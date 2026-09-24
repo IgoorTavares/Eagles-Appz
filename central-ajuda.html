@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Central de Ajuda · Eagles Labz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3fae12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Eagles Labz">
+<link rel="icon" href="assets/favicon-eagles.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+
+<script>(function(){try{var t=localStorage.getItem('eagles_tema')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+</head>
+<body>
+<div id="auth-loading" class="auth-loading-screen"><img src="assets/logo-full.png" alt="Eagles Labz" class="auth-loading-logo"><div class="auth-loading-text">Carregando...</div></div>
+<div id="offline-banner" class="offline-banner"><svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg> Sem conexão — trabalhando offline. Os dados serão sincronizados quando a internet voltar.</div>
+
+<header class="topbar" id="app-topbar">
+  <button type="button" class="topbar-mobile-toggle" onclick="toggleMobileNav()"><svg class="icone-menu" viewBox="0 0 24 24" style="width:20px;height:20px;"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg><span class="topbar-mobile-toggle-texto">MENU</span></button>
+
+  <div class="topbar-item" id="profile-item">
+    <button type="button" class="topbar-profile-btn" onclick="toggleDropdown('profile-menu')">
+      <span class="topbar-profile-avatar" id="profile-avatar-letter">E</span>
+      <span class="topbar-profile-name" id="profile-empresa-nome">Eagles Labz</span>
+      <span class="chevron">▾</span>
+    </button>
+    <div class="mega-menu" id="profile-menu">
+      <div id="usuario-logado" style="padding:2px 12px 8px; font-size:12px; font-weight:600; color:var(--text);"></div>
+      <a href="meu-perfil.html"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg> Dados da empresa</a>
+      <a href="usuarios.html" data-somente-admin style="display:none;"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Usuários</a>
+      <a href="empresas.html" data-somente-superadmin style="display:none;"><svg class="icone-menu" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="1"/><line x1="9" y1="6" x2="9.01" y2="6"/><line x1="15" y1="6" x2="15.01" y2="6"/><line x1="9" y1="10" x2="9.01" y2="10"/><line x1="15" y1="10" x2="15.01" y2="10"/><line x1="9" y1="14" x2="9.01" y2="14"/><line x1="15" y1="14" x2="15.01" y2="14"/><line x1="9" y1="18" x2="15" y2="18"/></svg> Empresas (Super Admin)</a>
+      <div style="padding:10px 12px 2px; font-size:11px; color:var(--text-soft); text-transform:uppercase; letter-spacing:0.3px;">Tema</div>
+      <div style="display:flex; gap:6px; padding:6px 12px 8px;">
+        <button type="button" class="btn btn-small" style="flex:1; justify-content:center;" onclick="definirTema('light')"><svg class="icone-menu" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Claro</button>
+        <button type="button" class="btn btn-small" style="flex:1; justify-content:center;" onclick="definirTema('dark')"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Escuro</button>
+      </div>
+      <div style="border-top:1px solid var(--border); margin-top:4px; padding-top:8px;">
+        <div id="sync-indicador" style="padding:2px 12px 8px; font-size:11px; color:var(--text-soft);">● Modo local (sem nuvem configurada)</div>
+        <button type="button" id="btn-instalar-app" onclick="instalarApp()" style="width:calc(100% - 24px); margin:0 12px 8px;" class="btn btn-small btn-instalar-app"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Instalar app</button>
+        <a href="#" onclick="logout(); return false;"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sair</a>
+      </div>
+    </div>
+  </div>
+
+  <nav class="topbar-nav" id="topbar-nav"></nav>
+
+  <div class="topbar-search">
+    <svg class="topbar-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    <input type="text" placeholder="Buscar clientes, produtos..." oninput="onBuscaGlobalInput(this.value)">
+    <div class="topbar-search-results" id="topbar-search-results"></div>
+  </div>
+
+  <div class="topbar-item" id="help-item">
+    <button type="button" class="topbar-help-btn" onclick="toggleDropdown('help-menu')">?</button>
+    <div class="mega-menu mega-menu-right" id="help-menu">
+      <a href="central-ajuda.html"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Central de ajuda</a>
+      <button type="button" class="mega-link" onclick="abrirChatbot()"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> Central de atendimento</button>
+      <button type="button" class="mega-link" onclick="abrirSuporteWhatsApp()"><svg class="icone-menu" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg> Suporte</button>
+    </div>
+  </div>
+
+  <div class="topbar-brand">
+    <span class="topbar-brand-name">LABZ</span>
+  </div>
+</header>
+<div class="app">
+<main class="main">
+
+<div class="page-header">
+  <div>
+    <h1>Central de Ajuda</h1>
+    <p>Como funciona cada área do sistema</p>
+  </div>
+</div>
+<div class="panel">
+  <div class="panel-title"><h2>Painel</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>É a tela inicial — mostra um resumo do mês selecionado: receita total, despesas, lucro, comparativo com o mês anterior, pendências de pagamento e o calendário financeiro. O Painel é <strong>somente para consulta</strong>; para editar qualquer valor, use a aba <strong>Financeiro</strong>.</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Meu Negócio</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>Tem sua própria tela, com um menu lateral com três áreas: <strong>Dashboard</strong> (o relatório financeiro do período — mês atual, últimos 3, 6 ou 12 meses — com gráficos e exportação em PDF), <strong>Vendas</strong> (um mapa do Brasil onde cada estado se destaca conforme o quanto vendeu ali — clique num estado pra dar zoom e ver as vendas por cidade — além de gráficos de situação da venda, vendas por estado e por produto) e <strong>Venda por vendedor</strong> (ranking por vendedor, por produto e a evolução das vendas mês a mês).</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Cadastros → Produtos</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>Ficha completa de produto: identificação (nome, SKU, marca, tipo, situação, condição), preço e estoque (incluindo fornecedores e estoque mínimo), características, dimensões e peso, e a parte de embalagem/códigos fiscais (GTIN/EAN, código DUN, volumes). Ao criar rapidamente pelo botão "+ Novo produto" só os campos essenciais são pedidos — o resto se completa depois clicando em "Editar".</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Cadastros → Clientes e Fornecedores</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>Ficha cadastral completa de clientes e fornecedores, com validação automática de CPF e CNPJ (o sistema confere o dígito verificador enquanto você digita, e <strong>não deixa salvar</strong> um documento inválido). Também guarda Inscrição Estadual, endereço completo, telefones e o vendedor vinculado. Um mesmo cadastro pode ser marcado como cliente, fornecedor, ou os dois.</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Cadastros → Vendedores / Funcionários</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>Fichas com dados pessoais, comerciais (comissão, meta de vendas, dados bancários pro vendedor) e profissionais (cargo, salário, contato de emergência pro funcionário).</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Vendas → Pedido de venda</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>Clicar em "+ Novo pedido de venda" abre uma tela completa (não uma janelinha): cliente, vendedor, itens do pedido com cálculo automático de preço e desconto, totais, condição de pagamento, transportador e mais. O cliente do pedido <strong>precisa estar cadastrado</strong> — se não estiver, aparece um botão "Cadastrar agora" que abre o cadastro em outra aba.</p><p>Cada pedido na lista tem um menu (⋮) com várias ações: <strong>Lançar</strong> (cria o lançamento a receber no Financeiro, já dividindo em parcelas se a condição de pagamento for algo como "30/60" ou "3x"), Gerar nota/ordem de serviço, Clonar venda, várias opções de impressão (comprovante, com detalhes, etiqueta de envio, carnê), relatório de produção, e enviar por e-mail ou WhatsApp.</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Vendas → Objetos de postagem / Contratos</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p><strong>Objetos de postagens:</strong> rastreamento dos envios relacionados a cada pedido. <strong>Contratos:</strong> contratos com vigência e valor, para clientes com cobrança recorrente.</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Estoque</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>Dividido em duas frentes: <strong>Compras</strong> (pedidos de compra a fornecedores e as notas fiscais de entrada recebidas) e <strong>Estoque</strong> propriamente (lançamentos de entrada/saída de produtos, e a conferência física periódica comparando o que o sistema acha que tem com o que foi contado de verdade).</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Financeiro</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>Aqui é onde tudo se edita: lançar receitas de clientes, pagamentos, adiantamentos e saídas variáveis, mês a mês — cada mês fica isolado dos outros, então editar setembro nunca mexe em agosto ou outubro. Um lançamento de receita manual só é permitido se o cliente <strong>e</strong> o produto já estiverem cadastrados (com aviso e atalho pra cadastrar na hora, se faltar). Também tem o calendário financeiro, o botão <strong>Duplicar</strong> (copia os lançamentos do mês atual pro mês seguinte) e a aba <strong>Cobranças</strong>, que mostra o status de pagamento de cada cliente (pendente, atrasado ou pago) com um clique para marcar como pago.</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Meu Perfil</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>No canto superior esquerdo. Mostra o nome da empresa cadastrada no sistema (e a logo, se você enviou uma). Tem três abas: <strong>Dados da empresa</strong> (CNPJ/CPF, Inscrição Estadual, endereço, contatos, upload de logo), <strong>Tema</strong> (claro/escuro e o botão pra instalar o aplicativo) e <strong>Segurança</strong>, onde qualquer pessoa troca a própria senha.</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Instalar o aplicativo</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>O sistema funciona como um app de verdade (PWA): dá pra instalar no celular ou computador com ícone próprio, tela cheia e uso offline. O botão fica em Meu Perfil → Tema, ou direto no menu de perfil. No iPhone (Safari), a instalação é manual: "Compartilhar" → "Adicionar à Tela de Início".</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Usuários</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>Quem é administrador de uma empresa consegue cadastrar até 5 pessoas da própria equipe (menu de perfil → Usuários), cada uma com e-mail e senha próprios. Dá pra remover o acesso de alguém a qualquer momento.</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Busca</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>A barra de pesquisa no topo procura por nome em Clientes/Fornecedores, Produtos e nos outros cadastros que você já visitou nesta sessão. Clique em um resultado para ir direto à página daquele cadastro.</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Central de Atendimento</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>É o chatbot (ícone de balão no canto da tela ou pelo menu de ajuda). Ele responde dúvidas comuns sobre como usar o sistema. Se ele não souber responder, oferece o link direto para o Suporte.</p></div>
+</div><div class="panel">
+  <div class="panel-title"><h2>Suporte</h2></div>
+  <div style="font-size:14px; line-height:1.7; color:var(--text);"><p>Abre uma conversa no WhatsApp já com a mensagem "PRECISO DE AJUDA COM A PLATAFORMA EAGLES" para agilizar o atendimento humano.</p></div>
+</div>
+
+</main>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="firebase-config.js"></script>
+<script src="script.js"></script>
+<script>
+initPaginaComum('');
+protegerPagina(function () {
+  // pagina estatica, nao precisa inicializar nada alem do comum
+});
+</script>
+</body>
+</html>

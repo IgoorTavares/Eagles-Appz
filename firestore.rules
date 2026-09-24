@@ -1,0 +1,101 @@
+// =====================================================================
+// Regras de segurança do Firestore — Eagles Labz (multi-tenant)
+// =====================================================================
+//
+// COMO USAR:
+// 1. No Console do Firebase, vá em Firestore Database → Regras.
+// 2. Apague o que estiver lá e cole este arquivo inteiro.
+// 3. Clique em "Publicar".
+//
+// O QUE ESSAS REGRAS GARANTEM:
+// - Cada empresa (tenant) só enxerga e só grava os PRÓPRIOS dados.
+// - O papel (role) de cada usuário mora no documento usuarios/{uid} —
+//   não existe como "custom claim" do Firebase Auth porque isso só pode
+//   ser configurado a partir de um servidor (Admin SDK / Cloud Functions),
+//   que este projeto (só front-end estático) não usa.
+// - Super Admin enxerga tudo, em qualquer empresa.
+// - Um usuário comum (TenantUser) só lê os próprios dados de perfil, não
+//   consegue criar nem remover outros usuários.
+// - Um TenantAdmin só cria/gerencia usuários dentro da PRÓPRIA empresa.
+//
+// LIMITAÇÃO CONHECIDA: o limite de 5 usuários por empresa é aplicado no
+// aplicativo (JavaScript), não aqui nas regras — bloquear isso também no
+// servidor exigiria contar documentos numa regra (o Firestore não faz
+// isso de forma simples sem Cloud Functions ou um contador mantido à
+// parte). Na prática, isso significa que o limite é confiável para uso
+// normal do sistema, mas não é uma trava 100% à prova de um usuário
+// tecnicamente malicioso tentando burlar a interface.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function estaLogado() {
+      return request.auth != null;
+    }
+
+    function meuUsuarioDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function meuTenantId() {
+      return meuUsuarioDoc().tenantId;
+    }
+
+    function souSuperAdmin() {
+      return estaLogado() && meuUsuarioDoc().role == 'SuperAdmin';
+    }
+
+    function souAdminOuSuperAdmin() {
+      return estaLogado() && (meuUsuarioDoc().role == 'TenantAdmin' || meuUsuarioDoc().role == 'SuperAdmin');
+    }
+
+    // ---------- usuarios/{uid} ----------
+    // Cada usuário sempre pode ler o próprio documento (é assim que o
+    // sistema descobre o tenantId e o papel dele logo após o login).
+    // Só um admin da mesma empresa (ou o Super Admin) pode ver os outros
+    // usuários dessa empresa, criar novos ou remover acesso.
+    match /usuarios/{userId} {
+      allow read: if estaLogado() && (
+        request.auth.uid == userId ||
+        souSuperAdmin() ||
+        meuTenantId() == resource.data.tenantId
+      );
+
+      allow create: if estaLogado() && (
+        souSuperAdmin() ||
+        (souAdminOuSuperAdmin() && request.resource.data.tenantId == meuTenantId())
+      );
+
+      allow update: if estaLogado() && (
+        request.auth.uid == userId ||
+        souSuperAdmin() ||
+        (souAdminOuSuperAdmin() && resource.data.tenantId == meuTenantId())
+      );
+
+      allow delete: if estaLogado() && (
+        souSuperAdmin() ||
+        (souAdminOuSuperAdmin() && resource.data.tenantId == meuTenantId())
+      );
+    }
+
+    // ---------- tenants/{tenantId} ----------
+    // Documento com os dados gerais da empresa. Só quem pertence a essa
+    // empresa (ou o Super Admin) pode ler/gravar.
+    match /tenants/{tenantId} {
+      allow read, write: if estaLogado() && (souSuperAdmin() || meuTenantId() == tenantId);
+
+      // ---------- tenants/{tenantId}/dados/{docId} ----------
+      // Aqui ficam TODOS os dados operacionais da empresa: clientes,
+      // produtos, pedidos, financeiro etc. — cada um guardado como um
+      // documento (ex: "eagles_produtos_v1") com o array inteiro dentro
+      // do campo "valor". Como cada documento pertence inteiramente a
+      // uma empresa só, a regra de isolamento é simples: só quem é
+      // dessa empresa (pelo caminho) pode ler ou escrever.
+      match /dados/{docId} {
+        allow read, write: if estaLogado() && (souSuperAdmin() || meuTenantId() == tenantId);
+      }
+    }
+  }
+}

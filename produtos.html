@@ -81,6 +81,55 @@
   <button type="button" class="btn btn-primary" onclick="openModal('modal-novo-produto')">+ Novo(a) Produto</button>
 </div>
 
+<div class="panel" style="margin-bottom:16px;">
+  <div style="display:flex; gap:10px; align-items:center; position:relative;">
+    <div class="topbar-search" style="flex:1; width:auto;">
+      <input type="text" id="busca-produto" placeholder="Pesquisar por nome ou código (SKU)..." oninput="filtrarProdutos()">
+    </div>
+    <button type="button" class="btn-filtro-data" id="btn-filtro-data-produto" onclick="abrirFiltroData('produto')" title="Filtrar por data">
+      <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    </button>
+    ${''}
+    <div class="filtro-data-popover" id="filtro-data-popover">
+      <div class="filtro-data-tabs">
+        <button type="button" id="filtro-data-aba1" class="active" onclick="trocarAbaFiltroData('campo1')"><span id="filtro-data-aba1-label">Alterado em</span></button>
+        <button type="button" id="filtro-data-aba2" onclick="trocarAbaFiltroData('campo2')"><span id="filtro-data-aba2-label">Data de validade</span></button>
+      </div>
+      <div class="filtro-data-corpo">
+        <div>
+          <div class="filtro-data-inicio-label">Período selecionado</div>
+          <div class="filtro-data-inicio-display" id="filtro-data-inicio-display">Selecione uma data</div>
+          <div class="filtro-data-nav">
+            <button type="button" onclick="navegarMesFiltroData(-1)">‹</button>
+            <span id="filtro-data-mes-label"></span>
+            <button type="button" onclick="navegarMesFiltroData(1)">›</button>
+          </div>
+          <div class="filtro-data-semana"><span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span></div>
+          <div class="filtro-data-grid" id="filtro-data-grid"></div>
+        </div>
+        <div class="filtro-data-presets">
+          <button type="button" onclick="aplicarPresetFiltroData('hoje')">Hoje</button>
+          <button type="button" onclick="aplicarPresetFiltroData('esta-semana')">Esta semana</button>
+          <button type="button" onclick="aplicarPresetFiltroData('semana-passada')">Semana passada</button>
+          <button type="button" onclick="aplicarPresetFiltroData('este-mes')">Este mês</button>
+          <button type="button" onclick="aplicarPresetFiltroData('mes-passado')">Mês passado</button>
+          <button type="button" onclick="limparFiltroData()">Limpar seleção</button>
+        </div>
+      </div>
+      <div class="filtro-data-acoes">
+        <button type="button" class="btn" onclick="fecharFiltroData()">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="confirmarFiltroData()">Filtrar</button>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:10px;">
+    <span id="badge-filtro-data-produto" class="badge-filtro-ativo" style="display:none;">
+      <span id="badge-filtro-data-produto-texto"></span>
+      <button type="button" onclick="limparFiltroDataAtivo('produto')">✕</button>
+    </span>
+  </div>
+</div>
+
 <div class="panel">
   <div class="table-scroll">
     <table id="tabela-produto">

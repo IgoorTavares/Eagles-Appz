@@ -80,7 +80,7 @@
   </div>
   <label style="font-size:13px; color:var(--text-soft); display:flex; align-items:center; gap:8px;">
     Mês de referência
-    <input type="month" id="financas-mes" value="2026-09" onchange="mudarMesFinancas()">
+    <input type="month" id="financas-mes" onchange="mudarMesFinancas()">
   </label>
 </div>
 
@@ -220,6 +220,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="script.js"></script>
 <script>

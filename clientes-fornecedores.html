@@ -83,9 +83,49 @@
 
 <div class="ficha-layout">
   <div class="ficha-filtros">
-    <div class="field">
+    <div class="field" style="position:relative;">
       <label>Buscar por nome</label>
-      <input type="text" id="busca-cliente-forn" placeholder="Nome ou razão social..." onkeydown="if(event.key==='Enter'){filtrarClientesForn();}">
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="busca-cliente-forn" placeholder="Nome ou razão social..." onkeydown="if(event.key==='Enter'){filtrarClientesForn();}" style="flex:1;">
+        <button type="button" class="btn-filtro-data" id="btn-filtro-data-cliente" onclick="abrirFiltroData('cliente')" title="Filtrar por data">
+          <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </button>
+      </div>
+      <div class="filtro-data-popover" id="filtro-data-popover" style="left:0; right:auto;">
+        <div class="filtro-data-tabs">
+          <button type="button" id="filtro-data-aba1" class="active" onclick="trocarAbaFiltroData('campo1')"><span id="filtro-data-aba1-label">Alterado em</span></button>
+          <button type="button" id="filtro-data-aba2" onclick="trocarAbaFiltroData('campo2')"><span id="filtro-data-aba2-label">Sem compras no período</span></button>
+        </div>
+        <div class="filtro-data-corpo">
+          <div>
+            <div class="filtro-data-inicio-label">Período selecionado</div>
+            <div class="filtro-data-inicio-display" id="filtro-data-inicio-display">Selecione uma data</div>
+            <div class="filtro-data-nav">
+              <button type="button" onclick="navegarMesFiltroData(-1)">‹</button>
+              <span id="filtro-data-mes-label"></span>
+              <button type="button" onclick="navegarMesFiltroData(1)">›</button>
+            </div>
+            <div class="filtro-data-semana"><span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span></div>
+            <div class="filtro-data-grid" id="filtro-data-grid"></div>
+          </div>
+          <div class="filtro-data-presets">
+            <button type="button" onclick="aplicarPresetFiltroData('hoje')">Hoje</button>
+            <button type="button" onclick="aplicarPresetFiltroData('esta-semana')">Esta semana</button>
+            <button type="button" onclick="aplicarPresetFiltroData('semana-passada')">Semana passada</button>
+            <button type="button" onclick="aplicarPresetFiltroData('este-mes')">Este mês</button>
+            <button type="button" onclick="aplicarPresetFiltroData('mes-passado')">Mês passado</button>
+            <button type="button" onclick="limparFiltroData()">Limpar seleção</button>
+          </div>
+        </div>
+        <div class="filtro-data-acoes">
+          <button type="button" class="btn" onclick="fecharFiltroData()">Cancelar</button>
+          <button type="button" class="btn btn-primary" onclick="confirmarFiltroData()">Filtrar</button>
+        </div>
+      </div>
+      <span id="badge-filtro-data-cliente" class="badge-filtro-ativo" style="display:none; margin-top:8px;">
+        <span id="badge-filtro-data-cliente-texto"></span>
+        <button type="button" onclick="limparFiltroDataAtivo('cliente')">✕</button>
+      </span>
     </div>
     <div class="field">
       <label>Tipo de cadastro</label>
@@ -93,6 +133,51 @@
         <option value="todos">Todos</option>
         <option value="cliente">Só clientes</option>
         <option value="fornecedor">Só fornecedores</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Situação</label>
+      <select id="filtro-situacao">
+        <option value="todas">Todas</option>
+        <option value="ativo">Ativo</option>
+        <option value="inativo">Inativo</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Tipo de pessoa</label>
+      <select id="filtro-tipo-pessoa">
+        <option value="todos">Todos</option>
+        <option value="PJ">Pessoa Jurídica (CNPJ)</option>
+        <option value="PF">Pessoa Física (CPF)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Vendedor</label>
+      <input type="text" id="filtro-vendedor" placeholder="Nome do vendedor..." onkeydown="if(event.key==='Enter'){filtrarClientesForn();}">
+    </div>
+    <div class="field">
+      <label>Telefone / Celular</label>
+      <input type="text" id="filtro-telefone" placeholder="Só números..." onkeydown="if(event.key==='Enter'){filtrarClientesForn();}">
+    </div>
+    <div class="field">
+      <label>E-mail</label>
+      <input type="text" id="filtro-email" placeholder="nome@..." onkeydown="if(event.key==='Enter'){filtrarClientesForn();}">
+    </div>
+    <div class="field">
+      <label>Estado (UF)</label>
+      <input type="text" id="filtro-estado" maxlength="2" placeholder="Ex: SP" onkeydown="if(event.key==='Enter'){filtrarClientesForn();}">
+    </div>
+    <div class="field">
+      <label>Município</label>
+      <input type="text" id="filtro-municipio" placeholder="Cidade..." onkeydown="if(event.key==='Enter'){filtrarClientesForn();}">
+    </div>
+    <div class="field">
+      <label>Lista de preço</label>
+      <select id="filtro-lista-preco">
+        <option value="todas">Todas</option>
+        <option value="Nenhuma lista">Nenhuma lista</option>
+        <option value="Lista padrão">Lista padrão</option>
+        <option value="Lista atacado">Lista atacado</option>
       </select>
     </div>
     <button type="button" class="btn btn-primary" style="width:100%; justify-content:center; margin-bottom:8px;" onclick="filtrarClientesForn()">Filtrar</button>

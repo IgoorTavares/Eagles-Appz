@@ -1039,26 +1039,69 @@ function onBuscaGlobalInput(valor) {
 // =====================================================================
 
 const CHATBOT_KB = [
-  { padroes: ['cadastrar cliente', 'novo cliente', 'adicionar cliente', 'incluir cliente'], resposta: 'Vá em Cadastros → Clientes e Fornecedores e clique em "+ Incluir cadastro". Preencha os dados e salve.' },
-  { padroes: ['fornecedor'], resposta: 'Fornecedores ficam na mesma lista de Clientes e Fornecedores — marque o tipo de cadastro como "Fornecedor". Também dá pra acessar direto por Estoque → Compras → Fornecedores.' },
-  { padroes: ['marcar pago', 'receber pagamento', 'confirmar pagamento', 'cobranca', 'cobrança'], resposta: 'No Financeiro, aba Cobranças, encontre o lançamento e clique em "Marcar pago".' },
+  // ---------- Visão geral do sistema ----------
+  { padroes: ['o que é esse sistema', 'como funciona o sistema', 'pra que serve', 'o que da pra fazer aqui'], resposta: 'O Eagles Labz é um sistema de gestão (ERP): cadastro de clientes/fornecedores/produtos, controle de vendas (pedidos), estoque, financeiro mês a mês, e dashboards pra acompanhar como o negócio está indo. Cada empresa que usa o sistema tem os próprios dados, totalmente separados de qualquer outra.' },
+  { padroes: ['por onde eu começo', 'primeiro passo', 'como comecar', 'sou novo aqui'], resposta: 'Sugestão de ordem: 1) Meu Perfil → preencha os dados da sua empresa. 2) Cadastros → cadastre seus produtos e seus clientes/fornecedores. 3) Vendas → registre seus pedidos. 4) Financeiro → acompanhe receitas e despesas do mês. O Painel e o Meu Negócio vão se preenchendo sozinhos conforme você usa o resto.' },
+  { padroes: ['diferenca entre painel e financeiro', 'painel ou financeiro'], resposta: 'O Painel é só pra CONSULTA — um resumo rápido do mês. Pra editar qualquer valor (lançar receita, pagamento, etc.), você precisa ir na aba Financeiro mesmo.' },
+  { padroes: ['super admin', 'superadmin', 'administrador da plataforma'], resposta: 'Super Admin é quem administra a PLATAFORMA inteira (cria empresas novas, suspende acesso por falta de pagamento). É diferente do "Administrador da empresa" (TenantAdmin), que só gerencia a própria empresa e a própria equipe.' },
+  { padroes: ['papeis', 'papéis', 'permissao', 'permissão', 'tipos de usuario'], resposta: 'Existem 3 papéis: Super Admin (dono da plataforma), Administrador (dono de uma empresa cliente, pode gerenciar a própria equipe) e Operacional (uso do dia a dia, sem acesso a Usuários/configurações).' },
+
+  // ---------- Cadastros ----------
+  { padroes: ['cadastrar cliente', 'novo cliente', 'adicionar cliente', 'incluir cliente'], resposta: 'Vá em Cadastros → Clientes e Fornecedores e clique em "+ Incluir cadastro". Preencha os dados e salve. O CPF/CNPJ é validado de verdade (confere o dígito) — se digitar errado, o sistema não deixa salvar.' },
+  { padroes: ['fornecedor'], resposta: 'Fornecedores ficam na mesma lista de Clientes e Fornecedores — marque o tipo de cadastro como "Fornecedor" (ou "Ambos", se for os dois). Também dá pra acessar direto por Estoque → Compras → Fornecedores.' },
+  { padroes: ['editar cadastro', 'como edito', 'mudar dados de'], resposta: 'Em qualquer lista de cadastro, clique em cima do item (ou no botão "Ver"/"Editar") pra abrir a ficha completa. Lá tem um botão "Editar" pra poder mudar os campos.' },
+  { padroes: ['excluir', 'apagar', 'deletar', 'remover cadastro'], resposta: 'Dentro da ficha de qualquer cadastro tem a opção de excluir. Cuidado: excluir um cadastro não desfaz — pense antes de confirmar.' },
+  { padroes: ['produto', 'estoque de produto', 'cadastrar produto'], resposta: 'Vá em Cadastros → Produtos. O cadastro rápido pede só o essencial (nome, preço, estoque); depois, clicando em "Editar", dá pra preencher a ficha completa (dimensões, peso, código de barras, fornecedor, etc.).' },
+  { padroes: ['vendedor'], resposta: 'Cadastre vendedores em Cadastros → Vendedores — inclui comissão, meta de vendas e dados bancários pra pagamento de comissão. Você pode vincular um vendedor a cada cliente e a cada pedido.' },
+  { padroes: ['funcionario', 'funcionário'], resposta: 'Cadastre a equipe em Cadastros → Funcionários — tem cargo, salário, carga horária e contato de emergência.' },
+  { padroes: ['cpf invalido', 'cnpj invalido', 'nao deixa salvar', 'não deixa salvar', 'documento invalido'], resposta: 'O sistema confere o dígito verificador de verdade do CPF/CNPJ — não é só formato. Se aparecer erro ao salvar, revise o número digitado; um número trocado já invalida.' },
+  { padroes: ['inscricao estadual', 'inscrição estadual', 'isento de ie'], resposta: 'No cadastro de cliente/fornecedor e nos Dados da empresa tem um campo de Inscrição Estadual, com uma opção de marcar "Isento" quando não se aplica.' },
+
+  // ---------- Vendas ----------
+  { padroes: ['pedido de venda', 'pedido de vendas', 'como vendo', 'registrar venda'], resposta: 'Pedidos de venda ficam em Vendas → Pedidos de vendas. Clique em "+ Novo pedido de venda" pra abrir o formulário completo: cliente, vendedor, itens (com desconto e cálculo automático), forma de pagamento, transportador.' },
+  { padroes: ['cliente nao cadastrado', 'cliente não cadastrado', 'cadastrar agora'], resposta: 'Pra fazer um pedido de venda, o cliente PRECISA estar cadastrado antes. Se você digitar um nome que não existe, aparece um botão "Cadastrar agora" que abre o cadastro de cliente numa aba nova, sem perder o que você já preencheu no pedido.' },
+  { padroes: ['desconto no item', 'desconto no pedido'], resposta: 'Cada item do pedido tem um campo de "Desc (%)" — o preço unitário e o total são recalculados na hora. Também dá pra dar um desconto geral na venda toda, no bloco "Totais".' },
+  { padroes: ['gerar parcelas', 'parcelas', 'editar parcelas'], resposta: 'No campo "Condição de pagamento", escreva algo como "3x" (parcelas mensais iguais) ou "30/60/90" (dias corridos a partir da venda). Clique em "Gerar parcelas" pra ver as datas e valores calculados — e em "Editar parcelas" pra ajustar manualmente antes de lançar no Financeiro.' },
+  { padroes: ['lançar', 'lancar', 'lançamento a receber'], resposta: 'Na lista de Pedidos de venda, clique nos 3 pontinhos (⋮) do pedido e escolha "Lançar" — isso cria o(s) lançamento(s) a receber no Financeiro, já divididos nas parcelas certas (ou numa parcela só, se for à vista).' },
+  { padroes: ['clonar', 'clonar venda', 'duplicar pedido'], resposta: 'Nos 3 pontinhos (⋮) de um pedido, tem "Clonar venda" — cria um pedido novo com os mesmos itens e dados, pronto pra editar (útil pra clientes que compram sempre a mesma coisa).' },
+  { padroes: ['imprimir', 'comprovante', 'etiqueta', 'carne', 'carnê', 'nota de servico', 'nota de serviço', 'ordem de servico'], resposta: 'Nos 3 pontinhos (⋮) de um pedido tem várias opções de documento: Imprimir simples, Comprovante, Com detalhes, Etiqueta de envio, Carnê (lista as parcelas), Nota/Ordem de serviço, e Relatório de produção — cada um formatado pra aquele uso específico.' },
+  { padroes: ['exportar em pdf', 'exportar pdf', 'baixar pdf do pedido'], resposta: 'Nos 3 pontinhos (⋮) do pedido tem "Exportar em PDF" — gera um arquivo PDF completo do pedido (todas as seções preenchidas) e baixa direto pro seu aparelho.' },
+  { padroes: ['enviar por email', 'enviar por e-mail', 'enviar whatsapp', 'mandar pro cliente'], resposta: 'Nos 3 pontinhos (⋮) do pedido tem "Enviar por e-mail" (abre seu app de e-mail já com o resumo escrito) e "Enviar por WhatsApp" (abre uma conversa com o número do cliente, se ele tiver cadastrado).' },
+  { padroes: ['boleto', 'emitir boleto'], resposta: 'Emitir um boleto de verdade (com código de barras válido) exige conectar o sistema a um banco ou gateway de pagamento — isso este sistema ainda não faz. Por enquanto, use "Gerar parcelas" + "Lançar" e acompanhe o recebimento pela aba Financeiro.' },
+  { padroes: ['contrato'], resposta: 'Contratos ficam em Vendas → Contratos — pra clientes com cobrança recorrente (mensalidade, assinatura).' },
+  { padroes: ['objeto de postagem', 'rastreio', 'rastreamento'], resposta: 'Objetos de postagem (Vendas → Objetos de postagens) servem pra anotar o rastreamento do envio de cada pedido.' },
+
+  // ---------- Estoque ----------
+  { padroes: ['estoque de produto', 'entrada de estoque', 'saida de estoque', 'saída de estoque'], resposta: 'Lançamentos de entrada/saída de estoque ficam em Estoque → Lançamentos de estoque.' },
+  { padroes: ['conferencia', 'conferência', 'contagem'], resposta: 'A conferência de estoque fica em Estoque → Conferência de estoque, onde você registra a contagem física e compara com o que o sistema acha que tem.' },
+  { padroes: ['nota fiscal', 'nf-e', 'nfe', 'nota de entrada'], resposta: 'Notas fiscais de ENTRADA (de compra) ficam em Estoque → Notas fiscais de entrada — é um registro manual, não emite nem consulta a SEFAZ.' },
+  { padroes: ['compra', 'pedido de compra'], resposta: 'Pedidos de compra a fornecedores ficam em Estoque → Pedido de compras.' },
+
+  // ---------- Financeiro ----------
+  { padroes: ['financeiro', 'lançar receita', 'lançar despesa', 'lancamento manual'], resposta: 'No Financeiro, cada mês é independente — editar setembro nunca mexe em agosto ou outubro. Dá pra lançar receitas, pagamentos, adiantamentos e saídas variáveis manualmente, sem precisar de um pedido de venda.' },
+  { padroes: ['marcar pago', 'receber pagamento', 'confirmar pagamento', 'cobranca', 'cobrança'], resposta: 'No Financeiro, aba Cobranças, encontre o lançamento e clique em "Marcar pago". Lá também dá pra ver quem está pendente ou atrasado.' },
+  { padroes: ['duplicar'], resposta: 'No Financeiro, use o botão "Duplicar" para copiar todos os lançamentos do mês atual para o mês seguinte — útil pra contas fixas que se repetem.' },
+  { padroes: ['meta de lucro', 'meta mensal'], resposta: 'Dá pra definir uma meta de lucro mensal no Financeiro — o sistema avisa quando o mês não está batendo a meta.' },
+  { padroes: ['calendario financeiro', 'calendário financeiro'], resposta: 'O calendário no Financeiro mostra os vencimentos do mês dia a dia — clique num dia pra ver o detalhe do que vence ali.' },
+
+  // ---------- Meu Negócio / relatórios ----------
+  { padroes: ['exportar', 'relatorio', 'relatório', 'pdf do relatorio'], resposta: 'Em Meu Negócio → Dashboard, escolha o período (mês atual, 3, 6 ou 12 meses) e clique em "Baixar em PDF" — o relatório com os números do período é gerado e baixado direto, com gráficos e a lista de clientes.' },
+  { padroes: ['mapa', 'vendas por estado', 'vendas por cidade'], resposta: 'Em Meu Negócio → Vendas, tem um mapa do Brasil: cada estado fica mais escuro conforme vendeu mais ali. Clique num estado pra dar zoom e ver as vendas por cidade dentro dele.' },
+  { padroes: ['venda por vendedor', 'ranking de vendedor'], resposta: 'Em Meu Negócio → Venda por vendedor tem o ranking de vendas por vendedor, por produto, e a evolução das vendas mês a mês.' },
+
+  // ---------- Conta, segurança e usuários ----------
   { padroes: ['tema', 'cor', 'escuro', 'claro', 'modo noturno'], resposta: 'Clique no seu perfil no canto superior esquerdo — lá tem a opção de tema Claro ou Escuro. Também dá pra trocar em Meu Perfil → aba Tema.' },
-  { padroes: ['exportar', 'relatorio', 'relatório', 'pdf'], resposta: 'Clique em "Meu Negócio" na barra superior, vá na aba Dashboard e escolha o período (mês atual, 3, 6 ou 12 meses). O relatório abre com gráficos e um botão para baixar em PDF.' },
-  { padroes: ['produto', 'estoque de produto'], resposta: 'Vá em Cadastros → Produtos para cadastrar, e em Estoque → Lançamentos de estoque para entradas/saídas.' },
-  { padroes: ['conferencia', 'conferência', 'contagem'], resposta: 'A conferência de estoque fica em Estoque → Conferência de estoque, onde você registra a contagem física.' },
-  { padroes: ['nota fiscal', 'nf-e', 'nfe', 'nota de entrada'], resposta: 'Notas fiscais de entrada ficam em Estoque → Notas fiscais de entrada.' },
-  { padroes: ['trocar senha', 'mudar senha', 'alterar senha', 'esqueci', 'esqueci a senha'], resposta: 'Vá no seu perfil (canto superior esquerdo) → Dados da empresa → aba Segurança. Lá você troca sua própria senha a qualquer momento, sem precisar de ajuda de ninguém.' },
-  { padroes: ['criar usuario', 'criar acesso', 'novo usuario', 'adicionar usuario', 'equipe', 'convidar'], resposta: 'Se você é administrador da empresa, vá no seu perfil → Usuários, e clique em "+ Novo usuário". Dá pra cadastrar até 5 pessoas da sua equipe, cada uma com e-mail e senha próprios.' },
-  { padroes: ['duplicar'], resposta: 'No Financeiro, use o botão "Duplicar" para copiar todos os lançamentos do mês atual para o mês seguinte.' },
-  { padroes: ['vendedor'], resposta: 'Cadastre vendedores em Cadastros → Vendedores. Você pode vincular um vendedor a cada cliente.' },
-  { padroes: ['funcionario', 'funcionário'], resposta: 'Cadastre a equipe em Cadastros → Funcionários.' },
-  { padroes: ['pedido de venda', 'pedido de vendas'], resposta: 'Pedidos de venda ficam em Vendas → Pedidos de vendas. Clique em "+ Novo pedido de venda" pra abrir o formulário completo, com itens, totais e forma de pagamento.' },
-  { padroes: ['lançar', 'lancar', 'lançamento a receber'], resposta: 'Na lista de Pedidos de venda, clique nos 3 pontinhos (⋮) do pedido e escolha "Lançar" — isso cria o lançamento a receber no Financeiro, já dividido em parcelas se a condição de pagamento indicar (ex: "30/60" ou "3x").' },
-  { padroes: ['mapa', 'vendas por estado', 'vendas por cidade'], resposta: 'Em Meu Negócio → Vendas, tem um mapa do Brasil: cada estado fica mais escuro conforme vendeu mais. Clique num estado pra dar zoom e ver as vendas por cidade.' },
-  { padroes: ['contrato'], resposta: 'Contratos ficam em Vendas → Contratos.' },
-  { padroes: ['compra', 'pedido de compra'], resposta: 'Pedidos de compra ficam em Estoque → Pedido de compras.' },
-  { padroes: ['instalar', 'aplicativo', 'app', 'pwa'], resposta: 'Dá pra instalar o sistema como um app de verdade. O botão fica em Meu Perfil → Tema, ou direto no menu do seu perfil. No iPhone, use "Compartilhar" → "Adicionar à Tela de Início" no Safari.' },
-  { padroes: ['oi', 'ola', 'olá', 'bom dia', 'boa tarde', 'boa noite'], resposta: 'Oi! Como posso ajudar? Você pode perguntar sobre cadastros, financeiro, vendas, estoque, senha ou usuários.' },
+  { padroes: ['logo', 'logotipo', 'imagem da empresa'], resposta: 'Em Meu Perfil → Dados da empresa, no topo do formulário, tem "Enviar imagem" — ela substitui a letra do avatar no menu pela sua logo.' },
+  { padroes: ['trocar senha', 'mudar senha', 'alterar senha'], resposta: 'Vá no seu perfil (canto superior esquerdo) → Dados da empresa → aba Segurança. Lá você troca sua própria senha a qualquer momento, sem precisar de ajuda de ninguém.' },
+  { padroes: ['esqueci', 'esqueci a senha', 'recuperar senha'], resposta: 'Na tela de login, clique em "Esqueceu a senha?" — chega um link no seu e-mail pra você criar uma senha nova.' },
+  { padroes: ['criar usuario', 'criar acesso', 'novo usuario', 'adicionar usuario', 'equipe', 'convidar'], resposta: 'Se você é administrador da empresa, vá no seu perfil → Usuários, e clique em "+ Novo usuário". Dá pra cadastrar até 5 pessoas da sua equipe, cada uma com e-mail e senha próprios, como Operacional ou Administrador.' },
+  { padroes: ['remover acesso', 'tirar usuario', 'demitir'], resposta: 'Em Usuários, ao lado do nome da pessoa tem "Remover acesso" — ela deixa de conseguir entrar no sistema na hora.' },
+  { padroes: ['instalar', 'aplicativo', 'app', 'pwa'], resposta: 'Dá pra instalar o sistema como um app de verdade, com ícone na tela e uso offline. O botão fica em Meu Perfil → Tema, ou direto no menu do seu perfil. No iPhone, use "Compartilhar" → "Adicionar à Tela de Início" no Safari.' },
+  { padroes: ['busca', 'pesquisar', 'procurar cliente', 'procurar produto'], resposta: 'A barra de busca no topo procura por nome em Clientes/Fornecedores e Produtos em tempo real — clique num resultado pra ir direto pra aquele cadastro.' },
+
+  // ---------- Conversa ----------
+  { padroes: ['obrigado', 'obrigada', 'valeu', 'brigado'], resposta: 'Por nada! Qualquer outra dúvida, é só perguntar por aqui.' },
+  { padroes: ['oi', 'ola', 'olá', 'bom dia', 'boa tarde', 'boa noite'], resposta: 'Oi! Como posso ajudar? Você pode perguntar sobre cadastros, vendas, estoque, financeiro, usuários ou senha.' },
 ];
 
 let CHATBOT_INICIADO = false;
@@ -1207,11 +1250,11 @@ function initModuloCadastro(moduloKey) {
   if (form) form.addEventListener('submit', (e) => { e.preventDefault(); handleNovoCadastroSimples(moduloKey); });
 }
 
-function renderCadastroTabela(moduloKey) {
+function renderCadastroTabela(moduloKey, dadosFiltrados) {
   const def = CADASTROS_REGISTRO[moduloKey];
   const tbody = document.getElementById(def.tbodyId);
   if (!tbody) return;
-  const dados = CADASTROS_DATA[moduloKey] || [];
+  const dados = dadosFiltrados || CADASTROS_DATA[moduloKey] || [];
   if (!dados.length) {
     tbody.innerHTML = emptyCadastroHtml(`openModal('${def.modalNovoId}')`, def.colunas.length + 1);
     return;
@@ -1235,7 +1278,7 @@ function handleNovoCadastroSimples(moduloKey) {
   // "vigente"/"encerrado", não "ativo"/"inativo"), então um valor fixo
   // pra todos os módulos mostrava rótulo errado ou "undefined" na tela.
   const campoStatus = def.fields.find((f) => (f.key === 'status' || f.key === 'situacao') && f.options && f.options.length);
-  const novo = { id: genId(moduloKey.slice(0, 2)) };
+  const novo = { id: genId(moduloKey.slice(0, 2)), criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() };
   if (campoStatus) novo[campoStatus.key] = campoStatus.options[0].value;
   def.fields.forEach((f) => {
     const el = form.querySelector(`[data-novo-key="${f.key}"]`);
@@ -1281,6 +1324,7 @@ function salvarCadastroModal() {
   const item = (CADASTROS_DATA[moduloKey] || []).find((i) => i.id === CADASTRO_MODAL_ID);
   if (!item) return;
   Object.assign(item, lerCamposModal('#' + def.modalEditCamposId));
+  item.atualizadoEm = new Date().toISOString();
   cloudSet(def.storageKey, CADASTROS_DATA[moduloKey]);
   renderCadastroTabela(moduloKey);
   closeModal(def.modalEditId);
@@ -1697,14 +1741,15 @@ function alternarTipoPessoaNovo() {
   document.getElementById('campo-novo-cpf').style.display = tipo === 'PF' ? '' : 'none';
 }
 
-function renderClientesFornTabela() {
+function renderClientesFornTabela(dadosParaExibir) {
   const tbody = document.querySelector('#tabela-clientes-forn tbody');
   if (!tbody) return;
-  if (!CLIENTES_FORN_DATA.length) {
+  const dados = dadosParaExibir || CLIENTES_FORN_DATA;
+  if (!dados.length) {
     tbody.innerHTML = emptyCadastroHtml(`openModal('modal-novo-cliente-forn')`, 6);
     return;
   }
-  tbody.innerHTML = CLIENTES_FORN_DATA.map((c) => {
+  tbody.innerHTML = dados.map((c) => {
     const doc = c.tipoPessoa === 'PJ' ? (c.cnpj || '—') : (c.cpf || '—');
     const tipoBadge = c.tipoCadastro === 'fornecedor'
       ? '<span class="badge badge-warning">Fornecedor</span>'
@@ -1722,29 +1767,292 @@ function renderClientesFornTabela() {
   }).join('');
 }
 
+// ---------- Filtro por data (calendário + atalhos), reutilizável em
+// Produtos, Clientes e Pedidos de venda ----------
+
+const FILTRO_DATA_CONFIG = {
+  produto: { rotulo1: 'Alterado em', campo1: 'atualizadoEm', rotulo2: 'Data de validade', campo2: 'dataValidade' },
+  cliente: { rotulo1: 'Próx. visita', campo1: 'proximaVisita', rotulo2: 'Sem compras no período', campo2: '__semCompras' },
+  pedido: { rotulo1: 'Alterado em', campo1: 'atualizadoEm', rotulo2: 'Data da venda', campo2: 'data' },
+};
+
+let FILTRO_DATA_MODULO = null;
+let FILTRO_DATA_ABA = 'atualizadoEm';
+let FILTRO_DATA_MES_EXIBIDO = null;
+let FILTRO_DATA_INICIO = null;
+let FILTRO_DATA_FIM = null;
+const NOMES_MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+function abrirFiltroData(modulo) {
+  FILTRO_DATA_MODULO = modulo;
+  FILTRO_DATA_ABA = 'campo1';
+  FILTRO_DATA_INICIO = null;
+  FILTRO_DATA_FIM = null;
+  FILTRO_DATA_MES_EXIBIDO = new Date(isoHoje() + 'T00:00:00');
+  FILTRO_DATA_MES_EXIBIDO.setDate(1);
+
+  const cfg = FILTRO_DATA_CONFIG[modulo];
+  document.getElementById('filtro-data-aba1-label').textContent = cfg.rotulo1;
+  document.getElementById('filtro-data-aba2-label').textContent = cfg.rotulo2;
+  trocarAbaFiltroData('campo1');
+  document.getElementById('filtro-data-popover').classList.add('open');
+}
+
+function fecharFiltroData() {
+  document.getElementById('filtro-data-popover').classList.remove('open');
+}
+
+function trocarAbaFiltroData(aba) {
+  FILTRO_DATA_ABA = aba;
+  document.getElementById('filtro-data-aba1').classList.toggle('active', aba === 'campo1');
+  document.getElementById('filtro-data-aba2').classList.toggle('active', aba === 'campo2');
+  renderGridFiltroData();
+}
+
+function navegarMesFiltroData(delta) {
+  FILTRO_DATA_MES_EXIBIDO.setMonth(FILTRO_DATA_MES_EXIBIDO.getMonth() + delta);
+  renderGridFiltroData();
+}
+
+function renderGridFiltroData() {
+  const grid = document.getElementById('filtro-data-grid');
+  const mesLabel = document.getElementById('filtro-data-mes-label');
+  if (!grid || !FILTRO_DATA_MES_EXIBIDO) return;
+
+  const ano = FILTRO_DATA_MES_EXIBIDO.getFullYear();
+  const mes = FILTRO_DATA_MES_EXIBIDO.getMonth();
+  mesLabel.textContent = `${NOMES_MESES_PT[mes]} ${ano}`;
+
+  const primeiroDiaSemana = new Date(ano, mes, 1).getDay();
+  const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+  const diasNoMesAnterior = new Date(ano, mes, 0).getDate();
+
+  let celulas = '';
+  for (let i = primeiroDiaSemana - 1; i >= 0; i--) {
+    celulas += `<span class="filtro-data-dia outro-mes">${diasNoMesAnterior - i}</span>`;
+  }
+  for (let d = 1; d <= diasNoMes; d++) {
+    const iso = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const selecionado = iso === FILTRO_DATA_INICIO || iso === FILTRO_DATA_FIM;
+    const noIntervalo = FILTRO_DATA_INICIO && FILTRO_DATA_FIM && iso > FILTRO_DATA_INICIO && iso < FILTRO_DATA_FIM;
+    const hojeClasse = iso === isoHoje() ? 'hoje' : '';
+    const classe = selecionado ? 'selecionado' : (noIntervalo ? 'no-intervalo' : hojeClasse);
+    celulas += `<button type="button" class="filtro-data-dia ${classe}" onclick="selecionarDiaFiltroData('${iso}')">${d}</button>`;
+  }
+  const totalCelulas = primeiroDiaSemana + diasNoMes;
+  const restante = (7 - (totalCelulas % 7)) % 7;
+  for (let d = 1; d <= restante; d++) {
+    celulas += `<span class="filtro-data-dia outro-mes">${d}</span>`;
+  }
+  grid.innerHTML = celulas;
+
+  const inicioDisplay = document.getElementById('filtro-data-inicio-display');
+  if (inicioDisplay) {
+    inicioDisplay.textContent = FILTRO_DATA_INICIO
+      ? formatDatePt(FILTRO_DATA_INICIO) + (FILTRO_DATA_FIM && FILTRO_DATA_FIM !== FILTRO_DATA_INICIO ? ' até ' + formatDatePt(FILTRO_DATA_FIM) : '')
+      : 'Selecione uma data';
+  }
+}
+
+function selecionarDiaFiltroData(iso) {
+  if (!FILTRO_DATA_INICIO || (FILTRO_DATA_INICIO && FILTRO_DATA_FIM)) {
+    FILTRO_DATA_INICIO = iso;
+    FILTRO_DATA_FIM = null;
+  } else if (iso < FILTRO_DATA_INICIO) {
+    FILTRO_DATA_FIM = FILTRO_DATA_INICIO;
+    FILTRO_DATA_INICIO = iso;
+  } else {
+    FILTRO_DATA_FIM = iso;
+  }
+  renderGridFiltroData();
+}
+
+function aplicarPresetFiltroData(preset) {
+  const hoje = new Date(isoHoje() + 'T00:00:00');
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  let inicio, fim;
+
+  if (preset === 'hoje') {
+    inicio = fim = isoHoje();
+  } else if (preset === 'esta-semana') {
+    const domingo = new Date(hoje); domingo.setDate(hoje.getDate() - hoje.getDay());
+    inicio = fmt(domingo); fim = isoHoje();
+  } else if (preset === 'semana-passada') {
+    const domingoAtual = new Date(hoje); domingoAtual.setDate(hoje.getDate() - hoje.getDay());
+    const domingoPassado = new Date(domingoAtual); domingoPassado.setDate(domingoAtual.getDate() - 7);
+    const sabadoPassado = new Date(domingoAtual); sabadoPassado.setDate(domingoAtual.getDate() - 1);
+    inicio = fmt(domingoPassado); fim = fmt(sabadoPassado);
+  } else if (preset === 'este-mes') {
+    inicio = fmt(new Date(hoje.getFullYear(), hoje.getMonth(), 1)); fim = isoHoje();
+  } else if (preset === 'mes-passado') {
+    inicio = fmt(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1));
+    fim = fmt(new Date(hoje.getFullYear(), hoje.getMonth(), 0));
+  } else {
+    return; // selecionar-mes / customizado: a pessoa escolhe direto no calendário
+  }
+
+  FILTRO_DATA_INICIO = inicio;
+  FILTRO_DATA_FIM = fim;
+  FILTRO_DATA_MES_EXIBIDO = new Date(inicio + 'T00:00:00');
+  FILTRO_DATA_MES_EXIBIDO.setDate(1);
+  renderGridFiltroData();
+}
+
+function limparFiltroData() {
+  FILTRO_DATA_INICIO = null;
+  FILTRO_DATA_FIM = null;
+  renderGridFiltroData();
+}
+
+function confirmarFiltroData() {
+  const modulo = FILTRO_DATA_MODULO;
+  if (FILTRO_DATA_INICIO) {
+    const cfg = FILTRO_DATA_CONFIG[modulo];
+    const campo = FILTRO_DATA_ABA === 'campo1' ? cfg.campo1 : cfg.campo2;
+    window['FILTRO_DATA_ATIVO_' + modulo] = { campo, inicio: FILTRO_DATA_INICIO, fim: FILTRO_DATA_FIM || FILTRO_DATA_INICIO };
+  } else {
+    window['FILTRO_DATA_ATIVO_' + modulo] = null;
+  }
+  fecharFiltroData();
+  if (modulo === 'produto') filtrarProdutos();
+  if (modulo === 'cliente') filtrarClientesForn();
+  if (modulo === 'pedido') filtrarPedidosVendaLista();
+}
+
+function limparFiltroDataAtivo(modulo) {
+  window['FILTRO_DATA_ATIVO_' + modulo] = null;
+  if (modulo === 'produto') filtrarProdutos();
+  if (modulo === 'cliente') filtrarClientesForn();
+  if (modulo === 'pedido') filtrarPedidosVendaLista();
+}
+
+// pega so "AAAA-MM-DD", mesmo se o campo for um ISO completo com hora
+function clienteTemCompraNoPeriodo(item, inicio, fim) {
+  const pedidos = getPedidosVenda();
+  const nomeCliente = item.fantasia || item.nome;
+  return pedidos.some((p) => p.cliente === nomeCliente && p.data && p.data >= inicio && p.data <= fim);
+}
+
+function dataDoRegistroParaFiltro(item, campo) {
+  const valor = item[campo];
+  return valor ? String(valor).slice(0, 10) : null;
+}
+
+function passaNoFiltroDeData(item, filtro) {
+  if (!filtro) return true;
+  // "Sem compras no período" é o oposto dos outros filtros: passa quem
+  // NÃO tem nenhuma compra dentro do intervalo, não quem tem.
+  if (filtro.campo === '__semCompras') {
+    return !clienteTemCompraNoPeriodo(item, filtro.inicio, filtro.fim);
+  }
+  const dataItem = dataDoRegistroParaFiltro(item, filtro.campo);
+  if (!dataItem) return false;
+  return dataItem >= filtro.inicio && dataItem <= filtro.fim;
+}
+
+function renderBadgeFiltroData(modulo) {
+  const filtro = window['FILTRO_DATA_ATIVO_' + modulo];
+  const badge = document.getElementById('badge-filtro-data-' + modulo);
+  if (!badge) return;
+  if (!filtro) { badge.style.display = 'none'; return; }
+  const cfg = FILTRO_DATA_CONFIG[modulo];
+  const rotuloCampo = filtro.campo === cfg.campo1 ? cfg.rotulo1 : cfg.rotulo2;
+  const texto = document.getElementById('badge-filtro-data-' + modulo + '-texto');
+  if (texto) texto.textContent = `${rotuloCampo}: ${formatDatePt(filtro.inicio)}${filtro.fim !== filtro.inicio ? ' a ' + formatDatePt(filtro.fim) : ''}`;
+  badge.style.display = '';
+}
+
+function filtrarProdutos() {
+  const termo = (document.getElementById('busca-produto')?.value || '').toLowerCase().trim();
+  const produtos = CADASTROS_DATA['produto'] || [];
+  const filtrado = produtos.filter((p) => {
+    if (termo) {
+      const alvo = `${p.nome || ''} ${p.sku || ''}`.toLowerCase();
+      if (!alvo.includes(termo)) return false;
+    }
+    if (!passaNoFiltroDeData(p, window.FILTRO_DATA_ATIVO_produto)) return false;
+    return true;
+  });
+  renderCadastroTabela('produto', filtrado);
+  renderBadgeFiltroData('produto');
+}
+
+function limparBuscaProdutos() {
+  const busca = document.getElementById('busca-produto');
+  if (busca) busca.value = '';
+  window.FILTRO_DATA_ATIVO_produto = null;
+  renderCadastroTabela('produto');
+  renderBadgeFiltroData('produto');
+}
+
+function filtrarPedidosVendaLista() {
+  const termo = (document.getElementById('busca-pedido-venda')?.value || '').toLowerCase().trim();
+  const pedidos = getPedidosVenda();
+  const filtrado = pedidos.filter((p) => {
+    if (termo) {
+      const alvo = `${p.numero || ''} ${p.cliente || ''}`.toLowerCase();
+      if (!alvo.includes(termo)) return false;
+    }
+    if (!passaNoFiltroDeData(p, window.FILTRO_DATA_ATIVO_pedido)) return false;
+    return true;
+  });
+  renderCadastroTabela('pedido-venda', filtrado);
+  renderBadgeFiltroData('pedido');
+}
+
+function limparBuscaPedidos() {
+  const busca = document.getElementById('busca-pedido-venda');
+  if (busca) busca.value = '';
+  window.FILTRO_DATA_ATIVO_pedido = null;
+  renderCadastroTabela('pedido-venda');
+  renderBadgeFiltroData('pedido');
+}
+
 function filtrarClientesForn() {
   const termo = (document.getElementById('busca-cliente-forn')?.value || '').toLowerCase().trim();
   const tipo = document.getElementById('filtro-tipo-cadastro')?.value || 'todos';
-  let visiveis = 0;
-  document.querySelectorAll('#tabela-clientes-forn tbody tr[data-id]').forEach((row) => {
-    const nomeEl = row.querySelector('.person-name');
-    const nome = nomeEl ? nomeEl.textContent.toLowerCase() : '';
-    const bateNome = !termo || nome.includes(termo);
-    const bateTipo = tipo === 'todos' || row.dataset.tipo === tipo || row.dataset.tipo === 'ambos';
-    const mostra = bateNome && bateTipo;
-    row.style.display = mostra ? '' : 'none';
-    if (mostra) visiveis++;
+  const situacao = document.getElementById('filtro-situacao')?.value || 'todas';
+  const tipoPessoa = document.getElementById('filtro-tipo-pessoa')?.value || 'todos';
+  const vendedor = (document.getElementById('filtro-vendedor')?.value || '').toLowerCase().trim();
+  const telefone = (document.getElementById('filtro-telefone')?.value || '').replace(/\D/g, '');
+  const email = (document.getElementById('filtro-email')?.value || '').toLowerCase().trim();
+  const estado = (document.getElementById('filtro-estado')?.value || '').toLowerCase().trim();
+  const municipio = (document.getElementById('filtro-municipio')?.value || '').toLowerCase().trim();
+  const listaPreco = document.getElementById('filtro-lista-preco')?.value || 'todas';
+
+  const filtrado = CLIENTES_FORN_DATA.filter((c) => {
+    const nome = (c.fantasia || c.nome || '').toLowerCase();
+    if (termo && !nome.includes(termo)) return false;
+    if (tipo !== 'todos' && c.tipoCadastro !== tipo && c.tipoCadastro !== 'ambos') return false;
+    if (situacao !== 'todas' && c.situacao !== situacao) return false;
+    if (tipoPessoa !== 'todos' && c.tipoPessoa !== tipoPessoa) return false;
+    if (vendedor && !(c.vendedor || '').toLowerCase().includes(vendedor)) return false;
+    if (telefone) {
+      const foneCliente = `${c.telefone1 || ''}${c.telefone2 || ''}${c.whatsapp || ''}`.replace(/\D/g, '');
+      if (!foneCliente.includes(telefone)) return false;
+    }
+    if (email && !(c.email || '').toLowerCase().includes(email)) return false;
+    if (estado && (c.estado || '').toLowerCase() !== estado) return false;
+    if (municipio && !(c.cidade || '').toLowerCase().includes(municipio)) return false;
+    if (listaPreco !== 'todas' && c.listaPreco !== listaPreco) return false;
+    if (!passaNoFiltroDeData(c, window.FILTRO_DATA_ATIVO_cliente)) return false;
+    return true;
   });
-  const vazio = document.getElementById('clientes-forn-empty');
-  if (vazio) vazio.style.display = visiveis === 0 ? '' : 'none';
+
+  renderClientesFornTabela(filtrado);
+  renderBadgeFiltroData('cliente');
 }
 
 function limparFiltroClientesForn() {
-  const busca = document.getElementById('busca-cliente-forn');
-  const tipo = document.getElementById('filtro-tipo-cadastro');
-  if (busca) busca.value = '';
-  if (tipo) tipo.value = 'todos';
-  filtrarClientesForn();
+  ['busca-cliente-forn', 'filtro-vendedor', 'filtro-telefone', 'filtro-email', 'filtro-estado', 'filtro-municipio'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['filtro-tipo-cadastro', 'filtro-situacao', 'filtro-tipo-pessoa', 'filtro-lista-preco'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.selectedIndex = 0;
+  });
+  renderClientesFornTabela();
 }
 
 function documentoValidoParaSalvar(tipoPessoa, cnpj, cpf) {
@@ -1771,6 +2079,8 @@ function handleNovoClienteForn(e) {
 
   const novo = {
     id: genId('cf'),
+    criadoEm: new Date().toISOString(),
+    atualizadoEm: new Date().toISOString(),
     tipoPessoa,
     nome,
     fantasia: document.getElementById('input-novo-fantasia').value || nome,
@@ -1790,6 +2100,7 @@ function handleNovoClienteForn(e) {
     estado: document.getElementById('input-novo-estado').value,
     cep: document.getElementById('input-novo-cep').value,
     vendedor: document.getElementById('input-novo-vendedor').value,
+    listaPreco: 'Nenhuma lista',
     situacao: 'ativo',
     observacoes: '',
   };
@@ -1821,6 +2132,8 @@ const CLIENTE_FORN_FIELDS = [
   { key: 'estado', label: 'Estado (UF)', type: 'text' },
   { key: 'cep', label: 'CEP', type: 'text' },
   { key: 'vendedor', label: 'Vendedor vinculado', type: 'text' },
+  { key: 'proximaVisita', label: 'Próxima visita', type: 'date' },
+  { key: 'listaPreco', label: 'Lista de preço', type: 'select', options: [{ value: 'Nenhuma lista', label: 'Nenhuma lista' }, { value: 'Lista padrão', label: 'Lista padrão' }, { value: 'Lista atacado', label: 'Lista atacado' }] },
   { key: 'situacao', label: 'Situação', type: 'select', options: [{ value: 'ativo', label: 'Ativo' }, { value: 'inativo', label: 'Inativo' }] },
   { key: 'observacoes', label: 'Observações', type: 'textarea', full: true },
 ];
@@ -1857,6 +2170,7 @@ function salvarClienteFornDetalhe() {
   }
 
   Object.assign(c, dados);
+  c.atualizadoEm = new Date().toISOString();
   cloudSet(CLIENTES_FORN_KEY, CLIENTES_FORN_DATA);
   CLIENTE_FORN_MODO_EDICAO = false;
   renderClienteFornDetalheModal();
@@ -1881,7 +2195,13 @@ function excluirClienteForn(id) {
 
 const FINANCE_TEMPLATE_KEY = 'eagles_fin_modelo_v1';
 const FINANCE_CICLOS_KEY = 'eagles_fin_ciclos_v1';
-const FINANCE_HOJE = new Date(2026, 8, 22);
+// Data de "hoje" de verdade (não fixa) — usada em vencimentos, atrasados,
+// e nos atalhos do filtro por data (Hoje, Esta semana, Este mês...).
+const FINANCE_HOJE = new Date();
+
+function mesKeyDoHoje() {
+  return `${FINANCE_HOJE.getFullYear()}-${String(FINANCE_HOJE.getMonth() + 1).padStart(2, '0')}`;
+}
 
 function financeTemplatePadrao() {
   return {
@@ -1967,14 +2287,14 @@ function setText(id, text) {
   if (el) el.textContent = text;
 }
 
-let FINANCE_MES_ATUAL = '2026-09';
+let FINANCE_MES_ATUAL = mesKeyDoHoje();
 let FINANCE_CICLO = null;
 let FINANCE_DIA_SELECIONADO = null;
 let onCicloCarregado = null;
 
 function carregarCicloAtual(mesInputId) {
   const mesInput = document.getElementById(mesInputId);
-  FINANCE_MES_ATUAL = (mesInput && mesInput.value) || '2026-09';
+  FINANCE_MES_ATUAL = (mesInput && mesInput.value) || mesKeyDoHoje();
   if (mesInput) mesInput.value = FINANCE_MES_ATUAL;
   cloudWatch(FINANCE_TEMPLATE_KEY, financeTemplatePadrao(), (data) => { FINANCE_TEMPLATE_CACHE = data; });
   cloudWatch(FINANCE_CICLOS_KEY, {}, (data) => {
@@ -2726,6 +3046,109 @@ function renderRelatorioConteudo(dados, quantidade, containerId) {
   });
 }
 
+// Gera um PDF de verdade a partir do que foi montado em #print-area, e já
+// baixa o arquivo — não depende da folha de impressão do sistema
+// operacional (que no celular varia muito de aparelho pra aparelho e às
+// vezes nem mostra "salvar como PDF" de um jeito claro).
+// Cabeçalho profissional reutilizável (logo + dados da empresa), pra
+// deixar os documentos exportados com a cara da empresa de quem usa o
+// sistema, não um relatório genérico.
+function montarCabecalhoDocumentoPdf(tituloDocumento, subtituloDocumento) {
+  const endereco = [PERFIL_DATA.endereco, PERFIL_DATA.numero, PERFIL_DATA.bairro].filter(Boolean).join(', ');
+  const cidadeUf = [PERFIL_DATA.cidade, PERFIL_DATA.estado].filter(Boolean).join('/');
+  const documento = PERFIL_DATA.tipoPessoa === 'PF' ? PERFIL_DATA.cpf : PERFIL_DATA.cnpj;
+  const linhaContato = [documento, endereco, cidadeUf].filter(Boolean).join(' · ');
+  const iniciais = (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa || 'E').trim().charAt(0).toUpperCase();
+  const logoHtml = PERFIL_DATA.logoUrl
+    ? `<img src="${PERFIL_DATA.logoUrl}" style="width:56px; height:56px; border-radius:10px; object-fit:cover;">`
+    : `<div style="width:56px; height:56px; border-radius:10px; background:#3fae12; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; font-family:Inter,sans-serif;">${escapeHtml(iniciais)}</div>`;
+
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:16px; border-bottom:3px solid #3fae12; margin-bottom:22px;">
+      <div style="display:flex; gap:14px; align-items:center;">
+        ${logoHtml}
+        <div>
+          <div style="font-size:17px; font-weight:700; color:#111;">${escapeHtml(PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa || 'Minha Empresa')}</div>
+          <div style="font-size:11px; color:#666; margin-top:2px;">${escapeHtml(linhaContato)}</div>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:15px; font-weight:700; color:#3fae12;">${escapeHtml(tituloDocumento)}</div>
+        ${subtituloDocumento ? `<div style="font-size:11px; color:#666; margin-top:2px;">${escapeHtml(subtituloDocumento)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+// Rodapé com numeração de página — só dá pra saber o total de páginas
+// depois que o PDF inteiro já foi montado, então isso roda por último,
+// passando por cada página já gerada.
+function adicionarRodapePaginas(pdf) {
+  const totalPaginas = pdf.internal.getNumberOfPages();
+  const empresa = PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa || '';
+  const agora = new Date();
+  const dataHora = `${formatDatePt(isoHoje())} às ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+  for (let i = 1; i <= totalPaginas; i++) {
+    pdf.setPage(i);
+    const largura = pdf.internal.pageSize.getWidth();
+    const altura = pdf.internal.pageSize.getHeight();
+    pdf.setFontSize(8);
+    pdf.setTextColor(150);
+    pdf.text(empresa, 40, altura - 20);
+    pdf.text(`Gerado em ${dataHora}`, largura / 2, altura - 20, { align: 'center' });
+    pdf.text(`Página ${i} de ${totalPaginas}`, largura - 40, altura - 20, { align: 'right' });
+  }
+}
+
+async function baixarPrintAreaComoPdf(nomeArquivo) {
+  const areaOriginal = document.getElementById('print-area');
+  if (!areaOriginal || !areaOriginal.innerHTML.trim()) return;
+  if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+    alert('Não foi possível carregar o gerador de PDF (verifique sua internet) — tente de novo.');
+    return;
+  }
+
+  // Monta uma cópia ISOLADA do conteúdo, fora da árvore da página, em vez
+  // de fotografar o #print-area no lugar onde ele está — em páginas com
+  // gráficos/mapa (Canvas, SVG) por perto, isso pode confundir a
+  // biblioteca que "tira a foto" da tela. Assim, o que é capturado é só
+  // o conteúdo do relatório, sem nada em volta pra atrapalhar.
+  const isolado = document.createElement('div');
+  isolado.style.cssText = 'position:fixed; left:-9999px; top:0; width:800px; background:#ffffff;';
+  isolado.innerHTML = areaOriginal.innerHTML;
+  document.body.appendChild(isolado);
+
+  try {
+    const canvas = await html2canvas(isolado, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'pt', 'a4');
+    const larguraPagina = pdf.internal.pageSize.getWidth();
+    const alturaPagina = pdf.internal.pageSize.getHeight();
+    const alturaImagem = (canvas.height * larguraPagina) / canvas.width;
+
+    let alturaRestante = alturaImagem;
+    let posicaoY = 0;
+    pdf.addImage(imgData, 'PNG', 0, posicaoY, larguraPagina, alturaImagem);
+    alturaRestante -= alturaPagina;
+
+    while (alturaRestante > 0) {
+      posicaoY = alturaRestante - alturaImagem;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, posicaoY, larguraPagina, alturaImagem);
+      alturaRestante -= alturaPagina;
+    }
+
+    adicionarRodapePaginas(pdf);
+    pdf.save(nomeArquivo);
+  } catch (err) {
+    console.error('Erro ao gerar PDF:', err);
+    const detalhe = (err && err.message) ? err.message : 'erro desconhecido';
+    alert('Não foi possível gerar o PDF agora (' + detalhe + '). Tente de novo — se persistir, me avise esse texto entre parênteses.');
+  } finally {
+    document.body.removeChild(isolado);
+  }
+}
+
 function imprimirRelatorioPeriodo() {
   if (!RELATORIO_DADOS_ATUAIS) return;
   const { dados, meses, quantidade } = RELATORIO_DADOS_ATUAIS;
@@ -2734,25 +3157,37 @@ function imprimirRelatorioPeriodo() {
   const topClientes = dados.clientesNomes.map((nome) => ({ nome, valor: dados.clientesMap[nome] })).sort((a, b) => b.valor - a.valor);
   const linhasClientes = topClientes.map((c) => `<tr><td>${escapeHtml(c.nome)}</td><td>${formatMoney(c.valor)}</td></tr>`).join('') || '<tr><td colspan="2">Nenhum cliente com receita no período.</td></tr>';
 
+  const secaoTitulo = (texto) => `<div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:#3fae12; border-left:3px solid #3fae12; padding-left:8px; margin:24px 0 10px;">${escapeHtml(texto)}</div>`;
+  const cardKpiPdf = (label, valor, cor) => `<div style="flex:1; min-width:130px; background:${cor}0d; border:1px solid ${cor}40; border-left:4px solid ${cor}; border-radius:8px; padding:12px;"><div style="font-size:10.5px; color:#666; text-transform:uppercase; letter-spacing:0.3px;">${escapeHtml(label)}</div><div style="font-size:18px; font-weight:700; color:#111; margin-top:2px;">${valor}</div></div>`;
+
   document.getElementById('print-area').innerHTML = `
-    <div style="padding:30px; font-family: Inter, sans-serif; color:#111;">
-      <h1 style="font-size:20px; margin-bottom:2px;">Eagles Labz</h1>
-      <p style="color:#555; margin-top:0;">Relatório financeiro — ${tituloPeriodo}</p>
-      <div style="display:flex; gap:14px; margin:20px 0; flex-wrap:wrap;">
-        <div style="flex:1; min-width:130px; border:1px solid #ddd; border-radius:8px; padding:12px;"><div style="font-size:11px; color:#777;">Receita total</div><div style="font-size:17px; font-weight:700;">${formatMoney(dados.receitaTotal)}</div></div>
-        <div style="flex:1; min-width:130px; border:1px solid #ddd; border-radius:8px; padding:12px;"><div style="font-size:11px; color:#777;">Despesas totais</div><div style="font-size:17px; font-weight:700;">${formatMoney(dados.despesaTotal)}</div></div>
-        <div style="flex:1; min-width:130px; border:1px solid #ddd; border-radius:8px; padding:12px;"><div style="font-size:11px; color:#777;">Lucro total</div><div style="font-size:17px; font-weight:700;">${formatMoney(dados.lucroTotal)}</div></div>
-        <div style="flex:1; min-width:130px; border:1px solid #ddd; border-radius:8px; padding:12px;"><div style="font-size:11px; color:#777;">Margem de lucro</div><div style="font-size:17px; font-weight:700;">${dados.margemLucro.toFixed(1)}%</div></div>
+    <div style="padding:34px; font-family: Inter, sans-serif; color:#111; max-width:800px;">
+      ${montarCabecalhoDocumentoPdf('Relatório financeiro', tituloPeriodo)}
+
+      <div style="display:flex; gap:14px; margin:0 0 6px; flex-wrap:wrap;">
+        ${cardKpiPdf('Receita total', formatMoney(dados.receitaTotal), '#4fa8d8')}
+        ${cardKpiPdf('Despesas totais', formatMoney(dados.despesaTotal), '#e2726c')}
+        ${cardKpiPdf('Lucro total', formatMoney(dados.lucroTotal), '#3fae12')}
+        ${cardKpiPdf('Margem de lucro', dados.margemLucro.toFixed(1) + '%', '#8a6fd8')}
       </div>
-      <p style="font-size:13px;">Crescimento no período: receita ${dados.crescimentoReceita >= 0 ? '+' : ''}${dados.crescimentoReceita.toFixed(1)}%, lucro ${dados.crescimentoLucro >= 0 ? '+' : ''}${dados.crescimentoLucro.toFixed(1)}%.</p>
-      <p style="font-size:13px;">Clientes ativos no período: <strong>${dados.clientesNomes.length}</strong> · Receita média por cliente: <strong>${formatMoney(dados.receitaMediaPorCliente)}</strong>.</p>
-      <h3 style="font-size:14px; margin-top:22px;">Evolução mês a mês</h3>
-      <table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:12px;"><thead><tr><th style="text-align:left; border-bottom:1px solid #ccc; padding:6px 4px;">Mês</th><th style="text-align:left; border-bottom:1px solid #ccc; padding:6px 4px;">Receita</th><th style="text-align:left; border-bottom:1px solid #ccc; padding:6px 4px;">Despesas</th><th style="text-align:left; border-bottom:1px solid #ccc; padding:6px 4px;">Lucro</th></tr></thead><tbody>${linhasMeses}</tbody></table>
-      <h3 style="font-size:14px; margin-top:20px;">Receita por cliente no período</h3>
-      <table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:12px;"><thead><tr><th style="text-align:left; border-bottom:1px solid #ccc; padding:6px 4px;">Cliente</th><th style="text-align:left; border-bottom:1px solid #ccc; padding:6px 4px;">Receita no período</th></tr></thead><tbody>${linhasClientes}</tbody></table>
+
+      <p style="font-size:12.5px; color:#444; margin-top:16px;">Crescimento no período: receita <strong style="color:${dados.crescimentoReceita >= 0 ? '#3fae12' : '#e2726c'};">${dados.crescimentoReceita >= 0 ? '+' : ''}${dados.crescimentoReceita.toFixed(1)}%</strong>, lucro <strong style="color:${dados.crescimentoLucro >= 0 ? '#3fae12' : '#e2726c'};">${dados.crescimentoLucro >= 0 ? '+' : ''}${dados.crescimentoLucro.toFixed(1)}%</strong>.</p>
+      <p style="font-size:12.5px; color:#444;">Clientes ativos no período: <strong>${dados.clientesNomes.length}</strong> · Receita média por cliente: <strong>${formatMoney(dados.receitaMediaPorCliente)}</strong>.</p>
+
+      ${secaoTitulo('Evolução mês a mês')}
+      <table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <thead><tr style="background:#f4f6f4;"><th style="text-align:left; padding:8px 6px; font-size:11px; text-transform:uppercase; color:#666;">Mês</th><th style="text-align:left; padding:8px 6px; font-size:11px; text-transform:uppercase; color:#666;">Receita</th><th style="text-align:left; padding:8px 6px; font-size:11px; text-transform:uppercase; color:#666;">Despesas</th><th style="text-align:left; padding:8px 6px; font-size:11px; text-transform:uppercase; color:#666;">Lucro</th></tr></thead>
+        <tbody>${linhasMeses.replace(/<tr>/g, '<tr style="border-bottom:1px solid #eee;">').replace(/<td>/g, '<td style="padding:7px 6px;">')}</tbody>
+      </table>
+
+      ${secaoTitulo('Receita por cliente no período')}
+      <table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <thead><tr style="background:#f4f6f4;"><th style="text-align:left; padding:8px 6px; font-size:11px; text-transform:uppercase; color:#666;">Cliente</th><th style="text-align:left; padding:8px 6px; font-size:11px; text-transform:uppercase; color:#666;">Receita no período</th></tr></thead>
+        <tbody>${linhasClientes.replace(/<tr>/g, '<tr style="border-bottom:1px solid #eee;">').replace(/<td>/g, '<td style="padding:7px 6px;">')}</tbody>
+      </table>
     </div>
   `;
-  window.print();
+  baixarPrintAreaComoPdf(`relatorio-financeiro-${tituloPeriodo.replace(/\s|–/g, '-')}.pdf`);
 }
 
 // =====================================================================
@@ -3007,6 +3442,362 @@ function renderMnDetalheEstado() {
 
 // ---------- Boxes do dashboard "Vendas" ----------
 
+// ---------- Visão geral: KPIs cruzando vendas, estoque e clientes ----------
+
+let VG_CHART_PRODUTO = null, VG_CHART_SITUACAO = null, VG_CHART_CLIENTES = null;
+let VG_CHART_ESTOQUE = null, VG_CHART_TOP_PRODUTOS = null;
+
+const CORES_PIZZA = ['#3fae12', '#4fa8d8', '#d6a34e', '#e2726c', '#8a6fd8', '#5be7c4'];
+
+function produtoTemEstoqueBaixo(p) {
+  const min = Number(p.quantidadeMinima || 0);
+  if (!min) return false;
+  return Number(p.estoque || 0) <= min;
+}
+
+function renderVisaoGeral() {
+  if (typeof Chart === 'undefined') return;
+  const pedidos = getPedidosVenda();
+  const produtos = CADASTROS_DATA['produto'] || [];
+  const clientesForn = CLIENTES_FORN_DATA || [];
+
+  // ---------- KPIs ----------
+  const clientesAtivos = clientesForn.filter((c) => (c.tipoCadastro === 'cliente' || c.tipoCadastro === 'ambos') && c.situacao === 'ativo').length;
+  const produtosEstoqueBaixo = produtos.filter(produtoTemEstoqueBaixo);
+  const pedidosAbertos = pedidos.filter((p) => p.status === 'aberto').length;
+  const faturados = pedidos.filter((p) => p.status === 'faturado');
+  const ticketMedio = faturados.length ? faturados.reduce((a, p) => a + Number(p.valor || 0), 0) / faturados.length : 0;
+
+  setText('vg-kpi-clientes', String(clientesAtivos));
+  setText('vg-kpi-produtos', String(produtos.length));
+  setText('vg-kpi-estoque-baixo', String(produtosEstoqueBaixo.length));
+  setText('vg-kpi-pedidos-abertos', String(pedidosAbertos));
+  setText('vg-kpi-ticket-medio', formatMoney(ticketMedio));
+
+  const opcoesPizza = {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
+      tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${formatMoney(ctx.parsed)}` } },
+    },
+  };
+
+  // ---------- Vendas por produto (pizza) ----------
+  const porProduto = agregarProdutosDosItens(pedidos);
+  const produtosOrdenados = Object.keys(porProduto).sort((a, b) => porProduto[b] - porProduto[a]);
+  if (VG_CHART_PRODUTO) VG_CHART_PRODUTO.destroy();
+  const ctxProduto = document.getElementById('vg-chart-produto-pizza');
+  if (ctxProduto) {
+    VG_CHART_PRODUTO = new Chart(ctxProduto.getContext('2d'), {
+      type: 'doughnut',
+      data: { labels: produtosOrdenados, datasets: [{ data: produtosOrdenados.map((p) => porProduto[p]), backgroundColor: CORES_PIZZA }] },
+      options: opcoesPizza,
+    });
+  }
+
+  // ---------- Situação dos pedidos (pizza) ----------
+  const porStatus = agregarPorChave(pedidos, 'status');
+  const statusLabels = { aberto: 'Aberto', faturado: 'Faturado', cancelado: 'Cancelado' };
+  const statusChaves = Object.keys(porStatus);
+  if (VG_CHART_SITUACAO) VG_CHART_SITUACAO.destroy();
+  const ctxSituacao = document.getElementById('vg-chart-situacao-pizza');
+  if (ctxSituacao) {
+    VG_CHART_SITUACAO = new Chart(ctxSituacao.getContext('2d'), {
+      type: 'doughnut',
+      data: { labels: statusChaves.map((s) => statusLabels[s] || s), datasets: [{ data: statusChaves.map((s) => porStatus[s]), backgroundColor: ['#d6a34e', '#3fae12', '#e2726c', '#4fa8d8'] }] },
+      options: opcoesPizza,
+    });
+  }
+
+  // ---------- Clientes por tipo (pizza) ----------
+  const totalClientesSo = clientesForn.filter((c) => c.tipoCadastro === 'cliente').length;
+  const totalFornecedoresSo = clientesForn.filter((c) => c.tipoCadastro === 'fornecedor').length;
+  const totalAmbos = clientesForn.filter((c) => c.tipoCadastro === 'ambos').length;
+  if (VG_CHART_CLIENTES) VG_CHART_CLIENTES.destroy();
+  const ctxClientes = document.getElementById('vg-chart-clientes-pizza');
+  if (ctxClientes) {
+    VG_CHART_CLIENTES = new Chart(ctxClientes.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Só clientes', 'Só fornecedores', 'Cliente e fornecedor'],
+        datasets: [{ data: [totalClientesSo, totalFornecedoresSo, totalAmbos], backgroundColor: ['#3fae12', '#d6a34e', '#4fa8d8'] }],
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } } } },
+    });
+  }
+
+  // ---------- Estoque por situação (pizza) ----------
+  const semEstoque = produtos.filter((p) => Number(p.estoque || 0) === 0).length;
+  const estoqueBaixoCount = produtosEstoqueBaixo.filter((p) => Number(p.estoque || 0) > 0).length;
+  const estoqueNormal = produtos.length - semEstoque - estoqueBaixoCount;
+  if (VG_CHART_ESTOQUE) VG_CHART_ESTOQUE.destroy();
+  const ctxEstoque = document.getElementById('vg-chart-estoque-pizza');
+  if (ctxEstoque) {
+    VG_CHART_ESTOQUE = new Chart(ctxEstoque.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Estoque normal', 'Estoque baixo', 'Sem estoque'],
+        datasets: [{ data: [estoqueNormal, estoqueBaixoCount, semEstoque], backgroundColor: ['#3fae12', '#d6a34e', '#e2726c'] }],
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } } } },
+    });
+  }
+
+  // ---------- Top 5 produtos que mais venderam (barra) ----------
+  const top5 = produtosOrdenados.slice(0, 5);
+  if (VG_CHART_TOP_PRODUTOS) VG_CHART_TOP_PRODUTOS.destroy();
+  const ctxTop = document.getElementById('vg-chart-top-produtos');
+  if (ctxTop) {
+    VG_CHART_TOP_PRODUTOS = new Chart(ctxTop.getContext('2d'), {
+      type: 'bar',
+      data: { labels: top5, datasets: [{ label: 'Vendido', data: top5.map((p) => porProduto[p]), backgroundColor: '#3fae12' }] },
+      options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatMoney(ctx.parsed.x) } } }, scales: { x: { ticks: { callback: (v) => formatMoney(v) } } } },
+    });
+  }
+
+  // ---------- Lista de produtos com estoque baixo ----------
+  const listaEl = document.getElementById('vg-lista-estoque-baixo');
+  const painelEl = document.getElementById('vg-estoque-baixo-painel');
+  if (listaEl) {
+    if (!produtosEstoqueBaixo.length) {
+      listaEl.innerHTML = '<p class="empty-state">Nenhum produto com estoque baixo agora.</p>';
+      if (painelEl) painelEl.style.display = produtos.length ? '' : 'none';
+    } else {
+      listaEl.innerHTML = produtosEstoqueBaixo.map((p) => `
+        <div class="list-row">
+          <div class="icon-dot">${escapeHtml(initials(p.nome))}</div>
+          <div class="list-row-main"><div class="list-row-title">${escapeHtml(p.nome)}</div><div class="list-row-sub">Mínimo: ${Number(p.quantidadeMinima || 0)}</div></div>
+          <div class="list-row-value" style="color:var(--danger);">${Number(p.estoque || 0)} em estoque</div>
+        </div>`).join('');
+      if (painelEl) painelEl.style.display = '';
+    }
+  }
+}
+
+// ---------- Painéis por área (Vendas / Estoque / Clientes) com comparação
+// de período, no estilo do que aparece em outros ERPs do mercado ----------
+
+function definirPeriodoPadrao(prefixo) {
+  const hoje = new Date(isoHoje() + 'T00:00:00');
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const inicioMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  const fimMesAnteriorEquivalente = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const elInicio = document.getElementById(prefixo + '-data-inicio');
+  const elFim = document.getElementById(prefixo + '-data-fim');
+  const elCompInicio = document.getElementById(prefixo + '-comp-inicio');
+  const elCompFim = document.getElementById(prefixo + '-comp-fim');
+  if (elInicio && !elInicio.value) elInicio.value = fmt(inicioMes);
+  if (elFim && !elFim.value) elFim.value = isoHoje();
+  if (elCompInicio && !elCompInicio.value) elCompInicio.value = fmt(inicioMesAnterior);
+  if (elCompFim && !elCompFim.value) elCompFim.value = fmt(fimMesAnteriorEquivalente);
+}
+
+function badgeVariacao(atual, anterior) {
+  if (!anterior) return '<span style="font-size:11px; color:var(--text-soft);">sem período anterior</span>';
+  const variacao = ((atual - anterior) / anterior) * 100;
+  const subiu = variacao >= 0;
+  const cor = subiu ? 'var(--success)' : 'var(--danger)';
+  const seta = subiu ? '▲' : '▼';
+  return `<span style="font-size:11px; font-weight:700; color:${cor};">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
+}
+
+function cardKpi(label, valorFormatado, valorAnteriorFormatado, badgeHtml) {
+  return `<div class="stat-card">
+    <div class="stat-label">${escapeHtml(label)}</div>
+    <div class="stat-value" style="font-size:22px;">${valorFormatado}</div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:11px; color:var(--text-soft);">
+      ${badgeHtml}<span>ant.: ${valorAnteriorFormatado}</span>
+    </div>
+  </div>`;
+}
+
+function filtrarPedidosPorPeriodo(pedidos, inicio, fim) {
+  if (!inicio || !fim) return [];
+  return pedidos.filter((p) => p.data && p.data >= inicio && p.data <= fim);
+}
+
+function valoresPorDiaRelativo(pedidosPeriodo, dataInicio, dataFim) {
+  if (!dataInicio || !dataFim) return [];
+  const inicio = new Date(dataInicio + 'T00:00:00');
+  const fimD = new Date(dataFim + 'T00:00:00');
+  const dias = Math.max(1, Math.round((fimD - inicio) / 86400000) + 1);
+  const valores = new Array(dias).fill(0);
+  pedidosPeriodo.forEach((p) => {
+    const d = new Date(p.data + 'T00:00:00');
+    const idx = Math.round((d - inicio) / 86400000);
+    if (idx >= 0 && idx < dias) valores[idx] += Number(p.valor || 0);
+  });
+  return valores;
+}
+
+// ---------- Vendas → Pedidos de venda ----------
+
+let MN_CHART_VP_LINHA = null, MN_CHART_VP_SITUACAO = null;
+
+function renderVendasPedidosDashboard() {
+  definirPeriodoPadrao('vp');
+  const pedidos = getPedidosVenda();
+  const inicio = document.getElementById('vp-data-inicio').value;
+  const fim = document.getElementById('vp-data-fim').value;
+  const compInicio = document.getElementById('vp-comp-inicio').value;
+  const compFim = document.getElementById('vp-comp-fim').value;
+
+  const atual = filtrarPedidosPorPeriodo(pedidos, inicio, fim);
+  const anterior = filtrarPedidosPorPeriodo(pedidos, compInicio, compFim);
+
+  const valorAtual = atual.reduce((a, p) => a + Number(p.valor || 0), 0);
+  const valorAnterior = anterior.reduce((a, p) => a + Number(p.valor || 0), 0);
+  const qtdAtual = atual.length;
+  const qtdAnterior = anterior.length;
+  const produtosAtual = atual.reduce((a, p) => a + (p.itens || []).reduce((s, i) => s + Number(i.quantidade || 0), 0), 0);
+  const produtosAnterior = anterior.reduce((a, p) => a + (p.itens || []).reduce((s, i) => s + Number(i.quantidade || 0), 0), 0);
+  const ticketAtual = qtdAtual ? valorAtual / qtdAtual : 0;
+  const ticketAnterior = qtdAnterior ? valorAnterior / qtdAnterior : 0;
+
+  document.getElementById('vp-kpis').innerHTML =
+    cardKpi('Valor total', formatMoney(valorAtual), formatMoney(valorAnterior), badgeVariacao(valorAtual, valorAnterior)) +
+    cardKpi('Quantidade de pedidos', String(qtdAtual), String(qtdAnterior), badgeVariacao(qtdAtual, qtdAnterior)) +
+    cardKpi('Produtos vendidos', String(produtosAtual), String(produtosAnterior), badgeVariacao(produtosAtual, produtosAnterior)) +
+    cardKpi('Ticket médio', formatMoney(ticketAtual), formatMoney(ticketAnterior), badgeVariacao(ticketAtual, ticketAnterior));
+
+  if (typeof Chart === 'undefined') return;
+
+  const valoresAtual = valoresPorDiaRelativo(atual, inicio, fim);
+  const valoresAnteriores = valoresPorDiaRelativo(anterior, compInicio, compFim);
+  const maxDias = Math.max(valoresAtual.length, valoresAnteriores.length);
+  const labels = Array.from({ length: maxDias }, (_, i) => `Dia ${i + 1}`);
+
+  if (MN_CHART_VP_LINHA) MN_CHART_VP_LINHA.destroy();
+  const ctxLinha = document.getElementById('vp-chart-linha');
+  if (ctxLinha) {
+    MN_CHART_VP_LINHA = new Chart(ctxLinha.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Período atual', data: valoresAtual, borderColor: '#3fae12', backgroundColor: 'rgba(63,174,18,0.12)', tension: 0.3, fill: true },
+          { label: 'Período anterior', data: valoresAnteriores, borderColor: '#8a94a3', borderDash: [5, 4], tension: 0.3, fill: false },
+        ],
+      },
+      options: { responsive: true, plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}` } } }, scales: { y: { ticks: { callback: (v) => formatMoney(v) } } } },
+    });
+  }
+
+  const porStatus = agregarPorChave(atual, 'status');
+  const statusLabels = { aberto: 'Aberto', faturado: 'Faturado', cancelado: 'Cancelado' };
+  const statusChaves = Object.keys(porStatus);
+  if (MN_CHART_VP_SITUACAO) MN_CHART_VP_SITUACAO.destroy();
+  const ctxSit = document.getElementById('vp-chart-situacao');
+  if (ctxSit) {
+    MN_CHART_VP_SITUACAO = new Chart(ctxSit.getContext('2d'), {
+      type: 'doughnut',
+      data: { labels: statusChaves.map((s) => statusLabels[s] || s), datasets: [{ data: statusChaves.map((s) => porStatus[s]), backgroundColor: ['#d6a34e', '#3fae12', '#e2726c'] }] },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+    });
+  }
+}
+
+// ---------- Estoque ----------
+
+let MN_CHART_ESTOQUE_TOP = null;
+
+function renderEstoqueDashboard() {
+  const produtos = CADASTROS_DATA['produto'] || [];
+  const totalProdutos = produtos.length;
+  const valorEmEstoque = produtos.reduce((a, p) => a + Number(p.estoque || 0) * Number(p.precoVenda || 0), 0);
+  const estoqueBaixo = produtos.filter(produtoTemEstoqueBaixo);
+  const semEstoque = produtos.filter((p) => Number(p.estoque || 0) === 0);
+
+  document.getElementById('es-kpis').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Produtos cadastrados</div><div class="stat-value" style="font-size:22px;">${totalProdutos}</div></div>
+    <div class="stat-card"><div class="stat-label">Valor total em estoque</div><div class="stat-value" style="font-size:20px;">${formatMoney(valorEmEstoque)}</div></div>
+    <div class="stat-card danger"><div class="stat-label">Estoque baixo</div><div class="stat-value" style="font-size:22px;">${estoqueBaixo.length}</div></div>
+    <div class="stat-card danger"><div class="stat-label">Sem estoque</div><div class="stat-value" style="font-size:22px;">${semEstoque.length}</div></div>`;
+
+  const listaEl = document.getElementById('es-lista-atencao');
+  const atencao = [...semEstoque, ...estoqueBaixo.filter((p) => Number(p.estoque || 0) > 0)];
+  listaEl.innerHTML = atencao.length
+    ? atencao.map((p) => `
+      <div class="list-row">
+        <div class="icon-dot">${escapeHtml(initials(p.nome))}</div>
+        <div class="list-row-main"><div class="list-row-title">${escapeHtml(p.nome)}</div><div class="list-row-sub">Mínimo: ${Number(p.quantidadeMinima || 0)}</div></div>
+        <div class="list-row-value" style="color:var(--danger);">${Number(p.estoque || 0)} em estoque</div>
+      </div>`).join('')
+    : '<p class="empty-state">Nenhum produto precisando de atenção agora.</p>';
+
+  if (typeof Chart === 'undefined') return;
+  const porValor = produtos.map((p) => ({ nome: p.nome, valor: Number(p.estoque || 0) * Number(p.precoVenda || 0) })).sort((a, b) => b.valor - a.valor).slice(0, 8);
+  if (MN_CHART_ESTOQUE_TOP) MN_CHART_ESTOQUE_TOP.destroy();
+  const ctx = document.getElementById('es-chart-top');
+  if (ctx) {
+    MN_CHART_ESTOQUE_TOP = new Chart(ctx.getContext('2d'), {
+      type: 'bar',
+      data: { labels: porValor.map((p) => p.nome), datasets: [{ label: 'Valor em estoque', data: porValor.map((p) => p.valor), backgroundColor: '#4fa8d8' }] },
+      options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatMoney(ctx.parsed.x) } } }, scales: { x: { ticks: { callback: (v) => formatMoney(v) } } } },
+    });
+  }
+}
+
+// ---------- Clientes → Novos x Recorrentes ----------
+
+let MN_CHART_CLIENTES_PIZZA = null;
+
+function renderClientesDashboard() {
+  definirPeriodoPadrao('cl');
+  const pedidos = getPedidosVenda();
+  const inicio = document.getElementById('cl-data-inicio').value;
+  const fim = document.getElementById('cl-data-fim').value;
+
+  const noPeriodo = filtrarPedidosPorPeriodo(pedidos, inicio, fim);
+  const clientesNoPeriodo = [...new Set(noPeriodo.map((p) => p.cliente).filter(Boolean))];
+
+  let novos = 0, recorrentes = 0;
+  clientesNoPeriodo.forEach((c) => {
+    const comprouAntes = pedidos.some((p) => p.cliente === c && p.data && p.data < inicio);
+    if (comprouAntes) recorrentes++; else novos++;
+  });
+
+  document.getElementById('cl-kpis').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Clientes que compraram</div><div class="stat-value" style="font-size:22px;">${clientesNoPeriodo.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Clientes novos</div><div class="stat-value" style="font-size:22px; color:var(--blue-text);">${novos}</div></div>
+    <div class="stat-card"><div class="stat-label">Clientes recorrentes</div><div class="stat-value" style="font-size:22px; color:var(--success);">${recorrentes}</div></div>`;
+
+  if (typeof Chart !== 'undefined') {
+    if (MN_CHART_CLIENTES_PIZZA) MN_CHART_CLIENTES_PIZZA.destroy();
+    const ctx = document.getElementById('cl-chart-pizza');
+    if (ctx) {
+      MN_CHART_CLIENTES_PIZZA = new Chart(ctx.getContext('2d'), {
+        type: 'doughnut',
+        data: { labels: ['Novos', 'Recorrentes'], datasets: [{ data: [novos, recorrentes], backgroundColor: ['#4fa8d8', '#3fae12'] }] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+      });
+    }
+  }
+
+  // Atividade da carteira: todo cliente, com a data da última compra —
+  // quem está há mais tempo sem comprar aparece primeiro (pra ação rápida)
+  const clientes = (CLIENTES_FORN_DATA || []).filter((c) => c.tipoCadastro === 'cliente' || c.tipoCadastro === 'ambos');
+  const linhas = clientes.map((c) => {
+    const nomeExibicao = c.fantasia || c.nome;
+    const pedidosDoCliente = pedidos.filter((p) => p.cliente === nomeExibicao).sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+    const ultima = pedidosDoCliente[0] ? pedidosDoCliente[0].data : null;
+    return { nome: nomeExibicao, ultima };
+  }).sort((a, b) => (a.ultima || '0000') < (b.ultima || '0000') ? -1 : 1);
+
+  const listaEl = document.getElementById('cl-lista-atividade');
+  if (listaEl) {
+    listaEl.innerHTML = linhas.length
+      ? linhas.slice(0, 20).map((l) => `
+        <div class="list-row">
+          <div class="icon-dot">${escapeHtml(initials(l.nome))}</div>
+          <div class="list-row-main"><div class="list-row-title">${escapeHtml(l.nome)}</div></div>
+          <div class="list-row-value" style="${l.ultima ? '' : 'color:var(--danger);'}">${l.ultima ? 'Última compra: ' + formatDatePt(l.ultima) : 'Nunca comprou'}</div>
+        </div>`).join('')
+      : '<p class="empty-state">Nenhum cliente cadastrado ainda.</p>';
+  }
+}
+
 function renderDashboardVendas() {
   if (typeof Chart === 'undefined') return;
   const pedidos = getPedidosVenda();
@@ -3108,29 +3899,51 @@ function renderDashboardVendedor() {
 function initMeuNegocio() {
   cloudWatch('eagles_pedidos_venda_v1', pedidosVendaSeed(), (data) => {
     CADASTROS_DATA['pedido-venda'] = data;
-    const secaoAtiva = document.querySelector('.mn-secao:not([style*="display: none"])');
-    if (secaoAtiva && secaoAtiva.id === 'mn-secao-vendas') renderDashboardVendas();
-    if (secaoAtiva && secaoAtiva.id === 'mn-secao-vendedor') renderDashboardVendedor();
+    atualizarSecaoAtivaMeuNegocio();
+  });
+  cloudWatch(CLIENTES_FORN_KEY, clientesFornSeed(), (data) => {
+    CLIENTES_FORN_DATA = data;
+    atualizarSecaoAtivaMeuNegocio();
+  });
+  cloudWatch('eagles_produtos_v1', produtosSeed(), (data) => {
+    CADASTROS_DATA['produto'] = data;
+    atualizarSecaoAtivaMeuNegocio();
   });
   const mesInput = document.getElementById('mn-dashboard-mes');
-  if (mesInput) mesInput.value = '2026-09';
-  FINANCE_MES_ATUAL = '2026-09';
+  if (mesInput) mesInput.value = mesKeyDoHoje();
+  FINANCE_MES_ATUAL = mesKeyDoHoje();
   cloudWatch(FINANCE_TEMPLATE_KEY, financeTemplatePadrao(), (data) => { FINANCE_TEMPLATE_CACHE = data; });
   cloudWatch(FINANCE_CICLOS_KEY, {}, (data) => {
     FINANCE_CICLOS_CACHE = data;
     FINANCE_CICLO = getCicloDoMes(FINANCE_MES_ATUAL);
     gerarRelatorioPeriodo(1, 'mn-dashboard-conteudo', 'mn-dashboard-titulo');
   });
+  renderVisaoGeral();
+}
+
+function atualizarSecaoAtivaMeuNegocio() {
+  const secaoAtiva = document.querySelector('.mn-secao:not([style*="display: none"])');
+  if (!secaoAtiva) return;
+  if (secaoAtiva.id === 'mn-secao-vendas') renderDashboardVendas();
+  if (secaoAtiva.id === 'mn-secao-vendedor') renderDashboardVendedor();
+  if (secaoAtiva.id === 'mn-secao-visao-geral') renderVisaoGeral();
+  if (secaoAtiva.id === 'mn-secao-vendas-pedidos') renderVendasPedidosDashboard();
+  if (secaoAtiva.id === 'mn-secao-estoque') renderEstoqueDashboard();
+  if (secaoAtiva.id === 'mn-secao-clientes') renderClientesDashboard();
 }
 
 function mostrarSecaoNegocio(secao, btn) {
   document.querySelectorAll('.mn-secao').forEach((el) => { el.style.display = 'none'; });
   const alvo = document.getElementById('mn-secao-' + secao);
   if (alvo) alvo.style.display = '';
-  document.querySelectorAll('.mn-nav-item').forEach((b) => b.classList.remove('active'));
+  document.querySelectorAll('.mn-nav-item, .mn-nav-sublink').forEach((b) => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
+  if (secao === 'visao-geral') renderVisaoGeral();
   if (secao === 'vendas') renderDashboardVendas();
   if (secao === 'vendedor') renderDashboardVendedor();
+  if (secao === 'vendas-pedidos') renderVendasPedidosDashboard();
+  if (secao === 'estoque') renderEstoqueDashboard();
+  if (secao === 'clientes') renderClientesDashboard();
 }
 
 function toggleMnSubmenu(id) {
@@ -3482,6 +4295,8 @@ function salvarPedidoVenda() {
 
   const registro = {
     id: PEDIDO_FORM_EDITANDO_ID || genId('pv'),
+    criadoEm: (registroAnterior && registroAnterior.criadoEm) || new Date().toISOString(),
+    atualizadoEm: new Date().toISOString(),
     numero, cliente, vendedor,
     produto: produtoResumo, estado, cidade,
     data: dataVenda, valor: totalVenda,
@@ -3710,18 +4525,19 @@ function montarLinhasItensPedido(pedido) {
 function montarLinhasItensPedidoCompleto(pedido) {
   const itens = pedido.itens || [];
   if (!itens.length) return '<tr><td colspan="8" style="padding:6px;">Nenhum item.</td></tr>';
-  return itens.map((i) => {
+  return itens.map((i, idx) => {
     const precoUn = calcularPrecoUnitario(i);
     const total = precoUn * Number(i.quantidade || 0);
-    return `<tr>
-      <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(i.descricao)}</td>
-      <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(i.codigo || '—')}</td>
-      <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(i.unidade || 'UN')}</td>
-      <td style="padding:6px; border-bottom:1px solid #eee;">${i.quantidade}</td>
-      <td style="padding:6px; border-bottom:1px solid #eee;">${formatMoney(i.precoLista)}</td>
-      <td style="padding:6px; border-bottom:1px solid #eee;">${Number(i.descontoPct || 0)}%</td>
-      <td style="padding:6px; border-bottom:1px solid #eee;">${formatMoney(precoUn)}</td>
-      <td style="padding:6px; border-bottom:1px solid #eee; font-weight:600;">${formatMoney(total)}</td>
+    const fundo = idx % 2 === 1 ? 'background:#f9faf9;' : '';
+    return `<tr style="${fundo}">
+      <td style="padding:7px 6px; border-bottom:1px solid #eee;">${escapeHtml(i.descricao)}</td>
+      <td style="padding:7px 6px; border-bottom:1px solid #eee;">${escapeHtml(i.codigo || '—')}</td>
+      <td style="padding:7px 6px; border-bottom:1px solid #eee;">${escapeHtml(i.unidade || 'UN')}</td>
+      <td style="padding:7px 6px; border-bottom:1px solid #eee;">${i.quantidade}</td>
+      <td style="padding:7px 6px; border-bottom:1px solid #eee;">${formatMoney(i.precoLista)}</td>
+      <td style="padding:7px 6px; border-bottom:1px solid #eee;">${Number(i.descontoPct || 0)}%</td>
+      <td style="padding:7px 6px; border-bottom:1px solid #eee;">${formatMoney(precoUn)}</td>
+      <td style="padding:7px 6px; border-bottom:1px solid #eee; font-weight:600;">${formatMoney(total)}</td>
     </tr>`;
   }).join('');
 }
@@ -3748,18 +4564,23 @@ function montarDocumentoCompletoPedido(pedido, empresa) {
   const linha = (label, valor) => `<div><div style="font-size:10.5px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">${escapeHtml(label)}</div><div style="font-size:13px; margin-top:2px;">${valor}</div></div>`;
   const secao = (titulo, conteudoHtml) => `
     <div style="margin-top:22px;">
-      <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:#333; border-bottom:1.5px solid #333; padding-bottom:6px; margin-bottom:12px;">${escapeHtml(titulo)}</div>
+      <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:#3fae12; border-left:3px solid #3fae12; padding-left:8px; margin-bottom:12px;">${escapeHtml(titulo)}</div>
       ${conteudoHtml}
     </div>`;
 
   return `
-    <div style="padding:30px; font-family: Inter, sans-serif; color:#111; max-width:800px;">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <div style="padding:34px; font-family: Inter, sans-serif; color:#111; max-width:800px;">
+      ${montarCabecalhoDocumentoPdf('Pedido de venda', 'Nº ' + (pedido.numero || '—') + ' · Documento completo')}
+
+      <div style="display:flex; justify-content:space-between; align-items:center; background:#3fae120d; border:1px solid #3fae1240; border-radius:10px; padding:14px 18px; margin-bottom:8px;">
         <div>
-          <h1 style="font-size:21px; margin:0 0 2px;">${escapeHtml(empresa)}</h1>
-          <p style="color:#555; margin:0; font-size:13px;">Pedido de venda nº ${escapeHtml(pedido.numero)} — documento completo</p>
+          <div style="font-size:10.5px; color:#666; text-transform:uppercase; letter-spacing:0.3px;">Cliente</div>
+          <div style="font-size:15px; font-weight:700;">${escapeHtml(pedido.cliente || '—')}</div>
         </div>
-        <div style="text-align:right; font-size:12px; color:#555;">Emitido em ${formatDatePt(isoHoje())}</div>
+        <div style="text-align:right;">
+          <div style="font-size:10.5px; color:#666; text-transform:uppercase; letter-spacing:0.3px;">Total da venda</div>
+          <div style="font-size:22px; font-weight:700; color:#3fae12;">${formatMoney(pedido.valor)}</div>
+        </div>
       </div>
 
       ${secao('Dados gerais', `
@@ -3773,15 +4594,15 @@ function montarDocumentoCompletoPedido(pedido, empresa) {
 
       ${secao('Itens do pedido', `
         <table style="width:100%; border-collapse:collapse; font-size:12px;">
-          <thead><tr>
-            <th style="text-align:left; padding:6px; border-bottom:2px solid #333;">Descrição</th>
-            <th style="text-align:left; padding:6px; border-bottom:2px solid #333;">Código</th>
-            <th style="text-align:left; padding:6px; border-bottom:2px solid #333;">Un</th>
-            <th style="text-align:left; padding:6px; border-bottom:2px solid #333;">Qtd.</th>
-            <th style="text-align:left; padding:6px; border-bottom:2px solid #333;">Preço lista</th>
-            <th style="text-align:left; padding:6px; border-bottom:2px solid #333;">Desc.</th>
-            <th style="text-align:left; padding:6px; border-bottom:2px solid #333;">Preço un.</th>
-            <th style="text-align:left; padding:6px; border-bottom:2px solid #333;">Preço total</th>
+          <thead><tr style="background:#f4f6f4;">
+            <th style="text-align:left; padding:8px 6px; font-size:10.5px; text-transform:uppercase; color:#666;">Descrição</th>
+            <th style="text-align:left; padding:8px 6px; font-size:10.5px; text-transform:uppercase; color:#666;">Código</th>
+            <th style="text-align:left; padding:8px 6px; font-size:10.5px; text-transform:uppercase; color:#666;">Un</th>
+            <th style="text-align:left; padding:8px 6px; font-size:10.5px; text-transform:uppercase; color:#666;">Qtd.</th>
+            <th style="text-align:left; padding:8px 6px; font-size:10.5px; text-transform:uppercase; color:#666;">Preço lista</th>
+            <th style="text-align:left; padding:8px 6px; font-size:10.5px; text-transform:uppercase; color:#666;">Desc.</th>
+            <th style="text-align:left; padding:8px 6px; font-size:10.5px; text-transform:uppercase; color:#666;">Preço un.</th>
+            <th style="text-align:left; padding:8px 6px; font-size:10.5px; text-transform:uppercase; color:#666;">Preço total</th>
           </tr></thead>
           <tbody>${montarLinhasItensPedidoCompleto(pedido)}</tbody>
         </table>`)}
@@ -3794,7 +4615,7 @@ function montarDocumentoCompletoPedido(pedido, empresa) {
           ${linha('Outras despesas', formatMoney(pedido.outrasDespesas))}
           ${linha('Desconto total dos itens', formatMoney(descontoTotalItens))}
           ${linha('Total dos itens', formatMoney(totalItens))}
-          ${linha('Total da venda', `<strong>${formatMoney(pedido.valor)}</strong>`)}
+          ${linha('Total da venda', `<strong style="color:#3fae12;">${formatMoney(pedido.valor)}</strong>`)}
         </div>`)}
 
       ${secao('Detalhes da venda', `
@@ -3852,7 +4673,7 @@ function imprimirDocumentoPedido(id, tipo) {
 
   if (tipo === 'completo') {
     document.getElementById('print-area').innerHTML = montarDocumentoCompletoPedido(pedido, empresa);
-    window.print();
+    baixarPrintAreaComoPdf(`pedido-${pedido.numero}.pdf`);
     return;
   }
 

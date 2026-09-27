@@ -83,26 +83,155 @@
 <div class="mn-layout">
   <div class="panel" style="padding:10px;">
     <nav style="display:flex; flex-direction:column; gap:2px;">
-      <button type="button" class="mn-nav-item active" onclick="mostrarSecaoNegocio('dashboard', this)" style="justify-content:flex-start; gap:9px;"><svg class="icone-menu" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Dashboard</button>
+      <button type="button" class="mn-nav-item active" onclick="mostrarSecaoNegocio('visao-geral', this)" style="justify-content:flex-start; gap:9px;"><svg class="icone-menu" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Visão geral</button>
+      <button type="button" class="mn-nav-item" onclick="mostrarSecaoNegocio('dashboard', this)" style="justify-content:flex-start; gap:9px;"><svg class="icone-menu" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Financeiro</button>
 
       <div>
-        <button type="button" class="mn-nav-item" onclick="mostrarSecaoNegocio('vendas', this)">
+        <button type="button" class="mn-nav-item" onclick="toggleMnSubmenu('mn-sub-vendas')">
           <span style="display:flex; align-items:center; gap:9px;"><svg class="icone-menu" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg> Vendas</span>
-          <span onclick="event.stopPropagation(); toggleMnSubmenu('mn-sub-vendas')">▾</span>
+          <span>▾</span>
         </button>
-        <div id="mn-sub-vendas" style="display:none; flex-direction:column; gap:2px; padding-left:10px;">
-          <a class="mn-nav-sublink" href="pedidos-venda.html">Pedido de vendas</a>
-          <button type="button" class="mn-nav-sublink" onclick="mostrarSecaoNegocio('vendedor', this)">Pedidos por vendedor</button>
+        <div id="mn-sub-vendas" style="display:flex; flex-direction:column; gap:2px; padding-left:10px;">
+          <button type="button" class="mn-nav-sublink" onclick="mostrarSecaoNegocio('vendas-pedidos', this)">Pedidos de venda</button>
+          <button type="button" class="mn-nav-sublink" onclick="mostrarSecaoNegocio('vendas', this)">Mapa de vendas</button>
+          <button type="button" class="mn-nav-sublink" onclick="mostrarSecaoNegocio('vendedor', this)">Venda por vendedor</button>
         </div>
       </div>
 
-      <button type="button" class="mn-nav-item" onclick="mostrarSecaoNegocio('vendedor', this)" style="justify-content:flex-start; gap:9px;"><svg class="icone-menu" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg> Venda por vendedor</button>
+      <div>
+        <button type="button" class="mn-nav-item" onclick="toggleMnSubmenu('mn-sub-estoque')">
+          <span style="display:flex; align-items:center; gap:9px;"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M21 8V21H3V8"/><path d="M1 3h22v5H1z"/><line x1="10" y1="12" x2="14" y2="12"/></svg> Estoque</span>
+          <span>▾</span>
+        </button>
+        <div id="mn-sub-estoque" style="display:flex; flex-direction:column; gap:2px; padding-left:10px;">
+          <button type="button" class="mn-nav-sublink" onclick="mostrarSecaoNegocio('estoque', this)">Produtos em estoque</button>
+        </div>
+      </div>
+
+      <div>
+        <button type="button" class="mn-nav-item" onclick="toggleMnSubmenu('mn-sub-clientes')">
+          <span style="display:flex; align-items:center; gap:9px;"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Clientes</span>
+          <span>▾</span>
+        </button>
+        <div id="mn-sub-clientes" style="display:flex; flex-direction:column; gap:2px; padding-left:10px;">
+          <button type="button" class="mn-nav-sublink" onclick="mostrarSecaoNegocio('clientes', this)">Novos x Recorrentes</button>
+        </div>
+      </div>
     </nav>
   </div>
 
   <div>
 
-    <div class="mn-secao" id="mn-secao-dashboard">
+    <div class="mn-secao" id="mn-secao-visao-geral">
+      <div class="page-header" style="margin-bottom:16px;">
+        <div><h2 style="margin:0; font-size:17px;">Visão geral do negócio</h2><p style="margin:2px 0 0;">Vendas, estoque e clientes — tudo num só lugar</p></div>
+      </div>
+
+      <div class="stat-grid stat-grid-5" style="margin-bottom:20px;" id="vg-kpis">
+        <div class="stat-card"><div class="stat-label">Clientes ativos</div><div class="stat-value" id="vg-kpi-clientes" style="font-size:22px;">—</div></div>
+        <div class="stat-card"><div class="stat-label">Produtos cadastrados</div><div class="stat-value" id="vg-kpi-produtos" style="font-size:22px;">—</div></div>
+        <div class="stat-card danger"><div class="stat-label">Estoque baixo</div><div class="stat-value" id="vg-kpi-estoque-baixo" style="font-size:22px;">—</div></div>
+        <div class="stat-card"><div class="stat-label">Pedidos em aberto</div><div class="stat-value" id="vg-kpi-pedidos-abertos" style="font-size:22px;">—</div></div>
+        <div class="stat-card"><div class="stat-label">Ticket médio</div><div class="stat-value" id="vg-kpi-ticket-medio" style="font-size:20px;">—</div></div>
+      </div>
+
+      <div class="grid-2" style="align-items:start; margin-bottom:20px;">
+        <div class="panel">
+          <div class="panel-title"><h2>Vendas por produto</h2><span>participação de cada produto no total vendido</span></div>
+          <canvas id="vg-chart-produto-pizza" height="240"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><h2>Situação dos pedidos</h2><span>o que já faturou, o que está aberto ou cancelado</span></div>
+          <canvas id="vg-chart-situacao-pizza" height="240"></canvas>
+        </div>
+      </div>
+
+      <div class="grid-2" style="align-items:start; margin-bottom:20px;">
+        <div class="panel">
+          <div class="panel-title"><h2>Clientes por tipo</h2><span>clientes x fornecedores cadastrados</span></div>
+          <canvas id="vg-chart-clientes-pizza" height="200"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><h2>Estoque por situação</h2><span>produtos ativos, inativos e com estoque baixo</span></div>
+          <canvas id="vg-chart-estoque-pizza" height="200"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><h2>Top 5 produtos que mais venderam</h2></div>
+        <canvas id="vg-chart-top-produtos" height="140"></canvas>
+      </div>
+
+      <div class="panel" id="vg-estoque-baixo-painel">
+        <div class="panel-title"><h2>Produtos com estoque baixo</h2><span>clique num produto pra editar</span></div>
+        <div id="vg-lista-estoque-baixo"></div>
+      </div>
+    </div>
+
+    <div class="mn-secao" id="mn-secao-vendas-pedidos" style="display:none;">
+      <div class="page-header" style="margin-bottom:16px;">
+        <div><h2 style="margin:0; font-size:17px;">Pedidos de venda</h2><p style="margin:2px 0 0;">Compare o período atual com o anterior</p></div>
+        <a href="pedidos-venda.html" class="btn btn-small">Ver lista completa</a>
+      </div>
+      <div class="panel" style="margin-bottom:16px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="field"><label>Data início</label><input type="date" id="vp-data-inicio"></div>
+        <div class="field"><label>Data fim</label><input type="date" id="vp-data-fim"></div>
+        <div class="field"><label>Comparar de</label><input type="date" id="vp-comp-inicio"></div>
+        <div class="field"><label>até</label><input type="date" id="vp-comp-fim"></div>
+        <button type="button" class="btn btn-primary" onclick="renderVendasPedidosDashboard()">Visualizar</button>
+      </div>
+      <div class="stat-grid" id="vp-kpis" style="margin-bottom:20px;"></div>
+      <div class="grid-2" style="align-items:start;">
+        <div class="panel">
+          <div class="panel-title"><h2>Valor total de pedidos por dia</h2></div>
+          <canvas id="vp-chart-linha" height="220"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><h2>Situação</h2></div>
+          <canvas id="vp-chart-situacao" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="mn-secao" id="mn-secao-estoque" style="display:none;">
+      <div class="page-header" style="margin-bottom:16px;">
+        <div><h2 style="margin:0; font-size:17px;">Produtos em estoque</h2><p style="margin:2px 0 0;">Situação atual do seu estoque</p></div>
+        <a href="produtos.html" class="btn btn-small">Ver lista completa</a>
+      </div>
+      <div class="stat-grid" id="es-kpis" style="margin-bottom:20px;"></div>
+      <div class="grid-2" style="align-items:start;">
+        <div class="panel">
+          <div class="panel-title"><h2>Maior valor em estoque</h2><span>top 8 produtos</span></div>
+          <canvas id="es-chart-top" height="240"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><h2>Precisa de atenção</h2><span>sem estoque ou estoque baixo</span></div>
+          <div id="es-lista-atencao"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mn-secao" id="mn-secao-clientes" style="display:none;">
+      <div class="page-header" style="margin-bottom:16px;">
+        <div><h2 style="margin:0; font-size:17px;">Clientes — Novos x Recorrentes</h2><p style="margin:2px 0 0;">Quem comprou no período e quem já era cliente antes</p></div>
+        <a href="clientes-fornecedores.html" class="btn btn-small">Ver lista completa</a>
+      </div>
+      <div class="panel" style="margin-bottom:16px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="field"><label>Data início</label><input type="date" id="cl-data-inicio"></div>
+        <div class="field"><label>Data fim</label><input type="date" id="cl-data-fim"></div>
+        <button type="button" class="btn btn-primary" onclick="renderClientesDashboard()">Visualizar</button>
+      </div>
+      <div class="grid-2" style="align-items:start; margin-bottom:20px;">
+        <div class="stat-grid" id="cl-kpis" style="grid-template-columns:1fr; gap:12px;"></div>
+        <div class="panel"><canvas id="cl-chart-pizza" height="180"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><h2>Atividade da carteira</h2><span>quem está há mais tempo sem comprar aparece primeiro</span></div>
+        <div id="cl-lista-atividade"></div>
+      </div>
+    </div>
+
+    <div class="mn-secao" id="mn-secao-dashboard" style="display:none;">
       <div class="page-header" style="margin-bottom:16px;">
         <div><h2 id="mn-dashboard-titulo" style="margin:0; font-size:17px;">Relatório financeiro</h2></div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -180,6 +309,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="script.js"></script>
 <script>

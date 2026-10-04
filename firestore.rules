@@ -18,6 +18,32 @@
 //   consegue criar nem remover outros usuários.
 // - Um TenantAdmin só cria/gerencia usuários dentro da PRÓPRIA empresa.
 //
+// 02/10/2026 (Serviços): nova coleção pública planos_publicos.
+//
+// 02/10/2026 (Níveis de acesso): cada empresa tem um limite de usuários
+//   (vagas) e 3 níveis — Diretor (tudo), Administrativo (tudo menos o
+//   financeiro) e Financeiro (financeiro + só visualizar o resto). Os
+//   papéis antigos TenantAdmin/TenantUser valem como Diretor.
+//
+// 02/10/2026 (Kanban): novas coleções tenants/{id}/kanban_tarefas e
+//   tenants/{id}/kanban_projetos.
+//
+// REVISÃO DE SEGURANÇA (02/10/2026) — o que mudou:
+// - Ninguém consegue mais mudar o PRÓPRIO papel (role) ou a própria
+//   empresa (tenantId). Antes, um usuário comum podia se promover a
+//   SuperAdmin pelo console do navegador.
+// - Um TenantAdmin só cria/edita usuários como TenantAdmin ou TenantUser
+//   (nunca SuperAdmin) e não consegue mover alguém pra outra empresa.
+// - O documento da empresa (tenants/{id}: plano, ativo, nome) agora só é
+//   gravado pelo Super Admin. Antes, qualquer membro podia trocar o
+//   próprio plano ou se reativar.
+// - Empresa desativada (ativo == false) perde o acesso aos dados de
+//   verdade, não só na tela.
+// - propostas_publicas e briefings_publicos: o link continua abrindo
+//   SEM login (leitura de UM documento pelo id), mas LISTAR a coleção
+//   agora só é permitido pro dono. Antes, qualquer pessoa conseguia
+//   listar as propostas e os briefings de TODAS as empresas.
+//
 // LIMITAÇÃO CONHECIDA: o limite de 5 usuários por empresa é aplicado no
 // aplicativo (JavaScript), não aqui nas regras — bloquear isso também no
 // servidor exigiria contar documentos numa regra (o Firestore não faz
@@ -40,62 +66,252 @@ service cloud.firestore {
     }
 
     function meuTenantId() {
-      return meuUsuarioDoc().tenantId;
+      return meuUsuarioDoc().get('tenantId', null);
+    }
+
+    function meuRole() {
+      return meuUsuarioDoc().get('role', 'TenantUser');
     }
 
     function souSuperAdmin() {
-      return estaLogado() && meuUsuarioDoc().role == 'SuperAdmin';
+      return estaLogado() && meuRole() == 'SuperAdmin';
     }
 
-    function souAdminOuSuperAdmin() {
-      return estaLogado() && (meuUsuarioDoc().role == 'TenantAdmin' || meuUsuarioDoc().role == 'SuperAdmin');
+    // Níveis da empresa. Papéis antigos (TenantAdmin/TenantUser) = Diretor.
+    function ehRoleDiretor(role) {
+      return role == 'Diretor' || role == 'TenantAdmin' || role == 'TenantUser';
+    }
+    function souDiretor() {
+      return estaLogado() && (meuRole() == 'SuperAdmin' || ehRoleDiretor(meuRole()));
+    }
+    // Vê e mexe no financeiro (caixa, despesas, lucro, metas)
+    function veFinanceiro() {
+      return estaLogado() && (meuRole() == 'SuperAdmin' || ehRoleDiretor(meuRole()) || meuRole() == 'Financeiro');
+    }
+    // Cadastra e edita o operacional (clientes, pedidos, CRM, Kanban...)
+    function podeOperar() {
+      return estaLogado() && (meuRole() == 'SuperAdmin' || ehRoleDiretor(meuRole()) || meuRole() == 'Administrativo');
+    }
+
+    // Níveis que um Diretor pode dar (nunca SuperAdmin).
+    function roleNovo(role) {
+      return role == 'Diretor' || role == 'Administrativo' || role == 'Financeiro';
+    }
+    // Inclui os papéis antigos (pra editar/remover quem já existia)
+    function roleDeEmpresa(role) {
+      return roleNovo(role) || role == 'TenantAdmin' || role == 'TenantUser';
+    }
+
+    // Limite de usuários: cada usuário ocupa uma "vaga" numerada
+    // (tenants/{id}/vagas/{1..limite}). Empresa sem limite definido
+    // (criada antes desse recurso) não exige vaga.
+    function vagaValida(tenantId, uid) {
+      let t = get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+      return !('limiteUsuarios' in t) || (
+        request.resource.data.vaga is int &&
+        request.resource.data.vaga >= 1 &&
+        request.resource.data.vaga <= t.limiteUsuarios &&
+        existsAfter(/databases/$(database)/documents/tenants/$(tenantId)/vagas/$(string(request.resource.data.vaga))) &&
+        getAfter(/databases/$(database)/documents/tenants/$(tenantId)/vagas/$(string(request.resource.data.vaga))).data.uid == uid
+      );
+    }
+
+    // A empresa existe e não foi desativada pelo Super Admin.
+    // (empresa sem o campo "ativo" = criada antes desse recurso = ativa)
+    function empresaAtiva(tenantId) {
+      return exists(/databases/$(database)/documents/tenants/$(tenantId)) &&
+        get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('ativo', true) != false;
+    }
+
+    // Sou membro dessa empresa e ela está ativa.
+    function souMembroAtivo(tenantId) {
+      return estaLogado() && meuTenantId() != null && meuTenantId() == tenantId && empresaAtiva(tenantId);
     }
 
     // ---------- usuarios/{uid} ----------
-    // Cada usuário sempre pode ler o próprio documento (é assim que o
-    // sistema descobre o tenantId e o papel dele logo após o login).
-    // Só um admin da mesma empresa (ou o Super Admin) pode ver os outros
-    // usuários dessa empresa, criar novos ou remover acesso.
     match /usuarios/{userId} {
+      // Cada um lê o próprio documento (é assim que o sistema descobre o
+      // tenantId e o papel logo após o login). Colegas da mesma empresa
+      // também (a tela de Usuários lista a equipe).
       allow read: if estaLogado() && (
         request.auth.uid == userId ||
         souSuperAdmin() ||
-        meuTenantId() == resource.data.tenantId
+        (resource.data.get('tenantId', null) != null && meuTenantId() == resource.data.get('tenantId', null))
       );
 
+      // Super Admin cria qualquer usuário. Diretor só cria na própria
+      // empresa, num nível de empresa, numa vaga livre do limite e nunca
+      // como titular (titular é definido só pelo Super Admin).
       allow create: if estaLogado() && (
         souSuperAdmin() ||
-        (souAdminOuSuperAdmin() && request.resource.data.tenantId == meuTenantId())
+        (souDiretor() &&
+          request.resource.data.tenantId == meuTenantId() &&
+          empresaAtiva(meuTenantId()) &&
+          roleNovo(request.resource.data.role) &&
+          request.resource.data.get('titular', false) == false &&
+          vagaValida(meuTenantId(), userId))
       );
 
       allow update: if estaLogado() && (
-        request.auth.uid == userId ||
         souSuperAdmin() ||
-        (souAdminOuSuperAdmin() && resource.data.tenantId == meuTenantId())
+        // o próprio usuário: pode mudar o nome etc., NUNCA nível, empresa,
+        // titularidade ou vaga
+        (request.auth.uid == userId &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'tenantId', 'titular', 'vaga'])) ||
+        // Diretor: só gente da própria empresa, que continua nela, num nível
+        // de empresa — e nunca mexe no titular
+        (souDiretor() &&
+          resource.data.tenantId == meuTenantId() &&
+          request.resource.data.tenantId == meuTenantId() &&
+          resource.data.get('titular', false) == false &&
+          roleNovo(request.resource.data.role) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['titular', 'vaga']))
       );
 
+      // Remover acesso: Diretor da empresa, nunca o titular.
       allow delete: if estaLogado() && (
         souSuperAdmin() ||
-        (souAdminOuSuperAdmin() && resource.data.tenantId == meuTenantId())
+        (souDiretor() &&
+          resource.data.tenantId == meuTenantId() &&
+          resource.data.get('titular', false) == false &&
+          roleDeEmpresa(resource.data.role))
       );
     }
 
     // ---------- tenants/{tenantId} ----------
-    // Documento com os dados gerais da empresa. Só quem pertence a essa
-    // empresa (ou o Super Admin) pode ler/gravar.
+    // Dados gerais da empresa (nome, plano, ativo). Membros LEEM (o app
+    // precisa saber o plano); só o Super Admin GRAVA.
     match /tenants/{tenantId} {
-      allow read, write: if estaLogado() && (souSuperAdmin() || meuTenantId() == tenantId);
+      allow read: if estaLogado() && (souSuperAdmin() || meuTenantId() == tenantId);
+      allow write: if souSuperAdmin();
 
       // ---------- tenants/{tenantId}/dados/{docId} ----------
-      // Aqui ficam TODOS os dados operacionais da empresa: clientes,
-      // produtos, pedidos, financeiro etc. — cada um guardado como um
-      // documento (ex: "eagles_produtos_v1") com o array inteiro dentro
-      // do campo "valor". Como cada documento pertence inteiramente a
-      // uma empresa só, a regra de isolamento é simples: só quem é
-      // dessa empresa (pelo caminho) pode ler ou escrever.
+      // TODOS os dados operacionais da empresa (clientes, produtos,
+      // pedidos, financeiro, CRM, configurações...). Só membros de uma
+      // empresa ATIVA (ou o Super Admin) leem e gravam.
+      // Por nível: o financeiro (caixa, modelo, metas) só pra quem vê
+      // financeiro; configurações da empresa só o Diretor grava; o resto
+      // todos leem e só quem opera grava.
       match /dados/{docId} {
-        allow read, write: if estaLogado() && (souSuperAdmin() || meuTenantId() == tenantId);
+        allow read: if souSuperAdmin() || (souMembroAtivo(tenantId) &&
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1']) || veFinanceiro()));
+        allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && (
+          (docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1'] && veFinanceiro()) ||
+          (docId in ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1'] && souDiretor()) ||
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1']) && podeOperar())
+        ));
       }
+
+      // Vagas do limite de usuários: o Diretor ocupa uma vaga junto com a
+      // criação do usuário (mesmo lote) e libera junto com a remoção.
+      match /vagas/{vagaId} {
+        allow read: if souSuperAdmin() || (estaLogado() && meuTenantId() == tenantId);
+        allow create: if souSuperAdmin() || (
+          souDiretor() && meuTenantId() == tenantId && empresaAtiva(tenantId) &&
+          int(vagaId) >= 1 &&
+          int(vagaId) <= get(/databases/$(database)/documents/tenants/$(tenantId)).data.limiteUsuarios &&
+          request.resource.data.uid is string &&
+          getAfter(/databases/$(database)/documents/usuarios/$(request.resource.data.uid)).data.tenantId == tenantId
+        );
+        allow update: if souSuperAdmin();
+        allow delete: if souSuperAdmin() || (
+          souDiretor() && meuTenantId() == tenantId &&
+          !existsAfter(/databases/$(database)/documents/usuarios/$(resource.data.uid))
+        );
+      }
+
+      // Receitas lançadas por quem NÃO vê o financeiro (ex.: Administrativo
+      // fechando um negócio). Ele só consegue CRIAR aqui — nunca ler o
+      // caixa. Quem vê o financeiro move essas receitas pro mês certo.
+      match /receitas_pendentes/{id} {
+        allow create: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
+        allow read, delete: if souSuperAdmin() || (souMembroAtivo(tenantId) && veFinanceiro());
+      }
+
+      // ---------- tenants/{tenantId}/kanban_tarefas/{tarefaId} ----------
+      // Kanban do CRM: UMA tarefa por documento (pra equipe editar o
+      // quadro ao mesmo tempo sem uma gravação apagar a outra). Mesma
+      // proteção dos dados: só membros de empresa ativa (ou Super Admin).
+      match /kanban_tarefas/{tarefaId} {
+        allow read: if souSuperAdmin() || souMembroAtivo(tenantId);
+        allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
+      }
+
+      // Projetos do Kanban: também um documento por projeto.
+      match /kanban_projetos/{projetoId} {
+        allow read: if souSuperAdmin() || souMembroAtivo(tenantId);
+        allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
+      }
+    }
+
+    // ---------- propostas_publicas/{propostaId} ----------
+    // Exceção controlada: o cliente final abre a proposta por um link,
+    // sem login.
+    // - "get" (abrir UM documento pelo id do link): público, desde que não
+    //   seja rascunho.
+    // - "list" (consultar a coleção): só o dono, filtrando pela própria
+    //   empresa. Sem isso, qualquer um listaria propostas de todo mundo.
+    // - Quem não é dono só consegue marcar como visualizada, aprovar (com
+    //   assinatura) ou recusar — nenhum outro campo.
+    match /propostas_publicas/{propostaId} {
+      allow get: if resource.data.status != 'rascunho' ||
+        (estaLogado() && (souSuperAdmin() || resource.data.tenantId == meuTenantId()));
+
+      allow list: if estaLogado() && (souSuperAdmin() || resource.data.tenantId == meuTenantId());
+
+      allow create: if estaLogado() && request.resource.data.tenantId == meuTenantId() && empresaAtiva(meuTenantId()) && podeOperar();
+
+      allow update: if
+        (estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()))) ||
+        (
+          resource.data.status == 'enviada' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'assinatura', 'atualizadoEm', 'visualizadoEm']) &&
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visualizadoEm']) ||
+            request.resource.data.status == 'aprovada' ||
+            request.resource.data.status == 'recusada'
+          )
+        );
+
+      allow delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+    }
+
+    // ---------- planos_publicos/{endereco} ----------
+    // Apresentação pública de planos: o visitante abre UM documento pelo
+    // endereço (só se a página estiver ativa). O id do documento É o
+    // endereço, então duas empresas nunca usam o mesmo: a segunda não
+    // consegue gravar por cima (o documento já tem dono).
+    match /planos_publicos/{endereco} {
+      allow get: if resource.data.ativa == true ||
+        (estaLogado() && (souSuperAdmin() || resource.data.tenantId == meuTenantId()));
+      allow list: if estaLogado() && (souSuperAdmin() || resource.data.tenantId == meuTenantId());
+      allow create: if estaLogado() && request.resource.data.tenantId == meuTenantId() && empresaAtiva(meuTenantId()) && podeOperar();
+      allow update: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar())) &&
+        request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+    }
+
+    // ---------- briefings_publicos/{briefingId} ----------
+    // Mesma lógica: o cliente final preenche pelo link, sem login.
+    // - "get": público (quem tem o link abre).
+    // - "list": só o dono, filtrando pela própria empresa.
+    // - Quem não é dono só responde, e só enquanto está "pendente".
+    match /briefings_publicos/{briefingId} {
+      allow get: if true;
+
+      allow list: if estaLogado() && (souSuperAdmin() || resource.data.tenantId == meuTenantId());
+
+      allow create: if estaLogado() && request.resource.data.tenantId == meuTenantId() && empresaAtiva(meuTenantId()) && podeOperar();
+
+      allow update: if
+        (estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()))) ||
+        (
+          resource.data.status == 'pendente' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respostas', 'respondidoEm']) &&
+          request.resource.data.status == 'respondido'
+        );
+
+      allow delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
     }
   }
 }

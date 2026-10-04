@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#5fd436">
 <link rel="icon" href="assets/favicon-login-alert.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<script>(function(){try{var t=localStorage.getItem('eagles_tema')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>(function(){try{var r=document.documentElement,a=JSON.parse(localStorage.getItem('eagles_tema_aplicado_v1')||'null');if(a&&a.modo){r.setAttribute('data-theme',a.modo);if(a.custom&&a.vars){r.setAttribute('data-tema-custom','');for(var k in a.vars){if(k.indexOf('--')===0)r.style.setProperty(k,a.vars[k]);}}}else{r.setAttribute('data-theme',localStorage.getItem('eagles_tema')||'light');}}catch(e){}})();</script>
 <style>
   .login-page { min-height: 100vh; display: flex; }
   .login-lado-ilustracao {
@@ -196,5 +196,16 @@ function recuperarSenha() {
     .finally(() => { btn.disabled = false; });
 }
 </script>
+<div class="modal-overlay" id="modal-aviso-sistema">
+  <div class="modal crm-modal-aviso">
+    <div class="modal-header"><h2 id="aviso-sistema-titulo">Confirmar</h2></div>
+    <p id="aviso-sistema-mensagem" style="color:var(--text-soft); white-space:pre-wrap;"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="aviso-sistema-btn-cancelar" onclick="fecharAvisoSistema(false)">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="aviso-sistema-btn-ok" onclick="fecharAvisoSistema(true)">OK</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

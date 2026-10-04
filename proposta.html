@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="eagles-pagina-publica" content="1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Proposta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="assets/favicon-eagles.png">
+<script>(function(){try{var t=localStorage.getItem('eagles_tema')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  body { display:flex; justify-content:center; padding:32px 16px; min-height:100vh; }
+  .prop-wrap { width:100%; max-width:640px; }
+  .prop-cabecalho { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+  .prop-logo { width:52px; height:52px; border-radius:12px; object-fit:cover; }
+  .prop-logo-letra { width:52px; height:52px; border-radius:12px; background:var(--blue-strong); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; }
+  .prop-assinatura-canvas { border:1.5px dashed var(--border); border-radius:var(--radius); width:100%; height:160px; touch-action:none; background:#fff; cursor:crosshair; }
+</style>
+</head>
+<body>
+<div class="prop-wrap">
+  <div id="prop-carregando" style="text-align:center; padding:60px 0; color:var(--text-soft);">Carregando proposta...</div>
+  <div id="prop-erro" style="display:none; text-align:center; padding:60px 20px;">
+    <div class="ic-circulo"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ic-busca"/></svg></div>
+    <h2>Proposta não encontrada</h2>
+    <p style="color:var(--text-soft);">O link pode estar incorreto, ou a proposta ainda não foi enviada.</p>
+  </div>
+
+  <div id="prop-conteudo" style="display:none;">
+    <img id="prop-banner" alt="" style="display:none; width:100%; aspect-ratio:4/1; object-fit:cover; border-radius:14px; margin-bottom:20px;">
+    <div class="prop-cabecalho">
+      <div id="prop-logo-area"></div>
+      <div>
+        <div id="prop-empresa-nome" style="font-weight:700; font-size:16px;"></div>
+        <div style="font-size:12px; color:var(--text-soft);">Proposta comercial</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h1 id="prop-titulo" style="margin:0 0 4px; font-size:20px;"></h1>
+      <p style="color:var(--text-soft); margin:0 0 18px;">Pra: <strong id="prop-cliente" style="color:var(--text);"></strong></p>
+      <p id="prop-boas-vindas" style="display:none; color:var(--text-soft); font-size:13px; margin:0 0 16px;"></p>
+
+      <div id="prop-itens"></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); margin-top:12px; padding-top:12px;">
+        <strong>Total</strong>
+        <strong id="prop-total" style="font-size:20px; color:var(--blue-text);"></strong>
+      </div>
+
+      <div id="prop-extra" style="margin-top:16px; font-size:13px; color:var(--text-soft);"></div>
+    </div>
+
+    <div id="prop-avaliacoes" style="display:none;">
+      <h3 style="font-size:14px; margin:18px 0 10px;">O que dizem nossos clientes</h3>
+      <div id="prop-avaliacoes-lista"></div>
+    </div>
+
+    <div id="prop-acoes-pendente" class="panel" style="display:none; margin-top:16px; text-align:center;">
+      <p style="margin:0 0 14px;">O que você decide sobre essa proposta?</p>
+      <div style="display:flex; gap:10px; justify-content:center;">
+        <button type="button" class="btn" style="color:var(--danger); border-color:var(--danger);" onclick="recusarPropostaPublica()">Recusar</button>
+        <button type="button" class="btn btn-primary" id="prop-btn-aprovar" onclick="mostrarAssinaturaPublica()">Aprovar</button>
+      </div>
+    </div>
+
+    <div id="prop-assinatura-area" class="panel" style="display:none; margin-top:16px;">
+      <h3 style="margin-top:0;">Confirme sua aprovação</h3>
+      <div class="field"><label>Seu nome completo</label><input type="text" id="prop-nome-assinante" placeholder="Digite seu nome"></div>
+      <div class="field"><label>Assine aqui (com o dedo ou o mouse)</label><canvas id="prop-canvas-assinatura" class="prop-assinatura-canvas"></canvas></div>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <button type="button" class="btn btn-small" onclick="limparAssinaturaPublica()">Limpar</button>
+      </div>
+      <p style="font-size:11px; color:var(--text-soft); margin-top:10px;"><svg class="ic ic-aviso" aria-hidden="true" focusable="false"><use href="#ic-alerta"/></svg> Essa assinatura fica registrada dentro do sistema, com data e hora — mas não tem o mesmo nível de certificação legal (ICP-Brasil) de serviços especializados como Clicksign ou DocuSign.</p>
+      <button type="button" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:12px;" onclick="confirmarAprovacaoPublica()">Confirmar aprovação</button>
+    </div>
+
+    <div id="prop-ja-respondida" style="display:none; text-align:center; padding:30px 0;">
+      <div id="prop-resposta-icone" style="font-size:44px; margin-bottom:10px;"></div>
+      <h2 id="prop-resposta-titulo"></h2>
+      <p id="prop-resposta-texto" style="color:var(--text-soft);"></p>
+    </div>
+    <p id="prop-rodape" style="display:none; text-align:center; font-size:12px; color:var(--text-soft); margin:26px 0 0;"></p>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="script.js"></script>
+<script>
+carregarPropostaPublica();
+</script>
+<div class="modal-overlay" id="modal-aviso-sistema">
+  <div class="modal crm-modal-aviso">
+    <div class="modal-header"><h2 id="aviso-sistema-titulo">Confirmar</h2></div>
+    <p id="aviso-sistema-mensagem" style="color:var(--text-soft); white-space:pre-wrap;"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="aviso-sistema-btn-cancelar" onclick="fecharAvisoSistema(false)">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="aviso-sistema-btn-ok" onclick="fecharAvisoSistema(true)">OK</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="eagles-pagina-publica" content="1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Briefing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="assets/favicon-eagles.png">
+<script>(function(){try{var t=localStorage.getItem('eagles_tema')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  body { display:flex; justify-content:center; padding:24px 16px; min-height:100vh; }
+  .brf-wrap { width:100%; max-width:600px; }
+</style>
+</head>
+<body>
+<div class="brf-wrap">
+  <div id="brf-carregando" style="text-align:center; padding:60px 0; color:var(--text-soft);">Carregando briefing...</div>
+  <div id="brf-erro" style="display:none; text-align:center; padding:60px 20px;">
+    <div class="ic-circulo"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ic-busca"/></svg></div>
+    <h2>Briefing não encontrado</h2>
+    <p style="color:var(--text-soft);">O link pode estar incorreto.</p>
+  </div>
+
+  <div id="brf-conteudo" style="display:none;">
+    <div class="brf-header">
+      <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+        <img id="brf-logo" alt="" style="display:none; height:38px; max-width:150px; object-fit:contain; border-radius:8px;">
+        <strong id="brf-empresa-nome"></strong>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:12px; font-weight:600;" id="brf-empresa-nome-2"></div>
+        <div style="font-size:11px; color:var(--text-soft);" id="brf-tipo-nome"></div>
+      </div>
+    </div>
+
+    <p id="brf-boas-vindas" style="display:none; color:var(--text-soft); font-size:14px; line-height:1.55; margin:0 0 22px; white-space:pre-wrap;"></p>
+
+    <div id="brf-form-area">
+      <div class="brf-progresso-wrap">
+        <span id="brf-progresso-texto">Pergunta 1 de 8</span>
+        <span id="brf-progresso-pct">13%</span>
+      </div>
+      <div class="brf-progresso-barra"><div class="brf-progresso-fill" id="brf-progresso-fill" style="width:13%;"></div></div>
+
+      <div class="panel">
+        <h2 id="brf-pergunta-texto" style="margin:0 0 4px; font-size:18px;"></h2>
+        <p id="brf-pergunta-hint" style="color:var(--text-soft); font-size:13px; margin:0 0 16px;"></p>
+        <div id="brf-pergunta-campo"></div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; margin-top:18px;">
+        <button type="button" class="btn" id="brf-btn-anterior" onclick="brfVoltar()">‹ Anterior</button>
+        <button type="button" class="btn" style="background:var(--brf-destaque, linear-gradient(135deg,var(--success),#2f8a4f)); color:var(--brf-texto-destaque, #fff); border:none;" id="brf-btn-proxima" onclick="brfAvancar()">Próxima ›</button>
+      </div>
+    </div>
+
+    <div id="brf-enviado" style="display:none; text-align:center; padding:50px 20px;">
+      <div class="ic-circulo"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ic-aprovado"/></svg></div>
+      <h2>Briefing enviado!</h2>
+      <p style="color:var(--text-soft);">Obrigado por responder — a equipe já foi avisada e vai dar continuidade ao seu projeto.</p>
+    </div>
+
+    <div id="brf-ja-respondido" style="display:none; text-align:center; padding:50px 20px;">
+      <div class="ic-circulo"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ic-aprovado"/></svg></div>
+      <h2>Este briefing já foi respondido</h2>
+      <p style="color:var(--text-soft);">Obrigado! Suas respostas já foram registradas anteriormente.</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="script.js"></script>
+<script>
+carregarBriefingPublico();
+</script>
+<div class="modal-overlay" id="modal-aviso-sistema">
+  <div class="modal crm-modal-aviso">
+    <div class="modal-header"><h2 id="aviso-sistema-titulo">Confirmar</h2></div>
+    <p id="aviso-sistema-mensagem" style="color:var(--text-soft); white-space:pre-wrap;"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="aviso-sistema-btn-cancelar" onclick="fecharAvisoSistema(false)">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="aviso-sistema-btn-ok" onclick="fecharAvisoSistema(true)">OK</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,20 +1,286 @@
 // =====================================================================
-// ---------- Tema (claro / escuro) ----------
+// ---------- Tema e Aparência do Sistema ----------
 // =====================================================================
+// Tudo que é "aparência do sistema" (tema, cores individuais e tamanho
+// da fonte) é preferência de quem está usando, por isso fica salvo NESTE
+// navegador (localStorage) — igual o claro/escuro que já existia.
+// As páginas públicas (proposta.html, briefing.html) NÃO usam isso: elas
+// seguem a marca configurada pela empresa, não o gosto de quem abriu.
 
-function aplicarTemaSalvo() {
-  let tema = 'light';
-  try { tema = localStorage.getItem('eagles_tema') || 'light'; } catch (e) {}
-  document.documentElement.setAttribute('data-theme', tema);
+const APARENCIA_SISTEMA_KEY = 'eagles_aparencia_sistema_v1';
+const TEMA_APLICADO_KEY = 'eagles_tema_aplicado_v1'; // lido pelo <head> de cada página pra não piscar
+
+// cores: null = usa as cores originais do CSS (tema padrão do Eagles Labz)
+const TEMAS_SISTEMA = [
+  { id: 'padrao-escuro', grupo: 'escuro', nome: 'Padrão', desc: 'Escuro com verde Eagles', modo: 'dark', amostra: ['#0a0d0b', '#8be53f', '#151a16'], cores: null },
+  { id: 'midnight', grupo: 'escuro', nome: 'Midnight', desc: 'Ultra escuro com azul profundo', modo: 'dark', amostra: ['#0b0d1a', '#3b82f6', '#161a33'], cores: { bg: '#0b0d1a', bgSoft: '#12152b', bgElev: '#161a33', border: '#252a4d', text: '#eef0ff', textSoft: '#9aa1c7', accent: '#3b82f6' } },
+  { id: 'amoled', grupo: 'escuro', nome: 'AMOLED', desc: 'Preto puro com rosa', modo: 'dark', amostra: ['#000000', '#e91e63', '#0e0e0e'], cores: { bg: '#000000', bgSoft: '#0a0a0a', bgElev: '#0e0e0e', border: '#1f1f1f', text: '#f5f5f5', textSoft: '#9a9a9a', accent: '#e91e63' } },
+  { id: 'black-blue', grupo: 'escuro', nome: 'Black & Blue', desc: 'Preto puro com azul elétrico', modo: 'dark', amostra: ['#000000', '#3b82f6', '#0e0e0e'], cores: { bg: '#000000', bgSoft: '#0a0a0a', bgElev: '#0e0e0e', border: '#1f1f1f', text: '#f5f5f5', textSoft: '#9a9a9a', accent: '#3b82f6' } },
+  { id: 'black-green', grupo: 'escuro', nome: 'Black & Green', desc: 'Preto puro com verde neon', modo: 'dark', amostra: ['#000000', '#22c55e', '#0e0e0e'], cores: { bg: '#000000', bgSoft: '#0a0a0a', bgElev: '#0e0e0e', border: '#1f1f1f', text: '#f5f5f5', textSoft: '#9a9a9a', accent: '#22c55e' } },
+  { id: 'black-purple', grupo: 'escuro', nome: 'Black & Purple', desc: 'Preto puro com roxo vibrante', modo: 'dark', amostra: ['#000000', '#a855f7', '#0e0e0e'], cores: { bg: '#000000', bgSoft: '#0a0a0a', bgElev: '#0e0e0e', border: '#1f1f1f', text: '#f5f5f5', textSoft: '#9a9a9a', accent: '#a855f7' } },
+  { id: 'emerald', grupo: 'escuro', nome: 'Emerald', desc: 'Escuro com verde esmeralda', modo: 'dark', amostra: ['#0c1612', '#10b981', '#15251e'], cores: { bg: '#0c1612', bgSoft: '#11201a', bgElev: '#15251e', border: '#1f3a2e', text: '#ecf7f2', textSoft: '#93ab9f', accent: '#10b981' } },
+  { id: 'ocean', grupo: 'escuro', nome: 'Ocean', desc: 'Escuro com ciano oceano', modo: 'dark', amostra: ['#0b1520', '#06b6d4', '#132637'], cores: { bg: '#0b1520', bgSoft: '#10202e', bgElev: '#132637', border: '#1d3549', text: '#eaf4fa', textSoft: '#8ea5b6', accent: '#06b6d4' } },
+  { id: 'purple-rain', grupo: 'escuro', nome: 'Purple Rain', desc: 'Escuro com roxo intenso', modo: 'dark', amostra: ['#12101f', '#8b5cf6', '#1e1a38'], cores: { bg: '#12101f', bgSoft: '#1a1730', bgElev: '#1e1a38', border: '#2d2850', text: '#f1effc', textSoft: '#a29cc4', accent: '#8b5cf6' } },
+  { id: 'personalizado', grupo: 'escuro', nome: 'Personalizado', desc: 'Escolha sua cor', modo: 'dark', personalizado: true, cores: { bg: '#050505', bgSoft: '#0d0d0d', bgElev: '#111111', border: '#222222', text: '#f5f5f5', textSoft: '#9a9a9a', accent: null } },
+  { id: 'padrao-claro', grupo: 'claro', nome: 'Padrão Claro', desc: 'Claro com verde Eagles', modo: 'light', amostra: ['#f6f8f5', '#63d629', '#ffffff'], cores: null },
+  { id: 'monocromatico', grupo: 'claro', nome: 'Monocromático', desc: 'Preto e branco, claro', modo: 'light', amostra: ['#f5f5f5', '#161616', '#ffffff'], cores: { bg: '#f5f5f5', bgSoft: '#ececec', bgElev: '#ffffff', border: '#dedede', text: '#111111', textSoft: '#666666', accent: '#161616' } },
+  { id: 'rosa-claro', grupo: 'claro', nome: 'Rosa Claro', desc: 'Claro com rosa vibrante', modo: 'light', amostra: ['#fdf5f8', '#e91e63', '#ffffff'], cores: { bg: '#fdf5f8', bgSoft: '#f9e9ef', bgElev: '#ffffff', border: '#f0dbe3', text: '#1d1216', textSoft: '#7a6a70', accent: '#e91e63' } },
+  { id: 'azul-claro', grupo: 'claro', nome: 'Azul Claro', desc: 'Claro com azul suave', modo: 'light', amostra: ['#f3f6fc', '#3b82f6', '#ffffff'], cores: { bg: '#f3f6fc', bgSoft: '#e8eef9', bgElev: '#ffffff', border: '#dbe3f1', text: '#111827', textSoft: '#64708a', accent: '#3b82f6' } },
+];
+
+const ESCALAS_FONTE = { normal: 0, reduzido: 1, compacto: 2 };
+
+function corHexValida(valor) {
+  return typeof valor === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(valor.trim()) ? valor.trim().toLowerCase() : '';
 }
 
+function lerAparenciaSistema() {
+  let prefs = null;
+  try { prefs = JSON.parse(localStorage.getItem(APARENCIA_SISTEMA_KEY) || 'null'); } catch (e) {}
+  if (!prefs || typeof prefs !== 'object') {
+    // compatibilidade com o claro/escuro antigo (eagles_tema)
+    let antigo = 'light';
+    try { antigo = localStorage.getItem('eagles_tema') || 'light'; } catch (e) {}
+    prefs = { tema: antigo === 'dark' ? 'padrao-escuro' : 'padrao-claro' };
+  }
+  if (!TEMAS_SISTEMA.some((t) => t.id === prefs.tema)) prefs.tema = 'padrao-claro';
+  prefs.corPersonalizada = corHexValida(prefs.corPersonalizada) || '#7c3aed';
+  prefs.cores = prefs.cores && typeof prefs.cores === 'object' ? prefs.cores : {};
+  ['fundo', 'destaque', 'textoBotao', 'secundario'].forEach((k) => { prefs.cores[k] = corHexValida(prefs.cores[k]); });
+  if (!(prefs.fonte in ESCALAS_FONTE)) prefs.fonte = 'normal';
+  return prefs;
+}
+
+function luminanciaHex(hex) {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const v = parseInt(h.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// Traduz as preferências em: modo (light/dark) + variáveis de CSS. Se não
+// sobra nenhuma variável, é o tema padrão puro (o CSS original manda).
+function calcularTemaAplicado(prefs) {
+  const tema = TEMAS_SISTEMA.find((t) => t.id === prefs.tema) || TEMAS_SISTEMA[0];
+  const vars = {};
+  const c = tema.cores;
+  if (c) {
+    vars['--bg'] = c.bg; vars['--bg-soft'] = c.bgSoft; vars['--bg-elevated'] = c.bgElev;
+    vars['--border'] = c.border; vars['--text'] = c.text; vars['--text-soft'] = c.textSoft;
+  }
+  const accent = prefs.cores.destaque || (tema.personalizado ? prefs.corPersonalizada : (c && c.accent)) || '';
+  if (accent) {
+    vars['--blue-strong'] = accent;
+    vars['--eagle-accent-strong'] = `color-mix(in srgb, ${accent} 82%, ${tema.modo === 'dark' ? '#ffffff' : '#000000'})`;
+    vars['--blue-text'] = `color-mix(in srgb, ${accent} ${tema.modo === 'dark' ? '78%, #ffffff' : '72%, #000000'})`;
+    vars['--blue'] = `color-mix(in srgb, ${accent} 22%, var(--bg))`;
+    vars['--blue-tint'] = `color-mix(in srgb, ${accent} 12%, var(--bg))`;
+    vars['--on-accent'] = luminanciaHex(accent) > 0.3 ? '#0b0d0b' : '#ffffff';
+  }
+  if (prefs.cores.fundo) vars['--bg'] = prefs.cores.fundo;
+  if (prefs.cores.textoBotao) vars['--on-accent'] = prefs.cores.textoBotao;
+  if (prefs.cores.secundario) vars['--text-soft'] = prefs.cores.secundario;
+  return { modo: tema.modo, vars, custom: Object.keys(vars).length > 0, fonte: prefs.fonte };
+}
+
+function ehPaginaPublica() {
+  return !!document.querySelector('meta[name="eagles-pagina-publica"]');
+}
+
+const TEMA_TODAS_VARS = ['--bg', '--bg-soft', '--bg-elevated', '--border', '--text', '--text-soft', '--blue-strong', '--eagle-accent-strong', '--blue-text', '--blue', '--blue-tint', '--on-accent'];
+
+function aplicarTemaCalculado(t) {
+  const root = document.documentElement;
+  root.setAttribute('data-theme', t.modo);
+  TEMA_TODAS_VARS.forEach((v) => root.style.removeProperty(v));
+  Object.keys(t.vars).forEach((v) => root.style.setProperty(v, t.vars[v]));
+  if (t.custom) root.setAttribute('data-tema-custom', ''); else root.removeAttribute('data-tema-custom');
+  aplicarEscalaFonte(ESCALAS_FONTE[t.fonte] || 0);
+}
+
+function aplicarTemaSalvo() {
+  if (ehPaginaPublica()) {
+    let tema = 'light';
+    try { tema = localStorage.getItem('eagles_tema') || 'light'; } catch (e) {}
+    document.documentElement.setAttribute('data-theme', tema === 'dark' ? 'dark' : 'light');
+    return;
+  }
+  aplicarTemaCalculado(calcularTemaAplicado(lerAparenciaSistema()));
+}
+
+function salvarAparenciaSistema(prefs) {
+  const t = calcularTemaAplicado(prefs);
+  try {
+    localStorage.setItem(APARENCIA_SISTEMA_KEY, JSON.stringify(prefs));
+    localStorage.setItem('eagles_tema', t.modo);
+    localStorage.setItem(TEMA_APLICADO_KEY, JSON.stringify({ modo: t.modo, vars: t.vars, custom: t.custom }));
+  } catch (e) {}
+  aplicarTemaCalculado(t);
+}
+
+// Botões Claro/Escuro do menu do perfil: voltam pro tema padrão daquele
+// modo, mas mantêm as outras preferências (fonte, cores individuais).
 function definirTema(tema) {
-  try { localStorage.setItem('eagles_tema', tema); } catch (e) {}
-  document.documentElement.setAttribute('data-theme', tema);
-  fecharTodosDropdowns();
+  const prefs = lerAparenciaSistema();
+  prefs.tema = tema === 'dark' ? 'padrao-escuro' : 'padrao-claro';
+  salvarAparenciaSistema(prefs);
+  if (typeof fecharTodosDropdowns === 'function') fecharTodosDropdowns();
+  if (document.getElementById('cfg-ap-temas-escuros')) { if (CFG_FORM && CFG_FORM.tema) CFG_FORM.tema = prefs.tema; renderTemasAparenciaSistema(); }
+}
+
+// ---------- Tamanho da fonte ----------
+// O CSS do sistema usa px em tudo (não rem), então mudar o font-size do
+// <html> não adiantaria. Em vez disso, cada regra do style.css que define
+// font-size é reduzida em 1px ou 2px (guardando o valor original, pra
+// poder voltar), e o mesmo é feito nos estilos inline que o JS gera.
+let ESCALA_FONTE_ATUAL = 0;
+let ESCALA_FONTE_OBSERVER = null;
+
+function reduzirPx(original, delta) {
+  return Math.max(9, original - delta);
+}
+
+function aplicarEscalaFonteEmRegras(regras, delta) {
+  for (const r of Array.from(regras || [])) {
+    if (r.cssRules && !r.style) { aplicarEscalaFonteEmRegras(r.cssRules, delta); continue; }
+    if (!r.style) continue;
+    if (r.__fsOriginal === undefined) {
+      const v = r.style.getPropertyValue('font-size');
+      r.__fsOriginal = /^[\d.]+px$/.test(v) ? parseFloat(v) : null;
+    }
+    if (r.__fsOriginal !== null) r.style.setProperty('font-size', reduzirPx(r.__fsOriginal, delta) + 'px', r.style.getPropertyPriority('font-size'));
+    if (r.cssRules) aplicarEscalaFonteEmRegras(r.cssRules, delta);
+  }
+}
+
+function aplicarEscalaFonteEmElemento(el, delta) {
+  if (!el.style || !el.style.fontSize) return;
+  if (el.dataset.fsOriginal === undefined) {
+    if (!/^[\d.]+px$/.test(el.style.fontSize)) return;
+    el.dataset.fsOriginal = parseFloat(el.style.fontSize);
+  }
+  el.style.fontSize = reduzirPx(Number(el.dataset.fsOriginal), delta) + 'px';
+}
+
+function aplicarEscalaFonteEmArvore(raiz, delta) {
+  if (!raiz || !raiz.querySelectorAll) return;
+  if (raiz.style) aplicarEscalaFonteEmElemento(raiz, delta);
+  raiz.querySelectorAll('[style*="font-size"]').forEach((el) => aplicarEscalaFonteEmElemento(el, delta));
+}
+
+function aplicarEscalaFonte(delta) {
+  if (delta === ESCALA_FONTE_ATUAL && (delta === 0 || ESCALA_FONTE_OBSERVER)) return;
+  ESCALA_FONTE_ATUAL = delta;
+  for (const folha of Array.from(document.styleSheets || [])) {
+    try { aplicarEscalaFonteEmRegras(folha.cssRules, delta); } catch (e) { /* folha de outro domínio (Google Fonts) */ }
+  }
+  const iniciarObserver = () => {
+    aplicarEscalaFonteEmArvore(document.body, delta);
+    if (!ESCALA_FONTE_OBSERVER && delta > 0 && typeof MutationObserver !== 'undefined') {
+      ESCALA_FONTE_OBSERVER = new MutationObserver((mutacoes) => {
+        if (!ESCALA_FONTE_ATUAL) return;
+        mutacoes.forEach((m) => m.addedNodes.forEach((n) => { if (n.nodeType === 1) aplicarEscalaFonteEmArvore(n, ESCALA_FONTE_ATUAL); }));
+      });
+      ESCALA_FONTE_OBSERVER.observe(document.body, { childList: true, subtree: true });
+    }
+  };
+  if (document.body) iniciarObserver();
+  else document.addEventListener('DOMContentLoaded', iniciarObserver, { once: true });
 }
 
 aplicarTemaSalvo();
+
+// =====================================================================
+// ---------- Ícones do sistema (sprite SVG) ----------
+// =====================================================================
+// Um <symbol> por ícone, injetado uma vez no <body>. Qualquer lugar usa
+// <svg class="ic"><use href="#ic-NOME"/></svg> (no JS: ic('NOME')).
+// O traço usa currentColor e .ic tem a cor de destaque do tema
+// (var(--blue-strong)), então quando o tema muda, os ícones mudam junto.
+// Substituem os emojis — que não mudam de cor e mudam de aparência
+// em cada celular/sistema operacional.
+
+const ICONES_SISTEMA = {
+  tarefas: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+  maleta: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+  relogio: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  alerta: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  calendario: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  calendarioCheck: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/>',
+  alfinete: '<line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z"/>',
+  pessoas: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  reuniao: '<path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/>',
+  pacote: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  paleta: '<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="19" r="2.5"/><path d="M12 2a10 10 0 1 0 8 16c-1 0-2-1-2-2 0-1.5 2-2 3-3a10 10 0 0 0-9-11z"/>',
+  diagnostico: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  sorriso: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>',
+  coracao: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+  conversa: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
+  documento: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  contrato: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 17c1.5-2 2.5-2 3 0s1.5 2 3-.5"/><line x1="8" y1="12" x2="14" y2="12"/>',
+  raio: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  repetir: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  recorrente: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  pasta: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  abrir: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+  grafico: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  tendencia: '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+  modelos: '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
+  cadeado: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  alarme: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/>',
+  email: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+  aprovado: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  recusado: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+  estrela: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  brilho: '<path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  usuario: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  dinheiro: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  carteira: '<path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>',
+  enviar: '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  olho: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  lixeira: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  lapis: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>',
+  caneta: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  baixar: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  subir: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  festa: '<path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01"/><path d="M22 8h.01"/><path d="M15 2h.01"/><path d="M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11-.11.7-.72 1.22-1.43 1.22H17"/><path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"/>',
+  joinha: '<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>',
+  busca: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  camadas: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  globo: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+  imagem: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+  banco: '<line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
+  tomada: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  engrenagem: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  megafone: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  kanban: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="15"/>',
+  arquivos: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="9" y1="14" x2="15" y2="14"/>',
+};
+
+function ic(nome, classe) {
+  const n = ICONES_SISTEMA[nome] ? nome : 'documento';
+  return `<svg class="ic${classe ? ' ' + classe : ''}" aria-hidden="true" focusable="false"><use href="#ic-${n}"/></svg>`;
+}
+
+function injetarSpriteIcones() {
+  if (typeof document === 'undefined' || !document.body || document.getElementById('eagles-sprite-icones')) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  const sprite = document.createElementNS(ns, 'svg');
+  sprite.setAttribute('id', 'eagles-sprite-icones');
+  sprite.setAttribute('aria-hidden', 'true');
+  sprite.setAttribute('style', 'position:absolute; width:0; height:0; overflow:hidden;');
+  sprite.innerHTML = Object.keys(ICONES_SISTEMA).map((k) => `<symbol id="ic-${k}" viewBox="0 0 24 24">${ICONES_SISTEMA[k]}</symbol>`).join('');
+  document.body.insertBefore(sprite, document.body.firstChild);
+}
+
+if (typeof document !== 'undefined') {
+  if (document.body) injetarSpriteIcones();
+  else document.addEventListener('DOMContentLoaded', injetarSpriteIcones);
+}
 
 // =====================================================================
 // ---------- PWA: Service Worker, instalação e indicador offline ----------
@@ -57,7 +323,7 @@ window.addEventListener('appinstalled', () => {
 
 function instalarApp() {
   if (!DEFERRED_INSTALL_PROMPT) {
-    alert('A instalação não está disponível agora. No Chrome/Edge (Android e desktop), o botão aparece automaticamente quando o app pode ser instalado. No iPhone, use "Compartilhar" → "Adicionar à Tela de Início" no Safari.');
+    avisar('A instalação não está disponível agora. No Chrome/Edge (Android e desktop), o botão aparece automaticamente quando o app pode ser instalado. No iPhone, use "Compartilhar" → "Adicionar à Tela de Início" no Safari.');
     return;
   }
   DEFERRED_INSTALL_PROMPT.prompt();
@@ -159,7 +425,7 @@ function popularSelectNomes(select, nomes, opts) {
   let html = '';
   if (opts.includeTodos) html += `<option value="todos">${opts.todosLabel || 'Todos'}</option>`;
   if (opts.placeholder) html += `<option value="">${opts.placeholder}</option>`;
-  html += nomes.map((n) => `<option value="${n}">${n}</option>`).join('');
+  html += nomes.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
   select.innerHTML = html;
   if (nomes.includes(atual) || atual === 'todos' || atual === '') select.value = atual;
 }
@@ -243,6 +509,37 @@ function checarDocumento(inputId, hintId, tipo) {
 }
 
 // ---------- Modal genérico ----------
+
+// ---------- Modal de aviso/confirmação do sistema ----------
+// Substitui avisar()/confirm() nativos do navegador (que aparecem feios,
+// com o caminho do arquivo e sem estilo nenhum) por um modal padrão do
+// sistema. avisar() é só um "OK"; confirmarAcao() tem Cancelar/OK e só
+// executa o callback se a pessoa confirmar.
+
+let AVISO_SISTEMA_CALLBACK = null;
+
+function avisar(mensagem, titulo) {
+  document.getElementById('aviso-sistema-titulo').textContent = titulo || 'Aviso';
+  document.getElementById('aviso-sistema-mensagem').textContent = mensagem;
+  document.getElementById('aviso-sistema-btn-cancelar').style.display = 'none';
+  AVISO_SISTEMA_CALLBACK = null;
+  openModal('modal-aviso-sistema');
+}
+
+function confirmarAcao(mensagem, aoConfirmar, titulo) {
+  document.getElementById('aviso-sistema-titulo').textContent = titulo || 'Confirmar';
+  document.getElementById('aviso-sistema-mensagem').textContent = mensagem;
+  document.getElementById('aviso-sistema-btn-cancelar').style.display = '';
+  AVISO_SISTEMA_CALLBACK = aoConfirmar;
+  openModal('modal-aviso-sistema');
+}
+
+function fecharAvisoSistema(confirmado) {
+  closeModal('modal-aviso-sistema');
+  const callback = AVISO_SISTEMA_CALLBACK;
+  AVISO_SISTEMA_CALLBACK = null;
+  if (confirmado && callback) callback();
+}
 
 function openModal(id) {
   const overlay = document.getElementById(id);
@@ -391,37 +688,81 @@ function caminhoTenantDoc(key) {
   return firestoreDb.collection('tenants').doc(TENANT_ID).collection('dados').doc(key);
 }
 
+// ---------- Trava central contra "salvar antes de carregar" ----------
+// Os dados ficam na nuvem como UM documento por chave (o array inteiro).
+// Se alguma ação grava a chave antes do primeiro onSnapshot chegar, ela
+// grava o que tem na memória (vazio/seed) por cima dos dados reais. Já
+// aconteceu no Financeiro. Em vez de proteger função por função, o
+// cloudSet agora sabe o estado de cada chave nesta página:
+//   'aguardando' → cloudWatch registrado, dados ainda não chegaram: BLOQUEIA
+//   'carregado'  → pode gravar
+//   'erro'       → sem permissão/sem conexão com o banco: BLOQUEIA
+const CLOUD_ESTADO_CHAVES = {};
+let CLOUD_AVISO_CARREGANDO_EM = 0;
+
+function chaveProntaParaGravar(key) {
+  if (!FIREBASE_PRONTO || !TENANT_ID) return true; // modo local: só localStorage
+  const estado = CLOUD_ESTADO_CHAVES[key];
+  if (estado === 'aguardando' || estado === 'erro') {
+    console.warn('[EaglesLabz] Gravação de "' + key + '" bloqueada: dados ' + (estado === 'erro' ? 'indisponíveis' : 'ainda carregando') + '.');
+    const agora = Date.now();
+    if (agora - CLOUD_AVISO_CARREGANDO_EM > 4000 && typeof avisar === 'function' && document.getElementById('modal-aviso-sistema')) {
+      CLOUD_AVISO_CARREGANDO_EM = agora;
+      avisar(estado === 'erro'
+        ? 'Não foi possível salvar: os dados não puderam ser carregados da nuvem (sem permissão ou sem conexão). Recarregue a página.'
+        : 'Os dados ainda estão carregando da nuvem — aguarde um instante e tente de novo. Nada foi salvo, pra não sobrescrever seus dados.');
+    }
+    return false;
+  }
+  return true;
+}
+
 function cloudWatch(key, fallback, onChange) {
   if (!FIREBASE_PRONTO || !TENANT_ID) {
     onChange(lsLoad(chaveLocalTenant(key), fallback));
     return;
   }
+  // Nível sem acesso ao financeiro: nem pede o dado ao banco (as regras
+  // negariam de todo jeito) — a tela recebe vazio e mostra o bloqueio.
+  if (CHAVES_FINANCEIRAS.includes(key) && !nivelVeFinanceiro()) {
+    CLOUD_ESTADO_CHAVES[key] = 'bloqueado';
+    onChange(fallback);
+    return;
+  }
+  if (key === FINANCE_CICLOS_KEY) iniciarReceitasPendentes();
+  if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'aguardando';
   caminhoTenantDoc(key).onSnapshot((snap) => {
+    CLOUD_ESTADO_CHAVES[key] = 'carregado';
+    if (key === FINANCE_CICLOS_KEY && RECEITAS_PENDENTES_FILA.length) setTimeout(processarReceitasPendentes, 0);
     if (snap.exists) {
       const valor = snap.data().valor;
       lsSave(chaveLocalTenant(key), valor);
       onChange(valor);
     } else {
-      caminhoTenantDoc(key).set({ valor: fallback });
+      if (nivelPodeGravarChave(key)) caminhoTenantDoc(key).set({ valor: fallback });
       onChange(fallback);
     }
     atualizarIndicadorSincronizacao('ok');
   }, (err) => {
     console.error('Erro de sincronização em "' + key + '":', err);
+    if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'erro';
     atualizarIndicadorSincronizacao('erro');
     onChange(lsLoad(chaveLocalTenant(key), fallback));
   });
 }
 
 function cloudSet(key, data) {
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelPodeGravarChave(key)) { avisarSemPermissaoNivel(); return false; }
+  if (!chaveProntaParaGravar(key)) return false;
   lsSave(chaveLocalTenant(key), data);
-  if (!FIREBASE_PRONTO || !TENANT_ID) return;
+  if (!FIREBASE_PRONTO || !TENANT_ID) return true;
   caminhoTenantDoc(key).set({ valor: data }).then(() => {
     atualizarIndicadorSincronizacao('ok');
   }).catch((err) => {
     console.error('Erro ao salvar "' + key + '" na nuvem:', err);
     atualizarIndicadorSincronizacao('erro');
   });
+  return true;
 }
 
 async function cloudGetForce(key, fallback) {
@@ -429,6 +770,7 @@ async function cloudGetForce(key, fallback) {
   const snap = await caminhoTenantDoc(key).get();
   const valor = snap.exists ? snap.data().valor : fallback;
   lsSave(chaveLocalTenant(key), valor);
+  CLOUD_ESTADO_CHAVES[key] = 'carregado';
   return valor;
 }
 
@@ -437,9 +779,11 @@ async function cloudGetForce(key, fallback) {
 // =====================================================================
 
 let TENANT_ID = null;
+let TENANT_PLANO = null; // 'erp' | 'crm' | 'ambos' — controla quais ferramentas aparecem
 let USUARIO_ROLE = null;
 let USUARIO_NOME = null;
 let USUARIO_UID = null;
+let USUARIO_TITULAR = false;
 
 function protegerPagina(callback) {
   if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) {
@@ -457,6 +801,7 @@ function protegerPagina(callback) {
         esconderCarregandoAuth();
         iniciarMonitorInatividade();
         aplicarGatingPorRole();
+        aplicarRestricoesDeNivel();
         initPerfilWatch();
         initBuscaGlobalWatch();
         callback();
@@ -477,7 +822,7 @@ async function resolverTenantDoUsuario(user) {
 
     if (!snap.exists) {
       console.error('[EaglesLabz] Documento NÃO encontrado em usuarios/' + user.uid + '. Confira: 1) é este o UID exato em Authentication → Users; 2) a coleção se chama "usuarios" (minúsculo, sem acento); 3) o documento está no projeto "' + (firebase.app().options.projectId || '?') + '".');
-      alert('Sua conta ainda não foi vinculada a nenhuma empresa neste sistema. Fale com o administrador.');
+      avisar('Sua conta ainda não foi vinculada a nenhuma empresa neste sistema. Fale com o administrador.');
       await firebase.auth().signOut();
       window.location.href = 'login.html';
       return false;
@@ -486,6 +831,7 @@ async function resolverTenantDoUsuario(user) {
     const dados = snap.data();
     console.log('[EaglesLabz] Documento encontrado:', dados);
     USUARIO_ROLE = dados.role || 'TenantUser';
+    USUARIO_TITULAR = !!dados.titular;
     USUARIO_NOME = dados.nome || user.email;
     USUARIO_UID = user.uid;
 
@@ -495,13 +841,17 @@ async function resolverTenantDoUsuario(user) {
     // nuvem, igual qualquer outro usuário.
     if (USUARIO_ROLE === 'SuperAdmin') {
       TENANT_ID = dados.tenantId || null;
+      if (TENANT_ID) {
+        const tenantSnapSA = await firestoreDb.collection('tenants').doc(TENANT_ID).get();
+        TENANT_PLANO = tenantSnapSA.exists ? (tenantSnapSA.data().plano || 'erp') : 'erp';
+      }
       return true;
     }
 
     // Para utilizadores normais, verifica o tenantId
     TENANT_ID = dados.tenantId || null;
     if (!TENANT_ID) {
-      alert('Sua conta não está vinculada a uma empresa. Fale com o administrador.');
+      avisar('Sua conta não está vinculada a uma empresa. Fale com o administrador.');
       await firebase.auth().signOut();
       window.location.href = 'login.html';
       return false;
@@ -510,24 +860,110 @@ async function resolverTenantDoUsuario(user) {
     // Empresa suspensa (ex: falta de pagamento) — bloqueia mesmo com login válido.
     const tenantSnap = await firestoreDb.collection('tenants').doc(TENANT_ID).get();
     if (tenantSnap.exists && tenantSnap.data().ativo === false) {
-      alert('O acesso desta empresa está temporariamente suspenso. Fale com o suporte para regularizar.');
+      avisar('O acesso desta empresa está temporariamente suspenso. Fale com o suporte para regularizar.');
       await firebase.auth().signOut();
       window.location.href = 'login.html';
       return false;
     }
+    TENANT_PLANO = tenantSnap.exists ? (tenantSnap.data().plano || 'erp') : 'erp';
 
     return true;
   } catch (err) {
     console.error("Erro ao resolver tenant:", err);
-    alert('Não foi possível carregar os dados da sua conta. Tente entrar novamente.');
+    avisar('Não foi possível carregar os dados da sua conta. Tente entrar novamente.');
     await firebase.auth().signOut();
     window.location.href = 'login.html';
     return false;
   }
 }
 
+// =====================================================================
+// ---------- Níveis de acesso (Diretor / Administrativo / Financeiro) ----------
+// =====================================================================
+// O que vale de verdade são as regras do Firestore; estas funções só
+// deixam a tela coerente com elas (esconder, borrar, avisar antes).
+// Papéis antigos (TenantAdmin/TenantUser) contam como Diretor.
+const NIVEIS = {
+  diretor: { nome: 'Diretor', desc: 'Acesso a tudo, inclusive usuários e configurações da empresa' },
+  administrativo: { nome: 'Administrativo', desc: 'Tudo, menos o financeiro (Painel, Meu Negócio e Financeiro ficam bloqueados)' },
+  financeiro: { nome: 'Financeiro', desc: 'Financeiro completo; o resto só visualiza (não cadastra nem edita)' },
+};
+const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1'];
+const CHAVES_CONFIG_EMPRESA = ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1'];
+
+function nivelDoRole(role) {
+  if (role === 'SuperAdmin') return 'superadmin';
+  if (role === 'Administrativo') return 'administrativo';
+  if (role === 'Financeiro') return 'financeiro';
+  return 'diretor'; // Diretor, TenantAdmin, TenantUser
+}
+function nivelUsuario() {
+  if (!FIREBASE_PRONTO || !TENANT_ID) return USUARIO_ROLE === 'SuperAdmin' ? 'superadmin' : 'diretor'; // modo local
+  return nivelDoRole(USUARIO_ROLE);
+}
+function nivelVeFinanceiro() { return ['superadmin', 'diretor', 'financeiro'].includes(nivelUsuario()); }
+function nivelPodeOperar() { return ['superadmin', 'diretor', 'administrativo'].includes(nivelUsuario()); }
+function nivelEhDiretor() { return ['superadmin', 'diretor'].includes(nivelUsuario()); }
+
+function nivelPodeGravarChave(key) {
+  if (CHAVES_FINANCEIRAS.includes(key)) return nivelVeFinanceiro();
+  if (CHAVES_CONFIG_EMPRESA.includes(key)) return nivelEhDiretor();
+  return nivelPodeOperar();
+}
+
+let NIVEL_AVISO_EM = 0;
+function avisarSemPermissaoNivel(oQue) {
+  const agora = Date.now();
+  if (agora - NIVEL_AVISO_EM < 3000) return;
+  NIVEL_AVISO_EM = agora;
+  const nome = (NIVEIS[nivelUsuario()] || {}).nome || 'atual';
+  const motivo = nivelUsuario() === 'financeiro' ? 'permite só visualizar essa parte do sistema' : 'não permite essa ação';
+  if (typeof avisar === 'function' && document.getElementById('modal-aviso-sistema')) {
+    avisar(`Seu nível de acesso (${nome}) ${motivo}${oQue ? ' — ' + oQue : ''}. Para isso, fale com um Diretor da empresa.`, 'Sem permissão');
+  }
+}
+// Use antes de qualquer gravação direta no Firestore (propostas, briefings...)
+function exigirPodeOperar(oQue) {
+  if (nivelPodeOperar()) return true;
+  avisarSemPermissaoNivel(oQue);
+  return false;
+}
+
+// Bloqueio visual (os dados nem chegam: as regras do banco negam, e o
+// cloudWatch nem pede). Borra o conteúdo e mostra o aviso por cima.
+function htmlAvisoBloqueioFinanceiro() {
+  return `<div class="nivel-bloqueio-aviso" role="note">
+    <div class="ic-circulo">${ic('cadeado')}</div>
+    <h3>Área do financeiro</h3>
+    <p>Seu nível de acesso (${escapeHtml((NIVEIS[nivelUsuario()] || {}).nome || '')}) não inclui o financeiro da empresa. Para ver estes números, fale com um Diretor.</p>
+  </div>`;
+}
+function aplicarBloqueioFinanceiro(alvo) {
+  if (!alvo || alvo.classList.contains('nivel-bloqueado')) return;
+  alvo.classList.add('nivel-bloqueado');
+  alvo.insertAdjacentHTML('beforeend', htmlAvisoBloqueioFinanceiro());
+}
+
+function aplicarRestricoesDeNivel() {
+  if (!FIREBASE_PRONTO || !TENANT_ID || nivelUsuario() === 'superadmin' || nivelUsuario() === 'diretor') return;
+  const pagina = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  const paginasFinanceiras = ['index.html', '', 'meu-negocio.html', 'financeiro.html'];
+  if (!nivelVeFinanceiro() && paginasFinanceiras.includes(pagina)) {
+    aplicarBloqueioFinanceiro(document.querySelector('main.main'));
+    return;
+  }
+  // Financeiro: fora das telas financeiras, só visualiza
+  if (nivelUsuario() === 'financeiro' && !paginasFinanceiras.includes(pagina) && !['usuarios.html', 'configuracoes.html', 'central-ajuda.html', 'meu-perfil.html'].includes(pagina)) {
+    const main = document.querySelector('main.main');
+    if (main && !document.getElementById('nivel-faixa-leitura')) {
+      main.insertAdjacentHTML('afterbegin', `<div class="nivel-faixa-leitura" id="nivel-faixa-leitura">${ic('olho')} <span><strong>Modo visualização.</strong> Seu nível de acesso (Financeiro) permite ver esta área, mas não cadastrar nem editar.</span></div>`);
+    }
+    document.body.classList.add('nivel-somente-leitura');
+  }
+}
+
 function aplicarGatingPorRole() {
-  const admin = USUARIO_ROLE === 'TenantAdmin' || USUARIO_ROLE === 'SuperAdmin';
+  const admin = nivelEhDiretor();
   document.querySelectorAll('[data-somente-admin]').forEach((el) => { el.style.display = admin ? '' : 'none'; });
   document.querySelectorAll('[data-somente-superadmin]').forEach((el) => { el.style.display = USUARIO_ROLE === 'SuperAdmin' ? '' : 'none'; });
 }
@@ -543,8 +979,8 @@ function exibirUsuarioLogado(user) {
 }
 
 function traduzirRole(role) {
-  const mapa = { SuperAdmin: 'Super Admin', TenantAdmin: 'Administrador', TenantUser: 'Operacional' };
-  return mapa[role] || role;
+  if (role === 'SuperAdmin') return 'Super Admin';
+  return (NIVEIS[nivelDoRole(role)] || {}).nome || role;
 }
 
 function logout() {
@@ -577,7 +1013,7 @@ function mensagemErroCriacaoConta(code) {
   const mapa = {
     'auth/email-already-in-use': 'Já existe uma conta com esse e-mail no sistema (de outra empresa ou de um teste anterior). Use outro e-mail, ou primeiro remova/exclua a conta antiga.',
     'auth/invalid-email': 'Esse e-mail não é válido.',
-    'auth/weak-password': 'Essa senha é fraca demais para o Firebase aceitar. Tente uma com letras e números, mínimo 6 caracteres.',
+    'auth/weak-password': 'Essa senha é fraca demais para o Firebase aceitar. Tente uma com letras e números, mínimo 8 caracteres.',
     'auth/operation-not-allowed': 'O login por e-mail/senha não está habilitado no projeto do Firebase. Veja em Authentication → Sign-in method → Email/Password.',
     'auth/network-request-failed': 'Falha de conexão. Verifique a internet e tente de novo.',
     'auth/too-many-requests': 'Muitas tentativas seguidas. Aguarde um pouco e tente de novo.',
@@ -592,7 +1028,7 @@ function iniciarMonitorInatividade() {
   const resetarTimer = () => {
     if (INATIVIDADE_TIMER) clearTimeout(INATIVIDADE_TIMER);
     INATIVIDADE_TIMER = setTimeout(() => {
-      alert('Sua sessão expirou após 20 minutos de inatividade. Faça login novamente.');
+      avisar('Sua sessão expirou após 20 minutos de inatividade. Faça login novamente.');
       logout();
     }, INATIVIDADE_LIMITE_MS);
   };
@@ -607,10 +1043,10 @@ function iniciarMonitorInatividade() {
 // =====================================================================
 
 const NAV_ITEMS = [
-  { key: 'painel', href: 'index.html', label: 'Painel' },
-  { key: 'meu-negocio', href: 'meu-negocio.html', label: 'Meu Negócio' },
+  { key: 'painel', href: 'index.html', label: 'Painel', plano: 'erp' },
+  { key: 'meu-negocio', href: 'meu-negocio.html', label: 'Meu Negócio', plano: 'erp' },
   {
-    key: 'cadastros', label: 'Cadastros',
+    key: 'cadastros', label: 'Cadastros', plano: 'erp',
     children: [
       { key: 'produtos', href: 'produtos.html', label: 'Produtos' },
       { key: 'clientes-fornecedores', href: 'clientes-fornecedores.html', label: 'Clientes e Fornecedores' },
@@ -619,7 +1055,7 @@ const NAV_ITEMS = [
     ],
   },
   {
-    key: 'vendas', label: 'Vendas',
+    key: 'vendas', label: 'Vendas', plano: 'erp',
     children: [
       { key: 'pedidos-venda', href: 'pedidos-venda.html', label: 'Pedidos de vendas' },
       { key: 'objetos-postagem', href: 'objetos-postagem.html', label: 'Objetos de postagens' },
@@ -627,7 +1063,7 @@ const NAV_ITEMS = [
     ],
   },
   {
-    key: 'estoque', label: 'Estoque',
+    key: 'estoque', label: 'Estoque', plano: 'erp',
     columns: [
       {
         title: 'Compras', items: [
@@ -644,15 +1080,6398 @@ const NAV_ITEMS = [
       },
     ],
   },
-  { key: 'financeiro', href: 'financeiro.html', label: 'Financeiro' },
+  { key: 'financeiro', href: 'financeiro.html', label: 'Financeiro', plano: 'erp' },
+  { key: 'crm', href: 'crm.html', label: 'CRM', plano: 'crm' },
 ];
+
+// Um item aparece se: não tem plano marcado (sempre visível), a empresa
+// tem "ambos", ou o plano do item bate com o da empresa. Sem plano
+// resolvido ainda (ex: SuperAdmin sem empresa própria) = mostra tudo.
+// Bloqueia o acesso a uma ferramenta se o plano contratado pela empresa
+// não incluir aquele grupo — ex: empresa só-CRM tentando abrir
+// produtos.html direto pela URL. Não é só esconder no menu, bloqueia de
+// verdade a página inteira.
+function protegerPaginaPorPlano(planoNecessario) {
+  const permitidos = Array.isArray(planoNecessario) ? planoNecessario : [planoNecessario];
+  if (!TENANT_PLANO || TENANT_PLANO === 'ambos' || permitidos.includes(TENANT_PLANO)) return true;
+  const main = document.querySelector('.main') || document.body;
+  const nomes = { erp: 'ERP', crm: 'CRM' };
+  main.innerHTML = `
+    <div style="max-width:480px; margin:80px auto; text-align:center; padding:0 20px;">
+      <div class="ic-circulo">${ic('cadeado')}</div>
+      <h2 style="margin:0 0 10px;">Não incluído no seu plano</h2>
+      <p style="color:var(--text-soft);">Essa ferramenta faz parte do plano ${permitidos.map((p) => nomes[p] || p).join(' ou ')}, que sua empresa não tem contratado no momento. Fale com o administrador da plataforma se quiser incluir.</p>
+    </div>`;
+  return false;
+}
+
+// ---------- CRM: Funil de vendas (Kanban) ----------
+
+const CRM_NEGOCIOS_KEY = 'eagles_crm_negocios_v1';
+const CRM_ETAPAS = [
+  { key: 'lead', label: 'Lead', cor: '#8a94a3' },
+  { key: 'contato', label: 'Contato feito', cor: '#4fa8d8' },
+  { key: 'proposta', label: 'Proposta enviada', cor: '#d6a34e' },
+  { key: 'negociacao', label: 'Negociação', cor: '#8a6fd8' },
+  { key: 'fechado', label: 'Fechado', cor: '#3fae12' },
+  { key: 'perdido', label: 'Perdido', cor: '#e2726c' },
+];
+let CRM_NEGOCIOS_DATA = [];
+// Mesma lógica de proteção aplicada em CLIENTES_FORN_DATA_CARREGADO —
+// negócios é escrito por várias funcionalidades (Venda Rápida, Cadastrar
+// Cliente, assistente de Orçamento), então qualquer uma delas precisa
+// esperar os dados reais chegarem da nuvem pelo menos uma vez antes de
+// arriscar sobrescrever a lista inteira.
+let CRM_NEGOCIOS_DATA_CARREGADO = false;
+
+// Usada no início de qualquer ação que vá CRIAR um negócio novo — se os
+// dados reais ainda não chegaram da nuvem nessa sessão, bloqueia e avisa
+// em vez de arriscar sobrescrever a lista inteira com só o item novo.
+function negociosProntosOuAvisar() {
+  if (!FIREBASE_PRONTO || !TENANT_ID) return true; // modo local/sem nuvem não tem esse risco
+  if (!CRM_NEGOCIOS_DATA_CARREGADO) {
+    avisar('Os dados do funil ainda estão carregando — aguarde alguns segundos e tente de novo.');
+    return false;
+  }
+  return true;
+}
+let CRM_NEGOCIO_EDITANDO_ID = null;
+let CRM_ARRASTANDO_ID = null;
+
+function initFunilVendasCrm() {
+  cloudWatch(CRM_NEGOCIOS_KEY, [], (data) => {
+    CRM_NEGOCIOS_DATA = data;
+    CRM_NEGOCIOS_DATA_CARREGADO = true;
+    renderFunilKanban();
+  });
+}
+
+function renderFunilKanban() {
+  const board = document.getElementById('funil-kanban');
+  if (!board) return;
+  const negociosFiltrados = CRM_CLIENTE_FILTRO ? CRM_NEGOCIOS_DATA.filter((n) => n.cliente === CRM_CLIENTE_FILTRO) : CRM_NEGOCIOS_DATA;
+  board.innerHTML = CRM_ETAPAS.map((etapa) => {
+    const negocios = negociosFiltrados.filter((n) => (n.etapa || 'lead') === etapa.key);
+    const total = negocios.reduce((a, n) => a + Number(n.valor || 0), 0);
+    const cards = negocios.map((n) => {
+      const idxEtapa = CRM_ETAPAS.findIndex((e) => e.key === etapa.key);
+      const ativo = etapa.key !== 'fechado' && etapa.key !== 'perdido';
+      const diasParado = n.atualizadoEm ? Math.floor((Date.now() - new Date(n.atualizadoEm).getTime()) / 86400000) : 0;
+      const parado = ativo && diasParado >= 7;
+      const entrouEm = n.criadoEm ? `${formatDatePt(n.criadoEm.slice(0, 10))} às ${n.criadoEm.slice(11, 16)}` : '—';
+      return `
+      <div class="funil-card${parado ? ' funil-card-parado' : ''}" draggable="true" ondragstart="arrastarNegocioInicio(event,'${n.id}')">
+        ${parado ? `<div class="funil-card-alerta" title="Sem mexer há ${diasParado} dias">${ic('alarme', 'ic-herda')} Parado há ${diasParado}d</div>` : ''}
+        <div class="funil-card-topo">
+          <div class="funil-card-avatar">${escapeHtml(initials(n.cliente || n.nome))}</div>
+          <div class="funil-card-nome">${escapeHtml(n.nome)}</div>
+          <button type="button" class="funil-card-menu-btn" onclick="event.stopPropagation(); toggleMenuAcoesNegocio('${n.id}', this)">⋮</button>
+        </div>
+        <div class="funil-card-linha"><span class="funil-card-icone">${ic('relogio', 'ic-suave')}</span>Entrou em ${entrouEm}</div>
+        ${n.email ? `<div class="funil-card-linha"><span class="funil-card-icone">${ic('email', 'ic-suave')}</span>${escapeHtml(n.email)}</div>` : ''}
+        <div class="funil-card-rodape">
+          <span class="funil-card-valor">${n.valor ? formatMoney(n.valor) : '—'}</span>
+          <span class="funil-card-setas">
+            ${idxEtapa > 0 ? `<button type="button" onclick="event.stopPropagation(); moverNegocioEtapa('${n.id}',-1)" title="Etapa anterior">‹</button>` : ''}
+            ${idxEtapa < CRM_ETAPAS.length - 1 ? `<button type="button" onclick="event.stopPropagation(); moverNegocioEtapa('${n.id}',1)" title="Próxima etapa">›</button>` : ''}
+          </span>
+        </div>
+        ${ativo ? `
+        <div class="funil-card-acoes-ganho">
+          <button type="button" class="funil-card-btn-ganha" onclick="event.stopPropagation(); aplicarMudancaEtapaNegocio(CRM_NEGOCIOS_DATA.find(x=>x.id==='${n.id}'),'fechado')">✓ Ganha</button>
+          <button type="button" class="funil-card-btn-perdida" onclick="event.stopPropagation(); aplicarMudancaEtapaNegocio(CRM_NEGOCIOS_DATA.find(x=>x.id==='${n.id}'),'perdido')">✕ Perdida</button>
+        </div>` : ''}
+        <button type="button" class="funil-card-abrir" onclick="event.stopPropagation(); abrirDetalheNegocioCrm('${n.id}')">Abrir</button>
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="funil-coluna" ondragover="permitirSoltar(event)" ondrop="soltarNegocio(event,'${etapa.key}')">
+      <div class="funil-coluna-cabecalho" style="border-top-color:${etapa.cor};">
+        <span>${escapeHtml(etapa.label)}</span>
+        <span class="funil-coluna-contagem">${negocios.length}</span>
+      </div>
+      <div class="funil-coluna-total">${formatMoney(total)}</div>
+      <div class="funil-coluna-cards">${cards || '<p class="funil-coluna-vazia">Arraste um negócio pra cá</p>'}</div>
+    </div>`;
+  }).join('');
+}
+
+function arrastarNegocioInicio(e, id) {
+  CRM_ARRASTANDO_ID = id;
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function permitirSoltar(e) {
+  e.preventDefault();
+}
+
+function soltarNegocio(e, novaEtapa) {
+  e.preventDefault();
+  if (!CRM_ARRASTANDO_ID) return;
+  const negocio = CRM_NEGOCIOS_DATA.find((n) => n.id === CRM_ARRASTANDO_ID);
+  if (negocio) {
+    aplicarMudancaEtapaNegocio(negocio, novaEtapa);
+  }
+  CRM_ARRASTANDO_ID = null;
+}
+
+function moverNegocioEtapa(id, direcao) {
+  const negocio = CRM_NEGOCIOS_DATA.find((n) => n.id === id);
+  if (!negocio) return;
+  const idxAtual = CRM_ETAPAS.findIndex((e) => e.key === (negocio.etapa || 'lead'));
+  const novoIdx = idxAtual + direcao;
+  if (novoIdx < 0 || novoIdx >= CRM_ETAPAS.length) return;
+  aplicarMudancaEtapaNegocio(negocio, CRM_ETAPAS[novoIdx].key);
+}
+
+// Ponto único por onde QUALQUER mudança de etapa passa (arrastar ou
+// clicar nas setinhas) — garante que "Fechado" sempre lança a receita e
+// "Perdido" sempre pede o motivo, não importa como a pessoa moveu o card.
+function aplicarMudancaEtapaNegocio(negocio, novaEtapa) {
+  if (novaEtapa === 'perdido' && negocio.etapa !== 'perdido') {
+    const motivo = window.prompt('Por que esse negócio foi perdido? (obrigatório, ajuda a entender o funil depois)');
+    if (!motivo || !motivo.trim()) return; // cancela a mudança se não informar
+    negocio.motivoPerda = motivo.trim();
+  }
+
+  const eraFechado = negocio.etapa === 'fechado';
+  negocio.etapa = novaEtapa;
+  negocio.atualizadoEm = new Date().toISOString();
+  cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+  if (novaEtapa === 'fechado' && !eraFechado) lancarReceitaNegocioFechado(negocio);
+  renderFunilKanban();
+}
+
+function abrirNovoNegocioCrm() {
+  if (!exigirPodeOperar('criar negócios')) return;
+  CRM_NEGOCIO_EDITANDO_ID = null;
+  document.getElementById('negocio-crm-titulo').textContent = 'Novo negócio';
+  document.getElementById('negocio-crm-nome').value = '';
+  document.getElementById('negocio-crm-cliente').value = '';
+  document.getElementById('negocio-crm-valor').value = '';
+  document.getElementById('negocio-crm-responsavel').value = '';
+  document.getElementById('negocio-crm-email').value = '';
+  document.getElementById('negocio-crm-telefone').value = '';
+  document.getElementById('negocio-crm-origem').value = 'Indicação';
+  document.getElementById('negocio-crm-observacoes').value = '';
+  document.getElementById('btn-excluir-negocio-crm').style.display = 'none';
+  openModal('modal-negocio-crm');
+}
+
+function abrirEditarNegocioCrm(id) {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n) return;
+  CRM_NEGOCIO_EDITANDO_ID = id;
+  document.getElementById('negocio-crm-titulo').textContent = 'Editar negócio';
+  document.getElementById('negocio-crm-nome').value = n.nome || '';
+  document.getElementById('negocio-crm-cliente').value = n.cliente || '';
+  document.getElementById('negocio-crm-valor').value = n.valor || '';
+  document.getElementById('negocio-crm-responsavel').value = n.responsavel || '';
+  document.getElementById('negocio-crm-email').value = n.email || '';
+  document.getElementById('negocio-crm-telefone').value = n.telefone || '';
+  document.getElementById('negocio-crm-origem').value = n.origem || 'Indicação';
+  document.getElementById('negocio-crm-observacoes').value = n.observacoes || '';
+  document.getElementById('btn-excluir-negocio-crm').style.display = '';
+  openModal('modal-negocio-crm');
+}
+
+function salvarNegocioCrm() {
+  if (!negociosProntosOuAvisar()) return;
+  const nome = document.getElementById('negocio-crm-nome').value.trim();
+  if (!nome) return;
+  const dados = {
+    nome,
+    cliente: document.getElementById('negocio-crm-cliente').value.trim(),
+    valor: Number(document.getElementById('negocio-crm-valor').value || 0),
+    responsavel: document.getElementById('negocio-crm-responsavel').value.trim(),
+    email: document.getElementById('negocio-crm-email').value.trim(),
+    telefone: document.getElementById('negocio-crm-telefone').value.trim(),
+    origem: document.getElementById('negocio-crm-origem').value,
+    observacoes: document.getElementById('negocio-crm-observacoes').value.trim(),
+    atualizadoEm: new Date().toISOString(),
+  };
+
+  if (CRM_NEGOCIO_EDITANDO_ID) {
+    const n = CRM_NEGOCIOS_DATA.find((x) => x.id === CRM_NEGOCIO_EDITANDO_ID);
+    if (n) Object.assign(n, dados);
+  } else {
+    CRM_NEGOCIOS_DATA.push({ id: genId('cr'), etapa: 'lead', criadoEm: new Date().toISOString(), ...dados });
+  }
+  cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+  renderFunilKanban();
+  closeModal('modal-negocio-crm');
+}
+
+function excluirNegocioCrm() {
+  if (!CRM_NEGOCIO_EDITANDO_ID) return;
+  confirmarAcao('Excluir este negócio do funil? Essa ação não pode ser desfeita.', () => {
+    CRM_NEGOCIOS_DATA = CRM_NEGOCIOS_DATA.filter((x) => x.id !== CRM_NEGOCIO_EDITANDO_ID);
+    cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+    renderFunilKanban();
+    closeModal('modal-negocio-crm');
+  });
+}
+
+// ---------- Página pública da proposta (proposta.html, sem login) ----------
+
+let PROPOSTA_PUBLICA_ATUAL = null;
+let PROPOSTA_PUBLICA_ID = null;
+let PROPOSTA_CANVAS_CTX = null;
+let PROPOSTA_DESENHANDO = false;
+let PROPOSTA_TEM_TRACO = false;
+
+async function carregarPropostaPublica() {
+  initFirebase();
+  const params = new URLSearchParams(window.location.search);
+  PROPOSTA_PUBLICA_ID = params.get('id');
+  const mostrarErro = () => {
+    document.getElementById('prop-carregando').style.display = 'none';
+    document.getElementById('prop-erro').style.display = '';
+  };
+  if (!PROPOSTA_PUBLICA_ID || !firestoreDb) { mostrarErro(); return; }
+
+  try {
+    const snap = await firestoreDb.collection('propostas_publicas').doc(PROPOSTA_PUBLICA_ID).get();
+    if (!snap.exists || snap.data().status === 'rascunho') { mostrarErro(); return; }
+    PROPOSTA_PUBLICA_ATUAL = snap.data();
+    renderPropostaPublica();
+    if (PROPOSTA_PUBLICA_ATUAL.status === 'enviada' && !PROPOSTA_PUBLICA_ATUAL.visualizadoEm) {
+      const agora = new Date().toISOString();
+      firestoreDb.collection('propostas_publicas').doc(PROPOSTA_PUBLICA_ID).set({ visualizadoEm: agora }, { merge: true }).catch(() => {});
+      PROPOSTA_PUBLICA_ATUAL.visualizadoEm = agora;
+    }
+  } catch (err) {
+    console.error('Erro ao carregar proposta pública:', err);
+    mostrarErro();
+  }
+}
+
+function renderPropostaPublica() {
+  const p = PROPOSTA_PUBLICA_ATUAL;
+  document.getElementById('prop-carregando').style.display = 'none';
+  document.getElementById('prop-conteudo').style.display = '';
+
+  const vc = p.visualConfig || {};
+
+  // aplica a marca (cores) em toda a pagina, via variaveis de CSS
+  if (vc.corPrimaria) {
+    document.documentElement.style.setProperty('--blue-strong', vc.corPrimaria);
+    document.documentElement.style.setProperty('--blue-text', vc.corPrimaria);
+  }
+  aplicarVisualCheckoutPublico(vc);
+
+  const logoArea = document.getElementById('prop-logo-area');
+  const logoParaMostrar = urlImagemSegura(vc.logoUrl) || urlImagemSegura(p.empresaLogo);
+  logoArea.innerHTML = logoParaMostrar
+    ? `<img src="${escapeHtml(logoParaMostrar)}" class="prop-logo">`
+    : `<div class="prop-logo-letra">${escapeHtml((p.empresaNome || 'E').charAt(0).toUpperCase())}</div>`;
+  document.getElementById('prop-empresa-nome').textContent = p.empresaNome || '';
+  document.getElementById('prop-titulo').textContent = vc.tituloPrincipal || p.titulo || '';
+  document.getElementById('prop-cliente').textContent = p.cliente || '';
+
+  const boasVindasEl = document.getElementById('prop-boas-vindas');
+  if (vc.mensagemBoasVindas) { boasVindasEl.textContent = vc.mensagemBoasVindas; boasVindasEl.style.display = ''; }
+  else boasVindasEl.style.display = 'none';
+
+  const total = (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0);
+  document.getElementById('prop-itens').innerHTML = (p.itens || []).map((i) => `
+    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border);">
+      <span>${escapeHtml(i.descricao)}</span><span>${formatMoney(i.valor)}</span>
+    </div>`).join('');
+  document.getElementById('prop-total').textContent = formatMoney(total);
+
+  const extras = [];
+  if (p.condicaoPagamento) extras.push('Condição de pagamento: ' + escapeHtml(p.condicaoPagamento));
+  if (p.validoAte) extras.push('Válida até ' + formatDatePt(p.validoAte));
+  if (p.observacoes) extras.push(escapeHtml(p.observacoes));
+  document.getElementById('prop-extra').innerHTML = extras.map((t) => `<p style="margin:4px 0;">${t}</p>`).join('');
+
+  const avaliacoesWrap = document.getElementById('prop-avaliacoes');
+  if (vc.exibirAvaliacoes && (vc.avaliacoes || []).length) {
+    document.getElementById('prop-avaliacoes-lista').innerHTML = vc.avaliacoes.map((a) => `
+      <div class="panel" style="padding:12px; margin-bottom:8px;">
+        <strong style="font-size:12.5px;">${escapeHtml(a.nome || 'Cliente')}</strong>
+        <p style="font-size:12px; color:var(--text-soft); margin:4px 0 0;">${escapeHtml(a.texto || '')}</p>
+      </div>`).join('');
+    avaliacoesWrap.style.display = '';
+  } else {
+    avaliacoesWrap.style.display = 'none';
+  }
+
+  const btnAprovar = document.getElementById('prop-btn-aprovar');
+  if (btnAprovar) btnAprovar.textContent = vc.textoBotaoAprovacao || 'Aprovar';
+
+  if (p.status === 'enviada') {
+    document.getElementById('prop-acoes-pendente').style.display = '';
+  } else {
+    const respostaEl = document.getElementById('prop-ja-respondida');
+    respostaEl.style.display = '';
+    if (p.status === 'aprovada') {
+      document.getElementById('prop-resposta-icone').innerHTML = `<span class="ic-circulo">${ic('aprovado', 'ic-sucesso')}</span>`;
+      document.getElementById('prop-resposta-titulo').textContent = vc.tituloSucesso || 'Proposta já aprovada';
+      document.getElementById('prop-resposta-texto').textContent = vc.mensagemAgradecimento || (p.assinatura ? `Aprovada por ${p.assinatura.nomeDigitado} em ${formatDatePt(p.assinatura.dataHoraISO.slice(0, 10))}.` : 'Essa proposta já foi aprovada.');
+    } else {
+      document.getElementById('prop-resposta-icone').innerHTML = `<span class="ic-circulo" style="background:color-mix(in srgb, var(--danger) 13%, transparent);">${ic('recusado', 'ic-perigo')}</span>`;
+      document.getElementById('prop-resposta-titulo').textContent = 'Proposta recusada';
+      document.getElementById('prop-resposta-texto').textContent = 'Essa proposta foi marcada como recusada.';
+    }
+  }
+}
+
+// Campos que vieram de Configurações → Página de Aprovação / Checkout.
+// Toda cor passa por corHexValida antes de virar CSS (o valor está
+// salvo no documento público e não pode virar injeção de estilo).
+function aplicarVisualCheckoutPublico(vc) {
+  const root = document.documentElement;
+  const fundo = corHexValida(vc.corFundo);
+  const texto = corHexValida(vc.corTexto);
+  const textoBotao = corHexValida(vc.corTextoBotao);
+  const raio = { nenhum: '0px', pequeno: '6px', medio: '10px', grande: '16px', completo: '999px' }[vc.arredondamento];
+  const mistura = texto || (luminanciaHex(fundo || '#ffffff') > 0.4 ? '#000000' : '#ffffff');
+  if (fundo) {
+    root.style.setProperty('--bg', fundo);
+    root.style.setProperty('--bg-elevated', `color-mix(in srgb, ${fundo} 94%, ${mistura})`);
+    root.style.setProperty('--bg-soft', `color-mix(in srgb, ${fundo} 88%, ${mistura})`);
+    root.style.setProperty('--border', `color-mix(in srgb, ${fundo} 80%, ${mistura})`);
+    document.body.style.background = fundo;
+  }
+  if (texto) {
+    root.style.setProperty('--text', texto);
+    root.style.setProperty('--text-soft', `color-mix(in srgb, ${texto} 65%, ${fundo || '#ffffff'})`);
+  }
+  let css = '';
+  if (textoBotao) css += `.btn-primary, .btn-primary:hover, .btn-primary:focus { color: ${textoBotao} !important; }`;
+  if (raio) css += `.btn { border-radius: ${raio} !important; }`;
+  if (css) {
+    let tag = document.getElementById('prop-estilo-checkout');
+    if (!tag) { tag = document.createElement('style'); tag.id = 'prop-estilo-checkout'; document.head.appendChild(tag); }
+    tag.textContent = css;
+  }
+  const banner = document.getElementById('prop-banner');
+  const urlBanner = urlImagemSegura(vc.bannerUrl);
+  if (banner) { if (urlBanner) { banner.src = urlBanner; banner.style.display = ''; } else banner.style.display = 'none'; }
+  const rodape = document.getElementById('prop-rodape');
+  if (rodape) { rodape.textContent = vc.textoRodape || ''; rodape.style.display = vc.textoRodape ? '' : 'none'; }
+  if (vc.tituloAba) document.title = String(vc.tituloAba).slice(0, 70);
+}
+
+function mostrarAssinaturaPublica() {
+  document.getElementById('prop-acoes-pendente').style.display = 'none';
+  document.getElementById('prop-assinatura-area').style.display = '';
+  const canvas = document.getElementById('prop-canvas-assinatura');
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  PROPOSTA_CANVAS_CTX = canvas.getContext('2d');
+  PROPOSTA_CANVAS_CTX.lineWidth = 2.2;
+  PROPOSTA_CANVAS_CTX.lineCap = 'round';
+  PROPOSTA_CANVAS_CTX.strokeStyle = '#111';
+  PROPOSTA_TEM_TRACO = false;
+
+  const posicao = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const pt = e.touches ? e.touches[0] : e;
+    return { x: pt.clientX - rect.left, y: pt.clientY - rect.top };
+  };
+  const iniciar = (e) => { PROPOSTA_DESENHANDO = true; const p = posicao(e); PROPOSTA_CANVAS_CTX.beginPath(); PROPOSTA_CANVAS_CTX.moveTo(p.x, p.y); };
+  const desenhar = (e) => {
+    if (!PROPOSTA_DESENHANDO) return;
+    e.preventDefault();
+    const p = posicao(e);
+    PROPOSTA_CANVAS_CTX.lineTo(p.x, p.y);
+    PROPOSTA_CANVAS_CTX.stroke();
+    PROPOSTA_TEM_TRACO = true;
+  };
+  const parar = () => { PROPOSTA_DESENHANDO = false; };
+
+  canvas.onmousedown = iniciar; canvas.onmousemove = desenhar; canvas.onmouseup = parar; canvas.onmouseleave = parar;
+  canvas.ontouchstart = iniciar; canvas.ontouchmove = desenhar; canvas.ontouchend = parar;
+}
+
+function limparAssinaturaPublica() {
+  if (!PROPOSTA_CANVAS_CTX) return;
+  const canvas = document.getElementById('prop-canvas-assinatura');
+  PROPOSTA_CANVAS_CTX.clearRect(0, 0, canvas.width, canvas.height);
+  PROPOSTA_TEM_TRACO = false;
+}
+
+async function confirmarAprovacaoPublica() {
+  const nome = document.getElementById('prop-nome-assinante').value.trim();
+  if (!nome) { avisar('Digite seu nome pra confirmar.'); return; }
+  if (!PROPOSTA_TEM_TRACO) { avisar('Faça sua assinatura no quadro antes de confirmar.'); return; }
+
+  const canvas = document.getElementById('prop-canvas-assinatura');
+  const dados = {
+    status: 'aprovada',
+    atualizadoEm: new Date().toISOString(),
+    assinatura: { dataUrl: canvas.toDataURL('image/png'), nomeDigitado: nome, dataHoraISO: new Date().toISOString() },
+  };
+  try {
+    await firestoreDb.collection('propostas_publicas').doc(PROPOSTA_PUBLICA_ID).set(dados, { merge: true });
+    PROPOSTA_PUBLICA_ATUAL = { ...PROPOSTA_PUBLICA_ATUAL, ...dados };
+    document.getElementById('prop-assinatura-area').style.display = 'none';
+    renderPropostaPublica();
+  } catch (err) {
+    console.error('Erro ao confirmar aprovação:', err);
+    avisar('Não foi possível confirmar agora. Tente de novo.');
+  }
+}
+
+async function recusarPropostaPublica() {
+  confirmarAcao('Tem certeza que quer recusar essa proposta?', async () => {
+    try {
+      await firestoreDb.collection('propostas_publicas').doc(PROPOSTA_PUBLICA_ID).set({ status: 'recusada', atualizadoEm: new Date().toISOString() }, { merge: true });
+      PROPOSTA_PUBLICA_ATUAL.status = 'recusada';
+      document.getElementById('prop-acoes-pendente').style.display = 'none';
+      renderPropostaPublica();
+    } catch (err) {
+      console.error('Erro ao recusar proposta:', err);
+      avisar('Não foi possível registrar agora. Tente de novo.');
+    }
+  });
+}
+
+// ---------- CRM: filtro rápido por cliente (avatares no topo) ----------
+
+let CRM_CLIENTE_FILTRO = null; // null = "Todos"
+
+function renderFiltroClientesCrm() {
+  const el = document.getElementById('crm-filtro-clientes');
+  if (!el) return;
+  const nomes = nomesClientesCrm();
+  const pilulaTodos = `
+    <button type="button" class="crm-filtro-avatar${!CRM_CLIENTE_FILTRO ? ' ativo' : ''}" onclick="selecionarClienteFiltroCrm(null)">
+      <div class="crm-filtro-avatar-circulo" style="background:var(--text-soft);">${ic('pessoas', 'ic-herda')}</div>
+      <div class="crm-filtro-avatar-nome">Todos</div>
+    </button>`;
+  el.innerHTML = pilulaTodos + nomes.map((nome) => {
+    const ativo = CRM_CLIENTE_FILTRO === nome;
+    return `
+    <button type="button" class="crm-filtro-avatar${ativo ? ' ativo' : ''}" onclick="selecionarClienteFiltroCrm('${escapeParaOnclick(nome)}')">
+      <div class="crm-filtro-avatar-circulo">${escapeHtml(initials(nome))}</div>
+      <div class="crm-filtro-avatar-nome">${escapeHtml(nome)}</div>
+    </button>`;
+  }).join('');
+}
+
+function selecionarClienteFiltroCrm(nome) {
+  CRM_CLIENTE_FILTRO = nome;
+  renderFiltroClientesCrm();
+  atualizarSecaoAtivaCrm();
+}
+
+// ---------- CRM: Editor da Pagina de Aprovacao ----------
+
+const CRM_APROVACAO_KEY = 'eagles_crm_pagina_aprovacao_v1';
+let CRM_APROVACAO_DATA = null;
+let CRM_APROVACAO_CARREGADO = false;
+
+function aprovacaoConfigPadrao() {
+  return {
+    logoUrl: '', faviconUrl: '',
+    corPrimaria: '#ec4899', corSecundaria: '#14b8a6',
+    tituloPrincipal: '', mensagemBoasVindas: '', textoBotaoAprovacao: '', mensagemAgradecimento: '',
+    exibirAvaliacoes: false, avaliacoes: [],
+    exibirProjetos: false, maximoProjetos: 4,
+    corFundo: '', corTexto: '', corTextoBotao: '', arredondamento: 'medio', bannerUrl: '',
+    tituloAba: '', textoRodape: '', tituloSucesso: '',
+  };
+}
+
+function obterConfigAprovacaoAtual() {
+  const c = CRM_APROVACAO_DATA || aprovacaoConfigPadrao();
+  return {
+    logoUrl: c.logoUrl || '', corPrimaria: c.corPrimaria || '#ec4899', corSecundaria: c.corSecundaria || '#14b8a6',
+    tituloPrincipal: c.tituloPrincipal || '', mensagemBoasVindas: c.mensagemBoasVindas || '',
+    textoBotaoAprovacao: c.textoBotaoAprovacao || '', mensagemAgradecimento: c.mensagemAgradecimento || '',
+    exibirAvaliacoes: !!c.exibirAvaliacoes, avaliacoes: c.avaliacoes || [],
+    corFundo: corHexValida(c.corFundo), corTexto: corHexValida(c.corTexto), corTextoBotao: corHexValida(c.corTextoBotao),
+    arredondamento: ['nenhum', 'pequeno', 'medio', 'grande', 'completo'].includes(c.arredondamento) ? c.arredondamento : 'medio',
+    bannerUrl: c.bannerUrl || '', tituloAba: c.tituloAba || '', textoRodape: c.textoRodape || '', tituloSucesso: c.tituloSucesso || '',
+  };
+}
+
+const CRM_PALETAS_APROVACAO = [
+  { nome: 'Coral Vibe', cor1: '#ff6b6b', cor2: '#ffd93d' },
+  { nome: 'Ocean Deep', cor1: '#14b8a6', cor2: '#334155' },
+  { nome: 'Purple Rain', cor1: '#7c3aed', cor2: '#ef4444' },
+  { nome: 'Cyber Night', cor1: '#1e1b4b', cor2: '#ec4899' },
+  { nome: 'Forest Dream', cor1: '#16a34a', cor2: '#14532d' },
+  { nome: 'Royal Gold', cor1: '#1e3a8a', cor2: '#f59e0b' },
+  { nome: 'Pink Blue', cor1: '#3b82f6', cor2: '#a855f7' },
+  { nome: 'Fire Blue', cor1: '#ef4444', cor2: '#06b6d4' },
+];
+
+function iniciarConfigAprovacao() {
+  if (!CRM_APROVACAO_DATA) CRM_APROVACAO_DATA = aprovacaoConfigPadrao();
+  document.getElementById('aprovacao-cor-primaria').value = CRM_APROVACAO_DATA.corPrimaria;
+  document.getElementById('aprovacao-cor-primaria-hex').value = CRM_APROVACAO_DATA.corPrimaria;
+  document.getElementById('aprovacao-cor-secundaria').value = CRM_APROVACAO_DATA.corSecundaria;
+  document.getElementById('aprovacao-cor-secundaria-hex').value = CRM_APROVACAO_DATA.corSecundaria;
+  document.getElementById('aprovacao-titulo').value = CRM_APROVACAO_DATA.tituloPrincipal || '';
+  document.getElementById('aprovacao-boas-vindas').value = CRM_APROVACAO_DATA.mensagemBoasVindas || '';
+  document.getElementById('aprovacao-texto-botao').value = CRM_APROVACAO_DATA.textoBotaoAprovacao || '';
+  document.getElementById('aprovacao-agradecimento').value = CRM_APROVACAO_DATA.mensagemAgradecimento || '';
+  document.getElementById('aprovacao-exibir-avaliacoes').checked = !!CRM_APROVACAO_DATA.exibirAvaliacoes;
+  document.getElementById('crm-box-exibir-avaliacoes').classList.toggle('ativo', !!CRM_APROVACAO_DATA.exibirAvaliacoes);
+  document.getElementById('aprovacao-exibir-projetos').checked = !!CRM_APROVACAO_DATA.exibirProjetos;
+  document.getElementById('crm-box-exibir-projetos').classList.toggle('ativo', !!CRM_APROVACAO_DATA.exibirProjetos);
+  document.getElementById('aprovacao-max-projetos').value = CRM_APROVACAO_DATA.maximoProjetos || 4;
+
+  renderPreviewImagemAprovacao('logo');
+  renderPreviewImagemAprovacao('favicon');
+  renderPaletasCores();
+  renderListaAvaliacoes();
+  atualizarGradientePreviewCores();
+  renderPreviewAprovacao();
+
+  // primeira secao ja aberta, igual a referencia
+  document.querySelectorAll('.crm-acordeon').forEach((el, i) => el.classList.toggle('aberto', i === 0));
+}
+
+function toggleAcordeaoAprovacao(secao) {
+  const el = document.querySelector(`.crm-acordeon[data-secao="${secao}"]`);
+  if (el) el.classList.toggle('aberto');
+}
+
+function renderPaletasCores() {
+  const el = document.getElementById('crm-paletas-grid');
+  if (!el) return;
+  el.innerHTML = CRM_PALETAS_APROVACAO.map((p, i) => {
+    const selecionada = CRM_APROVACAO_DATA.corPrimaria === p.cor1 && CRM_APROVACAO_DATA.corSecundaria === p.cor2;
+    return `
+    <div class="crm-paleta-item${selecionada ? ' selecionada' : ''}" onclick="selecionarPaletaAprovacao(${i})">
+      <div class="crm-paleta-cores"><span style="background:${p.cor1};"></span><span style="background:${p.cor2};"></span></div>
+      <div class="crm-paleta-nome">${escapeHtml(p.nome)}</div>
+    </div>`;
+  }).join('');
+}
+
+function selecionarPaletaAprovacao(i) {
+  const p = CRM_PALETAS_APROVACAO[i];
+  CRM_APROVACAO_DATA.corPrimaria = p.cor1;
+  CRM_APROVACAO_DATA.corSecundaria = p.cor2;
+  document.getElementById('aprovacao-cor-primaria').value = p.cor1;
+  document.getElementById('aprovacao-cor-primaria-hex').value = p.cor1;
+  document.getElementById('aprovacao-cor-secundaria').value = p.cor2;
+  document.getElementById('aprovacao-cor-secundaria-hex').value = p.cor2;
+  renderPaletasCores();
+  atualizarGradientePreviewCores();
+  renderPreviewAprovacao();
+}
+
+function atualizarCorPersonalizadaAprovacao() {
+  CRM_APROVACAO_DATA.corPrimaria = document.getElementById('aprovacao-cor-primaria').value;
+  CRM_APROVACAO_DATA.corSecundaria = document.getElementById('aprovacao-cor-secundaria').value;
+  document.getElementById('aprovacao-cor-primaria-hex').value = CRM_APROVACAO_DATA.corPrimaria;
+  document.getElementById('aprovacao-cor-secundaria-hex').value = CRM_APROVACAO_DATA.corSecundaria;
+  renderPaletasCores();
+  atualizarGradientePreviewCores();
+  renderPreviewAprovacao();
+}
+
+function atualizarGradientePreviewCores() {
+  const el = document.getElementById('crm-preview-gradiente');
+  if (el) el.style.background = `linear-gradient(90deg, ${CRM_APROVACAO_DATA.corPrimaria}, ${CRM_APROVACAO_DATA.corSecundaria})`;
+}
+
+function selecionarImagemAprovacao(input, tipo) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { avisar('Selecione um arquivo de imagem (PNG ou JPG).'); return; }
+  if (file.size > 5 * 1024 * 1024) { avisar('Imagem muito grande (máximo 5MB).'); return; }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const alturaAlvo = tipo === 'favicon' ? 64 : 120;
+      const larguraAlvo = tipo === 'favicon' ? 64 : Math.round(img.width * (alturaAlvo / img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = larguraAlvo;
+      canvas.height = alturaAlvo;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, larguraAlvo, alturaAlvo);
+      const dataUrl = canvas.toDataURL('image/png', 0.9);
+      if (tipo === 'logo') CRM_APROVACAO_DATA.logoUrl = dataUrl;
+      else CRM_APROVACAO_DATA.faviconUrl = dataUrl;
+      renderPreviewImagemAprovacao(tipo);
+      renderPreviewAprovacao();
+    };
+    img.onerror = () => avisar('Não foi possível ler essa imagem. Tente outro arquivo.');
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderPreviewImagemAprovacao(tipo) {
+  const url = tipo === 'logo' ? CRM_APROVACAO_DATA.logoUrl : CRM_APROVACAO_DATA.faviconUrl;
+  const el = document.getElementById(tipo === 'logo' ? 'crm-preview-logo-aprovacao' : 'crm-preview-favicon-aprovacao');
+  if (!el) return;
+  if (url) {
+    el.innerHTML = `<img src="${url}" alt="${tipo}"><br><button type="button" class="crm-btn-remover-imagem" onclick="event.stopPropagation(); removerImagemAprovacao('${tipo}');">✕ Remover</button>`;
+  } else {
+    el.innerHTML = tipo === 'logo'
+      ? '<svg class="crm-acordeon-icone" viewBox="0 0 24 24" style="width:22px;height:22px;display:block;margin:0 auto 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Clique para fazer upload<br><span style="font-size:11px;">PNG, JPG até 5MB (recomendado 400x120px)</span>'
+      : '<svg class="crm-acordeon-icone" viewBox="0 0 24 24" style="width:22px;height:22px;display:block;margin:0 auto 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Clique para fazer upload<br><span style="font-size:11px;">PNG, JPG até 1MB (recomendado 64x64px)</span>';
+  }
+}
+
+function removerImagemAprovacao(tipo) {
+  if (tipo === 'logo') CRM_APROVACAO_DATA.logoUrl = '';
+  else CRM_APROVACAO_DATA.faviconUrl = '';
+  renderPreviewImagemAprovacao(tipo);
+  renderPreviewAprovacao();
+}
+
+function carregarAvaliacoesPadrao() {
+  CRM_APROVACAO_DATA.avaliacoes = [
+    { id: genId('av'), nome: 'Mariana Costa', texto: 'Trabalho excelente, entrega no prazo e comunicação impecável!', nota: 5 },
+    { id: genId('av'), nome: 'Rafael Souza', texto: 'Superou nossas expectativas. Recomendo demais!', nota: 5 },
+  ];
+  renderListaAvaliacoes();
+  renderPreviewAprovacao();
+}
+
+function adicionarAvaliacaoAprovacao() {
+  CRM_APROVACAO_DATA.avaliacoes.push({ id: genId('av'), nome: '', texto: '', nota: 5 });
+  renderListaAvaliacoes();
+}
+
+function renderListaAvaliacoes() {
+  const el = document.getElementById('crm-lista-avaliacoes');
+  if (!el) return;
+  el.innerHTML = CRM_APROVACAO_DATA.avaliacoes.map((a, i) => `
+    <div class="panel" style="padding:10px; margin-bottom:8px;">
+      <div style="display:flex; gap:8px; margin-bottom:6px;">
+        <input type="text" value="${escapeHtml(a.nome)}" placeholder="Nome do cliente" style="flex:1;" oninput="CRM_APROVACAO_DATA.avaliacoes[${i}].nome=this.value; renderPreviewAprovacao();">
+        <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerAvaliacaoAprovacao('${a.id}')">✕</button>
+      </div>
+      <textarea rows="2" placeholder="Depoimento..." oninput="CRM_APROVACAO_DATA.avaliacoes[${i}].texto=this.value; renderPreviewAprovacao();">${escapeHtml(a.texto)}</textarea>
+    </div>`).join('') || '<p class="empty-state">Nenhuma avaliação ainda.</p>';
+}
+
+function removerAvaliacaoAprovacao(id) {
+  CRM_APROVACAO_DATA.avaliacoes = CRM_APROVACAO_DATA.avaliacoes.filter((a) => a.id !== id);
+  renderListaAvaliacoes();
+  renderPreviewAprovacao();
+}
+
+// Dados de exemplo so pra pré-visualizacao (nao é nenhum orçamento real) —
+// assim que existir um orçamento de verdade, a pagina publica usa os
+// dados reais dele.
+function renderPreviewAprovacao() {
+  const el = document.getElementById('crm-aprovacao-preview');
+  if (!el || !CRM_APROVACAO_DATA) return;
+  const cor1 = CRM_APROVACAO_DATA.corPrimaria;
+  const cor2 = CRM_APROVACAO_DATA.corSecundaria;
+  const titulo = document.getElementById('aprovacao-titulo')?.value || 'Identidade Visual Completa';
+  const boasVindas = document.getElementById('aprovacao-boas-vindas')?.value;
+  const textoBotao = document.getElementById('aprovacao-texto-botao')?.value || 'Aprovar Proposta';
+
+  const itensExemplo = [
+    { nome: 'Criação de Logotipo', desc: 'Design personalizado e...', valor: 1500 },
+    { nome: 'Manual de Marca', desc: 'Guia completo de aplicação', valor: 800 },
+    { nome: 'Papelaria', desc: 'Cartão de visita, papel timbrado', valor: 500 },
+  ];
+  const subtotal = itensExemplo.reduce((a, i) => a + i.valor, 0);
+  const desconto = 300;
+  const total = subtotal - desconto;
+
+  let html = '';
+  if (CRM_APROVACAO_DATA.logoUrl) html += `<img src="${CRM_APROVACAO_DATA.logoUrl}" style="max-height:50px; margin-bottom:16px;">`;
+  html += `<h2 style="margin:0 0 6px; color:#fff;">${escapeHtml(titulo)}</h2>`;
+  if (boasVindas) html += `<p style="color:#aaa; font-size:13px; margin:0 0 18px;">${escapeHtml(boasVindas)}</p>`;
+  html += `<p style="color:#ccc; font-size:13px;">Desenvolvimento completo de identidade visual incluindo logotipo, paleta de cores, tipografia e manual de marca.</p>`;
+  html += `<h3 style="color:#fff; font-size:14px; margin:18px 0 10px;">Serviços Incluídos</h3>`;
+  itensExemplo.forEach((i) => {
+    html += `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,.04); border-radius:10px; padding:10px 12px; margin-bottom:8px;">
+      <div><strong style="color:#fff; font-size:13px;">${escapeHtml(i.nome)}</strong><div style="color:#999; font-size:11.5px;">${escapeHtml(i.desc)}</div></div>
+      <strong style="color:${cor1}; font-size:13.5px;">${formatMoney(i.valor)}</strong>
+    </div>`;
+  });
+  html += `<div style="background:rgba(255,255,255,.04); border-radius:10px; padding:14px; margin-top:14px;">
+    <div style="display:flex; justify-content:space-between; color:#ccc; font-size:12.5px; margin-bottom:4px;"><span>Subtotal</span><span>${formatMoney(subtotal)}</span></div>
+    <div style="display:flex; justify-content:space-between; color:${cor1}; font-size:12.5px; margin-bottom:8px;"><span>Desconto</span><span>- ${formatMoney(desconto)}</span></div>
+    <div style="display:flex; justify-content:space-between; font-weight:700; font-size:17px; color:#fff;"><span>Total:</span><span style="color:${cor1};">${formatMoney(total)}</span></div>
+  </div>`;
+
+  if (CRM_APROVACAO_DATA.exibirAvaliacoes && CRM_APROVACAO_DATA.avaliacoes.length) {
+    html += `<h3 style="color:#fff; font-size:14px; margin:18px 0 10px;">O que dizem nossos clientes</h3>`;
+    CRM_APROVACAO_DATA.avaliacoes.forEach((a) => {
+      html += `<div class="crm-preview-avaliacao-card"><strong style="color:#fff; font-size:12.5px;">${escapeHtml(a.nome || 'Cliente')}</strong><p style="color:#bbb; font-size:12px; margin:4px 0 0;">${escapeHtml(a.texto)}</p></div>`;
+    });
+  }
+
+  html += `<button type="button" style="width:100%; margin-top:18px; padding:13px; border:none; border-radius:10px; background:linear-gradient(90deg, ${cor1}, ${cor2}); color:#fff; font-weight:700; font-size:14px; cursor:default;">✓ ${escapeHtml(textoBotao)}</button>`;
+
+  el.innerHTML = html;
+}
+
+function salvarConfigAprovacao() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CRM_APROVACAO_CARREGADO) { avisar('Ainda carregando a configuração — aguarde um instante e tente de novo.'); return; }
+  CRM_APROVACAO_DATA.tituloPrincipal = document.getElementById('aprovacao-titulo').value.trim();
+  CRM_APROVACAO_DATA.mensagemBoasVindas = document.getElementById('aprovacao-boas-vindas').value.trim();
+  CRM_APROVACAO_DATA.textoBotaoAprovacao = document.getElementById('aprovacao-texto-botao').value.trim();
+  CRM_APROVACAO_DATA.mensagemAgradecimento = document.getElementById('aprovacao-agradecimento').value.trim();
+  CRM_APROVACAO_DATA.exibirAvaliacoes = document.getElementById('aprovacao-exibir-avaliacoes').checked;
+  CRM_APROVACAO_DATA.exibirProjetos = document.getElementById('aprovacao-exibir-projetos').checked;
+  CRM_APROVACAO_DATA.maximoProjetos = Number(document.getElementById('aprovacao-max-projetos').value || 4);
+  cloudSet(CRM_APROVACAO_KEY, CRM_APROVACAO_DATA);
+  avisar('Configurações salvas! A partir de agora, todo orçamento enviado usa esse visual.');
+}
+
+// ---------- CRM: Venda Rápida ----------
+
+let VENDA_RAPIDA_MODO = 'avista';
+let VENDA_RAPIDA_STATUS = 'pendente';
+
+function abrirVendaRapida() {
+  if (!exigirPodeOperar('lançar vendas')) return;
+  VENDA_RAPIDA_MODO = 'avista';
+  VENDA_RAPIDA_STATUS = 'pendente';
+
+  const selectCliente = document.getElementById('venda-rapida-cliente');
+  const nomes = nomesClientesCrm();
+  selectCliente.innerHTML = '<option value="">Buscar cliente...</option>' + nomes.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+
+  document.getElementById('venda-rapida-mover-pipeline').checked = true;
+  document.getElementById('venda-rapida-box-pipeline').classList.add('ativo');
+  document.getElementById('venda-rapida-servico').value = '';
+  document.getElementById('venda-rapida-descricao').value = '';
+  document.getElementById('venda-rapida-valor').value = '';
+  document.getElementById('venda-rapida-vencimento').value = isoHoje();
+  document.getElementById('venda-rapida-parcelas').value = 2;
+  document.getElementById('venda-rapida-gerar-tarefa').checked = false;
+  document.getElementById('venda-rapida-box-tarefa').classList.remove('ativo');
+  document.getElementById('venda-rapida-categoria').value = 'Sem categoria';
+  document.getElementById('venda-rapida-observacoes').value = '';
+  document.getElementById('venda-rapida-classificacao').style.display = 'none';
+  document.getElementById('venda-rapida-parcelas-campo').style.display = 'none';
+
+  document.querySelectorAll('#venda-rapida-modo-grid .crm-modo-btn').forEach((b) => b.classList.toggle('ativo', b.dataset.modo === 'avista'));
+  document.querySelectorAll('#venda-rapida-status-grid .crm-modo-btn').forEach((b) => b.classList.toggle('ativo', b.dataset.status === 'pendente'));
+
+  openModal('modal-venda-rapida');
+}
+
+function selecionarModoPagamentoVenda(modo) {
+  VENDA_RAPIDA_MODO = modo;
+  document.querySelectorAll('#venda-rapida-modo-grid .crm-modo-btn').forEach((b) => b.classList.toggle('ativo', b.dataset.modo === modo));
+  const campo = document.getElementById('venda-rapida-parcelas-campo');
+  const label = document.getElementById('venda-rapida-parcelas-label');
+  if (modo === 'avista') {
+    campo.style.display = 'none';
+  } else {
+    campo.style.display = '';
+    label.textContent = modo === 'parcelado' ? 'Número de parcelas' : 'Quantidade de meses';
+  }
+}
+
+function selecionarStatusVenda(status) {
+  VENDA_RAPIDA_STATUS = status;
+  document.querySelectorAll('#venda-rapida-status-grid .crm-modo-btn').forEach((b) => b.classList.toggle('ativo', b.dataset.status === status));
+}
+
+function lancarVendaRapida() {
+  // grava negócio + tarefa + receita: confere tudo ANTES, pra não ficar
+  // metade salvo (ex.: negócio criado e a receita bloqueada)
+  if (!exigirPodeOperar('lançar vendas')) return;
+  const chavesNecessarias = (nivelVeFinanceiro() ? [FINANCE_CICLOS_KEY] : []).concat([CRM_NEGOCIOS_KEY, CRM_TAREFAS_KEY]);
+  if (chavesNecessarias.some((k) => !chaveCarregadaNaNuvem(k))) { chaveProntaParaGravar(chavesNecessarias.find((k) => !chaveCarregadaNaNuvem(k))); return; }
+  const cliente = document.getElementById('venda-rapida-cliente').value;
+  const descricao = document.getElementById('venda-rapida-descricao').value.trim();
+  const valor = Number(document.getElementById('venda-rapida-valor').value || 0);
+  const vencimento = document.getElementById('venda-rapida-vencimento').value;
+
+  if (!descricao) { avisar('Preencha a descrição da venda.'); return; }
+  if (!valor || valor <= 0) { avisar('Preencha um valor maior que zero.'); return; }
+  if (!vencimento) { avisar('Preencha a data de vencimento.'); return; }
+
+  const moverPipeline = document.getElementById('venda-rapida-mover-pipeline').checked;
+  const gerarTarefa = document.getElementById('venda-rapida-gerar-tarefa').checked;
+  const categoria = document.getElementById('venda-rapida-categoria').value;
+  const observacoes = document.getElementById('venda-rapida-observacoes').value.trim();
+  const statusPagamento = VENDA_RAPIDA_STATUS === 'pago' ? 'pago' : 'pendente';
+
+  if (moverPipeline && !negociosProntosOuAvisar()) return;
+
+  // --- 1. mover/criar card no pipeline, já em Fechado ---
+  let negocioId = null;
+  if (moverPipeline) {
+    let negocio = cliente ? CRM_NEGOCIOS_DATA.find((n) => n.cliente === cliente && n.etapa !== 'fechado' && n.etapa !== 'perdido') : null;
+    if (negocio) {
+      negocio.nome = descricao;
+      negocio.valor = valor;
+      negocio.etapa = 'fechado';
+      negocio.atualizadoEm = new Date().toISOString();
+    } else {
+      negocio = { id: genId('cr'), nome: descricao, cliente: cliente || descricao, valor, etapa: 'fechado', origem: 'Venda rápida', criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() };
+      CRM_NEGOCIOS_DATA.push(negocio);
+    }
+    negocioId = negocio.id;
+    cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+  }
+
+  // --- 2. lançar no Financeiro, considerando o modo de pagamento ---
+  const parcelas = VENDA_RAPIDA_MODO === 'avista' ? 1 : Math.max(2, Number(document.getElementById('venda-rapida-parcelas').value || 2));
+  const valorParcela = Math.round((valor / parcelas) * 100) / 100;
+  const dataBase = new Date(vencimento + 'T00:00:00');
+  for (let i = 0; i < parcelas; i++) {
+    const dataParcela = new Date(dataBase);
+    if (VENDA_RAPIDA_MODO === 'parcelado') dataParcela.setMonth(dataParcela.getMonth() + i);
+    if (VENDA_RAPIDA_MODO === 'recorrente') dataParcela.setMonth(dataParcela.getMonth() + i);
+    const mesKey = dataParcela.toISOString().slice(0, 7);
+    registrarReceitaFinanceiro(mesKey, {
+      id: genId('r'),
+      cliente: cliente || descricao,
+      plano: descricao + (parcelas > 1 ? ` (${i + 1}/${parcelas})` : '') + (categoria !== 'Sem categoria' ? ` — ${categoria}` : ''),
+      valor: valorParcela,
+      diaAcerto: dataParcela.getDate(),
+      status: i === 0 ? statusPagamento : 'pendente',
+      dataPagamento: i === 0 && statusPagamento === 'pago' ? isoHoje() : null,
+      origemVendaRapida: true,
+    });
+  }
+
+  // --- 3. gerar tarefa, se marcado ---
+  if (gerarTarefa) {
+    CRM_TAREFAS_DATA.push({ id: genId('tf'), texto: 'Acompanhar venda: ' + descricao, feita: false, data: isoHoje(), negocioId, criadoEm: new Date().toISOString() });
+    cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA);
+  }
+
+  closeModal('modal-venda-rapida');
+  renderFunilKanban();
+  atualizarSecaoAtivaCrm();
+}
+
+// ---------- CRM: Assistente de Novo Orçamento (4 passos) ----------
+
+let ORCAMENTO_WIZARD = null;
+let WIZARD_PASSO_ATUAL = 1;
+
+function estadoWizardPadrao() {
+  return {
+    clienteNome: '', clienteEmail: '',
+    titulo: '', descricao: '', videos: [],
+    validadeDias: 30,
+    multiPlano: false,
+    itens: [{ descricao: '', prazo: '', qtd: 1, valorUnit: 0 }],
+    planos: [{ nome: '', descricao: '', valor: 0 }],
+    descontoValor: 0,
+    gerarContratoAutomatico: true,
+    descontoCondicionalAtivo: false,
+    descontoCondicionalTipo: 'percentual',
+    descontoCondicionalValor: 0,
+    descontoCondicionalValidoAte: '',
+    descontoCondicionalMensagem: '',
+    recorrenteAtivo: false,
+    recorrenteMeses: 12,
+    primeiroVencimentoTipo: 'dias',
+    primeiroVencimentoValor: 30,
+    inicioProjetoTipo: 'dias',
+    inicioProjetoValor: '',
+    prazoEntrega: '',
+    ocultarValoresIndividuais: false,
+    ocultarValorTotalContrato: false,
+    termosConteudo: '',
+  };
+}
+
+function abrirWizardOrcamento() {
+  if (!exigirPodeOperar('criar orçamentos')) return;
+  ORCAMENTO_WIZARD = estadoWizardPadrao();
+  WIZARD_PASSO_ATUAL = 1;
+  renderPassoWizard();
+  openModal('modal-orcamento-wizard');
+}
+
+function fecharWizardOrcamento() {
+  closeModal('modal-orcamento-wizard');
+}
+
+function renderPassoWizard() {
+  const indicador = document.getElementById('crm-wizard-indicador');
+  let htmlInd = '';
+  for (let i = 1; i <= 4; i++) {
+    const estado = i < WIZARD_PASSO_ATUAL ? 'feita' : (i === WIZARD_PASSO_ATUAL ? 'ativa' : '');
+    htmlInd += `<div class="crm-wizard-bolha ${estado}">${i < WIZARD_PASSO_ATUAL ? '✓' : i}</div>`;
+    if (i < 4) htmlInd += `<div class="crm-wizard-linha ${i < WIZARD_PASSO_ATUAL ? 'feita' : ''}"></div>`;
+  }
+  indicador.innerHTML = htmlInd;
+
+  const corpo = document.getElementById('crm-wizard-corpo');
+  if (WIZARD_PASSO_ATUAL === 1) corpo.innerHTML = htmlPasso1Wizard();
+  if (WIZARD_PASSO_ATUAL === 2) corpo.innerHTML = htmlPasso2Wizard();
+  if (WIZARD_PASSO_ATUAL === 3) corpo.innerHTML = htmlPasso3Wizard();
+  if (WIZARD_PASSO_ATUAL === 4) corpo.innerHTML = htmlPasso4Wizard();
+
+  document.getElementById('crm-wizard-btn-voltar').style.visibility = WIZARD_PASSO_ATUAL === 1 ? 'hidden' : 'visible';
+  document.getElementById('crm-wizard-btn-proximo').textContent = WIZARD_PASSO_ATUAL === 4 ? 'Criar e Compartilhar' : 'Próximo ›';
+}
+
+function voltarPassoWizard() {
+  if (WIZARD_PASSO_ATUAL === 1) return;
+  WIZARD_PASSO_ATUAL--;
+  renderPassoWizard();
+}
+
+function avancarPassoWizard() {
+  const w = ORCAMENTO_WIZARD;
+  if (WIZARD_PASSO_ATUAL === 1) {
+    if (!w.clienteNome.trim() || !w.titulo.trim()) { avisar('Preencha o cliente e o título do orçamento pra continuar.'); return; }
+  }
+  if (WIZARD_PASSO_ATUAL === 2) {
+    const totalPasso2 = calcularTotalWizard();
+    if (totalPasso2 <= 0) { avisar('Adicione pelo menos um item (ou plano) com valor maior que zero.'); return; }
+  }
+  if (WIZARD_PASSO_ATUAL === 4) { finalizarWizardOrcamento(); return; }
+  WIZARD_PASSO_ATUAL++;
+  renderPassoWizard();
+}
+
+// ----- Passo 1: Informações Básicas -----
+
+function htmlPasso1Wizard() {
+  const w = ORCAMENTO_WIZARD;
+  const opcoesClientes = nomesClientesCrm().map((n) => `<option value="${escapeHtml(n)}" ${w.clienteNome === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+  return `
+    <h3>Informações Básicas</h3>
+    <p class="crm-wizard-sub">Escolha o cliente e defina o título do orçamento</p>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Cliente *</label>
+        <select onchange="ORCAMENTO_WIZARD.clienteNome = this.value">
+          <option value="">Buscar cliente...</option>
+          ${opcoesClientes}
+        </select>
+      </div>
+      <div class="field full"><label>E-mail do cliente</label><input type="email" value="${escapeHtml(w.clienteEmail)}" oninput="ORCAMENTO_WIZARD.clienteEmail = this.value" placeholder="pra você mandar o link"></div>
+      <div class="field full"><label>Título do Orçamento *</label><input type="text" placeholder="Ex: Identidade Visual Completa" value="${escapeHtml(w.titulo)}" oninput="ORCAMENTO_WIZARD.titulo = this.value"></div>
+      <div class="field full"><label>Descrição</label><textarea rows="4" placeholder="Descreva os detalhes do projeto..." oninput="ORCAMENTO_WIZARD.descricao = this.value">${escapeHtml(w.descricao)}</textarea></div>
+      <div class="field full">
+        <label>Vídeos (links)</label>
+        <p style="font-size:11.5px; color:var(--text-soft); margin:2px 0 8px;">Cole links de vídeos (YouTube, Vimeo ou .mp4). Aparecem na página de aprovação.</p>
+        <div id="crm-wizard-videos-lista">${htmlVideosWizard()}</div>
+        <button type="button" class="btn btn-small" onclick="adicionarVideoWizard()">+ Adicionar vídeo</button>
+      </div>
+      <div class="field"><label>Validade (dias)</label><input type="number" min="1" value="${w.validadeDias}" oninput="ORCAMENTO_WIZARD.validadeDias = Number(this.value)"></div>
+      <div class="field"><label>Moeda</label><input type="text" value="R$ BRL — Real Brasileiro" disabled></div>
+    </div>`;
+}
+
+function htmlVideosWizard() {
+  return ORCAMENTO_WIZARD.videos.map((v, i) => `
+    <div style="display:flex; gap:8px; margin-bottom:6px;">
+      <input type="text" value="${escapeHtml(v)}" placeholder="https://..." oninput="ORCAMENTO_WIZARD.videos[${i}] = this.value" style="flex:1;">
+      <button type="button" class="btn btn-small btn-ghost" onclick="removerVideoWizard(${i})">✕</button>
+    </div>`).join('');
+}
+function adicionarVideoWizard() {
+  ORCAMENTO_WIZARD.videos.push('');
+  document.getElementById('crm-wizard-videos-lista').innerHTML = htmlVideosWizard();
+}
+function removerVideoWizard(i) {
+  ORCAMENTO_WIZARD.videos.splice(i, 1);
+  document.getElementById('crm-wizard-videos-lista').innerHTML = htmlVideosWizard();
+}
+
+// ----- Passo 2: Selecione os Serviços -----
+
+function calcularSubtotalWizard() {
+  const w = ORCAMENTO_WIZARD;
+  if (w.multiPlano) return w.planos.reduce((a, p) => a + Number(p.valor || 0), 0);
+  return w.itens.reduce((a, i) => a + Number(i.qtd || 0) * Number(i.valorUnit || 0), 0);
+}
+function calcularTotalWizard() {
+  return Math.max(0, calcularSubtotalWizard() - Number(ORCAMENTO_WIZARD.descontoValor || 0));
+}
+
+function htmlPasso2Wizard() {
+  const w = ORCAMENTO_WIZARD;
+  return `
+    <h3>Selecione os Serviços</h3>
+    <p class="crm-wizard-sub">Adicione os serviços que serão prestados</p>
+    <div class="crm-wizard-toggle-box ${w.multiPlano ? 'ativo' : ''}">
+      <div class="crm-wizard-toggle-linha">
+        <div><strong>${ic('camadas')} Orçamento multi-plano</strong><p>Ofereça vários planos; o cliente escolhe um e paga só esse valor.</p></div>
+        <label class="switch"><input type="checkbox" ${w.multiPlano ? 'checked' : ''} onchange="ORCAMENTO_WIZARD.multiPlano = this.checked; document.getElementById('crm-wizard-passo2-corpo').innerHTML = ORCAMENTO_WIZARD.multiPlano ? htmlPasso2MultiPlano() : htmlPasso2Servicos();"><span class="switch-slider"></span></label>
+      </div>
+    </div>
+    <div id="crm-wizard-passo2-corpo">${w.multiPlano ? htmlPasso2MultiPlano() : htmlPasso2Servicos()}</div>`;
+}
+
+function htmlPasso2Servicos() {
+  const w = ORCAMENTO_WIZARD;
+  const itensHtml = w.itens.map((item, i) => `
+    <div class="crm-wizard-item-servico">
+      <div class="crm-wizard-item-cabecalho">
+        <div><span class="crm-wizard-item-numero">${i + 1}</span><strong>${escapeHtml(item.descricao) || 'Novo item'}</strong></div>
+        <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerItemServicoWizard(${i})">−</button>
+      </div>
+      <div class="field full"><input type="text" placeholder="Nome do serviço (ex: Landing Page)" value="${escapeHtml(item.descricao)}" oninput="ORCAMENTO_WIZARD.itens[${i}].descricao = this.value; atualizarNumeroItemWizard(${i});"></div>
+      <div class="field full"><textarea rows="2" placeholder="Descrição do item (opcional)" oninput="ORCAMENTO_WIZARD.itens[${i}].obs = this.value"></textarea></div>
+      <div class="field full"><input type="text" placeholder="Prazo deste item (ex: 15 dias) — opcional" value="${escapeHtml(item.prazo)}" oninput="ORCAMENTO_WIZARD.itens[${i}].prazo = this.value"></div>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:8px;">
+        <span style="font-size:12.5px; color:var(--text-soft);">Qtd:</span>
+        <input type="number" min="1" value="${item.qtd}" style="width:70px;" oninput="ORCAMENTO_WIZARD.itens[${i}].qtd = Number(this.value); atualizarTotaisPasso2Wizard();">
+        <span style="font-size:12.5px; color:var(--text-soft);">Valor unit.: R$</span>
+        <input type="number" min="0" step="0.01" value="${item.valorUnit}" style="width:110px;" oninput="ORCAMENTO_WIZARD.itens[${i}].valorUnit = Number(this.value); atualizarTotaisPasso2Wizard();">
+        <strong style="margin-left:auto; color:var(--blue-text);" id="crm-wizard-item-total-${i}">${formatMoney(item.qtd * item.valorUnit)}</strong>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="field full"><input type="text" placeholder="Adicionar serviço... (digite o nome)" id="crm-wizard-novo-servico" style="margin-bottom:10px;"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;"><button type="button" class="btn btn-small" onclick="adicionarItemServicoWizard()">+ Novo item</button><button type="button" class="btn btn-small" onclick="srvIniciarDados(); srvAbrirCatalogoNoOrcamento(this)">${ic('pacote', 'ic-herda')} Adicionar do catálogo</button></div>
+    <div id="crm-wizard-itens-lista">${itensHtml}</div>
+    <div class="field full"><label>Desconto (R$)</label><input type="number" min="0" step="0.01" value="${w.descontoValor}" oninput="ORCAMENTO_WIZARD.descontoValor = Number(this.value); atualizarTotaisPasso2Wizard();"></div>
+    <div class="crm-wizard-totais">
+      <div style="display:flex; justify-content:space-between; color:var(--text-soft);"><span>Subtotal:</span><span id="crm-wizard-subtotal">${formatMoney(calcularSubtotalWizard())}</span></div>
+      <div style="display:flex; justify-content:space-between; font-weight:700; font-size:16px; margin-top:4px;"><span>Total:</span><span id="crm-wizard-total" style="color:var(--blue-text);">${formatMoney(calcularTotalWizard())}</span></div>
+    </div>`;
+}
+
+function atualizarNumeroItemWizard(i) {
+  // apenas re-render leve do titulo do card, sem perder o foco do campo principal
+}
+
+function atualizarTotaisPasso2Wizard() {
+  ORCAMENTO_WIZARD.itens.forEach((item, i) => {
+    const el = document.getElementById('crm-wizard-item-total-' + i);
+    if (el) el.textContent = formatMoney(Number(item.qtd || 0) * Number(item.valorUnit || 0));
+  });
+  const subEl = document.getElementById('crm-wizard-subtotal');
+  const totEl = document.getElementById('crm-wizard-total');
+  if (subEl) subEl.textContent = formatMoney(calcularSubtotalWizard());
+  if (totEl) totEl.textContent = formatMoney(calcularTotalWizard());
+}
+
+function adicionarItemServicoWizard() {
+  const input = document.getElementById('crm-wizard-novo-servico');
+  const nome = input ? input.value.trim() : '';
+  ORCAMENTO_WIZARD.itens.push({ descricao: nome, prazo: '', qtd: 1, valorUnit: 0 });
+  document.getElementById('crm-wizard-passo2-corpo').innerHTML = htmlPasso2Servicos();
+}
+function removerItemServicoWizard(i) {
+  if (ORCAMENTO_WIZARD.itens.length <= 1) { ORCAMENTO_WIZARD.itens[0] = { descricao: '', prazo: '', qtd: 1, valorUnit: 0 }; }
+  else ORCAMENTO_WIZARD.itens.splice(i, 1);
+  document.getElementById('crm-wizard-passo2-corpo').innerHTML = htmlPasso2Servicos();
+}
+
+function htmlPasso2MultiPlano() {
+  const w = ORCAMENTO_WIZARD;
+  const planosHtml = w.planos.map((p, i) => `
+    <div class="crm-wizard-item-servico">
+      <div class="crm-wizard-item-cabecalho">
+        <div><span class="crm-wizard-item-numero">${i + 1}</span><strong>${escapeHtml(p.nome) || 'Novo plano'}</strong></div>
+        <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerPlanoWizard(${i})">−</button>
+      </div>
+      <div class="field full"><input type="text" placeholder="Nome do plano (ex: Plano Essencial)" value="${escapeHtml(p.nome)}" oninput="ORCAMENTO_WIZARD.planos[${i}].nome = this.value"></div>
+      <div class="field full"><textarea rows="2" placeholder="O que está incluído nesse plano" oninput="ORCAMENTO_WIZARD.planos[${i}].descricao = this.value">${escapeHtml(p.descricao)}</textarea></div>
+      <div class="field"><label>Valor (R$)</label><input type="number" min="0" step="0.01" value="${p.valor}" oninput="ORCAMENTO_WIZARD.planos[${i}].valor = Number(this.value); atualizarTotaisPasso2Wizard();"></div>
+    </div>`).join('');
+  return `
+    <div id="crm-wizard-itens-lista">${planosHtml}</div>
+    <button type="button" class="btn btn-small" onclick="adicionarPlanoWizard()" style="margin-bottom:14px;">+ Adicionar plano</button>
+    <p style="font-size:12px; color:var(--text-soft);">O cliente verá a lista comparativa e escolherá um — o valor cobrado será apenas o do plano selecionado.</p>
+    <div class="crm-wizard-totais">
+      <div style="display:flex; justify-content:space-between; color:var(--text-soft);"><span>Maior valor entre os planos:</span><span id="crm-wizard-subtotal">${formatMoney(calcularSubtotalWizard())}</span></div>
+    </div>`;
+}
+function adicionarPlanoWizard() {
+  ORCAMENTO_WIZARD.planos.push({ nome: '', descricao: '', valor: 0 });
+  document.getElementById('crm-wizard-passo2-corpo').innerHTML = htmlPasso2MultiPlano();
+}
+function removerPlanoWizard(i) {
+  if (ORCAMENTO_WIZARD.planos.length <= 1) { ORCAMENTO_WIZARD.planos[0] = { nome: '', descricao: '', valor: 0 }; }
+  else ORCAMENTO_WIZARD.planos.splice(i, 1);
+  document.getElementById('crm-wizard-passo2-corpo').innerHTML = htmlPasso2MultiPlano();
+}
+
+// ----- Passo 3: Condições de Pagamento -----
+
+function htmlPasso3Wizard() {
+  const w = ORCAMENTO_WIZARD;
+  return `
+    <h3>Condições de Pagamento</h3>
+    <p class="crm-wizard-sub">Defina forma de pagamento e prazos</p>
+
+    <div class="crm-wizard-toggle-box ${w.gerarContratoAutomatico ? 'ativo' : ''}">
+      <div class="crm-wizard-toggle-linha">
+        <div><strong>${ic('contrato')} Gerar contrato automático após aprovação</strong><p>Quando o cliente aprovar o orçamento, o sistema gera o contrato sozinho.</p></div>
+        <label class="switch"><input type="checkbox" ${w.gerarContratoAutomatico ? 'checked' : ''} onchange="ORCAMENTO_WIZARD.gerarContratoAutomatico = this.checked; renderPassoWizard();"><span class="switch-slider"></span></label>
+      </div>
+    </div>
+
+    <div class="crm-wizard-toggle-box ${w.descontoCondicionalAtivo ? 'ativo' : ''}">
+      <div class="crm-wizard-toggle-linha">
+        <div><strong>${ic('brilho')} Desconto condicional</strong><p>Aplica um desconto extra apenas se uma condição for atingida (ex.: assinar até uma data).</p></div>
+        <label class="switch"><input type="checkbox" ${w.descontoCondicionalAtivo ? 'checked' : ''} onchange="ORCAMENTO_WIZARD.descontoCondicionalAtivo = this.checked; renderPassoWizard();"><span class="switch-slider"></span></label>
+      </div>
+      ${w.descontoCondicionalAtivo ? `
+      <div class="form-grid" style="margin-top:12px;">
+        <div class="field"><label>Tipo de desconto</label><select onchange="ORCAMENTO_WIZARD.descontoCondicionalTipo = this.value">
+          <option value="percentual" ${w.descontoCondicionalTipo === 'percentual' ? 'selected' : ''}>Porcentagem (%)</option>
+          <option value="valor" ${w.descontoCondicionalTipo === 'valor' ? 'selected' : ''}>Valor fixo (R$)</option>
+        </select></div>
+        <div class="field"><label>Valor</label><input type="number" min="0" placeholder="Ex: 10" value="${w.descontoCondicionalValor}" oninput="ORCAMENTO_WIZARD.descontoCondicionalValor = Number(this.value)"></div>
+        <div class="field full"><label>Válido até (opcional)</label><input type="date" value="${w.descontoCondicionalValidoAte}" oninput="ORCAMENTO_WIZARD.descontoCondicionalValidoAte = this.value"><p style="font-size:11px; color:var(--text-soft); margin-top:4px;">Se vazio, o desconto fica disponível até o orçamento expirar.</p></div>
+        <div class="field full"><label>Mensagem para o cliente (opcional)</label><input type="text" placeholder="Ex: Assine hoje e ganhe 10% de desconto" value="${escapeHtml(w.descontoCondicionalMensagem)}" oninput="ORCAMENTO_WIZARD.descontoCondicionalMensagem = this.value"></div>
+      </div>` : ''}
+    </div>
+
+    <div class="crm-wizard-toggle-box ${w.recorrenteAtivo ? 'ativo' : ''}">
+      <div class="crm-wizard-toggle-linha">
+        <div><strong>${ic('recorrente')} Recorrente / Mensalidade</strong><p>Ative para cobranças mensais recorrentes.</p></div>
+        <label class="switch"><input type="checkbox" ${w.recorrenteAtivo ? 'checked' : ''} onchange="ORCAMENTO_WIZARD.recorrenteAtivo = this.checked; renderPassoWizard();"><span class="switch-slider"></span></label>
+      </div>
+      ${w.recorrenteAtivo ? `
+      <div class="form-grid" style="margin-top:12px;">
+        <div class="field"><label>Quantidade de meses *</label><input type="number" min="1" value="${w.recorrenteMeses}" oninput="ORCAMENTO_WIZARD.recorrenteMeses = Number(this.value); document.getElementById('crm-wizard-recorrencia-info').textContent = ORCAMENTO_WIZARD.recorrenteMeses + ' lançamentos · Total: ' + formatMoney(ORCAMENTO_WIZARD.recorrenteMeses * calcularTotalWizard());">
+          <p id="crm-wizard-recorrencia-info" style="font-size:11px; color:var(--text-soft); margin-top:4px;">${w.recorrenteMeses} lançamentos · Total: ${formatMoney(w.recorrenteMeses * calcularTotalWizard())}</p>
+        </div>
+        <div class="field"><label>Primeiro vencimento (dias após aprovação)</label><input type="number" min="0" value="${w.primeiroVencimentoValor}" oninput="ORCAMENTO_WIZARD.primeiroVencimentoValor = Number(this.value)"></div>
+      </div>` : ''}
+    </div>
+
+    <div class="form-grid">
+      <div class="field"><label>Início do projeto (dias após aprovação)</label><input type="text" placeholder="Ex: 3 dias" value="${escapeHtml(w.inicioProjetoValor)}" oninput="ORCAMENTO_WIZARD.inicioProjetoValor = this.value"></div>
+      <div class="field"><label>Prazo de entrega</label><input type="text" placeholder="Ex: 30 dias corridos" value="${escapeHtml(w.prazoEntrega)}" oninput="ORCAMENTO_WIZARD.prazoEntrega = this.value"></div>
+    </div>`;
+}
+
+// ----- Passo 4: Revisão Final -----
+
+function htmlPasso4Wizard() {
+  const w = ORCAMENTO_WIZARD;
+  const total = calcularTotalWizard();
+  return `
+    <h3>Revisão Final</h3>
+    <p class="crm-wizard-sub">Revise todas as informações antes de enviar</p>
+
+    <div class="panel" style="margin-bottom:14px;">
+      <strong style="font-size:13px;">${ic('usuario')} Informações do cliente</strong>
+      <p style="margin:6px 0 0; font-weight:600;">${escapeHtml(w.clienteNome)}</p>
+      ${w.clienteEmail ? `<p style="margin:2px 0 0; font-size:12.5px; color:var(--text-soft);">${escapeHtml(w.clienteEmail)}</p>` : ''}
+    </div>
+
+    <div class="panel" style="margin-bottom:14px;">
+      <strong style="font-size:13px;">${ic('documento')} Detalhes da proposta</strong>
+      <p style="margin:8px 0 0; font-size:12px; color:var(--text-soft);">Título</p><p style="margin:0; font-weight:600;">${escapeHtml(w.titulo)}</p>
+      ${w.descricao ? `<p style="margin:8px 0 0; font-size:12px; color:var(--text-soft);">Descrição</p><p style="margin:0;">${escapeHtml(w.descricao)}</p>` : ''}
+      <p style="margin:8px 0 0; font-size:12px; color:var(--text-soft);">Validade</p><p style="margin:0;">${ic('calendario')} ${w.validadeDias} dias</p>
+    </div>
+
+    <div class="crm-wizard-toggle-box">
+      <div class="crm-wizard-toggle-linha">
+        <div><strong>Ocultar valores individuais</strong><p>O cliente verá apenas o valor total, sem o preço de cada item.</p></div>
+        <label class="switch"><input type="checkbox" ${w.ocultarValoresIndividuais ? 'checked' : ''} onchange="ORCAMENTO_WIZARD.ocultarValoresIndividuais = this.checked"><span class="switch-slider"></span></label>
+      </div>
+    </div>
+    ${w.recorrenteAtivo ? `
+    <div class="crm-wizard-toggle-box">
+      <div class="crm-wizard-toggle-linha">
+        <div><strong>Ocultar valor total do contrato</strong><p>Mostra apenas o valor mensal, sem somar o acumulado.</p></div>
+        <label class="switch"><input type="checkbox" ${w.ocultarValorTotalContrato ? 'checked' : ''} onchange="ORCAMENTO_WIZARD.ocultarValorTotalContrato = this.checked"><span class="switch-slider"></span></label>
+      </div>
+    </div>` : ''}
+
+    <div class="field full">
+      <label>Termos e Condições (opcional)</label>
+      <textarea rows="3" placeholder="Deixe em branco para não exibir termos neste orçamento." oninput="ORCAMENTO_WIZARD.termosConteudo = this.value">${escapeHtml(w.termosConteudo)}</textarea>
+      <p style="font-size:11px; color:var(--text-soft); margin-top:4px;">Se preenchido, o cliente precisa marcar "Li e aceito" antes de aprovar.</p>
+    </div>
+
+    <div class="panel" style="margin-bottom:14px; border-color:var(--blue-strong);">
+      <strong style="font-size:13px;">${ic('carteira')} Resumo financeiro</strong>
+      <div style="display:flex; justify-content:space-between; margin-top:8px; color:var(--text-soft);"><span>Subtotal</span><span>${formatMoney(calcularSubtotalWizard())}</span></div>
+      <div style="display:flex; justify-content:space-between; font-weight:700; font-size:16px;"><span>Total</span><span style="color:var(--blue-text);">${formatMoney(total)}</span></div>
+    </div>
+
+    <div class="panel">
+      <strong style="font-size:13px;">${ic('calendarioCheck')} Condições de pagamento</strong>
+      <p style="margin:8px 0 0; font-size:12px; color:var(--text-soft);">Forma de pagamento</p>
+      <p style="margin:0; font-weight:600;">${w.recorrenteAtivo ? 'Recorrente' : 'Pagamento único'}</p>
+      ${w.recorrenteAtivo ? `<p style="margin:6px 0 0; font-size:12.5px;">${ic('calendario')} ${w.recorrenteMeses} meses (${formatMoney(total)}/mês) · Total: ${formatMoney(total * w.recorrenteMeses)}</p><p style="margin:2px 0 0; font-size:12.5px; color:var(--text-soft);">Primeiro vencimento: ${w.primeiroVencimentoValor} dia(s) após aprovação</p>` : ''}
+    </div>`;
+}
+
+function finalizarWizardOrcamento() {
+  if (!exigirPodeOperar('criar orçamentos')) return;
+  if (!negociosProntosOuAvisar()) return;
+  const w = ORCAMENTO_WIZARD;
+  const total = calcularTotalWizard();
+  const validoAteData = new Date();
+  validoAteData.setDate(validoAteData.getDate() + Number(w.validadeDias || 30));
+
+  // Todo orçamento novo já vira um card no Pipeline, na etapa "Proposta
+  // enviada" — assim a pessoa acompanha o andamento dele arrastando o
+  // card, sem precisar criar o negócio por fora antes.
+  const novoNegocio = {
+    id: genId('cr'), nome: w.titulo, cliente: w.clienteNome, valor: total, moeda: w.moeda || 'BRL',
+    etapa: 'proposta', origem: 'Orçamento', criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString(),
+  };
+  CRM_NEGOCIOS_DATA.push(novoNegocio);
+  cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+
+  const doc = {
+    tenantId: TENANT_ID,
+    numero: 'ORC-' + Date.now(),
+    titulo: w.titulo,
+    cliente: w.clienteNome,
+    clienteEmail: w.clienteEmail,
+    negocioId: novoNegocio.id,
+    itens: w.multiPlano
+      ? w.planos.filter((p) => p.nome.trim()).map((p) => ({ descricao: p.nome + (p.descricao ? ' — ' + p.descricao : ''), valor: Number(p.valor || 0) }))
+      : w.itens.filter((i) => i.descricao.trim()).map((i) => ({ descricao: i.descricao + (i.prazo ? ` (prazo: ${i.prazo})` : ''), valor: Number(i.qtd || 0) * Number(i.valorUnit || 0) })),
+    descricao: w.descricao,
+    videos: w.videos.filter((v) => v.trim()),
+    validoAte: validoAteData.toISOString().slice(0, 10),
+    condicaoPagamento: w.recorrenteAtivo ? `Recorrente: ${w.recorrenteMeses}x de ${formatMoney(total)}` : 'Pagamento único',
+    observacoes: w.descricao,
+    multiPlano: w.multiPlano,
+    gerarContratoAutomatico: w.gerarContratoAutomatico,
+    descontoCondicional: w.descontoCondicionalAtivo ? {
+      tipo: w.descontoCondicionalTipo, valor: w.descontoCondicionalValor,
+      validoAte: w.descontoCondicionalValidoAte, mensagem: w.descontoCondicionalMensagem,
+    } : null,
+    recorrente: w.recorrenteAtivo ? {
+      meses: w.recorrenteMeses, primeiroVencimentoDias: w.primeiroVencimentoValor,
+    } : null,
+    inicioProjeto: w.inicioProjetoValor,
+    prazoEntrega: w.prazoEntrega,
+    ocultarValoresIndividuais: w.ocultarValoresIndividuais,
+    ocultarValorTotalContrato: w.ocultarValorTotalContrato,
+    termosConteudo: w.termosConteudo,
+    status: 'rascunho',
+    assinatura: null,
+    contratoGerado: false,
+    empresaNome: PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa || 'Minha Empresa',
+    empresaLogo: PERFIL_DATA.logoUrl || '',
+    visualConfig: obterConfigAprovacaoAtual(),
+    criadoEm: new Date().toISOString(),
+    atualizadoEm: new Date().toISOString(),
+  };
+
+  firestoreDb.collection(PROPOSTAS_COLECAO).add(doc).then((ref) => {
+    fecharWizardOrcamento();
+    mostrarSecaoCrm('orcamentos', document.querySelector('[onclick*="mostrarSecaoCrm(\'orcamentos\'"]'));
+    setTimeout(() => { if (ref && ref.id) abrirDetalhePropostaCrm(ref.id); }, 300);
+  });
+}
+
+// ---------- Página pública do briefing (briefing.html, sem login) ----------
+
+let BRF_PUBLICO_DADOS = null;
+let BRF_PUBLICO_ID = null;
+let BRF_INDICE_ATUAL = 0;
+let BRF_RESPOSTAS_LOCAIS = {};
+
+async function carregarBriefingPublico() {
+  initFirebase();
+  const params = new URLSearchParams(window.location.search);
+  BRF_PUBLICO_ID = params.get('id');
+  const mostrarErro = () => {
+    document.getElementById('brf-carregando').style.display = 'none';
+    document.getElementById('brf-erro').style.display = '';
+  };
+  if (!BRF_PUBLICO_ID || !firestoreDb) { mostrarErro(); return; }
+
+  try {
+    const snap = await firestoreDb.collection('briefings_publicos').doc(BRF_PUBLICO_ID).get();
+    if (!snap.exists) { mostrarErro(); return; }
+    BRF_PUBLICO_DADOS = snap.data();
+    BRF_RESPOSTAS_LOCAIS = { ...(BRF_PUBLICO_DADOS.respostas || {}) };
+    renderBriefingPublicoInicial();
+  } catch (err) {
+    console.error('Erro ao carregar briefing público:', err);
+    mostrarErro();
+  }
+}
+
+function renderBriefingPublicoInicial() {
+  document.getElementById('brf-carregando').style.display = 'none';
+  document.getElementById('brf-conteudo').style.display = '';
+  const d = BRF_PUBLICO_DADOS;
+  document.getElementById('brf-empresa-nome').textContent = d.empresaNome || '';
+  document.getElementById('brf-empresa-nome-2').textContent = d.empresaNome || '';
+  document.getElementById('brf-tipo-nome').textContent = d.tipoNome || '';
+
+  // aparência configurada em Configurações → Aparência → Briefings
+  // (briefings antigos, sem "visual", continuam com o visual de antes)
+  const v = d.visual;
+  if (v && typeof v === 'object') {
+    aplicarVisualBriefingPublico(v);
+    const logo = urlImagemSegura(v.logoUrl);
+    const img = document.getElementById('brf-logo');
+    if (img && logo && v.mostrarLogo) { img.src = logo; img.style.display = ''; }
+    if (!v.mostrarNome) {
+      document.getElementById('brf-empresa-nome').style.display = 'none';
+      document.getElementById('brf-empresa-nome-2').style.display = 'none';
+    } else if (logo && v.mostrarLogo) {
+      document.getElementById('brf-empresa-nome-2').style.display = 'none';
+    }
+    const bv = document.getElementById('brf-boas-vindas');
+    if (bv && v.boasVindas && d.status !== 'respondido') { bv.textContent = v.boasVindas; bv.style.display = ''; }
+  }
+
+  if (d.status === 'respondido') {
+    document.getElementById('brf-form-area').style.display = 'none';
+    document.getElementById('brf-ja-respondido').style.display = '';
+    return;
+  }
+  BRF_INDICE_ATUAL = 0;
+  brfRenderPergunta();
+}
+
+function brfRenderPergunta() {
+  const perguntas = BRF_PUBLICO_DADOS.perguntas || [];
+  const p = perguntas[BRF_INDICE_ATUAL];
+  const total = perguntas.length;
+  document.getElementById('brf-progresso-texto').textContent = `Pergunta ${BRF_INDICE_ATUAL + 1} de ${total}`;
+  const pct = Math.round(((BRF_INDICE_ATUAL + 1) / total) * 100);
+  document.getElementById('brf-progresso-pct').textContent = pct + '%';
+  document.getElementById('brf-progresso-fill').style.width = pct + '%';
+
+  document.getElementById('brf-pergunta-texto').innerHTML = escapeHtml(p.texto) + (p.obrigatoria ? ' <span style="color:var(--danger);">*</span>' : '');
+  document.getElementById('brf-pergunta-hint').textContent = p.hint || '';
+
+  const campoEl = document.getElementById('brf-pergunta-campo');
+  const valorAtual = BRF_RESPOSTAS_LOCAIS[p.id] || '';
+  if (p.tipo === 'textarea') {
+    campoEl.innerHTML = `<textarea id="brf-input-resposta" rows="4" placeholder="${escapeHtml(p.hint || '')}">${escapeHtml(valorAtual)}</textarea>`;
+  } else if (p.tipo === 'radio') {
+    campoEl.innerHTML = (p.opcoes || []).map((op) => `
+      <div class="brf-opcao-radio ${valorAtual === op ? 'selecionada' : ''}" onclick="brfSelecionarOpcao('${escapeParaOnclick(op)}')">
+        <div class="brf-bolinha"></div><span>${escapeHtml(op)}</span>
+      </div>`).join('');
+  } else {
+    campoEl.innerHTML = `<input type="text" id="brf-input-resposta" placeholder="${escapeHtml(p.hint || '')}" value="${escapeHtml(valorAtual)}">`;
+  }
+
+  document.getElementById('brf-btn-anterior').style.visibility = BRF_INDICE_ATUAL === 0 ? 'hidden' : 'visible';
+  document.getElementById('brf-btn-proxima').innerHTML = BRF_INDICE_ATUAL === total - 1 ? `${ic('enviar', 'ic-herda')} Enviar Briefing` : 'Próxima ›';
+}
+
+function brfSelecionarOpcao(valor) {
+  if (!BRF_PUBLICO_DADOS || !(BRF_PUBLICO_DADOS.perguntas || []).length) return;
+  const p = BRF_PUBLICO_DADOS.perguntas[BRF_INDICE_ATUAL];
+  BRF_RESPOSTAS_LOCAIS[p.id] = valor;
+  brfRenderPergunta();
+}
+
+function brfColetarRespostaAtual() {
+  const p = BRF_PUBLICO_DADOS.perguntas[BRF_INDICE_ATUAL];
+  if (p.tipo !== 'radio') {
+    const input = document.getElementById('brf-input-resposta');
+    if (input) BRF_RESPOSTAS_LOCAIS[p.id] = input.value.trim();
+  }
+}
+
+function brfAvancar() {
+  if (!BRF_PUBLICO_DADOS || !(BRF_PUBLICO_DADOS.perguntas || []).length) return;
+  brfColetarRespostaAtual();
+  const p = BRF_PUBLICO_DADOS.perguntas[BRF_INDICE_ATUAL];
+  if (p.obrigatoria && !BRF_RESPOSTAS_LOCAIS[p.id]) { avisar('Essa pergunta é obrigatória.'); return; }
+
+  const total = BRF_PUBLICO_DADOS.perguntas.length;
+  if (BRF_INDICE_ATUAL === total - 1) { brfEnviar(); return; }
+  BRF_INDICE_ATUAL++;
+  brfRenderPergunta();
+}
+
+function brfVoltar() {
+  if (!BRF_PUBLICO_DADOS || !(BRF_PUBLICO_DADOS.perguntas || []).length) return;
+  brfColetarRespostaAtual();
+  if (BRF_INDICE_ATUAL === 0) return;
+  BRF_INDICE_ATUAL--;
+  brfRenderPergunta();
+}
+
+async function brfEnviar() {
+  try {
+    await firestoreDb.collection('briefings_publicos').doc(BRF_PUBLICO_ID).set({
+      respostas: BRF_RESPOSTAS_LOCAIS, status: 'respondido', respondidoEm: new Date().toISOString(),
+    }, { merge: true });
+    document.getElementById('brf-form-area').style.display = 'none';
+    document.getElementById('brf-enviado').style.display = '';
+  } catch (err) {
+    console.error('Erro ao enviar briefing:', err);
+    avisar('Não foi possível enviar agora. Tente de novo.');
+  }
+}
+
+// ---------- CRM: Modelos de Contrato (com preenchimento de dados e exportação em PDF) ----------
+
+const CRM_MODELOS_CONTRATO_KEY = 'eagles_crm_modelos_contrato_v1';
+let CRM_MODELOS_CONTRATO_DATA = [];
+let MODELO_CONTRATO_EDITANDO_ID = null;
+
+const TEXTO_MODELO_CONTRATO_PADRAO = "CONTRATO DE PRESTA\u00c7\u00c3O DE SERVI\u00c7OS\n\nIDENTIFICA\u00c7\u00c3O DAS PARTES CONTRATANTES\n\nPelo presente instrumento particular de Contrato, {{Nome do Prestador}}, com sede na {{Endere\u00e7o do Prestador}}, {{N\u00famero do Endere\u00e7o Prestador}} \u2013 {{Bairro do Prestador}}, na cidade de {{Cidade do Prestador}}, estado de {{Estado do Prestador}}, inscrito no CNPJ/CPF (MF) sob o n\u00b0 {{CPF/CNPJ do Prestador}}, representado por {{Nome do Prestador}} (CONTRATADO)\n\ne\n\n{{Nome do Cliente}}, pessoa jur\u00eddica/f\u00edsica, com sede/resid\u00eancia em {{Endere\u00e7o do Cliente}}, {{N\u00famero do Endere\u00e7o Cliente}} \u2013 {{Bairro do Cliente}}, na {{Cidade do Cliente}} no estado de {{Estado do Cliente}}, inscrito no CNPJ/CPF sob o n\u00ba {{CPF/CNPJ do Cliente}}, neste ato representado por {{Representante do Cliente}}. (CONTRATANTE),\n\nAmbas devidamente representadas na forma de seus respectivos Contratos Sociais, t\u00eam entre si justo e acordado o presente Contrato de Presta\u00e7\u00e3o de Servi\u00e7os, que se reger\u00e1 pelas cl\u00e1usulas e condi\u00e7\u00f5es seguintes:\n\n01 \u2013 DO OBJETO DO CONTRATO\n\n1.1. O presente Contrato tem como objeto, a presta\u00e7\u00e3o pela CONTRATADO \u00e0 CONTRATANTE, dos seguintes servi\u00e7os:\n\nObjetivo do projeto: {{Nome do Projeto}}\n\nServi\u00e7os inclusos: {{Servi\u00e7os Inclusos}}\n\nPrazo de entrega: {{Prazo de Entrega}}\n\n02 \u2013 DO PRAZO DO CONTRATO\n\n2.1. Esse Contrato vigorar\u00e1 entre as partes por prazo de:\n\n{{Prazo do Contrato}}\n\npodendo ser rescindido, mediante pr\u00e9vio aviso escrito com 60 (sessenta) dias de anteced\u00eancia da finaliza\u00e7\u00e3o do prazo.\n\n2.2. Durante o prazo de aviso-pr\u00e9vio, o CONTRATADO atender\u00e1 normalmente \u00e0 CONTRATANTE, em todas as suas necessidades. Findo o prazo de aviso-pr\u00e9vio, a CONTRATANTE obriga-se a pagar todas as despesas que se vencerem ap\u00f3s tal t\u00e9rmino, desde que por ela pr\u00e9via e expressamente autorizadas.\n\n03. DO PRE\u00c7O E CONDI\u00c7\u00d5ES DE PAGAMENTO\n\nValor Total do Servi\u00e7o: {{Valor Total}}\nValor do Desconto: {{Valor do Desconto}}\nValor do Servi\u00e7o com desconto: {{Valor Final}}\n\nCondi\u00e7\u00e3o de Pagamento: {{Condi\u00e7\u00f5es de Pagamento}}\nForma de Pagamento: {{Forma de Pagamento}}\nQuantidade de Parcelas: {{N\u00famero de Parcelas}}\n\n04 \u2013 DAS OBRIGA\u00c7\u00d5ES DO CONTRATADO\n\na) Entregar o projeto no prazo estabelecido, sempre respeitando o escopo e as especificidades que o CONTRATANTE informou previamente para a consecu\u00e7\u00e3o perfeita do servi\u00e7o.\n\nb) Entrar em contato com a CONTRATANTE sempre que precisar esclarecer alguma d\u00favida ou precisar de uma informa\u00e7\u00e3o.\n\nc) Informar sobre qualquer atraso na presta\u00e7\u00e3o de servi\u00e7os, bem como a motiva\u00e7\u00e3o dele.\n\nd) Prestar o servi\u00e7o com qualidade.\n\ne) Eleger um representante para sempre estar em contato e esclarecer qualquer d\u00favida ou repassar informa\u00e7\u00f5es para a parte CONTRATANTE.\n\n05 \u2013 DAS OBRIGA\u00c7\u00d5ES DA CONTRATANTE\n\na) Entregar os materiais e documentos que forem requeridos pelo CONTRATADO, conforme o prazo estabelecido nesse contrato, sob pena de atraso na conclus\u00e3o do projeto, inexistindo qualquer responsabilidade para o CONTRATADO.\n\nb) Eleger um representante para prestar esclarecimento e discutir d\u00favidas com a parte CONTRATADO.\n\nc) Descrever com o maior n\u00famero de caracter\u00edsticas e funcionalidades poss\u00edveis ao projeto.\n\nd) Efetuar os pagamentos na data acordada, sob pena de acr\u00e9scimo de juros e multa.\n\ne) Se for necess\u00e1ria a presta\u00e7\u00e3o de qualquer servi\u00e7o externo ou que necessite de custos adicionais, inclusive ferramentas espec\u00edficas, o pagamento ser\u00e1 feito pelo CONTRATANTE.\n\nf) Em caso de pagamento relacionado a cl\u00e1usula anterior, o comprovante dever\u00e1 ser anexo ao presente contrato e um termo aditivo que informe a motiva\u00e7\u00e3o do pagamento.\n\ng) Desenvolver com o CONTRATADO um cronograma exclusivo para o projeto, onde constar\u00e3o as datas de entrega, produ\u00e7\u00e3o e qualquer situa\u00e7\u00e3o que precise estar prevista, com exce\u00e7\u00e3o daquelas imprevis\u00edveis.\n\n06 \u2013 DA CONFIDENCIALIDADE E DIREITOS AUTORAIS\n\n6.1. Cada uma das partes, por si e por seus funcion\u00e1rios compromete-se a manter como confidenciais, os termos deste Contrato e de todas as outras informa\u00e7\u00f5es e conhecimentos n\u00e3o p\u00fablicos, recebidos em decorr\u00eancia desse Contrato, objetivando sua execu\u00e7\u00e3o, n\u00e3o podendo torn\u00e1-las acess\u00edveis a quaisquer terceiros sem concord\u00e2ncia expressa da outra parte.\n\n6.2 Pelo presente contrato, o CONTRATADO cede em favor do CONTRATANTE, com exclusividade, a totalidade dos direitos autorais de todo o trabalho desenvolvido em raz\u00e3o do presente contrato, podendo o CONTRATANTE editar, transformar, revender, replicar, alterar.\n\n07 - DA N\u00c3O EXCLUSIVIDADE\n\nO CONTRATADO n\u00e3o atuar\u00e1 com exclusividade dentro do segmento do CONTRATANTE, podendo exercer sua atividade para outras empresas, ou efetuar neg\u00f3cios em nome e por conta pr\u00f3pria.\n\n08 \u2013 DAS RESPONSABILIDADES TRABALHISTAS\n\n8.1. O presente Contrato n\u00e3o estabelece qualquer rela\u00e7\u00e3o de emprego entre a CONTRATANTE e os empregados da CONTRATADO, sendo a \u00faltima citada a \u00fanica e exclusiva respons\u00e1vel pela contrata\u00e7\u00e3o, pagamento e demiss\u00e3o de seus funcion\u00e1rios, durante o prazo de vig\u00eancia desse Contrato.\n\n8.2. O CONTRATADO compromete-se a cumprir fielmente a legisla\u00e7\u00e3o trabalhista, previdenci\u00e1ria, fundi\u00e1ria e tribut\u00e1ria, bem como as normas relativas \u00e0 seguran\u00e7a e medicina do trabalho em rela\u00e7\u00e3o aos seus empregados.\n\n09 \u2013 DAS DISPOSI\u00c7\u00d5ES GERAIS\n\n9.1. \u00c9 expressamente vedada a cess\u00e3o ou transfer\u00eancia desse Contrato a terceiros, salvo de comum acordo entre as partes.\n\n9.2. Todos os entendimentos sobre o andamento ou altera\u00e7\u00e3o do objeto, termos e condi\u00e7\u00f5es desse Contrato, dever\u00e3o ser mantidos por escrito, mediante Termos Aditivos assinados pelos representantes legais das partes, sendo certo que acordos verbais n\u00e3o produzir\u00e3o quaisquer efeitos entre elas.\n\n9.3. Esse Contrato foi ajustado dentro dos princ\u00edpios da boa-f\u00e9 e probidade, sem qualquer v\u00edcio de consentimento.\n\n10 \u2013 DA ASSINATURA ELETR\u00d4NICA\n\nAs partes aceitam que este contrato ser\u00e1 assinado eletronicamente dentro da plataforma Eagles Labz e atestam a sua integridade e validade jur\u00eddica, nos termos da MP 2.200-2 e da Lei 14.063/2020.\n\n11 \u2013 DO FORO\n\n11.1. As partes elegem o foro da comarca de {{Cidade do Prestador}}, estado de {{Estado do Prestador}}, para dirimir quest\u00f5es decorrentes desse Contrato, com exclus\u00e3o de qualquer outro por mais privilegiado que seja.\n\nE por estarem justas e contratadas, as partes firmam o presente Contrato em 02 (Duas) vias de iguais teor e forma, perante as testemunhas abaixo, para que produza todos os efeitos de direito.\n\nData: {{Data}}\n\n\n______________________________________________\n{{Nome do Cliente}}\nCONTRATANTE\n\n\n______________________________________________\n{{Nome do Prestador}}\nCONTRATADO";
+
+function modelosContratoSeed() {
+  return [{ id: 'modelo-padrao', nome: 'Modelo Padrão', conteudo: TEXTO_MODELO_CONTRATO_PADRAO, padrao: true, criadoEm: new Date().toISOString() }];
+}
+
+const CRM_SHORTCODES_CONTRATO = [
+  { grupo: 'Dados do Prestador', itens: [
+    ['Nome do Prestador', 'Nome do Prestador'],
+    ['Endereço do Prestador', 'Endereço do Prestador'],
+    ['Número do Endereço Prestador', 'Número do Endereço'],
+    ['Bairro do Prestador', 'Bairro do Prestador'],
+    ['Cidade do Prestador', 'Cidade do Prestador'],
+    ['Estado do Prestador', 'Estado do Prestador'],
+    ['CPF/CNPJ do Prestador', 'CPF/CNPJ do Prestador'],
+    ['Telefone do Prestador', 'Telefone do Prestador'],
+  ] },
+  { grupo: 'Dados do Cliente', itens: [
+    ['Nome do Cliente', 'Nome do Cliente'],
+    ['Representante do Cliente', 'Representante do Cliente'],
+    ['Endereço do Cliente', 'Endereço do Cliente'],
+    ['Número do Endereço Cliente', 'Número do Endereço'],
+    ['Bairro do Cliente', 'Bairro do Cliente'],
+    ['Cidade do Cliente', 'Cidade do Cliente'],
+    ['Estado do Cliente', 'Estado do Cliente'],
+    ['CPF/CNPJ do Cliente', 'CPF/CNPJ do Cliente'],
+    ['Telefone do Cliente', 'Telefone do Cliente'],
+  ] },
+  { grupo: 'Dados do Projeto', itens: [
+    ['Nome do Projeto', 'Nome/Objetivo do Projeto'],
+    ['Serviços Inclusos', 'Serviços Inclusos'],
+    ['Prazo do Contrato', 'Prazo do Contrato'],
+  ] },
+  { grupo: 'Dados Financeiros', itens: [
+    ['Valor Total', 'Valor Total'],
+    ['Valor do Desconto', 'Valor do Desconto'],
+    ['Valor Final', 'Valor Final'],
+    ['Condições de Pagamento', 'Condições de Pagamento'],
+    ['Forma de Pagamento', 'Forma de Pagamento'],
+    ['Número de Parcelas', 'Número de Parcelas'],
+  ] },
+  { grupo: 'Outros', itens: [
+    ['Data', 'Data Atual'],
+  ] },
+];
+
+function renderShortcodesContratoLista() {
+  const el = document.getElementById('crm-shortcodes-lista');
+  if (!el) return;
+  el.innerHTML = CRM_SHORTCODES_CONTRATO.map((grupo) => `
+    <p class="crm-shortcode-grupo-titulo">${escapeHtml(grupo.grupo)}</p>
+    ${grupo.itens.map(([codigo, label]) => `
+      <button type="button" class="crm-shortcode-btn" onclick="inserirShortcodeContrato('${escapeParaOnclick(codigo)}')">
+        <code>{{${escapeHtml(codigo)}}}</code>
+        <span>${escapeHtml(label)}</span>
+      </button>`).join('')}`).join('');
+}
+
+function inserirShortcodeContrato(codigo) {
+  const textarea = document.getElementById('modelo-contrato-conteudo');
+  if (!textarea) return;
+  const inicio = textarea.selectionStart != null ? textarea.selectionStart : textarea.value.length;
+  const fim = textarea.selectionEnd != null ? textarea.selectionEnd : textarea.value.length;
+  const tag = '{{' + codigo + '}}';
+  textarea.value = textarea.value.slice(0, inicio) + tag + textarea.value.slice(fim);
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = inicio + tag.length;
+}
+
+function restaurarModeloContratoPadrao() {
+  confirmarAcao('Restaurar o texto padrão? Isso substitui o conteúdo atual do editor (o modelo só é alterado de verdade quando você clicar em "Salvar modelo").', () => {
+    document.getElementById('modelo-contrato-conteudo').value = TEXTO_MODELO_CONTRATO_PADRAO;
+  });
+}
+
+function abrirModelosContrato() {
+  renderModelosContratoLista();
+  openModal('modal-modelos-contrato');
+}
+
+function renderModelosContratoLista() {
+  const el = document.getElementById('crm-modelos-contrato-lista');
+  if (!el) return;
+  el.innerHTML = CRM_MODELOS_CONTRATO_DATA.map((m) => `
+    <div class="panel" style="padding:14px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div style="min-width:0;">
+          <strong style="font-size:13.5px;">${escapeHtml(m.nome)}</strong>
+          ${m.padrao ? '<span class="badge badge-danger" style="margin-left:6px;">' + ic('estrela', 'ic-herda') + ' Padrão</span>' : ''}
+          <p style="font-size:12px; color:var(--text-soft); margin:6px 0 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml((m.conteudo || '').slice(0, 90))}...</p>
+        </div>
+        <div style="display:flex; gap:4px; flex-shrink:0;">
+          <button type="button" class="btn btn-small btn-ghost" onclick="abrirEditorModeloContrato('${m.id}')" title="Editar" aria-label="Editar">${ic('lapis')}</button>
+          <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirModeloContrato('${m.id}')" title="Excluir" aria-label="Excluir">${ic('lixeira', 'ic-perigo')}</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function abrirEditorModeloContrato(id) {
+  MODELO_CONTRATO_EDITANDO_ID = id;
+  const m = id ? CRM_MODELOS_CONTRATO_DATA.find((x) => x.id === id) : null;
+  document.getElementById('modelo-contrato-titulo-modal').textContent = m ? 'Editar modelo' : 'Novo modelo';
+  document.getElementById('modelo-contrato-nome').value = m ? m.nome : '';
+  document.getElementById('modelo-contrato-conteudo').value = m ? m.conteudo : TEXTO_MODELO_CONTRATO_PADRAO;
+  document.getElementById('modelo-contrato-padrao').checked = m ? !!m.padrao : CRM_MODELOS_CONTRATO_DATA.length === 0;
+  renderShortcodesContratoLista();
+  openModal('modal-editor-modelo-contrato');
+}
+
+function salvarModeloContrato() {
+  const nome = document.getElementById('modelo-contrato-nome').value.trim();
+  const conteudo = document.getElementById('modelo-contrato-conteudo').value;
+  if (!nome) { avisar('Dê um nome pro modelo.'); return; }
+  const viraPadrao = document.getElementById('modelo-contrato-padrao').checked;
+
+  if (viraPadrao) CRM_MODELOS_CONTRATO_DATA.forEach((m) => { m.padrao = false; });
+
+  if (MODELO_CONTRATO_EDITANDO_ID) {
+    const m = CRM_MODELOS_CONTRATO_DATA.find((x) => x.id === MODELO_CONTRATO_EDITANDO_ID);
+    if (m) { m.nome = nome; m.conteudo = conteudo; m.padrao = viraPadrao; }
+  } else {
+    CRM_MODELOS_CONTRATO_DATA.push({ id: genId('mc'), nome, conteudo, padrao: viraPadrao || CRM_MODELOS_CONTRATO_DATA.length === 0, criadoEm: new Date().toISOString() });
+  }
+  cloudSet(CRM_MODELOS_CONTRATO_KEY, CRM_MODELOS_CONTRATO_DATA);
+  renderModelosContratoLista();
+  closeModal('modal-editor-modelo-contrato');
+}
+
+function excluirModeloContrato(id) {
+  if (CRM_MODELOS_CONTRATO_DATA.length <= 1) { avisar('Precisa ter pelo menos um modelo cadastrado.'); return; }
+  confirmarAcao('Excluir este modelo de contrato?', () => {
+    const eraPadrao = CRM_MODELOS_CONTRATO_DATA.find((x) => x.id === id)?.padrao;
+    CRM_MODELOS_CONTRATO_DATA = CRM_MODELOS_CONTRATO_DATA.filter((x) => x.id !== id);
+    if (eraPadrao && CRM_MODELOS_CONTRATO_DATA.length) CRM_MODELOS_CONTRATO_DATA[0].padrao = true;
+    cloudSet(CRM_MODELOS_CONTRATO_KEY, CRM_MODELOS_CONTRATO_DATA);
+    renderModelosContratoLista();
+  });
+}
+
+// Troca cada {{Campo}} do modelo pelos dados reais da proposta/empresa.
+// Campo sem dado disponível ainda vira "—" em vez de quebrar o texto.
+function preencherModeloContrato(template, proposta) {
+  const perfil = PERFIL_DATA || {};
+  const negocioLigado = proposta.negocioId ? CRM_NEGOCIOS_DATA.find((n) => n.id === proposta.negocioId) : null;
+  const total = (proposta.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0);
+  const servicos = (proposta.itens || []).map((i) => i.descricao).join(', ') || '—';
+  const mapa = {
+    'Nome do Prestador': perfil.nomeFantasia || perfil.nomeEmpresa || '—',
+    'Endereço do Prestador': perfil.endereco || '—',
+    'Número do Endereço Prestador': perfil.numero || '—',
+    'Bairro do Prestador': perfil.bairro || '—',
+    'Cidade do Prestador': perfil.cidade || '—',
+    'Estado do Prestador': perfil.estado || '—',
+    'CPF/CNPJ do Prestador': perfil.cnpj || perfil.cpf || '—',
+    'Telefone do Prestador': perfil.telefone1 || perfil.telefone2 || '—',
+    'Nome do Cliente': proposta.cliente || '—',
+    'Endereço do Cliente': '—',
+    'Número do Endereço Cliente': '—',
+    'Bairro do Cliente': '—',
+    'Cidade do Cliente': '—',
+    'Estado do Cliente': '—',
+    'CPF/CNPJ do Cliente': '—',
+    'Telefone do Cliente': (negocioLigado && negocioLigado.telefone) || '—',
+    'Representante do Cliente': proposta.cliente || '—',
+    'Nome do Projeto': proposta.titulo || '—',
+    'Serviços Inclusos': servicos,
+    'Prazo de Entrega': proposta.prazoEntrega || '—',
+    'Prazo do Contrato': proposta.recorrente ? `${proposta.recorrente.meses} meses` : 'Indeterminado',
+    'Valor Total': formatMoney(total),
+    'Valor do Desconto': formatMoney(0),
+    'Valor Final': formatMoney(total),
+    'Condições de Pagamento': proposta.condicaoPagamento || '—',
+    'Forma de Pagamento': proposta.recorrente ? 'Recorrente' : 'Pagamento único',
+    'Número de Parcelas': proposta.recorrente ? String(proposta.recorrente.meses) : '1',
+    'Data': new Date().toLocaleDateString('pt-BR'),
+  };
+  let texto = template;
+  Object.entries(mapa).forEach(([chave, valor]) => {
+    texto = texto.split('{{' + chave + '}}').join(valor);
+  });
+  return texto;
+}
+
+// Gera um PDF de verdade, com texto selecionável (não é foto de tela) —
+// certo pra um documento longo como um contrato, com quebra de página
+// automática.
+function gerarPdfTextoLongo(texto, nomeArquivo, tituloDocumento) {
+  if (typeof window.jspdf === 'undefined') { avisar('A biblioteca de PDF ainda não carregou — tente de novo em alguns segundos.'); return; }
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('p', 'pt', 'a4');
+  const margemEsquerda = 56, margemTopo = 56, margemBaixo = 56;
+  const larguraUtil = pdf.internal.pageSize.getWidth() - margemEsquerda * 2;
+  const alturaPagina = pdf.internal.pageSize.getHeight();
+  let y = margemTopo;
+
+  if (tituloDocumento) {
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13);
+    pdf.text(tituloDocumento, margemEsquerda, y);
+    y += 24;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10.5);
+  } else {
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10.5);
+  }
+
+  const paragrafos = texto.split('\n');
+  paragrafos.forEach((paragrafo) => {
+    const negrito = /^\d+\s*[–-]|^[A-ZÀ-Ú0-9\s.,–-]{6,}$/.test(paragrafo.trim()) && paragrafo.trim().length < 90 && paragrafo.trim() === paragrafo.trim().toUpperCase() && paragrafo.trim().length > 0;
+    pdf.setFont('helvetica', negrito ? 'bold' : 'normal');
+    const linhas = pdf.splitTextToSize(paragrafo || ' ', larguraUtil);
+    linhas.forEach((linha) => {
+      if (y > alturaPagina - margemBaixo) { pdf.addPage(); y = margemTopo; }
+      pdf.text(linha, margemEsquerda, y);
+      y += 14;
+    });
+    y += 4;
+  });
+
+  adicionarRodapePaginas(pdf);
+  pdf.save(nomeArquivo);
+}
+
+function modeloContratoPadraoAtual() {
+  return CRM_MODELOS_CONTRATO_DATA.find((m) => m.padrao) || CRM_MODELOS_CONTRATO_DATA[0];
+}
+
+// Acha um contrato já existente pro mesmo cliente — pra não deixar
+// gerar duplicado sem avisar.
+function contratoExistenteParaCliente(clienteNome) {
+  if (!clienteNome) return null;
+  const lista = CADASTROS_DATA['contrato'] || [];
+  return lista.find((c) => c.cliente === clienteNome) || null;
+}
+
+let PROPOSTA_GERANDO_CONTRATO_ID = null;
+
+// Ponto de entrada do menu "Gerar Contrato" / "Atualizar o Contrato".
+// Se já existir um contrato pra esse cliente, pergunta o que fazer antes
+// de continuar; se não existir nenhum, gera direto.
+function iniciarGeracaoContratoProposta(id) {
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p) return;
+  const existente = contratoExistenteParaCliente(p.cliente);
+  if (existente) {
+    PROPOSTA_GERANDO_CONTRATO_ID = id;
+    openModal('modal-contrato-ja-existe');
+    return;
+  }
+  forcarGerarContratoProposta(id);
+}
+
+function resolverContratoExistente(acao) {
+  const id = PROPOSTA_GERANDO_CONTRATO_ID;
+  closeModal('modal-contrato-ja-existe');
+  if (!id) return;
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p) return;
+  const modelo = modeloContratoPadraoAtual();
+  const conteudoModelo = modelo ? modelo.conteudo : TEXTO_MODELO_CONTRATO_PADRAO;
+  const textoNovo = preencherModeloContrato(conteudoModelo, p);
+
+  if (acao === 'substituir') {
+    const existente = contratoExistenteParaCliente(p.cliente);
+    if (existente) {
+      existente.titulo = p.titulo;
+      existente.valor = (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0);
+      existente.textoContrato = textoNovo;
+      existente.atualizadoEm = new Date().toISOString();
+      cloudSet('eagles_contratos_v1', CADASTROS_DATA['contrato']);
+    }
+    p.contratoGerado = true;
+    firestoreDb.collection(PROPOSTAS_COLECAO).doc(id).set({ contratoGerado: true }, { merge: true });
+    renderPropostasListaCrm();
+    return;
+  }
+
+  // acao === 'novo': mantém o contrato anterior e cria mais um
+  criarContratoDeProposta(p, textoNovo);
+}
+
+function criarContratoDeProposta(p, textoContrato) {
+  if (!exigirPodeOperar('gerar contratos')) return;
+  const novoContrato = {
+    id: genId('ct'),
+    titulo: p.titulo,
+    cliente: p.cliente,
+    dataInicio: isoHoje(),
+    dataFim: '',
+    valor: (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0),
+    status: 'vigente',
+    criadoEm: new Date().toISOString(),
+    atualizadoEm: new Date().toISOString(),
+    origemPropostaId: p.id,
+    textoContrato,
+  };
+  CADASTROS_DATA['contrato'] = CADASTROS_DATA['contrato'] || [];
+  CADASTROS_DATA['contrato'].push(novoContrato);
+  cloudSet('eagles_contratos_v1', CADASTROS_DATA['contrato']);
+  p.contratoGerado = true;
+  firestoreDb.collection(PROPOSTAS_COLECAO).doc(p.id).set({ contratoGerado: true }, { merge: true });
+  renderPropostasListaCrm();
+  if (typeof renderCrmContratosLista === 'function') renderCrmContratosLista();
+}
+
+function baixarContratoPdfPorPropostaId(id) {
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p) return;
+  const modelo = modeloContratoPadraoAtual();
+  if (!modelo) { avisar('Cadastre um modelo de contrato primeiro (botão "Contrato" no topo).'); return; }
+  const texto = preencherModeloContrato(modelo.conteudo, p);
+  gerarPdfTextoLongo(texto, `Contrato - ${p.cliente} - ${p.numero}.pdf`, 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS');
+}
+
+// ---------- CRM: Propostas (com link público de aprovação) ----------
+
+const PROPOSTAS_COLECAO = 'propostas_publicas';
+let CRM_PROPOSTAS_DATA = [];
+let PROPOSTA_CRM_ITENS_FORM = [];
+let PROPOSTA_CRM_DETALHE_ID = null;
+let PROPOSTAS_LISTENER_ATIVO = false;
+
+function escutarPropostasCrm() {
+  if (!FIREBASE_PRONTO || !TENANT_ID || PROPOSTAS_LISTENER_ATIVO) return;
+  PROPOSTAS_LISTENER_ATIVO = true;
+  firestoreDb.collection(PROPOSTAS_COLECAO).where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
+    CRM_PROPOSTAS_DATA = [];
+    snap.forEach((doc) => CRM_PROPOSTAS_DATA.push({ id: doc.id, ...doc.data() }));
+    converterPropostasAprovadasEmContrato();
+    renderPropostasListaCrm();
+    const subPdf = document.getElementById('crm-orcamentos-sub-pdf');
+    if (subPdf && subPdf.style.display !== 'none') renderCrmPdfOrcamentosLista();
+  }, (err) => console.error('Erro ao carregar propostas:', err));
+}
+
+// Lança automaticamente uma receita "pendente" no Financeiro quando um
+// negócio do funil fecha — mesmo padrão usado quando se lança um pedido
+// de venda, só que disparado pelo CRM.
+function lancarReceitaNegocioFechado(negocio) {
+  // Sem acesso ao caixa (Administrativo): a receita vai pra fila, sem ler nada.
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelVeFinanceiro()) {
+    return Promise.resolve(registrarReceitaFinanceiro(isoHoje().slice(0, 7), {
+      id: genId('r'), cliente: negocio.cliente || negocio.nome, plano: 'Negócio fechado: ' + negocio.nome,
+      valor: Number(negocio.valor || 0), diaAcerto: Number(isoHoje().slice(8, 10)), status: 'pendente', dataPagamento: null, origemNegocioId: negocio.id,
+    }));
+  }
+  // Páginas como o funil-vendas.html não carregam o Financeiro. Sem os
+  // dados do mês na memória, o lançamento gravaria um mês "em branco"
+  // por cima do real (o merge do Firestore substitui o array inteiro de
+  // receitas). Então, se ainda não carregou, busca da nuvem primeiro.
+  const precisaBuscar = FIREBASE_PRONTO && TENANT_ID && !chaveCarregadaNaNuvem(FINANCE_CICLOS_KEY);
+  const carregar = precisaBuscar
+    ? Promise.all([
+        cloudGetForce(FINANCE_CICLOS_KEY, {}),
+        FINANCE_TEMPLATE_CACHE ? Promise.resolve(FINANCE_TEMPLATE_CACHE) : cloudGetForce(FINANCE_TEMPLATE_KEY, financeTemplatePadrao()),
+      ]).then(([ciclos, template]) => {
+        FINANCE_CICLOS_CACHE = ciclos || {};
+        FINANCE_TEMPLATE_CACHE = template || financeTemplatePadrao();
+      })
+    : Promise.resolve();
+  return carregar.then(() => {
+    const mesKey = isoHoje().slice(0, 7);
+    const ciclo = getCicloDoMes(mesKey);
+    ciclo.receitas = ciclo.receitas || [];
+    // não lança duas vezes se o negócio sair e voltar pra "Fechado"
+    if (ciclo.receitas.some((r) => r.origemNegocioId === negocio.id)) return false;
+    ciclo.receitas.push({
+      id: genId('r'),
+      cliente: negocio.cliente || negocio.nome,
+      plano: 'Negócio fechado: ' + negocio.nome,
+      valor: Number(negocio.valor || 0),
+      diaAcerto: Number(isoHoje().slice(8, 10)),
+      status: 'pendente',
+      dataPagamento: null,
+      origemNegocioId: negocio.id,
+    });
+    return salvarCicloDoMes(mesKey, ciclo);
+  }).catch((err) => {
+    console.error('Erro ao lançar a receita do negócio fechado:', err);
+    avisar('O negócio foi fechado, mas não consegui lançar a receita no Financeiro agora (sem conexão com o banco). Lance manualmente ou tente de novo.');
+    return false;
+  });
+}
+
+// "Conversão automática em contrato": como o sistema não tem um servidor
+// rodando o tempo todo, essa conversão acontece assim que a EMPRESA (já
+// logada) volta a olhar a lista de propostas — se alguma tiver sido
+// aprovada pelo cliente e ainda não virou contrato, vira agora, sozinha,
+// sem precisar clicar em nada. Se a proposta estiver vinculada a um
+// negócio do funil, ele também move pra "Fechado" e lança a receita.
+// Gera o contrato sozinho quando o cliente aprova a proposta pelo link.
+// Roda a cada atualização das propostas, então precisa ser à prova de:
+// - dados ainda não carregados (gravaria por cima dos contratos reais):
+//   espera e roda de novo quando contratos/negócios chegarem;
+// - duas abas/usuários abertos ao mesmo tempo: a proposta é
+//   "reivindicada" numa transação do Firestore, só uma aba cria;
+// - proposta que pediu pra NÃO gerar contrato (opção do assistente);
+// - marcar como gerado sem ter gravado o contrato de fato.
+const PROPOSTAS_CONVERTENDO = new Set();
+
+function chaveCarregadaNaNuvem(key) {
+  if (!FIREBASE_PRONTO || !TENANT_ID) return true;
+  return CLOUD_ESTADO_CHAVES[key] === 'carregado';
+}
+
+function converterPropostasAprovadasEmContrato() {
+  if (!nivelPodeOperar()) return; // Financeiro só visualiza: quem opera gera o contrato
+  if (!chaveCarregadaNaNuvem('eagles_contratos_v1')) return; // roda de novo quando carregar
+  const candidatas = CRM_PROPOSTAS_DATA.filter((p) =>
+    p.status === 'aprovada' && !p.contratoGerado && p.gerarContratoAutomatico !== false && !PROPOSTAS_CONVERTENDO.has(p.id));
+  candidatas.forEach((p) => {
+    if (p.negocioId && !chaveCarregadaNaNuvem(CRM_NEGOCIOS_KEY)) return; // espera o funil carregar
+    const jaExiste = (CADASTROS_DATA['contrato'] || []).some((c) => c.origemPropostaId === p.id);
+    if (jaExiste) { marcarPropostaComContrato(p); return; }
+    PROPOSTAS_CONVERTENDO.add(p.id);
+    reivindicarPropostaParaContrato(p.id).then((ganhou) => {
+      if (!ganhou) { p.contratoGerado = true; return; } // outra aba/usuário já está gerando
+      if (!criarContratoAutomaticoDaProposta(p)) {
+        liberarReivindicacaoProposta(p.id); // não gravou: devolve pra tentar de novo
+        return;
+      }
+      p.contratoGerado = true;
+    }).catch((err) => {
+      console.error('Erro ao gerar contrato automático:', err);
+    }).finally(() => PROPOSTAS_CONVERTENDO.delete(p.id));
+  });
+}
+
+// true = esta aba ficou responsável por gerar o contrato.
+function reivindicarPropostaParaContrato(id) {
+  if (!FIREBASE_PRONTO || !firestoreDb) return Promise.resolve(true);
+  const ref = firestoreDb.collection(PROPOSTAS_COLECAO).doc(id);
+  if (typeof firestoreDb.runTransaction !== 'function') {
+    return ref.set({ contratoGerado: true }, { merge: true }).then(() => true);
+  }
+  return firestoreDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data().contratoGerado) return false;
+    tx.set(ref, { contratoGerado: true }, { merge: true });
+    return true;
+  });
+}
+
+function liberarReivindicacaoProposta(id) {
+  if (!FIREBASE_PRONTO || !firestoreDb) return;
+  firestoreDb.collection(PROPOSTAS_COLECAO).doc(id).set({ contratoGerado: false }, { merge: true }).catch(() => {});
+}
+
+function marcarPropostaComContrato(p) {
+  p.contratoGerado = true;
+  if (FIREBASE_PRONTO && firestoreDb) firestoreDb.collection(PROPOSTAS_COLECAO).doc(p.id).set({ contratoGerado: true }, { merge: true }).catch(() => {});
+}
+
+function criarContratoAutomaticoDaProposta(p) {
+  const modelo = modeloContratoPadraoAtual();
+  const conteudoModelo = modelo ? modelo.conteudo : TEXTO_MODELO_CONTRATO_PADRAO;
+  const novoContrato = {
+    id: genId('ct'),
+    titulo: p.titulo,
+    cliente: p.cliente,
+    dataInicio: isoHoje(),
+    dataFim: '',
+    valor: (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0),
+    status: 'vigente',
+    criadoEm: new Date().toISOString(),
+    atualizadoEm: new Date().toISOString(),
+    origemPropostaId: p.id,
+    textoContrato: preencherModeloContrato(conteudoModelo, p),
+  };
+  const lista = (CADASTROS_DATA['contrato'] || []).concat([novoContrato]);
+  if (cloudSet('eagles_contratos_v1', lista) === false) return false;
+  CADASTROS_DATA['contrato'] = lista;
+
+  if (p.negocioId) {
+    const negocio = CRM_NEGOCIOS_DATA.find((n) => n.id === p.negocioId);
+    if (negocio && negocio.etapa !== 'fechado') {
+      negocio.etapa = 'fechado';
+      negocio.atualizadoEm = new Date().toISOString();
+      if (cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA) !== false) lancarReceitaNegocioFechado(negocio);
+    }
+  }
+  return true;
+}
+
+function mostrarSubAbaOrcamento(aba, btn) {
+  document.getElementById('crm-orcamentos-sub-lista').style.display = aba === 'lista' ? '' : 'none';
+  document.getElementById('crm-orcamentos-sub-contratos').style.display = aba === 'contratos' ? '' : 'none';
+  document.getElementById('crm-orcamentos-sub-aprovacao').style.display = aba === 'aprovacao' ? '' : 'none';
+  document.getElementById('crm-orcamentos-sub-pdf').style.display = aba === 'pdf' ? '' : 'none';
+  document.querySelectorAll('.crm-subaba').forEach((b) => b.classList.remove('ativa'));
+  if (btn) btn.classList.add('ativa');
+  if (aba === 'contratos') renderCrmContratosLista();
+  if (aba === 'aprovacao') iniciarConfigAprovacao();
+  if (aba === 'pdf') renderCrmPdfOrcamentosLista();
+}
+
+function renderCrmPdfOrcamentosLista() {
+  const tbody = document.getElementById('crm-pdf-orcamentos-lista');
+  if (!tbody) return;
+  const statusInfo = {
+    rascunho: { label: 'Rascunho', cor: 'badge-neutral' },
+    enviada: { label: 'Enviado', cor: 'badge-warning' },
+    aprovada: { label: 'Aprovado ✓', cor: 'badge-success' },
+    recusada: { label: 'Recusado', cor: 'badge-danger' },
+  };
+  tbody.innerHTML = CRM_PROPOSTAS_DATA.length
+    ? CRM_PROPOSTAS_DATA.slice().sort((a, b) => (b.atualizadoEm || '').localeCompare(a.atualizadoEm || '')).map((p) => {
+        const total = (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0);
+        const info = statusInfo[p.status] || statusInfo.rascunho;
+        return `
+        <tr>
+          <td style="font-size:12px; color:var(--text-soft);">${escapeHtml(p.numero || '—')}</td>
+          <td>${escapeHtml(p.titulo)}</td>
+          <td>${escapeHtml(p.cliente || '—')}</td>
+          <td>${formatMoney(total)}</td>
+          <td><span class="badge ${info.cor}">${info.label}</span></td>
+          <td style="text-align:right;"><button type="button" class="btn btn-small" onclick="gerarPdfOrcamento('${p.id}')">${ic('baixar')} Baixar PDF</button></td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-soft);">Nenhum orçamento ainda.</td></tr>`;
+}
+
+// Monta o orçamento como HTML "de papel" (fundo branco, pra imprimir bem),
+// usando a MESMA marca configurada na Página de Aprovação — assim o PDF
+// baixado fica igual ao que o cliente vê no preview, não um texto seco.
+function construirHtmlOrcamentoParaPdf(p) {
+  const vc = p.visualConfig || obterConfigAprovacaoAtual();
+  const cor1 = vc.corPrimaria || '#ec4899';
+  const cor2 = vc.corSecundaria || '#14b8a6';
+  const total = (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0);
+
+  let html = `<div style="font-family:Helvetica,Arial,sans-serif; width:760px; padding:40px; background:#fff; color:#222;">`;
+  html += `<div style="display:flex; align-items:center; gap:14px; margin-bottom:24px; border-bottom:2px solid ${cor1}; padding-bottom:18px;">`;
+  if (vc.logoUrl || p.empresaLogo) {
+    html += `<img src="${vc.logoUrl || p.empresaLogo}" style="height:46px;">`;
+  } else {
+    html += `<div style="width:46px; height:46px; border-radius:50%; background:${cor1}; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:18px;">${escapeHtml((p.empresaNome || 'E').charAt(0).toUpperCase())}</div>`;
+  }
+  html += `<div><strong style="font-size:15px;">${escapeHtml(p.empresaNome || '')}</strong><div style="font-size:11px; color:#888;">Proposta comercial</div></div></div>`;
+
+  html += `<h1 style="font-size:22px; margin:0 0 4px;">${escapeHtml(vc.tituloPrincipal || p.titulo || '')}</h1>`;
+  html += `<p style="font-size:13px; color:#666; margin:0 0 18px;">Para: <strong style="color:#222;">${escapeHtml(p.cliente || '')}</strong></p>`;
+  if (vc.mensagemBoasVindas) html += `<p style="font-size:12.5px; color:#555; margin:0 0 18px;">${escapeHtml(vc.mensagemBoasVindas)}</p>`;
+
+  html += `<h3 style="font-size:14px; margin:0 0 10px;">Itens</h3>`;
+  (p.itens || []).forEach((i) => {
+    html += `<div style="display:flex; justify-content:space-between; padding:10px 14px; background:#f7f7f8; border-radius:8px; margin-bottom:8px;">
+      <span style="font-size:13px;">${escapeHtml(i.descricao)}</span>
+      <strong style="font-size:13px; color:${cor1};">${formatMoney(i.valor)}</strong>
+    </div>`;
+  });
+
+  html += `<div style="background:#f7f7f8; border-radius:10px; padding:16px; margin-top:14px;">
+    <div style="display:flex; justify-content:space-between; font-size:19px; font-weight:bold;"><span>Total:</span><span style="color:${cor1};">${formatMoney(total)}</span></div>
+  </div>`;
+
+  const extras = [];
+  if (p.condicaoPagamento) extras.push('Condição de pagamento: ' + p.condicaoPagamento);
+  if (p.validoAte) extras.push('Válido até ' + formatDatePt(p.validoAte));
+  if (extras.length) html += `<p style="font-size:12px; color:#666; margin-top:14px;">${extras.map(escapeHtml).join(' · ')}</p>`;
+
+  if (vc.exibirAvaliacoes && (vc.avaliacoes || []).length) {
+    html += `<h3 style="font-size:14px; margin:22px 0 10px;">O que dizem nossos clientes</h3>`;
+    vc.avaliacoes.forEach((a) => {
+      html += `<div style="background:#f7f7f8; border-radius:8px; padding:12px; margin-bottom:8px;"><strong style="font-size:12.5px;">${escapeHtml(a.nome || 'Cliente')}</strong><p style="font-size:12px; color:#555; margin:4px 0 0;">${escapeHtml(a.texto || '')}</p></div>`;
+    });
+  }
+
+  html += `<div style="margin-top:26px; padding:16px; border-radius:10px; background:linear-gradient(90deg, ${cor1}, ${cor2}); color:#fff; text-align:center; font-weight:bold; font-size:14px;">✓ ${escapeHtml(vc.textoBotaoAprovacao || 'Aprovar Proposta')}</div>`;
+  html += `</div>`;
+  return html;
+}
+
+async function gerarPdfOrcamento(id) {
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p) return;
+  if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+    avisar('Não foi possível carregar o gerador de PDF (verifique sua internet) — tente de novo.');
+    return;
+  }
+
+  const isolado = document.createElement('div');
+  isolado.style.cssText = 'position:fixed; left:-9999px; top:0; width:760px;';
+  isolado.innerHTML = construirHtmlOrcamentoParaPdf(p);
+  document.body.appendChild(isolado);
+
+  try {
+    const canvas = await html2canvas(isolado, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'pt', 'a4');
+    const larguraPagina = pdf.internal.pageSize.getWidth();
+    const alturaPagina = pdf.internal.pageSize.getHeight();
+    const alturaImagem = (canvas.height * larguraPagina) / canvas.width;
+
+    let alturaRestante = alturaImagem;
+    let posicaoY = 0;
+    pdf.addImage(imgData, 'PNG', 0, posicaoY, larguraPagina, alturaImagem);
+    alturaRestante -= alturaPagina;
+    while (alturaRestante > 0) {
+      posicaoY = alturaRestante - alturaImagem;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, posicaoY, larguraPagina, alturaImagem);
+      alturaRestante -= alturaPagina;
+    }
+
+    adicionarRodapePaginas(pdf);
+    pdf.save(`Orcamento - ${p.cliente || p.titulo} - ${p.numero || ''}.pdf`);
+  } catch (err) {
+    console.error('Erro ao gerar PDF do orçamento:', err);
+    avisar('Não foi possível gerar o PDF agora. Tente de novo.');
+  } finally {
+    document.body.removeChild(isolado);
+  }
+}
+
+function hexParaRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+  if (!m) return null;
+  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+}
+
+function renderCrmContratosLista() {
+  const statsEl = document.getElementById('crm-contratos-stats');
+  const tbody = document.getElementById('crm-contratos-lista');
+  if (!tbody) return;
+  const contratos = CADASTROS_DATA['contrato'] || [];
+
+  if (statsEl) {
+    const vigentes = contratos.filter((c) => c.status === 'vigente').length;
+    const valorVigente = contratos.filter((c) => c.status === 'vigente').reduce((a, c) => a + Number(c.valor || 0), 0);
+    statsEl.innerHTML = `
+      <div class="stat-card"><div class="stat-label">Total de contratos</div><div class="stat-value">${contratos.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Vigentes</div><div class="stat-value" style="color:var(--success);">${vigentes}</div></div>
+      <div class="stat-card"><div class="stat-label">Valor em contratos vigentes</div><div class="stat-value" style="color:var(--success); font-size:18px;">${formatMoney(valorVigente)}</div></div>`;
+  }
+
+  tbody.innerHTML = contratos.length ? contratos.slice().sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || '')).map((c) => `
+    <tr>
+      <td>${escapeHtml(c.titulo)}</td>
+      <td>${escapeHtml(c.cliente || '—')}</td>
+      <td>${formatMoney(c.valor)}</td>
+      <td><span class="badge ${c.status === 'vigente' ? 'badge-success' : 'badge-neutral'}">${c.status === 'vigente' ? 'Vigente' : 'Encerrado'}</span></td>
+      <td style="font-size:12.5px;">${c.dataInicio ? formatDatePt(c.dataInicio) : '—'}</td>
+      <td style="text-align:right;">
+        ${c.textoContrato ? `<button type="button" class="btn btn-small btn-ghost" onclick="baixarContratoPdfPorId('${c.id}')">Baixar PDF</button>` : '<span style="font-size:11px; color:var(--text-soft);">Sem texto gerado</span>'}
+      </td>
+    </tr>`).join('') : '<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-soft);">Nenhum contrato ainda — gerado automaticamente quando um orçamento é aprovado, ou manualmente pelo menu de ações.</td></tr>';
+}
+
+function baixarContratoPdfPorId(id) {
+  const c = (CADASTROS_DATA['contrato'] || []).find((x) => x.id === id);
+  if (!c || !c.textoContrato) return;
+  gerarPdfTextoLongo(c.textoContrato, `Contrato - ${c.cliente || 'Cliente'}.pdf`, 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS');
+}
+
+function renderPropostasListaCrm() {
+  const tbody = document.getElementById('crm-propostas-lista');
+  if (!tbody) return;
+  const statsEl = document.getElementById('crm-orcamentos-stats');
+  const busca = (document.getElementById('crm-orcamentos-busca')?.value || '').toLowerCase().trim();
+  const filtro = document.getElementById('crm-orcamentos-filtro')?.value || 'todos';
+
+  const base = CRM_CLIENTE_FILTRO ? CRM_PROPOSTAS_DATA.filter((p) => p.cliente === CRM_CLIENTE_FILTRO) : CRM_PROPOSTAS_DATA;
+
+  if (statsEl) {
+    const rascunhos = base.filter((p) => p.status === 'rascunho').length;
+    const enviados = base.filter((p) => p.status === 'enviada').length;
+    const aprovados = base.filter((p) => p.status === 'aprovada').length;
+    const valorAprovado = base.filter((p) => p.status === 'aprovada').reduce((a, p) => a + (p.itens || []).reduce((s, i) => s + Number(i.valor || 0), 0), 0);
+    statsEl.innerHTML = `
+      <div class="stat-card"><div class="stat-label">Rascunhos</div><div class="stat-value">${rascunhos}</div></div>
+      <div class="stat-card"><div class="stat-label">Enviados</div><div class="stat-value">${enviados}</div></div>
+      <div class="stat-card"><div class="stat-label">Aprovados</div><div class="stat-value" style="color:var(--success);">${aprovados}</div></div>
+      <div class="stat-card"><div class="stat-label">Valor total aprovado</div><div class="stat-value" style="color:var(--success); font-size:19px;">${formatMoney(valorAprovado)}</div></div>`;
+  }
+
+  let propostasFiltradas = base;
+  if (filtro !== 'todos') propostasFiltradas = propostasFiltradas.filter((p) => p.status === filtro);
+  if (busca) {
+    propostasFiltradas = propostasFiltradas.filter((p) =>
+      (p.titulo || '').toLowerCase().includes(busca) ||
+      (p.numero || '').toLowerCase().includes(busca) ||
+      (p.cliente || '').toLowerCase().includes(busca));
+  }
+
+  if (!propostasFiltradas.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-soft);">${base.length ? 'Nada encontrado com esse filtro.' : 'Nenhum orçamento ainda — clique em "+ Novo Orçamento" pra criar o primeiro.'}</td></tr>`;
+    return;
+  }
+
+  const statusInfo = {
+    rascunho: { label: 'Rascunho', cor: 'badge-neutral' },
+    enviada: { label: 'Enviado', cor: 'badge-warning' },
+    aprovada: { label: 'Aprovado ✓', cor: 'badge-success' },
+    recusada: { label: 'Recusado', cor: 'badge-danger' },
+  };
+
+  tbody.innerHTML = propostasFiltradas
+    .slice()
+    .sort((a, b) => (b.atualizadoEm || '').localeCompare(a.atualizadoEm || ''))
+    .map((p) => {
+      const total = (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0);
+      const info = statusInfo[p.status] || statusInfo.rascunho;
+      const dataCriacao = p.criadoEm ? formatDatePt(p.criadoEm.slice(0, 10)) : '—';
+      let validade = '—';
+      if (p.validoAte) {
+        validade = formatDatePt(p.validoAte);
+      } else if (p.criadoEm) {
+        const d = new Date(p.criadoEm);
+        d.setDate(d.getDate() + 30);
+        validade = formatDatePt(d.toISOString().slice(0, 10));
+      }
+      return `
+      <tr>
+        <td style="font-size:12px; color:var(--text-soft);">${escapeHtml(p.numero || '—')}</td>
+        <td>${escapeHtml(p.titulo)}${p.contratoGerado ? ' <span class="badge badge-blue" style="font-size:10px;">Virou contrato</span>' : ''}</td>
+        <td>${escapeHtml(p.cliente || '—')}${p.clienteEmail ? `<div style="font-size:11.5px; color:var(--text-soft);">${escapeHtml(p.clienteEmail)}</div>` : ''}</td>
+        <td>${formatMoney(total)}</td>
+        <td><span class="badge ${info.cor}">${info.label}</span>${p.status === 'enviada' && p.visualizadoEm ? ' <span title="Visualizada pelo cliente">' + ic('olho') + '</span>' : ''}</td>
+        <td style="font-size:12.5px;">${dataCriacao}</td>
+        <td style="font-size:12.5px;">${validade}</td>
+        <td style="text-align:right;">
+          <button type="button" class="btn btn-small btn-ghost" onclick="event.stopPropagation(); toggleMenuAcoesProposta('${p.id}', this)">⋮</button>
+        </td>
+      </tr>`;
+    }).join('');
+}
+
+let CRM_MENU_ACOES_ABERTO = null;
+
+function elementoMenuFlutuante() {
+  let el = document.getElementById('crm-menu-flutuante');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'crm-menu-flutuante';
+    el.className = 'crm-menu-acoes';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function toggleMenuAcoesProposta(id, botao) {
+  const menu = elementoMenuFlutuante();
+  if (CRM_MENU_ACOES_ABERTO === id) {
+    menu.style.display = 'none';
+    CRM_MENU_ACOES_ABERTO = null;
+    return;
+  }
+  if (!botao) { menu.style.display = 'none'; CRM_MENU_ACOES_ABERTO = null; return; }
+  menu.innerHTML = htmlMenuAcoesProposta(id);
+  menu.style.display = 'block';
+  CRM_MENU_ACOES_ABERTO = id;
+
+  // posiciona colado no botao que foi clicado, usando coordenadas reais
+  // da tela (position: fixed) — assim nao fica preso/cortado pela rolagem
+  // da tabela, que tem overflow-x: auto.
+  const r = botao.getBoundingClientRect();
+  const larguraMenu = 220;
+  let esquerda = r.right - larguraMenu;
+  if (esquerda < 8) esquerda = 8;
+  let topo = r.bottom + 4;
+  menu.style.left = esquerda + 'px';
+  menu.style.top = topo + 'px';
+
+  // se nao couber embaixo (perto do fim da tela), abre pra cima
+  requestAnimationFrame(() => {
+    const alturaMenu = menu.offsetHeight;
+    if (topo + alturaMenu > window.innerHeight - 8) {
+      menu.style.top = Math.max(8, r.top - alturaMenu - 4) + 'px';
+    }
+  });
+}
+
+document.addEventListener('click', (e) => {
+  if (CRM_MENU_ACOES_ABERTO && !e.target.closest('#crm-menu-flutuante') && !e.target.closest('[onclick*="toggleMenuAcoesProposta"]')) {
+    const el = document.getElementById('crm-menu-flutuante');
+    if (el) el.style.display = 'none';
+    CRM_MENU_ACOES_ABERTO = null;
+  }
+});
+window.addEventListener('scroll', () => {
+  if (CRM_MENU_ACOES_ABERTO) {
+    const el = document.getElementById('crm-menu-flutuante');
+    if (el) el.style.display = 'none';
+    CRM_MENU_ACOES_ABERTO = null;
+  }
+}, true);
+
+function htmlMenuAcoesProposta(id) {
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p) return '';
+  const icSvg = (path) => `<svg class="crm-menu-icone" viewBox="0 0 24 24">${path}</svg>`;
+  const I = {
+    editar: icSvg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>'),
+    enviar: icSvg('<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>'),
+    aprovar: icSvg('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
+    cobranca: icSvg('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'),
+    detalhes: icSvg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'),
+    ver: icSvg('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'),
+    link: icSvg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+    email: icSvg('<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22 6 12 13 2 6"/>'),
+    duplicar: icSvg('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'),
+    contrato: icSvg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'),
+    baixar: icSvg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+    arquivar: icSvg('<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>'),
+    excluir: icSvg('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+  };
+  const item = (icone, label, acao, cor) => `<button type="button" onclick="${acao}" ${cor ? `style="color:${cor};"` : ''}>${icone}${label}</button>`;
+  let itens = '';
+  itens += item(I.editar, 'Editar', `abrirEditarNegocioOuProposta('${id}')`);
+  if (p.status === 'rascunho') {
+    itens += item(I.enviar, 'Concluir e Enviar', `fecharMenuEExecutar('${id}', enviarPropostaPorId)`);
+    itens += item(I.aprovar, 'Concluir (sem email)', `fecharMenuEExecutar('${id}', enviarPropostaPorId)`);
+  }
+  if (p.status !== 'aprovada') itens += item(I.aprovar, 'Aprovar Manualmente', `fecharMenuEExecutar('${id}', aprovarPropostaManualmente)`, 'var(--success)');
+  itens += item(I.cobranca, 'Gerar cobrança', `avisar('Isso ainda depende de uma conta em gateway de pagamento (Asaas, Mercado Pago, etc.) — ainda não conectada.')`);
+  itens += item(I.detalhes, 'Ver Detalhes', `fecharMenuEExecutar('${id}', abrirDetalhePropostaCrm)`);
+  if (p.status !== 'rascunho') {
+    itens += item(I.ver, 'Visualizar (como o cliente vê)', `window.open('${linkPublicoProposta(id)}', '_blank')`);
+    itens += item(I.link, 'Copiar Link', `navigator.clipboard.writeText('${linkPublicoProposta(id).replace(/'/g, "\\'")}'); toggleMenuAcoesProposta('${id}');`);
+    itens += item(I.link, 'Compartilhar', `compartilharProposta('${id}')`);
+    itens += item(I.email, 'Enviar por Email', `window.open('mailto:${encodeURIComponent(p.clienteEmail || '')}?subject=${encodeURIComponent('Orçamento: ' + p.titulo)}&body=${encodeURIComponent('Olá! Segue o link do orçamento: ' + linkPublicoProposta(id))}', '_blank')`);
+  }
+  itens += item(I.duplicar, 'Duplicar', `fecharMenuEExecutar('${id}', duplicarPropostaCrm)`);
+  if (!p.contratoGerado) {
+    const existente = contratoExistenteParaCliente(p.cliente);
+    itens += item(I.contrato, existente ? 'Atualizar o Contrato' : 'Gerar Contrato', `fecharMenuEExecutar('${id}', iniciarGeracaoContratoProposta)`);
+  }
+  if (p.contratoGerado) itens += item(I.baixar, 'Baixar Contrato (PDF)', `fecharMenuEExecutar('${id}', baixarContratoPdfPorPropostaId)`);
+  itens += item(I.arquivar, p.arquivada ? 'Desarquivar' : 'Arquivar', `fecharMenuEExecutar('${id}', toggleArquivarPropostaCrm)`);
+  itens += item(I.excluir, 'Excluir', `fecharMenuEExecutar('${id}', excluirPropostaPorId)`, 'var(--danger)');
+  return itens;
+}
+
+function compartilharProposta(id) {
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p) return;
+  const link = linkPublicoProposta(id);
+  if (navigator.share) {
+    navigator.share({ title: 'Orçamento: ' + p.titulo, text: 'Segue o link do orçamento', url: link }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(link);
+    avisar('Link copiado! Cole onde quiser compartilhar.');
+  }
+  toggleMenuAcoesProposta(id);
+}
+
+function fecharMenuEExecutar(id, fn) {
+  const el = document.getElementById('crm-menu-flutuante');
+  if (el) el.style.display = 'none';
+  CRM_MENU_ACOES_ABERTO = null;
+  fn(id);
+}
+
+function abrirEditarNegocioOuProposta(id) {
+  abrirDetalhePropostaCrm(id);
+}
+
+function enviarPropostaPorId(id) {
+  PROPOSTA_CRM_DETALHE_ID = id;
+  enviarPropostaCrm();
+}
+
+function excluirPropostaPorId(id) {
+  PROPOSTA_CRM_DETALHE_ID = id;
+  excluirPropostaCrm();
+}
+
+function aprovarPropostaManualmente(id) {
+  if (!exigirPodeOperar('aprovar orçamentos')) return;
+  confirmarAcao('Marcar esse orçamento como aprovado manualmente (sem precisar do cliente confirmar pelo link)?', () => {
+    const dados = {
+      status: 'aprovada',
+      atualizadoEm: new Date().toISOString(),
+      assinatura: { dataUrl: null, nomeDigitado: 'Aprovado manualmente pela empresa', dataHoraISO: new Date().toISOString() },
+    };
+    const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+    if (p) Object.assign(p, dados);
+    converterPropostasAprovadasEmContrato();
+    renderPropostasListaCrm();
+    firestoreDb.collection(PROPOSTAS_COLECAO).doc(id).set(dados, { merge: true });
+  });
+}
+
+function duplicarPropostaCrm(id) {
+  if (!exigirPodeOperar('duplicar orçamentos')) return;
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p) return;
+  const novoId = genId('prop-local');
+  const copia = {
+    tenantId: TENANT_ID,
+    numero: 'ORC-' + Date.now(),
+    titulo: p.titulo + ' (cópia)',
+    cliente: p.cliente,
+    clienteEmail: p.clienteEmail || '',
+    negocioId: p.negocioId || null,
+    itens: (p.itens || []).map((i) => ({ ...i })),
+    validoAte: p.validoAte || '',
+    condicaoPagamento: p.condicaoPagamento || '',
+    observacoes: p.observacoes || '',
+    status: 'rascunho',
+    assinatura: null,
+    contratoGerado: false,
+    empresaNome: p.empresaNome || '',
+    empresaLogo: p.empresaLogo || '',
+    criadoEm: new Date().toISOString(),
+    atualizadoEm: new Date().toISOString(),
+  };
+  CRM_PROPOSTAS_DATA.push({ id: novoId, ...copia });
+  renderPropostasListaCrm();
+  firestoreDb.collection(PROPOSTAS_COLECAO).add(copia);
+}
+
+function forcarGerarContratoProposta(id) {
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p || p.contratoGerado) return;
+  const modelo = modeloContratoPadraoAtual();
+  const conteudoModelo = modelo ? modelo.conteudo : TEXTO_MODELO_CONTRATO_PADRAO;
+  criarContratoDeProposta(p, preencherModeloContrato(conteudoModelo, p));
+
+  if (p.negocioId) {
+    const negocio = CRM_NEGOCIOS_DATA.find((n) => n.id === p.negocioId);
+    if (negocio && negocio.etapa !== 'fechado') {
+      negocio.etapa = 'fechado';
+      negocio.atualizadoEm = new Date().toISOString();
+      cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+      lancarReceitaNegocioFechado(negocio);
+    }
+  }
+}
+
+function toggleArquivarPropostaCrm(id) {
+  if (!exigirPodeOperar('arquivar orçamentos')) return;
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p) return;
+  p.arquivada = !p.arquivada;
+  p.atualizadoEm = new Date().toISOString();
+  renderPropostasListaCrm();
+  firestoreDb.collection(PROPOSTAS_COLECAO).doc(id).set({ arquivada: p.arquivada, atualizadoEm: p.atualizadoEm }, { merge: true });
+}
+
+function abrirNovaPropostaCrm() {
+  document.getElementById('proposta-crm-titulo').value = '';
+  document.getElementById('proposta-crm-cliente').value = '';
+  document.getElementById('proposta-crm-email').value = '';
+  document.getElementById('proposta-crm-validade').value = '';
+  document.getElementById('proposta-crm-condicao').value = '';
+  document.getElementById('proposta-crm-observacoes').value = '';
+  const selectNegocio = document.getElementById('proposta-crm-negocio');
+  const abertos = CRM_NEGOCIOS_DATA.filter((n) => n.etapa !== 'fechado' && n.etapa !== 'perdido');
+  selectNegocio.innerHTML = '<option value="">Nenhum — proposta avulsa</option>' +
+    abertos.map((n) => `<option value="${n.id}">${escapeHtml(n.nome)} — ${escapeHtml(n.cliente || '')}</option>`).join('');
+  PROPOSTA_CRM_ITENS_FORM = [{ descricao: '', valor: 0 }];
+  renderItensPropostaCrmForm();
+  openModal('modal-proposta-crm');
+}
+
+function preencherPropostaComNegocio() {
+  const negocioId = document.getElementById('proposta-crm-negocio').value;
+  if (!negocioId) return;
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === negocioId);
+  if (!n) return;
+  if (!document.getElementById('proposta-crm-titulo').value) document.getElementById('proposta-crm-titulo').value = n.nome;
+  if (!document.getElementById('proposta-crm-cliente').value) document.getElementById('proposta-crm-cliente').value = n.cliente || '';
+  if (n.valor && PROPOSTA_CRM_ITENS_FORM.length === 1 && !PROPOSTA_CRM_ITENS_FORM[0].descricao) {
+    PROPOSTA_CRM_ITENS_FORM = [{ descricao: n.nome, valor: n.valor }];
+    renderItensPropostaCrmForm();
+  }
+}
+
+function renderItensPropostaCrmForm() {
+  const el = document.getElementById('proposta-crm-itens');
+  if (!el) return;
+  el.innerHTML = PROPOSTA_CRM_ITENS_FORM.map((item, idx) => `
+    <div style="display:flex; gap:8px; margin-bottom:8px;">
+      <input type="text" value="${escapeHtml(item.descricao)}" placeholder="Descrição do item/serviço" style="flex:1;" oninput="PROPOSTA_CRM_ITENS_FORM[${idx}].descricao = this.value">
+      <input type="number" value="${item.valor}" placeholder="Valor" style="width:120px;" step="0.01" oninput="PROPOSTA_CRM_ITENS_FORM[${idx}].valor = Number(this.value)">
+      <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerItemPropostaCrm(${idx})">✕</button>
+    </div>`).join('');
+}
+
+function adicionarItemPropostaCrm() {
+  PROPOSTA_CRM_ITENS_FORM.push({ descricao: '', valor: 0 });
+  renderItensPropostaCrmForm();
+}
+
+function removerItemPropostaCrm(idx) {
+  PROPOSTA_CRM_ITENS_FORM.splice(idx, 1);
+  renderItensPropostaCrmForm();
+}
+
+function salvarPropostaCrm() {
+  if (!exigirPodeOperar('editar orçamentos')) return;
+  const titulo = document.getElementById('proposta-crm-titulo').value.trim();
+  const cliente = document.getElementById('proposta-crm-cliente').value.trim();
+  if (!titulo || !cliente) return;
+
+  const doc = {
+    tenantId: TENANT_ID,
+    numero: 'ORC-' + Date.now(),
+    titulo,
+    cliente,
+    clienteEmail: document.getElementById('proposta-crm-email').value.trim(),
+    negocioId: document.getElementById('proposta-crm-negocio').value || null,
+    itens: PROPOSTA_CRM_ITENS_FORM.filter((i) => i.descricao.trim()),
+    validoAte: document.getElementById('proposta-crm-validade').value,
+    condicaoPagamento: document.getElementById('proposta-crm-condicao').value.trim(),
+    observacoes: document.getElementById('proposta-crm-observacoes').value.trim(),
+    status: 'rascunho',
+    assinatura: null,
+    contratoGerado: false,
+    empresaNome: PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa || 'Minha Empresa',
+    empresaLogo: PERFIL_DATA.logoUrl || '',
+    visualConfig: obterConfigAprovacaoAtual(),
+    criadoEm: new Date().toISOString(),
+    atualizadoEm: new Date().toISOString(),
+  };
+
+  firestoreDb.collection(PROPOSTAS_COLECAO).add(doc)
+    .then(() => closeModal('modal-proposta-crm'))
+    .catch((err) => { console.error('Erro ao salvar proposta:', err); avisar('Não foi possível salvar agora. Tente de novo.'); });
+}
+
+function linkPublicoProposta(id) {
+  return window.location.origin + window.location.pathname.replace('crm.html', '') + `proposta.html?id=${id}`;
+}
+
+function abrirDetalhePropostaCrm(id) {
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === id);
+  if (!p) return;
+  PROPOSTA_CRM_DETALHE_ID = id;
+  document.getElementById('proposta-detalhe-titulo').textContent = p.titulo;
+
+  const total = (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0);
+  const itensHtml = (p.itens || []).map((i) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title">${escapeHtml(i.descricao)}</div></div><div class="list-row-value">${formatMoney(i.valor)}</div></div>`).join('');
+
+  let acaoHtml = '';
+  if (p.status === 'rascunho') {
+    acaoHtml = `<button type="button" class="btn btn-primary" style="width:100%; justify-content:center;" onclick="enviarPropostaCrm()">Gerar link e marcar como enviada</button>`;
+  } else {
+    const link = linkPublicoProposta(p.id);
+    acaoHtml = `
+      <div class="field full"><label>Link pra enviar ao cliente</label><input type="text" readonly value="${escapeHtml(link)}" onclick="this.select()"></div>
+      <button type="button" class="btn btn-small" onclick="navigator.clipboard.writeText('${link.replace(/'/g, "\\'")}'); this.textContent='Copiado!'">Copiar link</button>`;
+  }
+
+  let assinaturaHtml = '';
+  if (p.assinatura) {
+    assinaturaHtml = `
+      <div class="panel" style="margin-top:14px; padding:14px;">
+        <strong style="font-size:13px;">Assinatura do cliente</strong>
+        <img src="${p.assinatura.dataUrl}" style="display:block; max-width:260px; margin:8px 0; background:#fff; border-radius:8px;">
+        <p style="font-size:12.5px; color:var(--text-soft); margin:0;">${escapeHtml(p.assinatura.nomeDigitado)} · ${formatDatePt(p.assinatura.dataHoraISO.slice(0, 10))}</p>
+        <p style="font-size:11px; color:var(--text-soft); margin-top:6px;">${ic('alerta', 'ic-aviso')} Assinatura capturada dentro do sistema, sem certificação (não é o mesmo nível legal de um serviço como Clicksign/DocuSign).</p>
+      </div>`;
+  }
+
+  document.getElementById('proposta-detalhe-corpo').innerHTML = `
+    <p style="font-size:13px; color:var(--text-soft);">Cliente: <strong style="color:var(--text);">${escapeHtml(p.cliente)}</strong></p>
+    <div class="panel" style="padding:12px; margin-bottom:14px;">${itensHtml}</div>
+    <p style="font-size:14px; font-weight:700; margin-bottom:14px;">Total: ${formatMoney(total)}</p>
+    <div class="form-grid" style="margin-bottom:6px;">${acaoHtml}</div>
+    ${assinaturaHtml}`;
+
+  openModal('modal-proposta-crm-detalhe');
+}
+
+function enviarPropostaCrm() {
+  if (!exigirPodeOperar('enviar orçamentos')) return;
+  if (!PROPOSTA_CRM_DETALHE_ID) return;
+  const dados = { status: 'enviada', atualizadoEm: new Date().toISOString() };
+  const p = CRM_PROPOSTAS_DATA.find((x) => x.id === PROPOSTA_CRM_DETALHE_ID);
+  if (p) Object.assign(p, dados);
+  renderPropostasListaCrm();
+  abrirDetalhePropostaCrm(PROPOSTA_CRM_DETALHE_ID);
+  firestoreDb.collection(PROPOSTAS_COLECAO).doc(PROPOSTA_CRM_DETALHE_ID).set(dados, { merge: true });
+}
+
+function excluirPropostaCrm() {
+  if (!exigirPodeOperar('excluir orçamentos')) return;
+  if (!PROPOSTA_CRM_DETALHE_ID) return;
+  confirmarAcao('Excluir esta proposta? Essa ação não pode ser desfeita.', () => {
+    CRM_PROPOSTAS_DATA = CRM_PROPOSTAS_DATA.filter((x) => x.id !== PROPOSTA_CRM_DETALHE_ID);
+    renderPropostasListaCrm();
+    closeModal('modal-proposta-crm-detalhe');
+    firestoreDb.collection(PROPOSTAS_COLECAO).doc(PROPOSTA_CRM_DETALHE_ID).delete();
+  });
+}
+
+function contatosUnificadosCrm() {
+  const nomesClientes = new Set(nomesClientesCrm());
+  const porNome = {};
+  CRM_NEGOCIOS_DATA.forEach((n) => {
+    const nome = n.cliente || n.nome;
+    if (!nome) return;
+    if (!porNome[nome]) porNome[nome] = { nome, email: n.email || '', telefone: n.telefone || '', primeiroContato: n.criadoEm, ehCliente: nomesClientes.has(nome), comprou: false, receita: 0, origem: n.origem || '' };
+    if (n.criadoEm && (!porNome[nome].primeiroContato || n.criadoEm < porNome[nome].primeiroContato)) porNome[nome].primeiroContato = n.criadoEm;
+    if (!porNome[nome].email && n.email) porNome[nome].email = n.email;
+    if (n.etapa === 'fechado') { porNome[nome].comprou = true; porNome[nome].receita += Number(n.valor || 0); }
+  });
+  nomesClientes.forEach((nome) => {
+    if (!porNome[nome]) porNome[nome] = { nome, email: '', telefone: '', primeiroContato: null, ehCliente: true, comprou: false, receita: 0, origem: '' };
+    else porNome[nome].ehCliente = true;
+  });
+  return Object.values(porNome);
+}
+
+function renderCrmLeads() {
+  const el = document.getElementById('crm-secao-leads');
+  if (!el) return;
+  const contatos = contatosUnificadosCrm();
+  const totalClientes = contatos.filter((c) => c.ehCliente).length;
+  const totalCompraram = contatos.filter((c) => c.comprou).length;
+  const receitaTotal = contatos.reduce((a, c) => a + c.receita, 0);
+
+  el.innerHTML = `
+    <div class="page-header" style="margin-bottom:16px; padding:0;">
+      <div><h1 style="font-size:20px;">Leads</h1><p style="color:var(--text-soft); margin:0;">Todos os contatos da base, com histórico de cada um.</p></div>
+      <div style="display:flex; gap:10px;">${htmlBotaoTour('leads')}</div>
+    </div>
+    <div class="stat-grid" style="margin-bottom:18px;">
+      <div class="stat-card"><div class="stat-label">Contatos</div><div class="stat-value">${contatos.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Clientes</div><div class="stat-value">${totalClientes}</div></div>
+      <div class="stat-card"><div class="stat-label">Já compraram</div><div class="stat-value">${totalCompraram}</div></div>
+      <div class="stat-card"><div class="stat-label">Receita</div><div class="stat-value" style="color:var(--success);">${formatMoney(receitaTotal)}</div></div>
+    </div>
+    <div class="panel" style="padding:0;">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Contato</th><th>Origem</th><th>Entrou</th><th style="text-align:right;">Jornada</th></tr></thead>
+          <tbody>
+            ${contatos.length ? contatos.map((c) => `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(c.nome)}</strong>
+                  ${c.ehCliente ? ' <span class="badge badge-success" style="font-size:10px;">Cliente</span>' : ' <span class="badge badge-neutral" style="font-size:10px;">Lead</span>'}
+                  ${c.email ? `<div style="font-size:11.5px; color:var(--text-soft);">${escapeHtml(c.email)}</div>` : ''}
+                </td>
+                <td style="font-size:12.5px; color:var(--text-soft);">${escapeHtml(c.origem) || '—'}</td>
+                <td style="font-size:12.5px;">${c.primeiroContato ? formatDatePt(c.primeiroContato.slice(0, 10)) : '—'}</td>
+                <td style="text-align:right;"><button type="button" class="btn btn-small btn-ghost" title="Ver jornada" onclick="abrirJornadaContatoCrm('${escapeParaOnclick(c.nome)}')">
+                  <svg class="crm-menu-icone" viewBox="0 0 24 24" style="stroke:var(--blue-strong); margin:0;"><path d="M9 20l-5.5-2.5V4L9 6.5m0 13.5l6-3m-6 3V6.5m6 10.5l5.5 2.5V6l-5.5-2.5M15 17V6.5M9 6.5L15 3.5"/></svg>
+                </button></td>
+              </tr>`).join('') : '<tr><td colspan="4" style="text-align:center; padding:30px; color:var(--text-soft);">Nenhum contato ainda.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-overlay" id="modal-jornada-contato">
+      <div class="modal" style="max-width:680px;">
+        <div class="modal-header">
+          <div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <h2 id="jornada-contato-nome" style="margin:0;">Jornada</h2>
+              <span id="jornada-contato-badge-tipo" class="badge"></span>
+            </div>
+            <p id="jornada-contato-desde" style="font-size:12px; color:var(--text-soft); margin:4px 0 0;"></p>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button type="button" class="btn btn-small" id="jornada-btn-abrir-funil" onclick="abrirContatoNoFunilCrm()">
+              <svg class="icone-menu" viewBox="0 0 24 24" style="margin:0;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Abrir no funil
+            </button>
+            <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirContatoDaBaseCrm()" title="Excluir este lead">
+              <svg class="icone-menu" viewBox="0 0 24 24" style="margin:0; stroke:var(--danger);"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+            <button class="close-btn" onclick="closeModal('modal-jornada-contato')">&times;</button>
+          </div>
+        </div>
+        <div id="jornada-contato-corpo"></div>
+      </div>
+    </div>`;
+}
+
+let JORNADA_CONTATO_NOME_ATUAL = null;
+
+function abrirContatoNoFunilCrm() {
+  const nome = JORNADA_CONTATO_NOME_ATUAL;
+  if (!nome) return;
+  const negocio = CRM_NEGOCIOS_DATA.find((n) => (n.cliente || n.nome) === nome);
+  if (!negocio) { avisar('Esse contato ainda não tem nenhum negócio no funil.'); return; }
+  closeModal('modal-jornada-contato');
+  mostrarSecaoCrm('pipeline', document.querySelector('[onclick*="pipeline"]'));
+  setTimeout(() => abrirDetalheNegocioCrm(negocio.id), 150);
+}
+
+// Remove esse contato de TODA a base — negócio(s) no funil e o
+// cadastro de cliente, seja ele independente do CRM ou compartilhado
+// com o ERP. Pede confirmação explicando exatamente o que some.
+function excluirContatoDaBaseCrm() {
+  const nome = JORNADA_CONTATO_NOME_ATUAL;
+  if (!nome) return;
+  const negocios = CRM_NEGOCIOS_DATA.filter((n) => (n.cliente || n.nome) === nome);
+  // Clientes do CRM vivem só na base do CRM — excluir aqui nunca apaga
+  // o cadastro do ERP (mesmo que o cliente tenha sido importado de lá).
+  const ehClienteIndep = CRM_CLIENTES_INDEP_DATA.some((c) => c.nome === nome);
+
+  const partes = [];
+  if (negocios.length) partes.push(`${negocios.length} negócio(s) no funil`);
+  if (ehClienteIndep) partes.push('o cadastro de cliente do CRM');
+  if (!partes.length) { closeModal('modal-jornada-contato'); return; }
+
+  confirmarAcao(`Excluir "${nome}" da base? Isso remove ${partes.join(' e ')}. Essa ação não pode ser desfeita.`, () => {
+    CRM_NEGOCIOS_DATA = CRM_NEGOCIOS_DATA.filter((n) => (n.cliente || n.nome) !== nome);
+    cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+
+    if (ehClienteIndep) {
+      CRM_CLIENTES_INDEP_DATA = CRM_CLIENTES_INDEP_DATA.filter((c) => c.nome !== nome);
+      cloudSet('eagles_crm_clientes_v1', CRM_CLIENTES_INDEP_DATA);
+    }
+
+    closeModal('modal-jornada-contato');
+    renderFunilKanban();
+    atualizarSecaoAtivaCrm();
+  });
+}
+
+function abrirJornadaContatoCrm(nome) {
+  const contatos = contatosUnificadosCrm();
+  const c = contatos.find((x) => x.nome === nome);
+  if (!c) return;
+  JORNADA_CONTATO_NOME_ATUAL = nome;
+  document.getElementById('jornada-contato-nome').textContent = nome;
+  const badgeTipo = document.getElementById('jornada-contato-badge-tipo');
+  badgeTipo.textContent = c.ehCliente ? 'Cliente' : 'Lead';
+  badgeTipo.className = 'badge ' + (c.ehCliente ? 'badge-success' : 'badge-neutral');
+  document.getElementById('jornada-contato-desde').textContent = c.primeiroContato ? `Na base desde ${formatDatePt(c.primeiroContato.slice(0, 10))}` : '';
+
+  const temNegocio = CRM_NEGOCIOS_DATA.some((n) => (n.cliente || n.nome) === nome);
+  document.getElementById('jornada-btn-abrir-funil').disabled = !temNegocio;
+  document.getElementById('jornada-btn-abrir-funil').style.opacity = temNegocio ? '1' : '.45';
+
+  const negociosDoContato = CRM_NEGOCIOS_DATA.filter((n) => (n.cliente || n.nome) === nome).sort((a, b) => (a.criadoEm || '').localeCompare(b.criadoEm || ''));
+  const propostasDoContato = CRM_PROPOSTAS_DATA.filter((p) => p.cliente === nome);
+
+  const eventos = [];
+  if (c.primeiroContato) eventos.push({ tipo: 'entrou', label: 'Entrou na base', data: c.primeiroContato });
+  if (c.ehCliente) eventos.push({ tipo: 'cliente', label: 'Virou cliente', data: c.primeiroContato });
+  propostasDoContato.forEach((p) => eventos.push({ tipo: 'orcamento', label: 'Orçamento: ' + p.titulo, data: p.criadoEm, valor: (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0), status: p.status }));
+  negociosDoContato.filter((n) => n.etapa === 'fechado').forEach((n) => eventos.push({ tipo: 'comprou', label: 'Comprou: ' + n.nome, data: n.atualizadoEm, valor: n.valor }));
+  eventos.sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+
+  const iconePorTipo = { entrou: ic('usuario', 'ic-herda'), cliente: ic('estrela', 'ic-herda'), orcamento: ic('documento', 'ic-herda'), comprou: ic('dinheiro', 'ic-herda') };
+  const corPorTipo = { entrou: 'var(--blue-strong)', cliente: 'var(--success)', orcamento: '#8a6fd8', comprou: 'var(--success)' };
+
+  const trilhaHtml = eventos.map((e) => `
+    <div style="flex-shrink:0; min-width:150px; border:1.5px solid ${corPorTipo[e.tipo]}; border-radius:12px; padding:10px 12px;">
+      <div style="font-size:11px; color:var(--text-soft);">${iconePorTipo[e.tipo]} ${e.data ? formatDatePt(e.data.slice(0, 10)) : ''}</div>
+      <strong style="font-size:12.5px; display:block; margin-top:4px;">${escapeHtml(e.label)}</strong>
+      ${e.valor ? `<div style="font-size:12px; color:var(--success); margin-top:4px;">${formatMoney(e.valor)}</div>` : ''}
+    </div>`).join('<div style="width:20px; height:2px; background:var(--border); align-self:center; flex-shrink:0;"></div>');
+
+  const historicoHtml = eventos.slice().reverse().map((e) => `
+    <div class="list-row">
+      <div class="icon-dot">${iconePorTipo[e.tipo]}</div>
+      <div class="list-row-main"><div class="list-row-title">${escapeHtml(e.label)}</div><div class="list-row-sub">${e.data ? formatDatePt(e.data.slice(0, 10)) + ' às ' + e.data.slice(11, 16) : ''}</div></div>
+      ${e.valor ? `<div class="list-row-value">${formatMoney(e.valor)}</div>` : ''}
+    </div>`).join('');
+
+  document.getElementById('jornada-contato-corpo').innerHTML = `
+    <div class="stat-grid" style="margin-bottom:18px;">
+      <div class="stat-card"><div class="stat-label">Compras</div><div class="stat-value">${negociosDoContato.filter((n) => n.etapa === 'fechado').length}</div></div>
+      <div class="stat-card"><div class="stat-label">Total pago</div><div class="stat-value" style="color:var(--success); font-size:18px;">${formatMoney(c.receita)}</div></div>
+      <div class="stat-card"><div class="stat-label">Orçamentos</div><div class="stat-value">${propostasDoContato.length}</div></div>
+    </div>
+    <strong style="font-size:13px;">Jornada</strong>
+    <div style="display:flex; align-items:stretch; gap:0; overflow-x:auto; padding:14px 2px; margin-bottom:18px;">${trilhaHtml || '<p class="empty-state">Sem eventos ainda.</p>'}</div>
+    <strong style="font-size:13px;">Histórico detalhado</strong>
+    <div style="margin-top:10px;">${historicoHtml || '<p class="empty-state">Sem histórico ainda.</p>'}</div>`;
+
+  openModal('modal-jornada-contato');
+}
+
+
+
+// ---------- CRM: Lembretes rápidos e Meta de receita ----------
+
+const CRM_LEMBRETES_KEY = 'eagles_crm_lembretes_v1';
+const CRM_METAS_KEY = 'eagles_crm_metas_v1';
+let CRM_LEMBRETES_DATA = [];
+let CRM_METAS_DATA = { metaReceitaMensal: 10000 };
+
+function renderCrmLembretes() {
+  const el = document.getElementById('crm-lembretes-lista');
+  if (!el) return;
+  el.innerHTML = CRM_LEMBRETES_DATA.length
+    ? CRM_LEMBRETES_DATA.slice().reverse().map((l) => `
+      <div class="list-row">
+        <div class="list-row-main"><div class="list-row-title">${escapeHtml(l.texto)}</div></div>
+        <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirLembreteCrm('${l.id}')">✕</button>
+      </div>`).join('')
+    : '<p class="empty-state">Nenhum lembrete ainda.</p>';
+}
+
+function adicionarLembreteCrm() {
+  const input = document.getElementById('crm-novo-lembrete');
+  const texto = input.value.trim();
+  if (!texto) return;
+  CRM_LEMBRETES_DATA.push({ id: genId('lb'), texto, criadoEm: new Date().toISOString() });
+  cloudSet(CRM_LEMBRETES_KEY, CRM_LEMBRETES_DATA);
+  input.value = '';
+  renderCrmLembretes();
+}
+
+function excluirLembreteCrm(id) {
+  CRM_LEMBRETES_DATA = CRM_LEMBRETES_DATA.filter((x) => x.id !== id);
+  cloudSet(CRM_LEMBRETES_KEY, CRM_LEMBRETES_DATA);
+  renderCrmLembretes();
+}
+
+function abrirEditarMetaReceitaCrm() {
+  const atual = CRM_METAS_DATA.metaReceitaMensal || 0;
+  const novo = window.prompt('Qual a meta de faturamento pra este mês (R$)?', atual);
+  if (novo === null) return;
+  const valor = Number(novo);
+  if (isNaN(valor) || valor < 0) return;
+  CRM_METAS_DATA.metaReceitaMensal = valor;
+  cloudSet(CRM_METAS_KEY, CRM_METAS_DATA);
+  renderCrmDashTopo();
+}
+
+// ---------- CRM: Clientes independentes (quando não tem plano ERP) ----------
+
+const CRM_CLIENTES_KEY = 'eagles_crm_clientes_v1';
+let CRM_CLIENTES_INDEP_DATA = [];
+let CRM_CLIENTE_INDEP_EDITANDO_ID = null;
+
+function abrirNovoClienteIndepCrm() {
+  CRM_CLIENTE_INDEP_EDITANDO_ID = null;
+  document.getElementById('cliente-indep-titulo').textContent = 'Novo cliente';
+  document.getElementById('cliente-indep-nome').value = '';
+  document.getElementById('cliente-indep-email').value = '';
+  document.getElementById('cliente-indep-telefone').value = '';
+  document.getElementById('cliente-indep-ultima-reuniao').value = '';
+  document.getElementById('cliente-indep-nps').value = '';
+  document.getElementById('btn-excluir-cliente-indep').style.display = 'none';
+  openModal('modal-cliente-indep-crm');
+}
+
+function abrirEditarClienteIndepCrm(id) {
+  const c = CRM_CLIENTES_INDEP_DATA.find((x) => x.id === id);
+  if (!c) return;
+  CRM_CLIENTE_INDEP_EDITANDO_ID = id;
+  document.getElementById('cliente-indep-titulo').textContent = 'Editar cliente';
+  document.getElementById('cliente-indep-nome').value = c.nome || '';
+  document.getElementById('cliente-indep-email').value = c.email || '';
+  document.getElementById('cliente-indep-telefone').value = c.telefone || '';
+  document.getElementById('cliente-indep-ultima-reuniao').value = c.ultimaReuniao || '';
+  document.getElementById('cliente-indep-nps').value = c.nps !== undefined && c.nps !== null ? c.nps : '';
+  document.getElementById('btn-excluir-cliente-indep').style.display = '';
+  openModal('modal-cliente-indep-crm');
+}
+
+function salvarClienteIndepCrm() {
+  const nome = document.getElementById('cliente-indep-nome').value.trim();
+  if (!nome) return;
+  const npsValor = document.getElementById('cliente-indep-nps').value;
+  const dados = {
+    nome,
+    email: document.getElementById('cliente-indep-email').value.trim(),
+    telefone: document.getElementById('cliente-indep-telefone').value.trim(),
+    ultimaReuniao: document.getElementById('cliente-indep-ultima-reuniao').value,
+    nps: npsValor === '' ? null : Math.max(0, Math.min(10, Number(npsValor))),
+    atualizadoEm: new Date().toISOString(),
+  };
+  if (CRM_CLIENTE_INDEP_EDITANDO_ID) {
+    const c = CRM_CLIENTES_INDEP_DATA.find((x) => x.id === CRM_CLIENTE_INDEP_EDITANDO_ID);
+    if (c) Object.assign(c, dados);
+  } else {
+    CRM_CLIENTES_INDEP_DATA.push({ id: genId('cc'), criadoEm: new Date().toISOString(), ...dados });
+  }
+  cloudSet(CRM_CLIENTES_KEY, CRM_CLIENTES_INDEP_DATA);
+  renderCrmClientes();
+  closeModal('modal-cliente-indep-crm');
+}
+
+function excluirClienteIndepCrm() {
+  if (!CRM_CLIENTE_INDEP_EDITANDO_ID) return;
+  confirmarAcao('Excluir este cliente? Essa ação não pode ser desfeita.', () => {
+    CRM_CLIENTES_INDEP_DATA = CRM_CLIENTES_INDEP_DATA.filter((x) => x.id !== CRM_CLIENTE_INDEP_EDITANDO_ID);
+    cloudSet(CRM_CLIENTES_KEY, CRM_CLIENTES_INDEP_DATA);
+    renderCrmClientes();
+    closeModal('modal-cliente-indep-crm');
+  });
+}
+
+// Lista de nomes de cliente pra usar em toda parte do CRM (filtro de
+// avatares, funil, propostas). O CRM SEMPRE tem a própria base de
+// clientes, em qualquer plano — os do ERP só entram por "Importar do ERP".
+function nomesClientesCrm() {
+  return CRM_CLIENTES_INDEP_DATA.map((c) => c.nome);
+}
+
+// Faturamento "do CRM" — sempre calculado a partir dos negócios fechados
+// no funil, então funciona igual não importa o plano (é dado que já
+// pertence só a essa empresa, não depende do ERP de jeito nenhum).
+function faturamentoCrmDoMes(mesKey) {
+  mesKey = mesKey || isoHoje().slice(0, 7);
+  const fechados = CRM_NEGOCIOS_DATA.filter((n) => n.etapa === 'fechado' && (n.atualizadoEm || '').slice(0, 7) === mesKey);
+  return fechados.reduce((a, n) => a + Number(n.valor || 0), 0);
+}
+
+function renderCrmFinanceiroSecao() {
+  const el = document.getElementById('crm-secao-financeiro');
+  if (!el) return;
+  if (!nivelVeFinanceiro()) {
+    el.classList.remove('nivel-bloqueado');
+    el.innerHTML = '<div style="min-height:340px;"></div>';
+    aplicarBloqueioFinanceiro(el);
+    return;
+  }
+
+  // O Financeiro completo (ciclos mensais, receitas, pagamentos,
+  // cobranças) já está liberado pros dois planos — financeiro.html
+  // aceita tanto 'erp' quanto 'crm'. Então aqui dentro do CRM a gente só
+  // mostra um resumo rápido (pra não duplicar a tela inteira) com um
+  // link pra abrir o módulo de verdade, igual pros dois planos.
+  const fat = faturamentoCrmDoMes();
+  el.innerHTML = `
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="panel-title"><h2>Faturamento do CRM</h2><span>calculado a partir dos negócios fechados no funil</span></div>
+      <div class="stat-grid" style="margin-bottom:0;">
+        <div class="stat-card"><div class="stat-label">Faturado este mês</div><div class="stat-value">${formatMoney(fat)}</div></div>
+        <div class="stat-card"><div class="stat-label">Negócios fechados este mês</div><div class="stat-value">${CRM_NEGOCIOS_DATA.filter((n) => n.etapa === 'fechado' && (n.atualizadoEm || '').slice(0, 7) === isoHoje().slice(0, 7)).length}</div></div>
+      </div>
+    </div>
+    <div class="panel" style="text-align:center; padding:40px 24px;">
+      <div class="ic-circulo">${ic('carteira')}</div>
+      <h2 style="margin:0 0 8px;">Financeiro completo</h2>
+      <p style="color:var(--text-soft); max-width:420px; margin:0 auto 18px;">Ciclos mensais, receitas, pagamentos e cobranças — o mesmo módulo de Financeiro, liberado pro seu plano.</p>
+      <a href="financeiro.html" class="btn btn-primary">Abrir Financeiro</a>
+    </div>`;
+}
+
+// ---------- CRM: Detalhe do negócio (modal com 5 abas) ----------
+
+const CRM_NEGOCIO_CONTATOS_KEY = 'eagles_crm_negocio_contatos_v1';
+const CRM_NEGOCIO_ANOTACOES_KEY = 'eagles_crm_negocio_anotacoes_v1';
+let CRM_NEGOCIO_CONTATOS_DATA = [];
+let CRM_NEGOCIO_ANOTACOES_DATA = [];
+let CRM_NEGOCIO_SUBCOLECOES_CARREGADAS = false;
+let DETALHE_NEGOCIO_ID = null;
+let DETALHE_NEGOCIO_ABA = 'info';
+
+const CRM_DETALHE_ABAS = [
+  { key: 'info', label: 'Informações' },
+  { key: 'contatos', label: 'Contatos' },
+  { key: 'anotacoes', label: 'Anotações' },
+  { key: 'acoes', label: 'Ações Rápidas' },
+  { key: 'ia', label: 'Referências IA' },
+];
+
+function abrirDetalheNegocioCrm(id) {
+  // O painel completo de detalhes só existe no crm.html. Em páginas que
+  // também mostram o funil (funil-vendas.html), abre o editor do negócio.
+  if (!document.getElementById('crm-detalhe-abas')) { abrirEditarNegocioCrm(id); return; }
+  DETALHE_NEGOCIO_ID = id;
+  DETALHE_NEGOCIO_ABA = 'info';
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  document.getElementById('detalhe-negocio-nome').textContent = n ? n.nome : 'Negócio';
+  document.getElementById('crm-detalhe-abas').innerHTML = CRM_DETALHE_ABAS.map((a) =>
+    `<button type="button" class="crm-detalhe-aba${a.key === 'info' ? ' ativa' : ''}" onclick="mostrarAbaDetalheNegocio('${a.key}')">${a.label}</button>`).join('');
+  renderCorpoDetalheNegocio();
+  openModal('modal-detalhe-negocio');
+}
+
+function mostrarAbaDetalheNegocio(aba) {
+  DETALHE_NEGOCIO_ABA = aba;
+  document.querySelectorAll('.crm-detalhe-aba').forEach((b, i) => b.classList.toggle('ativa', CRM_DETALHE_ABAS[i].key === aba));
+  renderCorpoDetalheNegocio();
+}
+
+function renderCorpoDetalheNegocio() {
+  const el = document.getElementById('crm-detalhe-corpo');
+  if (!el) return;
+  el.className = 'crm-detalhe-corpo-scroll';
+  if (DETALHE_NEGOCIO_ABA === 'info') el.innerHTML = htmlAbaInformacoesNegocio();
+  if (DETALHE_NEGOCIO_ABA === 'contatos') el.innerHTML = htmlAbaContatosNegocio();
+  if (DETALHE_NEGOCIO_ABA === 'anotacoes') el.innerHTML = htmlAbaAnotacoesNegocio();
+  if (DETALHE_NEGOCIO_ABA === 'acoes') el.innerHTML = htmlAbaAcoesRapidasNegocio();
+  if (DETALHE_NEGOCIO_ABA === 'ia') el.innerHTML = htmlAbaReferenciasIaNegocio();
+}
+
+// ----- Aba: Informações -----
+
+function htmlAbaInformacoesNegocio() {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === DETALHE_NEGOCIO_ID);
+  if (!n) return '<p class="empty-state">Negócio não encontrado.</p>';
+  const opcoesEtapa = CRM_ETAPAS.map((e) => `<option value="${e.key}" ${n.etapa === e.key ? 'selected' : ''}>${e.label}</option>`).join('');
+  return `
+    <div class="form-grid">
+      <div class="field full"><label>Nome do negócio</label><input type="text" id="detalhe-info-nome" value="${escapeHtml(n.nome)}"></div>
+      <div class="field"><label>Cliente / contato</label><input type="text" id="detalhe-info-cliente" value="${escapeHtml(n.cliente || '')}"></div>
+      <div class="field"><label>Valor estimado (R$)</label><input type="number" id="detalhe-info-valor" step="0.01" value="${n.valor || 0}"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="detalhe-info-email" value="${escapeHtml(n.email || '')}"></div>
+      <div class="field"><label>Telefone / WhatsApp</label><input type="text" id="detalhe-info-telefone" value="${escapeHtml(n.telefone || '')}"></div>
+      <div class="field"><label>Estágio</label><select id="detalhe-info-etapa">${opcoesEtapa}</select></div>
+      <div class="field"><label>Responsável</label><input type="text" id="detalhe-info-responsavel" value="${escapeHtml(n.responsavel || '')}"></div>
+      <div class="field full"><label>Observações</label><textarea id="detalhe-info-observacoes" rows="3">${escapeHtml(n.observacoes || '')}</textarea></div>
+    </div>
+    <button type="button" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:6px;" onclick="salvarInformacoesNegocioDetalhe()">Salvar</button>`;
+}
+
+function salvarInformacoesNegocioDetalhe() {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === DETALHE_NEGOCIO_ID);
+  if (!n) return;
+  n.nome = document.getElementById('detalhe-info-nome').value.trim();
+  n.cliente = document.getElementById('detalhe-info-cliente').value.trim();
+  n.valor = Number(document.getElementById('detalhe-info-valor').value || 0);
+  n.email = document.getElementById('detalhe-info-email').value.trim();
+  n.telefone = document.getElementById('detalhe-info-telefone').value.trim();
+  n.etapa = document.getElementById('detalhe-info-etapa').value;
+  n.responsavel = document.getElementById('detalhe-info-responsavel').value.trim();
+  n.observacoes = document.getElementById('detalhe-info-observacoes').value.trim();
+  n.atualizadoEm = new Date().toISOString();
+  cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+  document.getElementById('detalhe-negocio-nome').textContent = n.nome;
+  renderFunilKanban();
+  closeModal('modal-detalhe-negocio');
+}
+
+// ----- Aba: Contatos -----
+
+function htmlAbaContatosNegocio() {
+  const contatos = CRM_NEGOCIO_CONTATOS_DATA.filter((c) => c.negocioId === DETALHE_NEGOCIO_ID);
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div><strong style="font-size:13.5px;">Contatos</strong><p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Pessoas de contato ligadas a este negócio.</p></div>
+      <button type="button" class="btn btn-small btn-primary" onclick="abrirNovoContatoNegocio()">+ Adicionar</button>
+    </div>
+    ${contatos.length ? contatos.map((c) => `
+      <div class="list-row">
+        <div class="icon-dot">${escapeHtml(initials(c.nome))}</div>
+        <div class="list-row-main"><div class="list-row-title">${escapeHtml(c.nome)}</div><div class="list-row-sub">${escapeHtml(c.cargo || '')}${c.email ? ' · ' + escapeHtml(c.email) : ''}${c.telefone ? ' · ' + escapeHtml(c.telefone) : ''}</div></div>
+        <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirContatoNegocio('${c.id}')">✕</button>
+      </div>`).join('') : '<div class="crm-dash-vazio"><p>Nenhum contato cadastrado ainda.</p></div>'}
+    <div class="panel" id="crm-form-novo-contato" style="display:none; margin-top:14px; padding:14px;">
+      <div class="form-grid">
+        <div class="field"><label>Nome</label><input type="text" id="contato-negocio-nome"></div>
+        <div class="field"><label>Cargo</label><input type="text" id="contato-negocio-cargo"></div>
+        <div class="field"><label>E-mail</label><input type="email" id="contato-negocio-email"></div>
+        <div class="field"><label>Telefone</label><input type="text" id="contato-negocio-telefone"></div>
+      </div>
+      <button type="button" class="btn btn-small btn-primary" onclick="salvarContatoNegocio()">Salvar contato</button>
+    </div>`;
+}
+
+function abrirNovoContatoNegocio() {
+  const painel = document.getElementById('crm-form-novo-contato');
+  painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
+}
+
+function salvarContatoNegocio() {
+  const nome = document.getElementById('contato-negocio-nome').value.trim();
+  if (!nome) return;
+  if (FIREBASE_PRONTO && TENANT_ID && !CRM_NEGOCIO_SUBCOLECOES_CARREGADAS) { avisar('Ainda carregando os dados — aguarde um instante e tente de novo.'); return; }
+  CRM_NEGOCIO_CONTATOS_DATA.push({
+    id: genId('nc'), negocioId: DETALHE_NEGOCIO_ID, nome,
+    cargo: document.getElementById('contato-negocio-cargo').value.trim(),
+    email: document.getElementById('contato-negocio-email').value.trim(),
+    telefone: document.getElementById('contato-negocio-telefone').value.trim(),
+  });
+  cloudSet(CRM_NEGOCIO_CONTATOS_KEY, CRM_NEGOCIO_CONTATOS_DATA);
+  renderCorpoDetalheNegocio();
+}
+
+function excluirContatoNegocio(id) {
+  CRM_NEGOCIO_CONTATOS_DATA = CRM_NEGOCIO_CONTATOS_DATA.filter((x) => x.id !== id);
+  cloudSet(CRM_NEGOCIO_CONTATOS_KEY, CRM_NEGOCIO_CONTATOS_DATA);
+  renderCorpoDetalheNegocio();
+}
+
+// ----- Aba: Anotações -----
+
+function htmlAbaAnotacoesNegocio() {
+  const anotacoes = CRM_NEGOCIO_ANOTACOES_DATA.filter((a) => a.negocioId === DETALHE_NEGOCIO_ID).slice().reverse();
+  return `
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <textarea id="nova-anotacao-negocio" rows="2" placeholder="Escreva uma anotação..." style="flex:1;"></textarea>
+      <button type="button" class="btn btn-small btn-primary" onclick="adicionarAnotacaoNegocio()" style="align-self:flex-end;">Salvar</button>
+    </div>
+    ${anotacoes.length ? anotacoes.map((a) => `
+      <div class="panel" style="padding:12px; margin-bottom:10px;">
+        <p style="margin:0; font-size:13px; white-space:pre-wrap;">${escapeHtml(a.texto)}</p>
+        <div style="display:flex; justify-content:space-between; margin-top:8px;">
+          <span style="font-size:11px; color:var(--text-soft);">${formatDatePt(a.criadoEm.slice(0, 10))} às ${a.criadoEm.slice(11, 16)}</span>
+          <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger); padding:2px 6px;" onclick="excluirAnotacaoNegocio('${a.id}')">✕</button>
+        </div>
+      </div>`).join('') : '<div class="crm-dash-vazio"><p>Nenhuma anotação ainda.</p></div>'}`;
+}
+
+function adicionarAnotacaoNegocio() {
+  const texto = document.getElementById('nova-anotacao-negocio').value.trim();
+  if (!texto) return;
+  if (FIREBASE_PRONTO && TENANT_ID && !CRM_NEGOCIO_SUBCOLECOES_CARREGADAS) { avisar('Ainda carregando os dados — aguarde um instante e tente de novo.'); return; }
+  CRM_NEGOCIO_ANOTACOES_DATA.push({ id: genId('na'), negocioId: DETALHE_NEGOCIO_ID, texto, criadoEm: new Date().toISOString() });
+  cloudSet(CRM_NEGOCIO_ANOTACOES_KEY, CRM_NEGOCIO_ANOTACOES_DATA);
+  renderCorpoDetalheNegocio();
+}
+
+function excluirAnotacaoNegocio(id) {
+  CRM_NEGOCIO_ANOTACOES_DATA = CRM_NEGOCIO_ANOTACOES_DATA.filter((x) => x.id !== id);
+  cloudSet(CRM_NEGOCIO_ANOTACOES_KEY, CRM_NEGOCIO_ANOTACOES_DATA);
+  renderCorpoDetalheNegocio();
+}
+
+// ----- Aba: Ações Rápidas -----
+
+function htmlAbaAcoesRapidasNegocio() {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === DETALHE_NEGOCIO_ID);
+  if (!n) return '';
+  const icSvg = (path) => `<svg class="crm-menu-icone" viewBox="0 0 24 24">${path}</svg>`;
+  const temTelefone = !!(n.telefone && n.telefone.trim());
+  const temEmail = !!(n.email && n.email.trim());
+  const ativo = n.etapa !== 'fechado' && n.etapa !== 'perdido';
+
+  return `
+    <div class="crm-acoes-rapidas-grid">
+      <button type="button" class="crm-acao-rapida-card" ${temTelefone ? '' : 'disabled'} onclick="abrirWhatsAppNegocio('${n.id}')">
+        ${icSvg('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>')}
+        <div><strong>WhatsApp</strong><span>${temTelefone ? 'Iniciar conversa no WhatsApp' : 'Cadastre um telefone primeiro'}</span></div>
+      </button>
+      <button type="button" class="crm-acao-rapida-card" ${temEmail ? '' : 'disabled'} onclick="enviarEmailNegocio('${n.id}')">
+        ${icSvg('<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22 6 12 13 2 6"/>')}
+        <div><strong>Enviar E-mail</strong><span>${temEmail ? 'Abrir cliente de e-mail' : 'Cadastre um e-mail primeiro'}</span></div>
+      </button>
+      <button type="button" class="crm-acao-rapida-card" onclick="gerarOrcamentoDoNegocio('${n.id}')">
+        ${icSvg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>')}
+        <div><strong>Gerar Orçamento</strong><span>Abre o assistente já com o cliente preenchido</span></div>
+      </button>
+      <button type="button" class="crm-acao-rapida-card" onclick="gerarContratoDoNegocio('${n.id}')">
+        ${icSvg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>')}
+        <div><strong>Gerar Contrato</strong><span>Precisa de um orçamento aprovado deste negócio</span></div>
+      </button>
+      <button type="button" class="crm-acao-rapida-card" onclick="criarTarefaDoNegocio('${n.id}')">
+        ${icSvg('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>')}
+        <div><strong>Criar Tarefa</strong><span>Adicionar tarefa vinculada a este negócio</span></div>
+      </button>
+      <button type="button" class="crm-acao-rapida-card" disabled>
+        ${icSvg('<rect x="3" y="4" width="18" height="18" rx="2"/><circle cx="8" cy="10" r="2"/>')}
+        <div><strong>Agendar Reunião</strong><span>Precisa do módulo de Agenda, ainda em construção</span></div>
+      </button>
+      <button type="button" class="crm-acao-rapida-card" disabled>
+        ${icSvg('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>')}
+        <div><strong>Criar Pasta no Drive</strong><span>Precisa conectar o Google Drive primeiro</span></div>
+      </button>
+      <button type="button" class="crm-acao-rapida-card" onclick="arquivarNegocioDetalhe('${n.id}')">
+        ${icSvg('<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/>')}
+        <div><strong>Arquivar Lead</strong><span>Mover negócio para arquivados</span></div>
+      </button>
+    </div>
+
+    ${ativo ? `
+    <div class="crm-acoes-rapidas-grid" style="margin-top:14px;">
+      <button type="button" class="crm-acao-rapida-card crm-acao-ganha" onclick="acaoRapidaGanha('${n.id}')">
+        ${icSvg('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>')}
+        <div><strong>Venda Ganha</strong><span>Move para "Fechado" e lança a receita</span></div>
+      </button>
+      <button type="button" class="crm-acao-rapida-card crm-acao-perdida" onclick="acaoRapidaPerdida('${n.id}')">
+        ${icSvg('<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>')}
+        <div><strong>Venda Perdida</strong><span>Registrar motivo e fechar negócio</span></div>
+      </button>
+    </div>` : ''}
+
+    <p style="font-size:12.5px; color:var(--text-soft); margin:16px 0 4px;">Mover para estágio</p>
+    <div class="crm-estagios-grid">
+      ${CRM_ETAPAS.map((e) => `<button type="button" class="crm-estagio-btn${n.etapa === e.key ? ' atual' : ''}" onclick="moverEstagioDetalheNegocio('${n.id}','${e.key}')">${e.label}</button>`).join('')}
+    </div>`;
+}
+
+function abrirWhatsAppNegocio(id) {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n || !n.telefone) return;
+  const numero = n.telefone.replace(/\D/g, '');
+  window.open(`https://wa.me/55${numero}`, '_blank');
+}
+
+function enviarEmailNegocio(id) {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n || !n.email) return;
+  window.open(`mailto:${encodeURIComponent(n.email)}`, '_blank');
+}
+
+function gerarOrcamentoDoNegocio(id) {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n) return;
+  closeModal('modal-detalhe-negocio');
+  abrirWizardOrcamento();
+  ORCAMENTO_WIZARD.clienteNome = n.cliente || n.nome;
+  ORCAMENTO_WIZARD.clienteEmail = n.email || '';
+  renderPassoWizard();
+}
+
+function gerarContratoDoNegocio(id) {
+  const proposta = CRM_PROPOSTAS_DATA.find((p) => p.negocioId === id && p.status === 'aprovada');
+  if (!proposta) { avisar('Esse negócio ainda não tem um orçamento aprovado pra gerar contrato.'); return; }
+  if (proposta.contratoGerado) { baixarContratoPdfPorPropostaId(proposta.id); return; }
+  forcarGerarContratoProposta(proposta.id);
+  setTimeout(() => baixarContratoPdfPorPropostaId(proposta.id), 200);
+}
+
+function criarTarefaDoNegocio(id) {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n) return;
+  const texto = window.prompt('Descreva a tarefa:');
+  if (!texto || !texto.trim()) return;
+  CRM_TAREFAS_DATA.push({ id: genId('tf'), texto: texto.trim(), feita: false, data: isoHoje(), negocioId: id, criadoEm: new Date().toISOString() });
+  cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA);
+  avisar('Tarefa criada — aparece no Dashboard, em Tarefas do dia.');
+}
+
+function arquivarNegocioDetalhe(id) {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n) return;
+  n.arquivado = !n.arquivado;
+  n.atualizadoEm = new Date().toISOString();
+  cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+  closeModal('modal-detalhe-negocio');
+  renderFunilKanban();
+}
+
+function acaoRapidaGanha(id) {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n) return;
+  aplicarMudancaEtapaNegocio(n, 'fechado');
+  closeModal('modal-detalhe-negocio');
+}
+
+function acaoRapidaPerdida(id) {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n) return;
+  aplicarMudancaEtapaNegocio(n, 'perdido');
+  if (n.etapa === 'perdido') closeModal('modal-detalhe-negocio');
+}
+
+function moverEstagioDetalheNegocio(id, etapa) {
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n) return;
+  aplicarMudancaEtapaNegocio(n, etapa);
+  renderCorpoDetalheNegocio();
+}
+
+// ----- Aba: Referências IA (placeholder) -----
+
+function htmlAbaReferenciasIaNegocio() {
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div><strong style="font-size:13.5px;">Central de Referências</strong><p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Tudo que você subir aqui alimentaria a IA de copywriting e design.</p></div>
+    </div>
+    <div class="crm-dash-vazio" style="padding:40px 10px;">
+      <div class="ic-circulo">${ic('brilho')}</div>
+      <p>Nenhuma referência ainda</p>
+      <span>Esse recurso depende de acesso a uma IA de geração (custo por uso) — ainda não conectada.</span>
+    </div>`;
+}
+
+// ----- Menu do card (⋮) -----
+
+function toggleMenuAcoesNegocio(id, botao) {
+  const menu = elementoMenuFlutuante();
+  if (CRM_MENU_ACOES_ABERTO === 'negocio-' + id) {
+    menu.style.display = 'none';
+    CRM_MENU_ACOES_ABERTO = null;
+    return;
+  }
+  if (!botao) { menu.style.display = 'none'; CRM_MENU_ACOES_ABERTO = null; return; }
+  const icSvg = (path) => `<svg class="crm-menu-icone" viewBox="0 0 24 24">${path}</svg>`;
+  menu.innerHTML = `
+    <button type="button" onclick="toggleMenuAcoesNegocio('${id}'); abrirDetalheNegocioCrm('${id}');">${icSvg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>')}Abrir detalhes</button>
+    <button type="button" onclick="toggleMenuAcoesNegocio('${id}'); duplicarNegocioCrm('${id}');">${icSvg('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')}Duplicar</button>
+    <button type="button" style="color:var(--danger);" onclick="toggleMenuAcoesNegocio('${id}'); excluirNegocioCrmPorId('${id}');">${icSvg('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')}Excluir</button>`;
+  menu.style.display = 'block';
+  CRM_MENU_ACOES_ABERTO = 'negocio-' + id;
+  const r = botao.getBoundingClientRect();
+  menu.style.left = Math.max(8, r.right - 220) + 'px';
+  menu.style.top = (r.bottom + 4) + 'px';
+}
+
+function duplicarNegocioCrm(id) {
+  if (!negociosProntosOuAvisar()) return;
+  const n = CRM_NEGOCIOS_DATA.find((x) => x.id === id);
+  if (!n) return;
+  const copia = { ...n, id: genId('cr'), nome: n.nome + ' (cópia)', etapa: 'lead', criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() };
+  CRM_NEGOCIOS_DATA.push(copia);
+  cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+  renderFunilKanban();
+}
+
+function excluirNegocioCrmPorId(id) {
+  confirmarAcao('Excluir este negócio do funil? Essa ação não pode ser desfeita.', () => {
+    CRM_NEGOCIOS_DATA = CRM_NEGOCIOS_DATA.filter((x) => x.id !== id);
+    cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+    renderFunilKanban();
+  });
+}
+
+// ---------- CRM: Briefings ----------
+
+const BRIEFINGS_PUBLICOS_COLECAO = 'briefings_publicos';
+const CRM_TEMPLATES_BRIEFING_KEY = 'eagles_crm_templates_briefing_v1';
+let CRM_BRIEFINGS_DATA = [];
+let CRM_TEMPLATES_BRIEFING_CUSTOM = [];
+let CRM_TEMPLATES_BRIEFING_CARREGADO = false;
+let BRIEFINGS_LISTENER_ATIVO = false;
+
+const TEMPLATES_BRIEFING_PADRAO = {
+  "logo": {
+    "nome": "Logo",
+    "desc": "Criação de logotipo e marca",
+    "icone": "paleta",
+    "perguntas": [
+      {
+        "id": "p1",
+        "texto": "Qual o nome da marca/empresa?",
+        "hint": "Nome completo da marca",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p2",
+        "texto": "Qual o segmento de atuação?",
+        "hint": "Ex: Tecnologia, Moda, Alimentação",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p3",
+        "texto": "Quem é o público-alvo? (idade, gênero, perfil)",
+        "hint": "Descreva seu público ideal",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p4",
+        "texto": "Tem referências visuais? (links ou descrição)",
+        "hint": "Cole links de logos que você gosta ou descreva o estilo",
+        "tipo": "textarea",
+        "obrigatoria": false
+      },
+      {
+        "id": "p5",
+        "texto": "Cores preferidas?",
+        "hint": "Ex: Azul, Verde, cores neutras",
+        "tipo": "texto",
+        "obrigatoria": false
+      },
+      {
+        "id": "p6",
+        "texto": "O que a marca deve transmitir? (sensações, valores)",
+        "hint": "Ex: Confiança, modernidade, sofisticação",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p7",
+        "texto": "Onde o logo será mais utilizado?",
+        "hint": "",
+        "tipo": "radio",
+        "obrigatoria": true,
+        "opcoes": [
+          "Redes sociais",
+          "Site",
+          "Impressos",
+          "Uniformes",
+          "Embalagens",
+          "Veículos"
+        ]
+      },
+      {
+        "id": "p8",
+        "texto": "Existe algum símbolo ou elemento que deve aparecer?",
+        "hint": "Descreva se há algum elemento obrigatório",
+        "tipo": "textarea",
+        "obrigatoria": false
+      }
+    ]
+  },
+  "landing": {
+    "nome": "Landing Page",
+    "desc": "Página de conversão/vendas",
+    "icone": "layout",
+    "perguntas": [
+      {
+        "id": "p1",
+        "texto": "Qual o nome do produto/serviço a ser divulgado?",
+        "hint": "Nome do produto ou serviço",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p2",
+        "texto": "Qual o objetivo principal da página?",
+        "hint": "Ex: Capturar leads, Vender direto, Inscrição em evento",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p3",
+        "texto": "Quem é o público-alvo? (idade, gênero, perfil)",
+        "hint": "Descreva seu público ideal",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p4",
+        "texto": "Quais seções a página precisa ter?",
+        "hint": "Ex: Depoimentos, Preços, Perguntas frequentes",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p5",
+        "texto": "Tem referências de páginas que você gosta? (links)",
+        "hint": "Cole links de páginas de referência",
+        "tipo": "textarea",
+        "obrigatoria": false
+      },
+      {
+        "id": "p6",
+        "texto": "Qual ação o visitante deve realizar?",
+        "hint": "Ex: Preencher formulário, comprar, agendar",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p7",
+        "texto": "Você já tem domínio e hospedagem?",
+        "hint": "",
+        "tipo": "radio",
+        "obrigatoria": true,
+        "opcoes": [
+          "Sim, já tenho",
+          "Não tenho",
+          "Preciso de ajuda pra decidir"
+        ]
+      },
+      {
+        "id": "p8",
+        "texto": "Cores/identidade visual já definida?",
+        "hint": "Descreva se já tem algo definido",
+        "tipo": "textarea",
+        "obrigatoria": false
+      }
+    ]
+  },
+  "social": {
+    "nome": "Social Media / Criativos",
+    "desc": "Posts, stories e anúncios",
+    "icone": "camera",
+    "perguntas": [
+      {
+        "id": "p1",
+        "texto": "Qual o nome da marca/empresa?",
+        "hint": "Nome completo da marca",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p2",
+        "texto": "Quais redes sociais serão utilizadas?",
+        "hint": "",
+        "tipo": "radio",
+        "obrigatoria": true,
+        "opcoes": [
+          "Instagram",
+          "Facebook",
+          "TikTok",
+          "LinkedIn",
+          "Todas as redes"
+        ]
+      },
+      {
+        "id": "p3",
+        "texto": "Quantos posts por semana/mês você precisa?",
+        "hint": "Ex: 3 posts por semana",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p4",
+        "texto": "Qual o tom de voz da marca?",
+        "hint": "Ex: Descontraído, formal, divertido",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p5",
+        "texto": "Tem referências de perfis/criativos que você gosta?",
+        "hint": "Cole links ou descreva",
+        "tipo": "textarea",
+        "obrigatoria": false
+      },
+      {
+        "id": "p6",
+        "texto": "Quais temas/pautas devem ser abordados?",
+        "hint": "Descreva os principais assuntos",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p7",
+        "texto": "Já tem identidade visual definida (cores, fontes, logo)?",
+        "hint": "",
+        "tipo": "radio",
+        "obrigatoria": true,
+        "opcoes": [
+          "Sim, tenho tudo",
+          "Tenho parcialmente",
+          "Não tenho nada ainda"
+        ]
+      },
+      {
+        "id": "p8",
+        "texto": "Alguma data ou campanha específica?",
+        "hint": "Ex: Black Friday, lançamento, datas comemorativas",
+        "tipo": "textarea",
+        "obrigatoria": false
+      }
+    ]
+  },
+  "branding": {
+    "nome": "Branding / Identidade Visual",
+    "desc": "Identidade visual completa",
+    "icone": "sparkle",
+    "perguntas": [
+      {
+        "id": "p1",
+        "texto": "Qual o nome da marca/empresa?",
+        "hint": "Nome completo da marca",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p2",
+        "texto": "Qual o segmento de atuação?",
+        "hint": "Ex: Tecnologia, Moda, Alimentação",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p3",
+        "texto": "Quem é o público-alvo?",
+        "hint": "Descreva seu público ideal",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p4",
+        "texto": "Quais valores a marca representa?",
+        "hint": "Ex: Inovação, tradição, sustentabilidade",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p5",
+        "texto": "Quem são os concorrentes diretos?",
+        "hint": "Cite marcas concorrentes, se souber",
+        "tipo": "textarea",
+        "obrigatoria": false
+      },
+      {
+        "id": "p6",
+        "texto": "Tem referências de marcas que você admira?",
+        "hint": "Cole links ou descreva",
+        "tipo": "textarea",
+        "obrigatoria": false
+      },
+      {
+        "id": "p7",
+        "texto": "Quais aplicações você precisa?",
+        "hint": "",
+        "tipo": "radio",
+        "obrigatoria": true,
+        "opcoes": [
+          "Só o logo",
+          "Logo + Papelaria",
+          "Manual de marca completo"
+        ]
+      },
+      {
+        "id": "p8",
+        "texto": "Cores e estilo preferido?",
+        "hint": "Ex: Minimalista, cores vibrantes",
+        "tipo": "texto",
+        "obrigatoria": false
+      }
+    ]
+  },
+  "video": {
+    "nome": "Vídeo / Motion",
+    "desc": "Vídeos e animações",
+    "icone": "video",
+    "perguntas": [
+      {
+        "id": "p1",
+        "texto": "Qual o nome do projeto/marca?",
+        "hint": "Nome completo",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p2",
+        "texto": "Qual o objetivo do vídeo?",
+        "hint": "Ex: Institucional, Anúncio, Explicativo",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p3",
+        "texto": "Qual a duração desejada?",
+        "hint": "Ex: 30 segundos, 1 minuto",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p4",
+        "texto": "Tem roteiro ou ideia já pronta?",
+        "hint": "Descreva a ideia ou cole o roteiro",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p5",
+        "texto": "Tem referências de vídeos que você gosta? (links)",
+        "hint": "Cole links de vídeos de referência",
+        "tipo": "textarea",
+        "obrigatoria": false
+      },
+      {
+        "id": "p6",
+        "texto": "Onde o vídeo será utilizado?",
+        "hint": "",
+        "tipo": "radio",
+        "obrigatoria": true,
+        "opcoes": [
+          "Redes sociais",
+          "Site",
+          "TV / YouTube Ads",
+          "Apresentação"
+        ]
+      },
+      {
+        "id": "p7",
+        "texto": "Precisa de locução/narração?",
+        "hint": "",
+        "tipo": "radio",
+        "obrigatoria": true,
+        "opcoes": [
+          "Sim, voz masculina",
+          "Sim, voz feminina",
+          "Não precisa"
+        ]
+      },
+      {
+        "id": "p8",
+        "texto": "Estilo visual preferido?",
+        "hint": "Ex: Animado 2D, Motion gráfico, Live action",
+        "tipo": "textarea",
+        "obrigatoria": false
+      }
+    ]
+  },
+  "outro": {
+    "nome": "Outro",
+    "desc": "Outro tipo de projeto",
+    "icone": "doc",
+    "perguntas": [
+      {
+        "id": "p1",
+        "texto": "Qual o nome do projeto?",
+        "hint": "Nome do projeto",
+        "tipo": "texto",
+        "obrigatoria": true
+      },
+      {
+        "id": "p2",
+        "texto": "Descreva brevemente o que você precisa",
+        "hint": "Conte com suas palavras o que precisa",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p3",
+        "texto": "Qual o objetivo principal?",
+        "hint": "O que esse projeto deve resolver",
+        "tipo": "textarea",
+        "obrigatoria": true
+      },
+      {
+        "id": "p4",
+        "texto": "Quem é o público-alvo?",
+        "hint": "Descreva seu público, se aplicável",
+        "tipo": "textarea",
+        "obrigatoria": false
+      },
+      {
+        "id": "p5",
+        "texto": "Tem referências ou exemplos?",
+        "hint": "Cole links ou descreva",
+        "tipo": "textarea",
+        "obrigatoria": false
+      },
+      {
+        "id": "p6",
+        "texto": "Qual o prazo desejado?",
+        "hint": "Ex: 15 dias, 1 mês",
+        "tipo": "texto",
+        "obrigatoria": false
+      },
+      {
+        "id": "p7",
+        "texto": "Tem orçamento definido?",
+        "hint": "Ex: R$ 1.000 a R$ 2.000",
+        "tipo": "texto",
+        "obrigatoria": false
+      },
+      {
+        "id": "p8",
+        "texto": "Alguma observação adicional?",
+        "hint": "O que mais achar importante",
+        "tipo": "textarea",
+        "obrigatoria": false
+      }
+    ]
+  }
+};
+
+function iconeTipoBriefing(nome) {
+  const icones = {
+    paleta: '<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="19" r="2.5"/><path d="M12 2a10 10 0 1 0 8 16c-1 0-2-1-2-2 0-1.5 2-2 3-3a10 10 0 0 0-9-11z"/>',
+    layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>',
+    camera: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7l2-3h4l2 3"/><circle cx="12" cy="14" r="3.5"/>',
+    sparkle: '<path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/>',
+    video: '<rect x="2" y="5" width="14" height="14" rx="2"/><polygon points="16 9 22 5 22 19 16 15"/>',
+    doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+  };
+  return icones[nome] || icones.doc;
+}
+
+// Junta os tipos padrao (que podem ter sido editados) com os
+// personalizados criados em "Perguntas Extra" — tudo num lugar so.
+function todosOsTemplatesBriefing() {
+  const padrao = Object.entries(TEMPLATES_BRIEFING_PADRAO).map(([id, t]) => {
+    const editado = CRM_TEMPLATES_BRIEFING_CUSTOM.find((c) => c.id === id);
+    return editado || { id, ...t, padrao: true };
+  });
+  const customizados = CRM_TEMPLATES_BRIEFING_CUSTOM.filter((c) => !TEMPLATES_BRIEFING_PADRAO[c.id]);
+  return [...padrao, ...customizados];
+}
+
+function escutarBriefingsCrm() {
+  if (!FIREBASE_PRONTO || !TENANT_ID || BRIEFINGS_LISTENER_ATIVO) return;
+  BRIEFINGS_LISTENER_ATIVO = true;
+  firestoreDb.collection(BRIEFINGS_PUBLICOS_COLECAO).where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
+    CRM_BRIEFINGS_DATA = [];
+    snap.forEach((doc) => CRM_BRIEFINGS_DATA.push({ id: doc.id, ...doc.data() }));
+    renderCrmBriefingsLista();
+  }, (err) => console.error('Erro ao carregar briefings:', err));
+}
+
+// Chamada 1x ao entrar na seção — monta as opções do filtro de tipo (que
+// podem mudar se a pessoa criar um template novo) e desenha a lista.
+function renderCrmBriefings() {
+  const selectTipo = document.getElementById('crm-briefings-filtro-tipo');
+  if (selectTipo) {
+    const valorAtual = selectTipo.value;
+    selectTipo.innerHTML = '<option value="todos">Todos os tipos</option>' +
+      todosOsTemplatesBriefing().map((t) => `<option value="${t.id}">${escapeHtml(t.nome)}</option>`).join('');
+    selectTipo.value = valorAtual || 'todos';
+  }
+  renderCrmBriefingsLista();
+}
+
+// So essa parte se refaz a cada letra digitada na busca / troca de
+// filtro — os campos em si (input, selects) ficam de fora, fixos no
+// HTML, pra não perder o foco a cada tecla.
+function renderCrmBriefingsLista() {
+  const statsEl = document.getElementById('crm-briefings-stats');
+  const listaEl = document.getElementById('crm-briefings-lista-wrap');
+  if (!listaEl) return;
+
+  const busca = (document.getElementById('crm-briefings-busca')?.value || '').toLowerCase().trim();
+  const filtroStatus = document.getElementById('crm-briefings-filtro-status')?.value || 'todos';
+  const filtroTipo = document.getElementById('crm-briefings-filtro-tipo')?.value || 'todos';
+
+  if (statsEl) {
+    const total = CRM_BRIEFINGS_DATA.length;
+    const pendentes = CRM_BRIEFINGS_DATA.filter((b) => b.status === 'pendente').length;
+    const respondidos = CRM_BRIEFINGS_DATA.filter((b) => b.status === 'respondido').length;
+    statsEl.innerHTML = `
+      <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value">${total}</div></div>
+      <div class="stat-card"><div class="stat-label">Pendentes</div><div class="stat-value" style="color:var(--warning);">${pendentes}</div></div>
+      <div class="stat-card"><div class="stat-label">Respondidos</div><div class="stat-value" style="color:var(--success);">${respondidos}</div></div>
+      <div class="stat-card"><div class="stat-label">Tipos</div><div class="stat-value">${todosOsTemplatesBriefing().length}</div></div>`;
+  }
+
+  let lista = CRM_BRIEFINGS_DATA;
+  if (filtroStatus !== 'todos') lista = lista.filter((b) => b.status === filtroStatus);
+  if (filtroTipo !== 'todos') lista = lista.filter((b) => b.tipoId === filtroTipo);
+  if (busca) lista = lista.filter((b) => (b.cliente || '').toLowerCase().includes(busca));
+
+  listaEl.innerHTML = lista.length
+    ? lista.slice().sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || '')).map((b) => htmlLinhaBriefing(b)).join('')
+    : `<div style="text-align:center; padding:50px 20px;">
+        <svg viewBox="0 0 24 24" style="width:40px; height:40px; stroke:var(--text-soft); fill:none; stroke-width:1.5; margin-bottom:12px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <h3 style="margin:0 0 6px;">Nenhum briefing encontrado</h3>
+        <p style="color:var(--text-soft); margin:0 0 18px;">Crie seu primeiro briefing para enviar aos clientes</p>
+        <button type="button" class="btn btn-primary" onclick="abrirNovoBriefing()">+ Criar Briefing</button>
+      </div>`;
+}
+
+function htmlLinhaBriefing(b) {
+  const tipo = todosOsTemplatesBriefing().find((t) => t.id === b.tipoId);
+  const pendente = b.status === 'pendente';
+  return `
+    <div class="list-row" style="cursor:${pendente ? 'default' : 'pointer'};" ${pendente ? '' : `onclick="abrirRespostasBriefing('${b.id}')"`}>
+      <div class="icon-dot">${escapeHtml(initials(b.cliente))}</div>
+      <div class="list-row-main">
+        <div class="list-row-title">${escapeHtml(b.cliente)}</div>
+        <div class="list-row-sub">${b.clienteEmail ? escapeHtml(b.clienteEmail) + ' · ' : ''}Criado: ${formatDatePt((b.criadoEm || '').slice(0, 10))}</div>
+      </div>
+      <span class="badge badge-neutral" style="margin-right:8px;">${escapeHtml(tipo ? tipo.nome : b.tipoId)}</span>
+      <span class="badge ${pendente ? 'badge-warning' : 'badge-success'}" style="margin-right:8px;">${pendente ? ic('relogio', 'ic-herda') + ' Pendente' : ic('aprovado', 'ic-herda') + ' Respondido'}</span>
+      <button type="button" class="btn btn-small btn-ghost" onclick="event.stopPropagation(); toggleMenuAcoesBriefing('${b.id}', this)">⋮</button>
+    </div>`;
+}
+
+function toggleMenuAcoesBriefing(id, botao) {
+  const menu = elementoMenuFlutuante();
+  if (CRM_MENU_ACOES_ABERTO === 'brf-' + id) { menu.style.display = 'none'; CRM_MENU_ACOES_ABERTO = null; return; }
+  if (!botao) { menu.style.display = 'none'; CRM_MENU_ACOES_ABERTO = null; return; }
+  const b = CRM_BRIEFINGS_DATA.find((x) => x.id === id);
+  if (!b) return;
+  const link = linkPublicoBriefing(id);
+  let itens = '';
+  itens += `<button type="button" onclick="navigator.clipboard.writeText('${link.replace(/'/g, "\\'")}'); toggleMenuAcoesBriefing('${id}');">${ic('link')} Copiar link</button>`;
+  itens += `<button type="button" onclick="window.open('${link}', '_blank')">${ic('abrir')} Abrir link</button>`;
+  if (b.status === 'respondido') itens += `<button type="button" onclick="toggleMenuAcoesBriefing('${id}'); abrirRespostasBriefing('${id}');">${ic('tarefas')} Ver respostas</button>`;
+  itens += `<button type="button" style="color:var(--danger);" onclick="toggleMenuAcoesBriefing('${id}'); excluirBriefingCrm('${id}');">${ic('lixeira', 'ic-perigo')} Excluir</button>`;
+  menu.innerHTML = itens;
+  menu.style.display = 'block';
+  CRM_MENU_ACOES_ABERTO = 'brf-' + id;
+  const r = botao.getBoundingClientRect();
+  menu.style.left = Math.max(8, r.right - 200) + 'px';
+  menu.style.top = (r.bottom + 4) + 'px';
+}
+
+function linkPublicoBriefing(id) {
+  return window.location.origin + window.location.pathname.replace('crm.html', '') + `briefing.html?id=${id}`;
+}
+
+function excluirBriefingCrm(id) {
+  if (!exigirPodeOperar('excluir briefings')) return;
+  confirmarAcao('Excluir este briefing? Essa ação não pode ser desfeita.', () => {
+    CRM_BRIEFINGS_DATA = CRM_BRIEFINGS_DATA.filter((x) => x.id !== id);
+    renderCrmBriefingsLista();
+    firestoreDb.collection(BRIEFINGS_PUBLICOS_COLECAO).doc(id).delete();
+  });
+}
+
+let BRIEFING_TIPO_SELECIONADO = null;
+
+function abrirNovoBriefing() {
+  if (!exigirPodeOperar('criar briefings')) return;
+  BRIEFING_TIPO_SELECIONADO = null;
+  const el = document.getElementById('crm-tipos-briefing-grid');
+  el.innerHTML = todosOsTemplatesBriefing().map((t) => `
+    <button type="button" class="crm-tipo-briefing-card" data-tipo="${t.id}" onclick="selecionarTipoBriefing('${t.id}')">
+      <div class="crm-tipo-briefing-icone"><svg viewBox="0 0 24 24">${iconeTipoBriefing(t.icone)}</svg></div>
+      <div><strong>${escapeHtml(t.nome)}</strong><span>${escapeHtml(t.desc || '')}</span></div>
+    </button>`).join('');
+  document.getElementById('btn-continuar-tipo-briefing').disabled = true;
+  openModal('modal-tipo-briefing');
+}
+
+function selecionarTipoBriefing(id) {
+  BRIEFING_TIPO_SELECIONADO = id;
+  document.querySelectorAll('.crm-tipo-briefing-card').forEach((c) => c.classList.toggle('selecionado', c.dataset.tipo === id));
+  document.getElementById('btn-continuar-tipo-briefing').disabled = false;
+}
+
+function avancarParaDadosBriefing() {
+  if (!BRIEFING_TIPO_SELECIONADO) return;
+  closeModal('modal-tipo-briefing');
+
+  const selectCliente = document.getElementById('briefing-cliente-cadastrado');
+  selectCliente.innerHTML = '<option value="">Buscar cliente por nome ou e-mail...</option>' +
+    nomesClientesCrm().map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+
+  const selectOrcamento = document.getElementById('briefing-orcamento-vinculado');
+  selectOrcamento.innerHTML = '<option value="">Nenhum orçamento</option>' +
+    CRM_PROPOSTAS_DATA.map((p) => `<option value="${p.id}">${escapeHtml(p.numero || '')} — ${escapeHtml(p.titulo)} (${escapeHtml(p.cliente || '—')})</option>`).join('');
+
+  document.getElementById('briefing-cliente-nome').value = '';
+  document.getElementById('briefing-cliente-email').value = '';
+  openModal('modal-dados-briefing');
+}
+
+// Busca o e-mail/telefone do cliente escolhido, seja ele da base
+// compartilhada com o ERP ou da base independente do CRM, e preenche
+// tudo de uma vez.
+function preencherClienteCadastradoBriefing(nome) {
+  if (!nome) return;
+  document.getElementById('briefing-cliente-nome').value = nome;
+  const contato = buscarContatoClientePorNome(nome);
+  if (contato) document.getElementById('briefing-cliente-email').value = contato.email || '';
+}
+
+function buscarContatoClientePorNome(nome) {
+  const c = CRM_CLIENTES_INDEP_DATA.find((x) => x.nome === nome);
+  return c ? { email: c.email || '', telefone: c.telefone || '' } : null;
+}
+
+function voltarParaTipoBriefing() {
+  closeModal('modal-dados-briefing');
+  openModal('modal-tipo-briefing');
+}
+
+function criarBriefingConfirmado() {
+  if (!exigirPodeOperar('criar briefings')) return;
+  const cliente = document.getElementById('briefing-cliente-nome').value.trim();
+  if (!cliente) { avisar('Preencha o nome do cliente.'); return; }
+  const email = document.getElementById('briefing-cliente-email').value.trim();
+  if (!email) { avisar('Preencha o e-mail do cliente.'); return; }
+  const propostaVinculadaId = document.getElementById('briefing-orcamento-vinculado').value || null;
+  const template = todosOsTemplatesBriefing().find((t) => t.id === BRIEFING_TIPO_SELECIONADO);
+  if (!template) return;
+
+  const doc = {
+    tenantId: TENANT_ID,
+    tipoId: template.id,
+    tipoNome: template.nome,
+    cliente, clienteEmail: email,
+    propostaVinculadaId,
+    perguntas: template.perguntas.map((p) => ({ ...p })),
+    respostas: {},
+    status: 'pendente',
+    empresaNome: PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa || 'Minha Empresa',
+    empresaLogo: PERFIL_DATA.logoUrl || '',
+    visual: obterVisualBriefingAtual(),
+    criadoEm: new Date().toISOString(),
+  };
+
+  firestoreDb.collection(BRIEFINGS_PUBLICOS_COLECAO).add(doc).then((ref) => {
+    closeModal('modal-dados-briefing');
+    document.getElementById('briefing-link-gerado').value = linkPublicoBriefing(ref.id);
+    openModal('modal-briefing-criado');
+  }).catch((err) => {
+    console.error('Erro ao criar briefing:', err);
+    avisar('Não foi possível criar o briefing agora. Tente de novo.');
+  });
+}
+
+function copiarLinkBriefing() {
+  const input = document.getElementById('briefing-link-gerado');
+  input.select();
+  navigator.clipboard.writeText(input.value);
+}
+
+function abrirMeusTemplatesBriefing() {
+  const el = document.getElementById('crm-lista-templates-briefing');
+  el.innerHTML = todosOsTemplatesBriefing().map((t) => `
+    <div class="panel" style="padding:12px; margin-bottom:8px; display:flex; align-items:center; gap:12px;">
+      <div class="crm-tipo-briefing-icone"><svg viewBox="0 0 24 24">${iconeTipoBriefing(t.icone)}</svg></div>
+      <div style="flex:1; min-width:0;">
+        <strong style="font-size:13px;">${escapeHtml(t.nome)}</strong>${t.padrao ? ' <span class="badge badge-neutral" style="font-size:10px;">Padrão</span>' : ''}
+        <div style="font-size:11.5px; color:var(--text-soft);">${t.perguntas.length} perguntas</div>
+      </div>
+      <button type="button" class="btn btn-small" onclick="editarTemplateBriefing('${t.id}')">Editar perguntas</button>
+      ${!t.padrao ? `<button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirTemplateBriefing('${t.id}')">Excluir</button>` : ''}
+    </div>`).join('');
+  openModal('modal-meus-templates');
+}
+
+let TEMPLATE_BRIEFING_EDITANDO_ID = null;
+let TEMPLATE_BRIEFING_PERGUNTAS_FORM = [];
+
+function abrirNovoTemplatePersonalizado() {
+  TEMPLATE_BRIEFING_EDITANDO_ID = null;
+  document.getElementById('titulo-editor-template-briefing').textContent = 'Nova categoria personalizada';
+  document.getElementById('template-briefing-nome').value = '';
+  document.getElementById('template-briefing-desc').value = '';
+  TEMPLATE_BRIEFING_PERGUNTAS_FORM = [{ id: 'p1', texto: '', hint: '', tipo: 'texto', obrigatoria: true }];
+  renderPerguntasTemplateForm();
+  openModal('modal-editor-template-briefing');
+}
+
+function editarTemplateBriefing(id) {
+  closeModal('modal-meus-templates');
+  const t = todosOsTemplatesBriefing().find((x) => x.id === id);
+  if (!t) return;
+  TEMPLATE_BRIEFING_EDITANDO_ID = id;
+  document.getElementById('titulo-editor-template-briefing').textContent = 'Editar: ' + t.nome;
+  document.getElementById('template-briefing-nome').value = t.nome;
+  document.getElementById('template-briefing-desc').value = t.desc || '';
+  TEMPLATE_BRIEFING_PERGUNTAS_FORM = t.perguntas.map((p) => ({ ...p }));
+  renderPerguntasTemplateForm();
+  openModal('modal-editor-template-briefing');
+}
+
+function renderPerguntasTemplateForm() {
+  const el = document.getElementById('crm-perguntas-template-lista');
+  el.innerHTML = TEMPLATE_BRIEFING_PERGUNTAS_FORM.map((p, i) => `
+    <div class="crm-pergunta-template-item">
+      <div style="display:flex; gap:8px; margin-bottom:6px;">
+        <input type="text" value="${escapeHtml(p.texto)}" placeholder="Pergunta" style="flex:1;" oninput="TEMPLATE_BRIEFING_PERGUNTAS_FORM[${i}].texto=this.value">
+        <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerPerguntaTemplate(${i})">✕</button>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="text" value="${escapeHtml(p.hint || '')}" placeholder="Texto de ajuda (opcional)" style="flex:1;" oninput="TEMPLATE_BRIEFING_PERGUNTAS_FORM[${i}].hint=this.value">
+        <select style="width:120px;" onchange="TEMPLATE_BRIEFING_PERGUNTAS_FORM[${i}].tipo=this.value; renderPerguntasTemplateForm();">
+          <option value="texto" ${p.tipo === 'texto' ? 'selected' : ''}>Texto curto</option>
+          <option value="textarea" ${p.tipo === 'textarea' ? 'selected' : ''}>Texto longo</option>
+          <option value="radio" ${p.tipo === 'radio' ? 'selected' : ''}>Múltipla escolha</option>
+        </select>
+        <label style="display:flex; align-items:center; gap:5px; font-size:11.5px; white-space:nowrap;"><input type="checkbox" style="width:auto;" ${p.obrigatoria ? 'checked' : ''} onchange="TEMPLATE_BRIEFING_PERGUNTAS_FORM[${i}].obrigatoria=this.checked"> Obrigatória</label>
+      </div>
+      ${p.tipo === 'radio' ? `
+      <div class="crm-pergunta-template-opcoes">
+        ${(p.opcoes || ['']).map((op, j) => `<div style="display:flex; gap:6px; margin-bottom:5px;"><input type="text" value="${escapeHtml(op)}" placeholder="Opção" style="flex:1;" oninput="TEMPLATE_BRIEFING_PERGUNTAS_FORM[${i}].opcoes[${j}]=this.value"><button type="button" class="btn btn-small btn-ghost" onclick="TEMPLATE_BRIEFING_PERGUNTAS_FORM[${i}].opcoes.splice(${j},1); renderPerguntasTemplateForm();">✕</button></div>`).join('')}
+        <button type="button" class="btn btn-small" onclick="if(!TEMPLATE_BRIEFING_PERGUNTAS_FORM[${i}].opcoes) TEMPLATE_BRIEFING_PERGUNTAS_FORM[${i}].opcoes=[]; TEMPLATE_BRIEFING_PERGUNTAS_FORM[${i}].opcoes.push(''); renderPerguntasTemplateForm();">+ Opção</button>
+      </div>` : ''}
+    </div>`).join('');
+}
+
+function adicionarPerguntaTemplate() {
+  TEMPLATE_BRIEFING_PERGUNTAS_FORM.push({ id: 'p' + (TEMPLATE_BRIEFING_PERGUNTAS_FORM.length + 1), texto: '', hint: '', tipo: 'texto', obrigatoria: true });
+  renderPerguntasTemplateForm();
+}
+
+function removerPerguntaTemplate(i) {
+  if (TEMPLATE_BRIEFING_PERGUNTAS_FORM.length <= 1) return;
+  TEMPLATE_BRIEFING_PERGUNTAS_FORM.splice(i, 1);
+  renderPerguntasTemplateForm();
+}
+
+function salvarTemplateBriefing() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CRM_TEMPLATES_BRIEFING_CARREGADO) { avisar('Ainda carregando os templates — aguarde um instante e tente de novo.'); return; }
+  const nome = document.getElementById('template-briefing-nome').value.trim();
+  if (!nome) { avisar('Dê um nome pra categoria.'); return; }
+  const desc = document.getElementById('template-briefing-desc').value.trim();
+  const perguntasValidas = TEMPLATE_BRIEFING_PERGUNTAS_FORM.filter((p) => p.texto.trim());
+  if (!perguntasValidas.length) { avisar('Adicione pelo menos uma pergunta.'); return; }
+
+  const id = TEMPLATE_BRIEFING_EDITANDO_ID || ('custom-' + genId(''));
+  const ehPadrao = !!TEMPLATES_BRIEFING_PADRAO[id];
+  const registro = { id, nome, desc, icone: 'doc', perguntas: perguntasValidas, padrao: ehPadrao };
+
+  const idx = CRM_TEMPLATES_BRIEFING_CUSTOM.findIndex((t) => t.id === id);
+  if (idx >= 0) CRM_TEMPLATES_BRIEFING_CUSTOM[idx] = registro;
+  else CRM_TEMPLATES_BRIEFING_CUSTOM.push(registro);
+
+  cloudSet(CRM_TEMPLATES_BRIEFING_KEY, CRM_TEMPLATES_BRIEFING_CUSTOM);
+  closeModal('modal-editor-template-briefing');
+  if (document.getElementById('modal-meus-templates').classList.contains('active')) abrirMeusTemplatesBriefing();
+}
+
+function excluirTemplateBriefing(id) {
+  confirmarAcao('Excluir esse template personalizado?', () => {
+    CRM_TEMPLATES_BRIEFING_CUSTOM = CRM_TEMPLATES_BRIEFING_CUSTOM.filter((t) => t.id !== id);
+    cloudSet(CRM_TEMPLATES_BRIEFING_KEY, CRM_TEMPLATES_BRIEFING_CUSTOM);
+    abrirMeusTemplatesBriefing();
+  });
+}
+
+function abrirRespostasBriefing(id) {
+  const b = CRM_BRIEFINGS_DATA.find((x) => x.id === id);
+  if (!b) return;
+  document.getElementById('titulo-respostas-briefing').textContent = 'Respostas — ' + b.cliente;
+  const html = (b.perguntas || []).map((p) => `
+    <div class="panel" style="padding:12px; margin-bottom:8px;">
+      <strong style="font-size:12.5px; display:block; margin-bottom:6px;">${escapeHtml(p.texto)}</strong>
+      <p style="margin:0; font-size:13px; color:var(--text-soft); white-space:pre-wrap;">${escapeHtml((b.respostas && b.respostas[p.id]) || '—')}</p>
+    </div>`).join('');
+  document.getElementById('crm-respostas-briefing-corpo').innerHTML = html || '<p class="empty-state">Sem respostas ainda.</p>';
+  openModal('modal-respostas-briefing');
+}
+
+
+// ---------- Página de Configurações (8 abas) ----------
+
+let CFG_ABA_ATUAL = 'perfil';
+
+function initConfiguracoesPage() {
+  cloudWatch(PERFIL_KEY, perfilSeed(), (data) => {
+    PERFIL_DATA = Object.assign(perfilSeed(), data);
+    renderProfileBox();
+    if (CFG_ABA_ATUAL === 'perfil') renderAbaPerfilConfig();
+  });
+  if (itemVisivelNoPlano({ plano: 'crm' })) {
+    cloudWatch(CRM_APROVACAO_KEY, aprovacaoConfigPadrao(), (data) => { CRM_APROVACAO_DATA = Object.assign(aprovacaoConfigPadrao(), data || {}); CRM_APROVACAO_CARREGADO = true; });
+    cloudWatch(CFG_PORTAL_KEY, portalConfigPadrao(), (data) => { CFG_PORTAL_DATA = data; CFG_PORTAL_CARREGADO = true; });
+    cloudWatch(CFG_BRIEFING_VISUAL_KEY, briefingVisualPadrao(), (data) => { CFG_BRIEFING_VISUAL_DATA = data; CFG_BRIEFING_VISUAL_CARREGADO = true; });
+    cloudWatch(CFG_CATEGORIAS_CONTEUDO_KEY, [], (data) => {
+      CFG_CATEGORIAS_DATA = Array.isArray(data) ? data : [];
+      CFG_CATEGORIAS_CARREGADO = true;
+      if (document.getElementById('cfg-categorias-corpo') && !CFG_CATEGORIA_EDITANDO) renderCfgCategorias();
+    });
+  }
+  const abaInicial = (window.location.hash || '').replace('#', '');
+  mostrarAbaConfig(['perfil', 'aparencia', 'atualizacoes', 'notificacoes', 'automacoes', 'integracoes', 'email', 'conteudos'].includes(abaInicial) ? abaInicial : 'perfil');
+}
+
+function mostrarAbaConfig(aba) {
+  CFG_ABA_ATUAL = aba;
+  const atalho = document.getElementById('topbar-config-btn');
+  if (atalho) atalho.classList.toggle('ativo', aba === 'aparencia');
+  document.querySelectorAll('.cfg-aba').forEach((b) => b.classList.toggle('ativa', b.dataset.aba === aba));
+  const funcoes = {
+    perfil: renderAbaPerfilConfig,
+    aparencia: renderAbaAparenciaConfig,
+    atualizacoes: renderAbaAtualizacoesConfig,
+    notificacoes: renderAbaNotificacoesConfig,
+    automacoes: renderAbaAutomacoesConfig,
+    integracoes: renderAbaIntegracoesConfig,
+    email: renderAbaEmailConfig,
+    conteudos: renderAbaConteudosConfig,
+  };
+  if (funcoes[aba]) funcoes[aba]();
+}
+
+
+// ----- Aba: Perfil -----
+
+function renderAbaPerfilConfig() {
+  const el = document.getElementById('cfg-conteudo-aba');
+  const d = PERFIL_DATA || perfilSeed();
+  el.innerHTML = `
+    <div class="cfg-painel">
+      <div class="cfg-painel-titulo">
+        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <div><h2>Perfil</h2><p>Informações pessoais e profissionais</p></div>
+      </div>
+
+      <div class="field full" style="margin-bottom:18px;">
+        <label>Foto de Perfil / Logo</label>
+        <div style="display:flex; align-items:center; gap:14px; margin-top:6px;">
+          <div id="cfg-perfil-avatar-preview" style="width:64px; height:64px; border-radius:50%; background:var(--bg-soft); display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;"></div>
+          <div>
+            <button type="button" class="btn btn-small" onclick="document.getElementById('cfg-input-logo').click()">Fazer Upload</button>
+            <input type="file" id="cfg-input-logo" accept="image/*" style="display:none;" onchange="selecionarLogoPerfilConfig(this)">
+            <p style="font-size:11px; color:var(--text-soft); margin:6px 0 0;">PNG, JPG até 5MB.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="field"><label>Idioma</label><select id="cfg-idioma"><option value="pt-BR">Português (BR)</option><option value="en">English</option><option value="es">Español</option></select></div>
+        <div class="field"><label>E-mail da conta</label><input type="email" id="cfg-email-conta" disabled></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Nome Completo *</label><input type="text" id="cfg-nome-completo"></div>
+        <div class="field"><label>Nome da Empresa</label><input type="text" id="cfg-nome-empresa"></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Telefone</label><input type="text" id="cfg-telefone"></div>
+        <div class="field"><label>CPF/CNPJ</label><input type="text" id="cfg-cpf-cnpj" placeholder="000.000.000-00"></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Endereço</label><input type="text" id="cfg-endereco"></div>
+        <div class="field"><label>Número</label><input type="text" id="cfg-numero"></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Bairro</label><input type="text" id="cfg-bairro"></div>
+        <div class="field"><label>Cidade</label><input type="text" id="cfg-cidade"></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Estado</label><input type="text" id="cfg-estado" maxlength="2"></div>
+        <div class="field"><label>CEP</label><input type="text" id="cfg-cep"></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>País</label><input type="text" id="cfg-pais" value="BR"></div>
+        <div class="field"><label>Moeda</label><select id="cfg-moeda"><option value="BRL">R$ BRL - Real Brasileiro</option><option value="USD">$ USD - Dólar Americano</option><option value="EUR">€ EUR - Euro</option></select></div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; margin-top:18px;">
+        <button type="button" class="btn btn-primary" onclick="salvarPerfilConfig()">Salvar</button>
+      </div>
+    </div>
+
+    <div class="cfg-painel">
+      <div class="cfg-painel-titulo">
+        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+        <div><h2>Meus Links</h2><p>Link público da sua Página de Aprovação</p></div>
+      </div>
+      <p style="font-size:12.5px; color:var(--text-soft);">Cada orçamento gera o link automaticamente na hora de enviar — não existe um slug fixo por enquanto.</p>
+    </div>
+
+    <div class="cfg-painel">
+      <div class="cfg-painel-titulo">
+        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+        <div><h2>Segurança</h2><p>Proteção da sua conta</p></div>
+      </div>
+      <p style="font-size:13px; font-weight:700; margin-bottom:2px;">Alterar Senha</p>
+      <p style="font-size:12px; color:var(--text-soft); margin:0 0 14px;">Digite sua senha atual e a nova senha para alterá-la.</p>
+      <div class="form-grid">
+        <div class="field full"><input type="password" id="senha-atual" placeholder="Senha atual"></div>
+        <div class="field full"><input type="password" id="senha-nova" placeholder="Nova senha"></div>
+        <div class="field full"><input type="password" id="senha-nova-confirmar" placeholder="Confirmar nova senha"></div>
+      </div>
+      <p id="trocar-senha-erro" style="display:none; color:var(--danger); font-size:12.5px; margin:4px 0;"></p>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+        <button type="button" class="btn btn-primary" id="btn-trocar-senha" onclick="trocarMinhaSenha()">Atualizar Senha</button>
+        <span id="trocar-senha-sucesso" style="display:none; color:var(--success); font-size:13px;">Senha alterada ✓</span>
+      </div>
+    </div>`;
+
+  document.getElementById('cfg-email-conta').value = (typeof firebase !== 'undefined' && firebase.auth().currentUser && firebase.auth().currentUser.email) || '';
+  document.getElementById('cfg-nome-completo').value = USUARIO_NOME || '';
+  document.getElementById('cfg-nome-empresa').value = d.nomeFantasia || d.nomeEmpresa || '';
+  document.getElementById('cfg-telefone').value = d.telefone1 || '';
+  document.getElementById('cfg-cpf-cnpj').value = d.cnpj || d.cpf || '';
+  document.getElementById('cfg-endereco').value = d.endereco || '';
+  document.getElementById('cfg-numero').value = d.numero || '';
+  document.getElementById('cfg-bairro').value = d.bairro || '';
+  document.getElementById('cfg-cidade').value = d.cidade || '';
+  document.getElementById('cfg-estado').value = d.estado || '';
+  document.getElementById('cfg-cep').value = d.cep || '';
+  document.getElementById('cfg-idioma').value = localStorage.getItem('eagles_idioma') || 'pt-BR';
+  document.getElementById('cfg-moeda').value = d.moeda || 'BRL';
+  atualizarPreviewAvatarConfig();
+}
+
+function atualizarPreviewAvatarConfig() {
+  const el = document.getElementById('cfg-perfil-avatar-preview');
+  if (!el) return;
+  if (PERFIL_DATA.logoUrl) el.innerHTML = `<img src="${PERFIL_DATA.logoUrl}" style="width:100%; height:100%; object-fit:cover;">`;
+  else el.innerHTML = `<svg viewBox="0 0 24 24" style="width:28px; height:28px; stroke:var(--text-soft); fill:none; stroke-width:2;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+}
+
+function selecionarLogoPerfilConfig(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const tam = 300;
+      const canvas = document.createElement('canvas');
+      canvas.width = tam; canvas.height = tam;
+      const ctx = canvas.getContext('2d');
+      const escala = Math.max(tam / img.width, tam / img.height);
+      const w = img.width * escala, h = img.height * escala;
+      ctx.drawImage(img, (tam - w) / 2, (tam - h) / 2, w, h);
+      PERFIL_DATA.logoUrl = canvas.toDataURL('image/png', 0.9);
+      atualizarPreviewAvatarConfig();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function salvarPerfilConfig() {
+  const get = (id) => document.getElementById(id).value.trim();
+  localStorage.setItem('eagles_idioma', get('cfg-idioma'));
+
+  PERFIL_DATA = {
+    ...PERFIL_DATA,
+    nomeEmpresa: get('cfg-nome-empresa') || PERFIL_DATA.nomeEmpresa,
+    nomeFantasia: get('cfg-nome-empresa') || PERFIL_DATA.nomeFantasia,
+    telefone1: get('cfg-telefone'),
+    cnpj: get('cfg-cpf-cnpj'),
+    endereco: get('cfg-endereco'),
+    numero: get('cfg-numero'),
+    bairro: get('cfg-bairro'),
+    cidade: get('cfg-cidade'),
+    estado: get('cfg-estado'),
+    cep: get('cfg-cep'),
+    pais: get('cfg-pais'),
+    moeda: get('cfg-moeda'),
+  };
+  cloudSet(PERFIL_KEY, PERFIL_DATA);
+  renderProfileBox();
+
+  const nomeCompleto = get('cfg-nome-completo');
+  if (nomeCompleto && nomeCompleto !== USUARIO_NOME) {
+    USUARIO_NOME = nomeCompleto;
+    const user = typeof firebase !== 'undefined' ? firebase.auth().currentUser : null;
+    if (user) firestoreDb.collection('usuarios').doc(user.uid).set({ nome: nomeCompleto }, { merge: true });
+    const elNome = document.getElementById('usuario-logado');
+    if (elNome) elNome.textContent = nomeCompleto;
+  }
+
+  avisar('Configurações de perfil salvas com sucesso!');
+}
+
+
+// ----- Aba: Aparência -----
+
+// Atalho da barra superior (ícone de engrenagem ao lado das tarefas).
+// Fora de Configurações, navega normalmente pro link; dentro dela, só
+// troca de aba, sem recarregar a página.
+function irParaAparenciaConfig(ev) {
+  if (document.getElementById('cfg-conteudo-aba')) {
+    if (ev) ev.preventDefault();
+    fecharTodosDropdowns();
+    mostrarAbaConfig('aparencia');
+    return false;
+  }
+  return true;
+}
+// Cada card abre uma janela própria. Onde a configuração pertence à
+// EMPRESA (portal, briefing, checkout, categorias) ela fica na nuvem, por
+// tenant. Onde é gosto de quem está usando (tema do sistema, ordem do
+// menu) ela fica neste navegador.
+
+const CFG_PORTAL_KEY = 'eagles_cfg_portal_cliente_v1';
+const CFG_BRIEFING_VISUAL_KEY = 'eagles_cfg_briefing_visual_v1';
+const CFG_CATEGORIAS_CONTEUDO_KEY = 'eagles_cfg_categorias_conteudo_v1';
+const CRM_MENU_PREFS_KEY = 'eagles_menu_crm_v1';
+
+let CFG_PORTAL_DATA = null;
+let CFG_PORTAL_CARREGADO = false;
+let CFG_BRIEFING_VISUAL_DATA = null;
+let CFG_BRIEFING_VISUAL_CARREGADO = false;
+let CFG_CATEGORIAS_DATA = [];
+let CFG_CATEGORIAS_CARREGADO = false;
+
+const CFG_APARENCIA_CARDS = [
+  { chave: 'sistema', icone: 'paleta', titulo: 'Aparência do Sistema', desc: 'Tema, cores e tipografia da plataforma' },
+  { chave: 'menu', icone: 'lista', titulo: 'Itens do Menu', desc: 'Mostre, oculte e reordene itens do menu lateral do CRM', plano: 'crm' },
+  { chave: 'portal', icone: 'pessoas', titulo: 'Portal do Cliente', desc: 'Logo, cores, login e mensagens do portal', plano: 'crm' },
+  { chave: 'briefings', icone: 'prancheta', titulo: 'Briefings', desc: 'Tema, cores e logo da página pública de briefing', plano: 'crm' },
+  { chave: 'categorias', icone: 'tag', titulo: 'Categorias de Conteúdo', desc: 'Crie categorias próprias que aparecem no diálogo de novo conteúdo', plano: 'crm' },
+  { chave: 'aprovacao', icone: 'cifrao', titulo: 'Página de Aprovação / Checkout', desc: 'Logo, cores e textos da página onde o cliente aprova o orçamento', plano: 'crm' },
+  { chave: 'pdf', icone: 'arquivo', titulo: 'PDF de Orçamento', desc: 'Template, cores e textos exibidos no PDF enviado/baixado', plano: 'crm' },
+  { chave: 'portfolio', icone: 'globo', titulo: 'Página Pública (Portfólio)', desc: 'Estilo, blocos e SEO do portfólio', plano: 'crm', pendente: true },
+  { chave: 'linkbio', icone: 'link', titulo: 'Link da Bio', desc: 'Tema, SEO e branding da bio', plano: 'crm', pendente: true },
+  { chave: 'agendamento', icone: 'calendario', titulo: 'Página de Agendamento', desc: 'Marca, horários e mensagens da página de agendamento', plano: 'crm', pendente: true },
+];
+
+const CFG_ICONES_EXTRA = {
+  lua: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  sol: '<circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/>',
+  pincel: '<path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/>',
+  texto: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>',
+  imagem: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  restaurar: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+  seta: '<polyline points="18 15 12 9 6 15"/>',
+  olho: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  escudo: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  olhoFechado: '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>',
+  caixa: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',
+  cadeado: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  mais: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+};
+
+function iconeCfg(nome, estilo) {
+  const corpo = CFG_ICONES_EXTRA[nome];
+  if (!corpo) return iconeAparenciaConfig(nome);
+  return `<svg viewBox="0 0 24 24" style="${estilo || 'width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0;'}">${corpo}</svg>`;
+}
+
+function iconeAparenciaConfig(nome) {
+  const icones = {
+    paleta: '<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="19" r="2.5"/><path d="M12 2a10 10 0 1 0 8 16c-1 0-2-1-2-2 0-1.5 2-2 3-3a10 10 0 0 0-9-11z"/>',
+    lista: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+    pessoas: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    prancheta: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3h6a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 13l2 2 4-4"/>',
+    tag: '<path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2.59 12.6a2 2 0 0 1 0-2.83L9.76 2.6a2 2 0 0 1 2.83 0l8 8a2 2 0 0 1 0 2.83z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+    cifrao: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    arquivo: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+    globo: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    calendario: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+    favicon: '<rect x="3" y="3" width="18" height="18" rx="4"/>',
+  };
+  return `<svg viewBox="0 0 24 24">${icones[nome] || icones.paleta}</svg>`;
+}
+
+function renderAbaAparenciaConfig() {
+  const el = document.getElementById('cfg-conteudo-aba');
+  const prefs = lerPreferenciasAparenciaConfig();
+  const cards = CFG_APARENCIA_CARDS.filter((c) => itemVisivelNoPlano(c));
+
+  el.innerHTML = `
+    <div class="cfg-grid-cards">
+      ${cards.map((c) => `
+        <button type="button" class="cfg-card" data-cfg-card="${c.chave}" onclick="abrirCardAparenciaConfig('${c.chave}')">
+          <div class="cfg-card-icone">${iconeAparenciaConfig(c.icone)}</div>
+          <div class="cfg-card-texto"><strong>${escapeHtml(c.titulo)}</strong><span>${escapeHtml(c.desc)}</span></div>
+          <svg class="cfg-card-seta" viewBox="0 0 24 24" style="width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2;"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>`).join('')}
+    </div>
+
+    <div class="cfg-painel">
+      <div class="cfg-painel-titulo">
+        <div class="cfg-painel-titulo-icone">${iconeAparenciaConfig('favicon')}</div>
+        <div><h2>Favicon Global</h2><p>Ícone exibido na aba do navegador em páginas públicas (orçamentos, contratos, briefings). Recomendado: imagem quadrada 64x64px.</p></div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <input type="text" id="cfg-favicon-url" placeholder="https://... ou faça upload" style="flex:1;" value="${escapeHtml(prefs.faviconUrl || '')}">
+        <button type="button" class="btn btn-small" onclick="document.getElementById('cfg-input-favicon').click()">${ic('subir')} Upload</button>
+        <input type="file" id="cfg-input-favicon" accept="image/*" style="display:none;" onchange="selecionarFaviconConfig(this)">
+      </div>
+
+      <div class="cfg-linha-toggle" style="margin-top:14px;">
+        <div><strong>Ocultar marca Eagles Labz</strong><span>Remove o "Powered by Eagles Labz" das páginas públicas (briefings, orçamentos, portais, etc.)</span></div>
+        <label class="switch"><input type="checkbox" id="cfg-ocultar-marca" ${prefs.ocultarMarca ? 'checked' : ''} onchange="salvarPreferenciasAparenciaConfig()"><span class="switch-slider"></span></label>
+      </div>
+    </div>
+
+    <div class="cfg-painel">
+      <div class="cfg-linha-toggle">
+        <div><strong>Contador de Produções</strong><span>Exibir o atalho flutuante do contador de produções no canto inferior da tela.</span></div>
+        <label class="switch"><input type="checkbox" id="cfg-contador-producoes" ${prefs.contadorProducoes ? 'checked' : ''} onchange="salvarPreferenciasAparenciaConfig()"><span class="switch-slider"></span></label>
+      </div>
+    </div>`;
+}
+
+function abrirCardAparenciaConfig(chave) {
+  const card = CFG_APARENCIA_CARDS.find((c) => c.chave === chave);
+  if (!card) return;
+  if (!itemVisivelNoPlano(card)) { avisar('Essa configuração faz parte do plano CRM.'); return; }
+  if (!['sistema', 'menu'].includes(chave) && !nivelEhDiretor()) { avisar('Só um Diretor da empresa pode mudar essa configuração (ela vale pra todo mundo). Aparência do Sistema e Itens do Menu são suas e você pode mudar à vontade.', 'Sem permissão'); return; }
+  if (card.pendente) {
+    avisar(`"${card.titulo}" ainda vai ser configurado numa próxima rodada, junto com o módulo Operacional.`, card.titulo);
+    return;
+  }
+  const abrir = {
+    sistema: abrirCfgAparenciaSistema,
+    menu: abrirCfgItensMenu,
+    portal: abrirCfgPortalCliente,
+    briefings: abrirCfgBriefingVisual,
+    categorias: abrirCfgCategoriasConteudo,
+    aprovacao: abrirCfgCheckout,
+    pdf: () => { window.location.href = 'crm.html#orcamentos-pdf'; },
+  };
+  if (abrir[chave]) abrir[chave]();
+}
+
+// ---------- Infra comum dos modais ----------
+
+// Coloca um modal criado pelo JS no <body>, antes do modal de aviso
+// quando ele é filho direto do body (o aviso tem z-index maior de todo
+// jeito, então em qualquer posição ele continua por cima).
+function inserirModalNoBody(el) {
+  const aviso = document.getElementById('modal-aviso-sistema');
+  if (aviso && aviso.parentNode === document.body) document.body.insertBefore(el, aviso);
+  else document.body.appendChild(el);
+}
+
+function abrirModalCfg({ titulo, sub, corpo, rodape, estreito }) {
+  let overlay = document.getElementById('modal-cfg-aparencia');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'modal-cfg-aparencia';
+    inserirModalNoBody(overlay);
+    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) fecharModalCfg(); });
+  }
+  overlay.innerHTML = `
+    <div class="modal cfg-modal${estreito ? ' cfg-modal-estreito' : ''}" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${escapeHtml(titulo)}</h2><button type="button" class="close-btn" onclick="fecharModalCfg()" aria-label="Fechar">✕</button></div>
+      ${sub ? `<p class="cfg-modal-sub">${escapeHtml(sub)}</p>` : ''}
+      <div id="cfg-modal-corpo">${corpo}</div>
+      ${rodape ? `<div class="cfg-modal-rodape">${rodape}</div>` : ''}
+    </div>`;
+  openModal('modal-cfg-aparencia');
+}
+
+function fecharModalCfg() {
+  closeModal('modal-cfg-aparencia');
+  CFG_FORM = null;
+  CFG_FORM_APOS = null;
+}
+
+// Formulário genérico: CFG_FORM é a cópia que está sendo editada, e
+// CFG_FORM_APOS é chamada a cada mudança (pra atualizar preview, ou
+// salvar na hora, no caso do tema do sistema).
+let CFG_FORM = null;
+let CFG_FORM_APOS = null;
+
+function cfgSet(caminho, valor) {
+  if (!CFG_FORM) return;
+  const partes = caminho.split('.');
+  let alvo = CFG_FORM;
+  for (let i = 0; i < partes.length - 1; i++) {
+    if (!alvo[partes[i]] || typeof alvo[partes[i]] !== 'object') alvo[partes[i]] = {};
+    alvo = alvo[partes[i]];
+  }
+  alvo[partes[partes.length - 1]] = valor;
+  if (CFG_FORM_APOS) CFG_FORM_APOS(caminho);
+}
+
+function cfgGet(caminho) {
+  return caminho.split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), CFG_FORM);
+}
+
+function expandirHex(hex) {
+  const v = corHexValida(hex);
+  if (!v) return '';
+  return v.length === 4 ? '#' + v.slice(1).split('').map((c) => c + c).join('') : v;
+}
+
+function htmlCampoCor(id, rotulo, caminho, placeholder) {
+  const v = corHexValida(cfgGet(caminho) || '');
+  return `
+    <div class="cfg-cor-campo">
+      ${rotulo ? `<label for="${id}-hex">${escapeHtml(rotulo)}</label>` : ''}
+      <div class="cfg-cor-linha">
+        <input type="color" id="${id}" value="${expandirHex(v) || '#888888'}" oninput="sincronizarCorCfg('${id}', 'picker', '${caminho}')" aria-label="${escapeHtml(rotulo || 'Cor')}">
+        <input type="text" id="${id}-hex" value="${escapeHtml(v)}" placeholder="${escapeHtml(placeholder || '')}" maxlength="7" spellcheck="false" oninput="sincronizarCorCfg('${id}', 'texto', '${caminho}')">
+      </div>
+    </div>`;
+}
+
+function sincronizarCorCfg(id, origem, caminho) {
+  const picker = document.getElementById(id);
+  const texto = document.getElementById(id + '-hex');
+  if (!picker || !texto) return;
+  if (origem === 'picker') texto.value = picker.value;
+  else {
+    const v = expandirHex(texto.value);
+    if (v) picker.value = v;
+  }
+  if (caminho) cfgSet(caminho, corHexValida(texto.value));
+}
+
+function htmlSwitchCfg(caminho, extra) {
+  return `<label class="switch"><input type="checkbox" ${cfgGet(caminho) ? 'checked' : ''} ${extra || ''} onchange="cfgSet('${caminho}', this.checked)"><span class="switch-slider"></span></label>`;
+}
+
+function htmlOpcoesCfg(caminho, opcoes, colunas, radio) {
+  const atual = cfgGet(caminho);
+  return `<div class="cfg-opcoes ${colunas ? 'col-' + colunas : ''}">
+    ${opcoes.map((o) => `
+      <button type="button" class="cfg-opcao${radio ? ' cfg-opcao-radio' : ''}${atual === o.v ? ' ativo' : ''}" onclick="escolherOpcaoCfg(this, '${caminho}', '${o.v}')">
+        ${radio ? `<strong>${escapeHtml(o.t)}</strong>` : `<div><strong>${escapeHtml(o.t)}</strong>${o.d ? `<span>${escapeHtml(o.d)}</span>` : ''}</div>`}
+      </button>`).join('')}
+  </div>`;
+}
+
+function htmlPilulasCfg(caminho, opcoes) {
+  const atual = cfgGet(caminho);
+  return `<div class="cfg-pilulas">${opcoes.map((o) => `<button type="button" class="cfg-pilula${atual === o.v ? ' ativo' : ''}" onclick="escolherOpcaoCfg(this, '${caminho}', '${o.v}')">${escapeHtml(o.t)}</button>`).join('')}</div>`;
+}
+
+function escolherOpcaoCfg(botao, caminho, valor) {
+  Array.from(botao.parentElement.children).forEach((b) => b.classList.toggle('ativo', b === botao));
+  cfgSet(caminho, valor);
+}
+
+function htmlLinhaToggleCfg(titulo, desc, caminho, extraHtml) {
+  return `
+    <div class="cfg-linha-toggle">
+      <div><strong>${titulo}</strong><span>${escapeHtml(desc)}</span>${extraHtml || ''}</div>
+      ${htmlSwitchCfg(caminho)}
+    </div>`;
+}
+
+// Lê uma imagem do computador, valida e redimensiona (sem distorcer)
+// pra caber no limite. Converte pra WebP quando o navegador suporta
+// (Safari antigo cai pra PNG sozinho) — isso mantém o documento da nuvem
+// bem abaixo do limite de 1MB do Firestore.
+function lerImagemRedimensionada(file, maxW, maxH) {
+  return new Promise((resolve, reject) => {
+    if (!file) { reject(new Error('Nenhum arquivo.')); return; }
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { reject(new Error('Envie uma imagem PNG, JPG ou WebP.')); return; }
+    if (file.size > 5 * 1024 * 1024) { reject(new Error('Imagem muito grande (máximo 5MB).')); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Não foi possível ler esse arquivo.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Não foi possível ler essa imagem. Tente outro arquivo.'));
+      img.onload = () => {
+        const escala = Math.min(1, maxW / img.width, maxH / img.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * escala));
+        canvas.height = Math.max(1, Math.round(img.height * escala));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        let url = canvas.toDataURL('image/webp', 0.85);
+        if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/png');
+        resolve(url);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function urlImagemSegura(url) {
+  const u = String(url || '').trim();
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(u)) return u;
+  if (/^https:\/\/[^\s"'<>()\\]+$/i.test(u)) return u;
+  return '';
+}
+
+function tamanhoAproximadoKb(obj) {
+  try { return Math.round(JSON.stringify(obj).length / 1024); } catch (e) { return 0; }
+}
+
+
+// =====================================================================
+// 1) Aparência do Sistema
+// =====================================================================
+
+function abrirCfgAparenciaSistema() {
+  CFG_FORM = lerAparenciaSistema();
+  CFG_FORM_APOS = (caminho) => {
+    salvarAparenciaSistema(CFG_FORM);
+    if (caminho === 'tema' || caminho === 'corPersonalizada') renderTemasAparenciaSistema();
+  };
+  abrirModalCfg({
+    titulo: 'Aparência do Sistema',
+    corpo: `
+      <div class="cfg-painel" style="margin-bottom:0;">
+        <div class="cfg-painel-titulo">
+          <div class="cfg-painel-titulo-icone">${iconeAparenciaConfig('paleta')}</div>
+          <div><h2>Aparência</h2><p>Personalize as cores do sistema — fica salvo neste navegador.</p></div>
+        </div>
+
+        <div class="cfg-secao-titulo">${iconeCfg('lua')} Temas escuros</div>
+        <div class="cfg-temas-grid" id="cfg-ap-temas-escuros"></div>
+        <div id="cfg-ap-personalizado"></div>
+
+        <div class="cfg-secao-titulo" style="margin-top:20px;">${iconeCfg('sol')} Temas claros</div>
+        <div class="cfg-temas-grid" id="cfg-ap-temas-claros"></div>
+
+        <hr class="cfg-divisor">
+        <div class="cfg-secao-titulo">${iconeCfg('pincel')} Personalizar cores individuais</div>
+        <p class="cfg-secao-nota">Aplique sobre qualquer tema. Deixe em branco para usar a cor do tema selecionado.</p>
+        <div class="cfg-cores-grid">
+          ${htmlCampoCor('cfg-ap-cor-fundo', 'Fundo', 'cores.fundo', 'Cor do tema')}
+          ${htmlCampoCor('cfg-ap-cor-destaque', 'Botões e destaque', 'cores.destaque', 'Cor do tema')}
+          ${htmlCampoCor('cfg-ap-cor-texto-botao', 'Texto dos botões em destaque', 'cores.textoBotao', 'Automático')}
+          ${htmlCampoCor('cfg-ap-cor-secundario', 'Ícones e textos secundários', 'cores.secundario', 'Cor do tema')}
+        </div>
+
+        <hr class="cfg-divisor">
+        <div class="cfg-secao-titulo">${iconeCfg('texto')} Tamanho da fonte</div>
+        <p class="cfg-secao-nota">Reduza o tamanho das fontes do sistema, incluindo menu e textos gerais.</p>
+        ${htmlOpcoesCfg('fonte', [
+          { v: 'normal', t: 'Aa — Normal', d: 'Tamanho padrão' },
+          { v: 'reduzido', t: 'Aa — Reduzido', d: '1px menor em todos os textos' },
+          { v: 'compacto', t: 'Aa — Compacto', d: '2px menor em todos os textos' },
+        ], 3)}
+
+        <hr class="cfg-divisor">
+        <button type="button" class="btn" onclick="restaurarAparenciaSistemaPadrao()">${iconeCfg('restaurar')} Restaurar tema padrão</button>
+      </div>`,
+  });
+  renderTemasAparenciaSistema();
+}
+
+function htmlCardTema(t, ativo) {
+  const amostra = t.personalizado
+    ? '<div class="cfg-tema-gradiente"></div>'
+    : `<div class="cfg-tema-amostras">${t.amostra.map((c) => `<i style="background:${c};"></i>`).join('')}</div>`;
+  return `
+    <button type="button" class="cfg-tema-card${ativo ? ' ativo' : ''}" data-tema="${t.id}" onclick="cfgSet('tema', '${t.id}')">
+      ${ativo ? '<span class="cfg-tema-check">✓</span>' : ''}
+      ${amostra}
+      <strong>${escapeHtml(t.nome)}</strong><span>${escapeHtml(t.desc)}</span>
+    </button>`;
+}
+
+function renderTemasAparenciaSistema() {
+  const escuros = document.getElementById('cfg-ap-temas-escuros');
+  const claros = document.getElementById('cfg-ap-temas-claros');
+  if (!escuros || !claros) return;
+  const prefs = CFG_FORM || lerAparenciaSistema();
+  escuros.innerHTML = TEMAS_SISTEMA.filter((t) => t.grupo === 'escuro').map((t) => htmlCardTema(t, prefs.tema === t.id)).join('');
+  claros.innerHTML = TEMAS_SISTEMA.filter((t) => t.grupo === 'claro').map((t) => htmlCardTema(t, prefs.tema === t.id)).join('');
+  const pers = document.getElementById('cfg-ap-personalizado');
+  if (pers) {
+    pers.innerHTML = prefs.tema === 'personalizado' ? `
+      <div class="cfg-caixa" style="margin-top:10px;">
+        <span class="cfg-caixa-titulo">Cor do seu tema personalizado</span>
+        ${htmlCampoCor('cfg-ap-cor-personalizada', '', 'corPersonalizada', '#7c3aed')}
+      </div>` : '';
+  }
+}
+
+function restaurarAparenciaSistemaPadrao() {
+  confirmarAcao('Voltar para o tema padrão claro, sem cores personalizadas e com a fonte normal?', () => {
+    salvarAparenciaSistema({ tema: 'padrao-claro', corPersonalizada: '#7c3aed', cores: {}, fonte: 'normal' });
+    abrirCfgAparenciaSistema();
+  }, 'Restaurar tema padrão');
+}
+
+
+// =====================================================================
+// 2) Itens do Menu (menu lateral do CRM)
+// =====================================================================
+// A estrutura abaixo foi gerada a partir do próprio crm.html (cada item
+// lá tem data-menu-id igual ao id daqui). Se um item novo for criado no
+// menu, ele precisa entrar aqui também.
+
+const CRM_MENU_ESTRUTURA = [{"id": "dashboard", "nome": "Dashboard", "icone": "<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"/>", "obrigatorio": true}, {"id": "crm-grupo-comercial", "nome": "Comercial", "icone": "<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"1\"/><line x1=\"9\" y1=\"6\" x2=\"9\" y2=\"6.01\"/><line x1=\"15\" y1=\"6\" x2=\"15\" y2=\"6.01\"/><line x1=\"9\" y1=\"10\" x2=\"9\" y2=\"10.01\"/><line x1=\"15\" y1=\"10\" x2=\"15\" y2=\"10.01\"/>", "filhos": [{"id": "clientes", "nome": "Clientes", "icone": "<path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/>"}, {"id": "pipeline", "nome": "Pipelines", "icone": "<path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"/>"}, {"id": "leads", "nome": "Leads", "icone": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"8.5\" cy=\"7\" r=\"4\"/><line x1=\"20\" y1=\"8\" x2=\"20\" y2=\"14\"/><line x1=\"17\" y1=\"11\" x2=\"23\" y2=\"11\"/>"}, {"id": "orcamentos", "nome": "Orçamentos", "icone": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><polyline points=\"9 15 11 17 16 12\"/>"}, {"id": "briefings", "nome": "Briefings", "icone": "<rect x=\"7\" y=\"3\" width=\"10\" height=\"4\" rx=\"1\"/><path d=\"M8 4H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2\"/>"}]}, {"id": "crm-grupo-agentes", "nome": "Agentes IA", "icone": "<path d=\"M12 2l1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5z\"/>", "filhos": [{"id": "agente-analista", "nome": "Analista", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>"}, {"id": "agente-copywriter", "nome": "Copywriter", "icone": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>"}, {"id": "agente-designer", "nome": "Designer", "icone": "<path d=\"M12 2l1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5z\"/>"}]}, {"id": "crm-grupo-operacional", "nome": "Operacional", "icone": "<polyline points=\"9 11 12 14 22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/>", "filhos": [{"id": "kanban", "nome": "Kanban", "icone": "<polyline points=\"9 11 12 14 22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/>"}, {"id": "conteudos", "nome": "Conteúdos", "icone": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/>"}, {"id": "portal-cliente", "nome": "Portal do cliente", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>"}, {"id": "agendamentos", "nome": "Agendamentos", "icone": "<line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"/><polygon points=\"22 2 15 22 11 13 2 9 22 2\"/>", "beta": true}, {"id": "relatorios-redes", "nome": "Relatórios de redes", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>", "beta": true}, {"id": "anuncios-meta", "nome": "Anúncios Meta", "icone": "<path d=\"M3 11l18-7-7 18-2-8-9-3z\"/>", "beta": true}, {"id": "agenda", "nome": "Agenda", "icone": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/>"}, {"id": "crm-sub-atendimento", "nome": "Atendimento", "icone": "<path d=\"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z\"/>", "filhos": [{"id": "whatsapp", "nome": "WhatsApp", "icone": "<path d=\"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z\"/>"}, {"id": "atendentes", "nome": "Atendentes", "icone": "<path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/>"}, {"id": "automacoes", "nome": "Automações", "icone": "<rect x=\"2\" y=\"7\" width=\"20\" height=\"14\" rx=\"2\"/><path d=\"M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"/>"}, {"id": "monitor-grupos", "nome": "Monitor de Grupos", "icone": "<path d=\"M3 11v3a1 1 0 0 0 1 1h2l4 5V6l-4 5H4a1 1 0 0 0-1 1z\"/><path d=\"M15 9a3 3 0 0 1 0 6\"/>"}]}, {"id": "crm-sub-financeiro", "nome": "Financeiro", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>", "filhos": [{"id": "financeiro", "nome": "Visão geral", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>"}, {"id": "fin-receber", "nome": "Receber", "icone": "<path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"/>"}, {"id": "fin-pagar", "nome": "Pagar", "icone": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>"}, {"id": "fin-recorrencias", "nome": "Recorrências", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/>"}, {"id": "fin-relatorios", "nome": "Relatórios", "icone": "<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"/>"}, {"id": "fin-caixa", "nome": "Caixa", "icone": "<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"1\"/><line x1=\"9\" y1=\"6\" x2=\"9\" y2=\"6.01\"/><line x1=\"15\" y1=\"6\" x2=\"15\" y2=\"6.01\"/><line x1=\"9\" y1=\"10\" x2=\"9\" y2=\"10.01\"/><line x1=\"15\" y1=\"10\" x2=\"15\" y2=\"10.01\"/>"}, {"id": "fin-integracoes", "nome": "Integrações", "icone": "<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z\"/>"}]}, {"id": "crm-sub-servicos", "nome": "Serviços", "icone": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>", "filhos": [{"id": "servicos-servicos", "nome": "Serviços", "icone": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>"}, {"id": "servicos-produtos", "nome": "Produtos", "icone": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>"}, {"id": "servicos-planos", "nome": "Planos", "icone": "<polygon points=\"12 2 2 7 12 12 22 7 12 2\"/><polyline points=\"2 17 12 22 22 17\"/><polyline points=\"2 12 12 17 22 12\"/>"}]}, {"id": "crm-sub-paginas", "nome": "Páginas", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>", "filhos": [{"id": "paginas-landing", "nome": "Landing page", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>"}, {"id": "paginas-link-bio", "nome": "Link da bio", "icone": "<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\"/><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\"/>"}, {"id": "paginas-formularios", "nome": "Formulários", "icone": "<rect x=\"7\" y=\"3\" width=\"10\" height=\"4\" rx=\"1\"/><path d=\"M8 4H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2\"/>"}, {"id": "paginas-agendamento", "nome": "Agendamento", "icone": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/>"}, {"id": "paginas-portfolio", "nome": "Portfólio", "icone": "<rect x=\"2\" y=\"7\" width=\"20\" height=\"14\" rx=\"2\"/><path d=\"M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"/>"}, {"id": "paginas-captura", "nome": "Páginas de captura", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>", "beta": true}]}]}];
+
+
+function lerPrefsMenuCrm() {
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem(CRM_MENU_PREFS_KEY) || 'null'); } catch (e) {}
+  if (!p || typeof p !== 'object') p = {};
+  return {
+    ordem: p.ordem && typeof p.ordem === 'object' ? p.ordem : {},
+    ocultos: Array.isArray(p.ocultos) ? p.ocultos.filter((x) => typeof x === 'string') : [],
+  };
+}
+
+function salvarPrefsMenuCrm(prefs) {
+  try { localStorage.setItem(CRM_MENU_PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+}
+
+function idsObrigatoriosMenuCrm() {
+  const ids = [];
+  const varrer = (lista) => lista.forEach((n) => { if (n.obrigatorio) ids.push(n.id); if (n.filhos) varrer(n.filhos); });
+  varrer(CRM_MENU_ESTRUTURA);
+  return ids;
+}
+
+// Ordem salva primeiro; itens que não estão na ordem salva (ex: um item
+// novo que entrou no sistema depois) ficam no fim, na ordem original.
+function ordenarPorPrefs(lista, ordemSalva, pegarId) {
+  if (!Array.isArray(ordemSalva) || !ordemSalva.length) return lista.slice();
+  const pos = {};
+  ordemSalva.forEach((id, i) => { pos[id] = i; });
+  return lista.slice().sort((a, b) => {
+    const pa = pos[pegarId(a)], pb = pos[pegarId(b)];
+    if (pa === undefined && pb === undefined) return 0;
+    if (pa === undefined) return 1;
+    if (pb === undefined) return -1;
+    return pa - pb;
+  });
+}
+
+let CFG_MENU_PREFS = null;
+
+function abrirCfgItensMenu() {
+  CFG_MENU_PREFS = lerPrefsMenuCrm();
+  abrirModalCfg({
+    titulo: 'Itens do Menu',
+    estreito: true,
+    corpo: `
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:14px;">
+        <p style="margin:0; font-size:12.5px; color:var(--text-soft); line-height:1.5;">Personalize quais módulos aparecem no menu lateral do CRM. Arraste pela alça ⠿ para reordenar e use o botão para mostrar/ocultar. Itens obrigatórios não podem ser ocultados.</p>
+        <button type="button" class="btn btn-small btn-ghost" style="flex-shrink:0;" onclick="restaurarItensMenuCrm()">${iconeCfg('restaurar')} Restaurar</button>
+      </div>
+      <div class="cfg-menu-lista" id="cfg-menu-lista" data-pai="raiz"></div>
+      <p style="font-size:11.5px; color:var(--text-soft); margin:16px 0 0; padding-top:12px; border-top:1px solid var(--border);">A ordem e a visibilidade ficam salvas neste navegador e já valem para o CRM aberto em outra aba.</p>`,
+  });
+  renderCfgItensMenu();
+}
+
+function htmlNoMenuCfg(no, pai, ocultos) {
+  const oculto = ocultos.has(no.id) && !no.obrigatorio;
+  const filhos = no.filhos ? ordenarPorPrefs(no.filhos, CFG_MENU_PREFS.ordem[no.id], (n) => n.id) : [];
+  return `
+    <div class="cfg-menu-no" data-id="${no.id}" data-pai="${pai}">
+      <div class="cfg-menu-item${oculto ? ' oculto' : ''}">
+        <button type="button" class="cfg-menu-alca" aria-label="Arrastar para reordenar" onpointerdown="iniciarArrasteMenuCfg(event, '${no.id}')">⠿</button>
+        <div class="cfg-menu-icone"><svg viewBox="0 0 24 24">${no.icone || ''}</svg></div>
+        <div class="cfg-menu-nome">${escapeHtml(no.nome)}${no.obrigatorio ? `<span class="cfg-menu-badge">${iconeCfg('cadeado', 'width:10px; height:10px; stroke:currentColor; fill:none; stroke-width:2.4; vertical-align:-1px;')} Obrigatório</span>` : ''}${no.beta ? '<span class="cfg-menu-badge">BETA</span>' : ''}</div>
+        <label class="switch"><input type="checkbox" ${oculto ? '' : 'checked'} ${no.obrigatorio ? 'disabled' : ''} onchange="alternarItemMenuCfg('${no.id}', this.checked)"><span class="switch-slider"></span></label>
+      </div>
+      ${filhos.length ? `<div class="cfg-menu-filhos" data-pai="${no.id}">${filhos.map((f) => htmlNoMenuCfg(f, no.id, ocultos)).join('')}</div>` : ''}
+    </div>`;
+}
+
+function renderCfgItensMenu() {
+  const el = document.getElementById('cfg-menu-lista');
+  if (!el) return;
+  const ocultos = new Set(CFG_MENU_PREFS.ocultos);
+  const raiz = ordenarPorPrefs(CRM_MENU_ESTRUTURA, CFG_MENU_PREFS.ordem.raiz, (n) => n.id);
+  el.innerHTML = raiz.map((n) => htmlNoMenuCfg(n, 'raiz', ocultos)).join('');
+}
+
+function alternarItemMenuCfg(id, visivel) {
+  if (idsObrigatoriosMenuCrm().includes(id)) return;
+  const ocultos = new Set(CFG_MENU_PREFS.ocultos);
+  if (visivel) ocultos.delete(id); else ocultos.add(id);
+  CFG_MENU_PREFS.ocultos = Array.from(ocultos);
+  salvarPrefsMenuCrm(CFG_MENU_PREFS);
+  const item = document.querySelector(`.cfg-menu-no[data-id="${id}"] > .cfg-menu-item`);
+  if (item) item.classList.toggle('oculto', !visivel);
+}
+
+// Arrastar com Pointer Events (funciona com mouse e com o dedo no
+// celular). Só reordena entre irmãos — um item não pula de grupo.
+function iniciarArrasteMenuCfg(ev, id) {
+  const no = document.querySelector(`.cfg-menu-no[data-id="${id}"]`);
+  if (!no) return;
+  ev.preventDefault();
+  const container = no.parentElement;
+  const item = no.querySelector('.cfg-menu-item');
+  item.classList.add('arrastando');
+
+  const mover = (e) => {
+    const irmaos = Array.from(container.children).filter((c) => c !== no && c.classList.contains('cfg-menu-no'));
+    let antesDe = null;
+    for (const irmao of irmaos) {
+      const r = irmao.querySelector('.cfg-menu-item').getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { antesDe = irmao; break; }
+    }
+    if (antesDe) { if (no.nextElementSibling !== antesDe) container.insertBefore(no, antesDe); }
+    else if (container.lastElementChild !== no) container.appendChild(no);
+  };
+  const soltar = () => {
+    document.removeEventListener('pointermove', mover);
+    document.removeEventListener('pointerup', soltar);
+    document.removeEventListener('pointercancel', soltar);
+    item.classList.remove('arrastando');
+    const pai = container.dataset.pai || 'raiz';
+    CFG_MENU_PREFS.ordem[pai] = Array.from(container.children).filter((c) => c.classList.contains('cfg-menu-no')).map((c) => c.dataset.id);
+    salvarPrefsMenuCrm(CFG_MENU_PREFS);
+  };
+  document.addEventListener('pointermove', mover);
+  document.addEventListener('pointerup', soltar);
+  document.addEventListener('pointercancel', soltar);
+}
+
+function restaurarItensMenuCrm() {
+  confirmarAcao('Voltar o menu lateral do CRM para a ordem original, com todos os itens visíveis?', () => {
+    try { localStorage.removeItem(CRM_MENU_PREFS_KEY); } catch (e) {}
+    CFG_MENU_PREFS = lerPrefsMenuCrm();
+    renderCfgItensMenu();
+  }, 'Restaurar menu');
+}
+
+// Aplicado no crm.html: esconde e reordena os itens de verdade.
+function aplicarPreferenciasMenuCrm() {
+  const nav = document.querySelector('#crm-sidebar-painel nav');
+  if (!nav) return;
+  const prefs = lerPrefsMenuCrm();
+  const obrigatorios = idsObrigatoriosMenuCrm();
+  const ocultos = new Set(prefs.ocultos.filter((id) => !obrigatorios.includes(id)));
+  nav.querySelectorAll('[data-menu-id]').forEach((el) => el.classList.toggle('crm-menu-oculto', ocultos.has(el.dataset.menuId)));
+
+  const reordenar = (container, chave) => {
+    if (!container) return;
+    const filhos = Array.from(container.children).filter((c) => c.dataset && c.dataset.menuId);
+    ordenarPorPrefs(filhos, prefs.ordem[chave], (el) => el.dataset.menuId).forEach((el) => container.appendChild(el));
+  };
+  nav.querySelectorAll(':scope > .crm-nav-divisor').forEach((d) => d.remove());
+  reordenar(nav, 'raiz');
+  const varrer = (lista) => lista.forEach((n) => { if (n.filhos) { reordenar(document.getElementById(n.id), n.id); varrer(n.filhos); } });
+  varrer(CRM_MENU_ESTRUTURA);
+
+  // divisores entre os blocos do topo (só entre os visíveis)
+  const visiveis = Array.from(nav.children).filter((c) => c.dataset && c.dataset.menuId && !c.classList.contains('crm-menu-oculto'));
+  visiveis.slice(1).forEach((el) => {
+    const div = document.createElement('div');
+    div.className = 'crm-nav-divisor';
+    nav.insertBefore(div, el);
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === CRM_MENU_PREFS_KEY && document.getElementById('crm-sidebar-painel')) aplicarPreferenciasMenuCrm();
+    if ((e.key === APARENCIA_SISTEMA_KEY) && !ehPaginaPublica()) aplicarTemaSalvo();
+  });
+}
+
+
+// =====================================================================
+// 3) Portal do Cliente
+// =====================================================================
+// O portal em si ainda vai ser construído (módulo Operacional). Aqui a
+// configuração já fica salva de verdade na nuvem da empresa, pra ser
+// usada assim que o portal entrar no ar.
+
+function portalConfigPadrao() {
+  return {
+    nomeMarca: '', logoUrl: '', corBotao: '#7c3aed', corTextoBotao: '#ffffff', corMarca: '',
+    login: { imagemFundo: '', corFundo: '#1a1a2e', titulo: '', subtitulo: '', disposicao: 'centralizada', textura: 'nenhuma', caixa: 'solida', campoFundo: '', campoTexto: '', rodape: '' },
+    dentro: { tamanhoLogo: 'medio', cartaoCliente: true },
+    visibilidade: { emAprovacao: true, emRevisao: true, aprovado: true, publicado: true, emProducao: false, revisaoInterna: false },
+    permissoes: { criarTarefas: false, editarTarefas: false, baixarArquivos: true },
+    solicitacoes: { abaRelatorio: false, abaProducao: true, sugestoesPost: true, permitirSolicitacoes: false },
+  };
+}
+
+function mesclarComPadrao(padrao, dados) {
+  const out = JSON.parse(JSON.stringify(padrao));
+  if (!dados || typeof dados !== 'object') return out;
+  Object.keys(out).forEach((k) => {
+    if (dados[k] === undefined) return;
+    if (out[k] && typeof out[k] === 'object' && !Array.isArray(out[k])) out[k] = Object.assign(out[k], dados[k] || {});
+    else out[k] = dados[k];
+  });
+  return out;
+}
+
+const TEXTURAS_PORTAL = [
+  { v: 'nenhuma', t: 'Nenhuma' }, { v: 'pontilhado', t: 'Pontilhado' }, { v: 'grade', t: 'Grade fina' }, { v: 'linhas', t: 'Linhas finas' },
+  { v: 'colunas', t: 'Colunas' }, { v: 'diagonal', t: 'Diagonal' }, { v: 'scanlines', t: 'Scanlines' }, { v: 'granulado', t: 'Granulado' },
+];
+
+function abrirCfgPortalCliente() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CFG_PORTAL_CARREGADO) { avisar('Ainda carregando as configurações do portal — aguarde um instante e tente de novo.'); return; }
+  CFG_FORM = mesclarComPadrao(portalConfigPadrao(), CFG_PORTAL_DATA);
+  CFG_FORM_APOS = () => renderPreviewPortalCfg();
+  const ponto = (cor) => `<span class="cfg-status-ponto" style="background:${cor};"></span>`;
+
+  abrirModalCfg({
+    titulo: 'Personalizar Portal do Cliente',
+    sub: 'Estas configurações se aplicam a todos os clientes que acessam seu portal de aprovações.',
+    corpo: `
+      <div class="cfg-aviso-info">O Portal do Cliente ainda está sendo construído (faz parte do módulo Operacional). Tudo que você configurar aqui já fica salvo e passa a valer assim que o portal entrar no ar.</div>
+      <div class="cfg-portal-preview" id="cfg-portal-preview"></div>
+
+      <div class="cfg-secao-rotulo">${iconeCfg('paleta', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Identidade visual</div>
+      <div class="field full"><label>Nome da empresa / marca</label><input type="text" maxlength="60" value="${escapeHtml(CFG_FORM.nomeMarca)}" placeholder="${escapeHtml(nomeEmpresaAtualCfg())}" oninput="cfgSet('nomeMarca', this.value)"></div>
+      <div class="field full"><label>Logo da empresa</label>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="btn btn-small" onclick="document.getElementById('cfg-portal-input-logo').click()">${iconeCfg('upload')} Enviar logo</button>
+          <button type="button" class="btn btn-small btn-ghost" id="cfg-portal-remover-logo" onclick="cfgSet('logoUrl', ''); renderBotoesImagemPortalCfg();">Remover</button>
+          <input type="file" id="cfg-portal-input-logo" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="enviarImagemPortalCfg(this, 'logoUrl', 400, 400)">
+        </div>
+      </div>
+      <div class="cfg-cores-grid">
+        ${htmlCampoCor('cfg-portal-cor-botao', 'Cor do botão', 'corBotao', '#7c3aed')}
+        ${htmlCampoCor('cfg-portal-cor-texto-botao', 'Cor texto botão', 'corTextoBotao', '#ffffff')}
+      </div>
+      <div style="margin-top:12px;">${htmlCampoCor('cfg-portal-cor-marca', 'Cor da marca no portal', 'corMarca', 'Igual ao botão')}</div>
+      <p class="cfg-secao-nota" style="margin-top:6px;">Pinta o portal inteiro: menu, abas, destaques e links. Vazio, usa a cor do botão.</p>
+
+      <hr class="cfg-divisor">
+      <div class="cfg-secao-rotulo">${iconeCfg('imagem', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Tela de login</div>
+      <div class="cfg-caixa">
+        <span class="cfg-caixa-titulo">Imagem de fundo</span>
+        <p class="cfg-upload-nota">Desktop: 1920×1080px · Mobile: 1080×1920px (a imagem será ajustada automaticamente)</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-small" onclick="document.getElementById('cfg-portal-input-fundo').click()">${iconeCfg('upload')} Enviar imagem</button>
+          <button type="button" class="btn btn-small btn-ghost" id="cfg-portal-remover-fundo" onclick="cfgSet('login.imagemFundo', ''); renderBotoesImagemPortalCfg();">Remover</button>
+          <input type="file" id="cfg-portal-input-fundo" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="enviarImagemPortalCfg(this, 'login.imagemFundo', 1920, 1920)">
+        </div>
+      </div>
+      <div class="cfg-caixa">${htmlCampoCor('cfg-portal-cor-fundo', 'Cor de fundo (caso sem imagem)', 'login.corFundo', '#1a1a2e')}</div>
+      <div class="cfg-caixa">
+        <div class="cfg-cores-grid">
+          <div class="field" style="margin:0;"><label>Título</label><input type="text" maxlength="60" value="${escapeHtml(CFG_FORM.login.titulo)}" placeholder="${escapeHtml(nomeEmpresaAtualCfg())}" oninput="cfgSet('login.titulo', this.value)"></div>
+          <div class="field" style="margin:0;"><label>Subtítulo</label><input type="text" maxlength="90" value="${escapeHtml(CFG_FORM.login.subtitulo)}" placeholder="Acompanhe e aprove seus conteúdos" oninput="cfgSet('login.subtitulo', this.value)"></div>
+        </div>
+      </div>
+      <div class="cfg-caixa">
+        <span class="cfg-caixa-titulo">Disposição</span>
+        ${htmlOpcoesCfg('login.disposicao', [
+          { v: 'centralizada', t: 'Centralizada', d: 'Imagem cobrindo a tela, formulário no meio' },
+          { v: 'dividida', t: 'Dividida', d: 'Imagem com o título de um lado, formulário do outro' },
+        ], 2)}
+      </div>
+      <div class="cfg-caixa">
+        <span class="cfg-caixa-titulo">Textura</span>
+        <p class="cfg-upload-nota">Estilos prontos, com traço fino. A textura some atrás do formulário e aparece nas bordas.</p>
+        <div class="cfg-texturas">
+          ${TEXTURAS_PORTAL.map((tx) => `<button type="button" class="cfg-textura cfg-tx-${tx.v}${CFG_FORM.login.textura === tx.v ? ' ativo' : ''}" onclick="escolherOpcaoCfg(this, 'login.textura', '${tx.v}')"><span>${escapeHtml(tx.t)}</span></button>`).join('')}
+        </div>
+      </div>
+      <div class="cfg-caixa">
+        <span class="cfg-caixa-titulo">Caixa do formulário</span>
+        ${htmlOpcoesCfg('login.caixa', [{ v: 'solida', t: 'Sólida' }, { v: 'vidro', t: 'Vidro (sobre a imagem)' }], 2)}
+      </div>
+      <div class="cfg-caixa">
+        <span class="cfg-caixa-titulo">Campos (telefone, e-mail e senha)</span>
+        <p class="cfg-upload-nota">Vazio = automático: no vidro, campo translúcido com texto branco; na sólida, o padrão.</p>
+        <div class="cfg-cores-grid">
+          ${htmlCampoCor('cfg-portal-campo-fundo', 'Fundo do campo', 'login.campoFundo', 'Automático')}
+          ${htmlCampoCor('cfg-portal-campo-texto', 'Texto do campo', 'login.campoTexto', 'Automático')}
+        </div>
+      </div>
+      <div class="cfg-caixa">
+        <span class="cfg-caixa-titulo">Texto no rodapé</span>
+        <textarea rows="2" maxlength="200" placeholder="Ex.: Atendimento de segunda a sexta, das 9h às 18h" oninput="cfgSet('login.rodape', this.value)">${escapeHtml(CFG_FORM.login.rodape)}</textarea>
+      </div>
+
+      <hr class="cfg-divisor">
+      <div class="cfg-secao-rotulo">${iconeCfg('caixa', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Portal por dentro</div>
+      <div class="cfg-caixa">
+        <span class="cfg-caixa-titulo">Tamanho do seu logo no topo</span>
+        ${htmlOpcoesCfg('dentro.tamanhoLogo', [{ v: 'pequeno', t: 'Pequeno' }, { v: 'medio', t: 'Médio' }, { v: 'grande', t: 'Grande' }], 3)}
+      </div>
+      <div class="cfg-caixa" style="padding-top:2px; padding-bottom:2px;">
+        ${htmlLinhaToggleCfg('Cartão do cliente na lateral', 'Foto ou logo do cliente com nome, empresa, e-mail e WhatsApp dele. A foto se troca na configuração de cada cliente.', 'dentro.cartaoCliente')}
+      </div>
+
+      <hr class="cfg-divisor">
+      <div class="cfg-secao-rotulo">${iconeCfg('olhoFechado', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Visibilidade de conteúdos</div>
+      <p class="cfg-secao-nota">Selecione quais status o cliente pode ver no portal (calendário, feed e lista). Conteúdos em rascunho ou revisão interna ficam ocultos por padrão.</p>
+      ${htmlLinhaToggleCfg(ponto('#f59e0b') + 'Em aprovação', 'Aguardando aprovação do cliente', 'visibilidade.emAprovacao')}
+      ${htmlLinhaToggleCfg(ponto('#fb923c') + 'Em revisão', 'Cliente pediu ajustes', 'visibilidade.emRevisao')}
+      ${htmlLinhaToggleCfg(ponto('#22c55e') + 'Aprovado', 'Já aprovado pelo cliente', 'visibilidade.aprovado')}
+      ${htmlLinhaToggleCfg(ponto('#10b981') + 'Publicado', 'Já foi ao ar', 'visibilidade.publicado')}
+      ${htmlLinhaToggleCfg(ponto('#9ca3af') + 'Em produção (rascunho)', 'Ainda sendo criado pela equipe', 'visibilidade.emProducao')}
+      ${htmlLinhaToggleCfg(ponto('#6366f1') + 'Revisão interna', 'Em revisão dentro da equipe', 'visibilidade.revisaoInterna')}
+
+      <hr class="cfg-divisor">
+      <div class="cfg-secao-rotulo">${iconeCfg('escudo', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Permissões do cliente</div>
+      ${htmlLinhaToggleCfg('Criar tarefas', 'Clientes podem criar novas tarefas', 'permissoes.criarTarefas')}
+      ${htmlLinhaToggleCfg('Editar tarefas', 'Clientes podem editar tarefas existentes', 'permissoes.editarTarefas')}
+      ${htmlLinhaToggleCfg('Baixar arquivos', 'Desligado, os botões de baixar somem do portal. Serve para segurar a entrega até o pagamento.', 'permissoes.baixarArquivos')}
+
+      <hr class="cfg-divisor">
+      <div class="cfg-secao-rotulo">${iconeCfg('caixa', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Solicitações de serviço</div>
+      ${htmlLinhaToggleCfg('Mostrar aba "Relatório"', 'Exibe relatório mensal dos conteúdos produzidos no portal do cliente.', 'solicitacoes.abaRelatorio')}
+      ${htmlLinhaToggleCfg('Mostrar aba "Produção" <span style="font-weight:400; color:var(--text-soft);">(padrão)</span>', 'Clientes veem as tarefas em produção no portal.', 'solicitacoes.abaProducao', '<span class="cfg-nota-laranja">Este é o padrão geral. Você vai poder ligar/desligar por cliente no acesso de cada um.</span>')}
+      ${htmlLinhaToggleCfg('Sugestões de post do cliente', 'O cliente manda ideias e referências pelo portal. Elas chegam no quadro de produção, onde viram pauta em um clique.', 'solicitacoes.sugestoesPost')}
+      ${htmlLinhaToggleCfg('Permitir solicitações <span style="font-weight:400; color:var(--text-soft);">(padrão)</span>', 'Clientes podem solicitar serviços/orçamentos.', 'solicitacoes.permitirSolicitacoes', '<span class="cfg-nota-laranja">Este é o padrão geral. Você vai poder ligar/desligar por cliente no acesso de cada um.</span>')}`,
+    rodape: `
+      <button type="button" class="btn" title="Ver pré-visualização" aria-label="Ver pré-visualização" onclick="document.getElementById('cfg-portal-preview').scrollIntoView({ behavior: 'smooth', block: 'center' })">${iconeCfg('olho')}</button>
+      <button type="button" class="btn btn-primary" style="flex:1; justify-content:center;" onclick="salvarCfgPortalCliente()">Salvar Configurações</button>`,
+  });
+  renderPreviewPortalCfg();
+  renderBotoesImagemPortalCfg();
+}
+
+function nomeEmpresaAtualCfg() {
+  return (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || 'Minha Empresa';
+}
+
+function renderBotoesImagemPortalCfg() {
+  const logo = document.getElementById('cfg-portal-remover-logo');
+  const fundo = document.getElementById('cfg-portal-remover-fundo');
+  if (logo) logo.style.display = CFG_FORM && CFG_FORM.logoUrl ? '' : 'none';
+  if (fundo) fundo.style.display = CFG_FORM && CFG_FORM.login.imagemFundo ? '' : 'none';
+  renderPreviewPortalCfg();
+}
+
+function enviarImagemPortalCfg(input, caminho, maxW, maxH) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  lerImagemRedimensionada(file, maxW, maxH).then((url) => {
+    cfgSet(caminho, url);
+    renderBotoesImagemPortalCfg();
+  }).catch((err) => avisar(err.message));
+}
+
+function renderPreviewPortalCfg() {
+  const el = document.getElementById('cfg-portal-preview');
+  if (!el || !CFG_FORM) return;
+  const f = CFG_FORM;
+  const fundo = urlImagemSegura(f.login.imagemFundo);
+  el.style.backgroundColor = corHexValida(f.login.corFundo) || '#1a1a2e';
+  el.style.backgroundImage = fundo ? `url("${fundo}")` : 'none';
+  el.style.justifyContent = f.login.disposicao === 'dividida' ? 'flex-end' : 'center';
+  const logo = urlImagemSegura(f.logoUrl);
+  const nome = f.login.titulo || f.nomeMarca || nomeEmpresaAtualCfg();
+  const textura = TEXTURAS_PORTAL.some((t) => t.v === f.login.textura) ? f.login.textura : 'nenhuma';
+  el.innerHTML = `
+    <div class="cfg-portal-preview-textura cfg-tx-${textura}"></div>
+    <div class="cfg-portal-preview-conteudo ${f.login.caixa === 'vidro' ? 'vidro' : 'solida'}">
+      ${logo ? `<img src="${logo}" alt="">` : ''}
+      <div class="cfg-portal-preview-nome">${escapeHtml(nome)}<small>Pré-visualização</small></div>
+      <button type="button" class="cfg-portal-preview-btn" tabindex="-1" style="background:${corHexValida(f.corBotao) || '#7c3aed'}; color:${corHexValida(f.corTextoBotao) || '#ffffff'};">Entrar</button>
+    </div>`;
+}
+
+function salvarCfgPortalCliente() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CFG_PORTAL_CARREGADO) { avisar('Ainda carregando — aguarde um instante e tente de novo.'); return; }
+  const dados = mesclarComPadrao(portalConfigPadrao(), CFG_FORM);
+  ['corBotao', 'corTextoBotao', 'corMarca'].forEach((k) => { dados[k] = corHexValida(dados[k]); });
+  ['corFundo', 'campoFundo', 'campoTexto'].forEach((k) => { dados.login[k] = corHexValida(dados.login[k]); });
+  dados.logoUrl = urlImagemSegura(dados.logoUrl);
+  dados.login.imagemFundo = urlImagemSegura(dados.login.imagemFundo);
+  if (tamanhoAproximadoKb(dados) > 900) { avisar('As imagens enviadas estão grandes demais pra salvar juntas. Tente uma imagem de fundo menor (ou mais simples).'); return; }
+  CFG_PORTAL_DATA = dados;
+  cloudSet(CFG_PORTAL_KEY, dados);
+  fecharModalCfg();
+  avisar('Configurações do Portal do Cliente salvas!');
+}
+
+
+// =====================================================================
+// 4) Aparência do Briefing (página pública briefing.html)
+// =====================================================================
+
+function briefingVisualPadrao() {
+  return { tema: 'claro', corDestaque: '', corFundo: '', corTexto: '', logoUrl: '', mostrarLogo: true, mostrarNome: true, boasVindas: '' };
+}
+
+// O que vai gravado dentro de cada briefing (o cliente final não tem
+// acesso aos dados da empresa, então a aparência viaja junto com o
+// briefing, igual o visualConfig das propostas). Logo vazio = usa o logo
+// do Portal do Cliente e, se também não tiver, o logo do perfil.
+function obterVisualBriefingAtual() {
+  const v = mesclarComPadrao(briefingVisualPadrao(), CFG_BRIEFING_VISUAL_DATA);
+  const logo = urlImagemSegura(v.logoUrl) || urlImagemSegura(CFG_PORTAL_DATA && CFG_PORTAL_DATA.logoUrl) || urlImagemSegura(PERFIL_DATA && PERFIL_DATA.logoUrl) || '';
+  return {
+    tema: ['claro', 'escuro', 'auto'].includes(v.tema) ? v.tema : 'claro',
+    corDestaque: corHexValida(v.corDestaque), corFundo: corHexValida(v.corFundo), corTexto: corHexValida(v.corTexto),
+    logoUrl: logo, mostrarLogo: !!v.mostrarLogo, mostrarNome: !!v.mostrarNome,
+    boasVindas: String(v.boasVindas || '').slice(0, 400),
+  };
+}
+
+function abrirCfgBriefingVisual() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CFG_BRIEFING_VISUAL_CARREGADO) { avisar('Ainda carregando — aguarde um instante e tente de novo.'); return; }
+  CFG_FORM = mesclarComPadrao(briefingVisualPadrao(), CFG_BRIEFING_VISUAL_DATA);
+  CFG_FORM_APOS = null;
+  abrirModalCfg({
+    titulo: 'Aparência do Briefing',
+    sub: 'Personalize a página pública que seus clientes veem ao preencher um briefing.',
+    corpo: `
+      <div class="cfg-secao-titulo">Tema da página</div>
+      ${htmlOpcoesCfg('tema', [{ v: 'claro', t: 'Claro' }, { v: 'escuro', t: 'Escuro' }, { v: 'auto', t: 'Automático' }], 3, true)}
+      <p class="cfg-secao-nota" style="margin-top:8px;">"Automático" segue o tema do dispositivo do cliente. Use Claro ou Escuro para forçar.</p>
+
+      <div class="cfg-secao-titulo">Cores</div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        ${htmlCampoCor('cfg-brf-cor-destaque', 'Cor de destaque (botões, progresso)', 'corDestaque', 'Ex: #7c3aed')}
+        ${htmlCampoCor('cfg-brf-cor-fundo', 'Cor de fundo (opcional)', 'corFundo', 'Vazio = usa o tema')}
+        ${htmlCampoCor('cfg-brf-cor-texto', 'Cor do texto (opcional)', 'corTexto', 'Vazio = usa o tema')}
+      </div>
+
+      <div class="cfg-secao-titulo">Logo / Branding</div>
+      <div class="field full"><label>URL do logo</label><input type="url" id="cfg-brf-logo-url" value="${escapeHtml(CFG_FORM.logoUrl && !CFG_FORM.logoUrl.startsWith('data:') ? CFG_FORM.logoUrl : '')}" placeholder="https://... (vazio = usa o logo do Portal do Cliente)" oninput="cfgSet('logoUrl', this.value.trim())"></div>
+      ${htmlLinhaToggleCfg('Mostrar logo no topo', '', 'mostrarLogo')}
+      ${htmlLinhaToggleCfg('Mostrar nome da empresa', '', 'mostrarNome')}
+
+      <div class="field full" style="margin-top:14px;"><label>Mensagem de boas-vindas (opcional)</label><textarea rows="3" maxlength="400" placeholder="Mensagem curta exibida no topo do briefing" oninput="cfgSet('boasVindas', this.value)">${escapeHtml(CFG_FORM.boasVindas)}</textarea></div>
+      <p class="cfg-secao-nota" style="margin-top:8px;">Vale para os briefings novos e também para os que ainda estão aguardando resposta. Os já respondidos não mudam.</p>`,
+    rodape: `
+      <button type="button" class="btn" onclick="fecharModalCfg()">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="cfg-brf-btn-salvar" onclick="salvarCfgBriefingVisual()">Salvar</button>`,
+  });
+}
+
+function salvarCfgBriefingVisual() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CFG_BRIEFING_VISUAL_CARREGADO) { avisar('Ainda carregando — aguarde um instante e tente de novo.'); return; }
+  const f = CFG_FORM;
+  const urlDigitada = String(f.logoUrl || '').trim();
+  if (urlDigitada && !urlImagemSegura(urlDigitada)) { avisar('A URL do logo precisa começar com https:// (ou deixe vazio pra usar o logo do Portal do Cliente).'); return; }
+  const dados = {
+    tema: ['claro', 'escuro', 'auto'].includes(f.tema) ? f.tema : 'claro',
+    corDestaque: corHexValida(f.corDestaque), corFundo: corHexValida(f.corFundo), corTexto: corHexValida(f.corTexto),
+    logoUrl: urlImagemSegura(urlDigitada), mostrarLogo: !!f.mostrarLogo, mostrarNome: !!f.mostrarNome,
+    boasVindas: String(f.boasVindas || '').trim().slice(0, 400),
+  };
+  CFG_BRIEFING_VISUAL_DATA = dados;
+  cloudSet(CFG_BRIEFING_VISUAL_KEY, dados);
+  fecharModalCfg();
+  atualizarVisualBriefingsPendentes().then((n) => {
+    avisar('Aparência do briefing salva!' + (n ? ` Também atualizei ${n} briefing${n > 1 ? 's' : ''} que ainda aguarda${n > 1 ? 'm' : ''} resposta.` : ''));
+  });
+}
+
+async function atualizarVisualBriefingsPendentes() {
+  if (!FIREBASE_PRONTO || !TENANT_ID || !firestoreDb) return 0;
+  try {
+    const visual = obterVisualBriefingAtual();
+    const snap = await firestoreDb.collection(BRIEFINGS_PUBLICOS_COLECAO).where('tenantId', '==', TENANT_ID).get();
+    const pendentes = [];
+    snap.forEach((doc) => { if ((doc.data() || {}).status === 'pendente') pendentes.push(doc.ref); });
+    await Promise.all(pendentes.map((ref) => ref.set({ visual }, { merge: true })));
+    return pendentes.length;
+  } catch (err) {
+    console.error('Erro ao atualizar briefings pendentes:', err);
+    return 0;
+  }
+}
+
+// Aplicado no briefing.html (página do cliente final).
+function aplicarVisualBriefingPublico(visual) {
+  if (!visual || typeof visual !== 'object') return;
+  const root = document.documentElement;
+  let modo = visual.tema === 'escuro' ? 'dark' : 'light';
+  if (visual.tema === 'auto') modo = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  root.setAttribute('data-theme', modo);
+  const destaque = corHexValida(visual.corDestaque);
+  const fundo = corHexValida(visual.corFundo);
+  const texto = corHexValida(visual.corTexto);
+  if (destaque) {
+    root.style.setProperty('--brf-destaque', destaque);
+    root.style.setProperty('--blue-strong', destaque);
+    root.style.setProperty('--brf-texto-destaque', luminanciaHex(destaque) > 0.3 ? '#0b0d0b' : '#ffffff');
+  }
+  if (fundo) {
+    root.style.setProperty('--bg', fundo);
+    root.style.setProperty('--bg-elevated', `color-mix(in srgb, ${fundo} 93%, ${texto || (modo === 'dark' ? '#ffffff' : '#000000')})`);
+    root.style.setProperty('--bg-soft', `color-mix(in srgb, ${fundo} 88%, ${texto || (modo === 'dark' ? '#ffffff' : '#000000')})`);
+    root.style.setProperty('--border', `color-mix(in srgb, ${fundo} 80%, ${texto || (modo === 'dark' ? '#ffffff' : '#000000')})`);
+    document.body.style.background = fundo;
+  }
+  if (texto) {
+    root.style.setProperty('--text', texto);
+    root.style.setProperty('--text-soft', `color-mix(in srgb, ${texto} 65%, ${fundo || (modo === 'dark' ? '#000000' : '#ffffff')})`);
+  }
+}
+
+
+// =====================================================================
+// 5) Categorias de Conteúdo
+// =====================================================================
+
+let CFG_CATEGORIA_EDITANDO = null; // null = nenhuma, 'nova' = criando, ou id
+
+function abrirCfgCategoriasConteudo() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CFG_CATEGORIAS_CARREGADO) { avisar('Ainda carregando as categorias — aguarde um instante e tente de novo.'); return; }
+  CFG_CATEGORIA_EDITANDO = null;
+  abrirModalCfg({
+    titulo: 'Categorias de Conteúdo',
+    sub: 'Crie e edite categorias próprias que aparecem ao criar um novo conteúdo.',
+    corpo: '<div id="cfg-categorias-corpo"></div>',
+  });
+  renderCfgCategorias();
+}
+
+function htmlFormCategoriaCfg(cat) {
+  const cor = corHexValida(cat && cat.cor) || '#7c3aed';
+  return `
+    <div class="cfg-caixa" style="margin-bottom:12px;">
+      <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="field" style="flex:1; min-width:180px; margin:0;"><label>Nome da categoria</label><input type="text" id="cfg-categoria-nome" maxlength="40" value="${escapeHtml(cat ? cat.nome : '')}" placeholder="Ex: Podcast" onkeydown="if(event.key==='Enter'){event.preventDefault(); salvarCategoriaCfg();}"></div>
+        <div class="field" style="margin:0;"><label>Cor</label><input type="color" id="cfg-categoria-cor" value="${expandirHex(cor)}" style="width:52px; padding:3px; cursor:pointer;"></div>
+        <button type="button" class="btn" onclick="CFG_CATEGORIA_EDITANDO=null; renderCfgCategorias();">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarCategoriaCfg()">Salvar</button>
+      </div>
+    </div>`;
+}
+
+function renderCfgCategorias() {
+  const el = document.getElementById('cfg-categorias-corpo');
+  if (!el) return;
+  const lista = CFG_CATEGORIAS_DATA || [];
+  const cabecalho = `
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:14px;">
+      <div><strong style="font-size:14px;">Categorias de conteúdo</strong><p style="margin:2px 0 0; font-size:11.5px; color:var(--text-soft);">Suas próprias categorias (ex: Podcast, Newsletter, Peça gráfica). Aparecem na seção "Outros" ao criar conteúdo.</p></div>
+      <button type="button" class="btn btn-primary" style="flex-shrink:0;" onclick="CFG_CATEGORIA_EDITANDO='nova'; renderCfgCategorias();">${iconeCfg('mais')} Nova categoria</button>
+    </div>`;
+  const form = CFG_CATEGORIA_EDITANDO === 'nova' ? htmlFormCategoriaCfg(null) : '';
+  const itens = lista.length ? lista.map((c) => (CFG_CATEGORIA_EDITANDO === c.id ? htmlFormCategoriaCfg(c) : `
+    <div class="cfg-categoria-linha">
+      <span class="cfg-categoria-bolinha" style="background:${corHexValida(c.cor) || '#7c3aed'};"></span>
+      <strong style="flex:1; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(c.nome)}</strong>
+      <button type="button" class="btn btn-small" onclick="CFG_CATEGORIA_EDITANDO='${escapeParaOnclick(c.id)}'; renderCfgCategorias();">Editar</button>
+      <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirCategoriaCfg('${escapeParaOnclick(c.id)}')">Excluir</button>
+    </div>`)).join('') : (CFG_CATEGORIA_EDITANDO === 'nova' ? '' : `
+    <div class="cfg-vazio">
+      <svg viewBox="0 0 24 24"><path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2.59 12.6a2 2 0 0 1 0-2.83L9.76 2.6a2 2 0 0 1 2.83 0l8 8a2 2 0 0 1 0 2.83z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+      Nenhuma categoria personalizada ainda.
+      <div style="margin-top:12px;"><button type="button" class="btn" onclick="CFG_CATEGORIA_EDITANDO='nova'; renderCfgCategorias();">${iconeCfg('mais')} Criar primeira</button></div>
+    </div>`);
+  el.innerHTML = cabecalho + form + itens;
+  const campo = document.getElementById('cfg-categoria-nome');
+  if (campo) campo.focus();
+}
+
+function salvarCategoriaCfg() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CFG_CATEGORIAS_CARREGADO) { avisar('Ainda carregando — aguarde um instante e tente de novo.'); return; }
+  const nome = (document.getElementById('cfg-categoria-nome').value || '').trim();
+  const cor = corHexValida(document.getElementById('cfg-categoria-cor').value) || '#7c3aed';
+  if (!nome) { avisar('Dê um nome pra categoria.'); return; }
+  const lista = (CFG_CATEGORIAS_DATA || []).slice();
+  const duplicada = lista.find((c) => c.nome.toLowerCase() === nome.toLowerCase() && c.id !== CFG_CATEGORIA_EDITANDO);
+  if (duplicada) { avisar('Já existe uma categoria com esse nome.'); return; }
+  if (CFG_CATEGORIA_EDITANDO && CFG_CATEGORIA_EDITANDO !== 'nova') {
+    const idx = lista.findIndex((c) => c.id === CFG_CATEGORIA_EDITANDO);
+    if (idx >= 0) lista[idx] = { ...lista[idx], nome, cor };
+  } else {
+    lista.push({ id: genId('cat'), nome, cor, criadoEm: new Date().toISOString() });
+  }
+  CFG_CATEGORIAS_DATA = lista;
+  cloudSet(CFG_CATEGORIAS_CONTEUDO_KEY, lista);
+  CFG_CATEGORIA_EDITANDO = null;
+  renderCfgCategorias();
+}
+
+function excluirCategoriaCfg(id) {
+  const cat = (CFG_CATEGORIAS_DATA || []).find((c) => c.id === id);
+  if (!cat) return;
+  confirmarAcao(`Excluir a categoria "${cat.nome}"?`, () => {
+    if (FIREBASE_PRONTO && TENANT_ID && !CFG_CATEGORIAS_CARREGADO) return;
+    CFG_CATEGORIAS_DATA = CFG_CATEGORIAS_DATA.filter((c) => c.id !== id);
+    cloudSet(CFG_CATEGORIAS_CONTEUDO_KEY, CFG_CATEGORIAS_DATA);
+    renderCfgCategorias();
+  }, 'Excluir categoria');
+}
+
+
+// =====================================================================
+// 6) Página de Aprovação / Checkout
+// =====================================================================
+// Edita a MESMA configuração da aba CRM → Orçamentos → Página de
+// Aprovação (CRM_APROVACAO_KEY) — não é uma cópia. Os campos novos
+// daqui (fundo, texto, arredondamento, banner, rodapé, título de
+// sucesso) também passam a valer na página pública da proposta.
+
+const ARREDONDAMENTOS_BOTAO = { nenhum: '0px', pequeno: '6px', medio: '10px', grande: '16px', completo: '999px' };
+
+function abrirCfgCheckout() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CRM_APROVACAO_CARREGADO) { avisar('Ainda carregando — aguarde um instante e tente de novo.'); return; }
+  const atual = Object.assign(aprovacaoConfigPadrao(), CRM_APROVACAO_DATA || {});
+  CFG_FORM = {
+    corPrimaria: atual.corPrimaria, corFundo: atual.corFundo, corTexto: atual.corTexto, corTextoBotao: atual.corTextoBotao,
+    arredondamento: ARREDONDAMENTOS_BOTAO[atual.arredondamento] ? atual.arredondamento : 'medio',
+    logoUrl: atual.logoUrl, bannerUrl: atual.bannerUrl,
+    tituloAba: atual.tituloAba, mensagemBoasVindas: atual.mensagemBoasVindas, textoRodape: atual.textoRodape,
+    tituloSucesso: atual.tituloSucesso, mensagemAgradecimento: atual.mensagemAgradecimento,
+  };
+  CFG_FORM_APOS = null;
+  const acordeon = (icone, titulo, corpo) => `
+    <div class="cfg-acordeon">
+      <button type="button" class="cfg-acordeon-cab" onclick="this.parentElement.classList.toggle('fechado')">${iconeCfg(icone)} ${titulo}<svg class="cfg-acordeon-seta" viewBox="0 0 24 24">${CFG_ICONES_EXTRA.seta}</svg></button>
+      <div class="cfg-acordeon-corpo">${corpo}</div>
+    </div>`;
+
+  abrirModalCfg({
+    titulo: 'Personalizar Orçamentos / Checkout',
+    corpo: `
+      ${acordeon('paleta', 'Cores e tema', `
+        <div class="cfg-cores-grid">
+          ${htmlCampoCor('cfg-chk-cor-primaria', 'Cor primária', 'corPrimaria', '#8b5cf6')}
+          ${htmlCampoCor('cfg-chk-cor-fundo', 'Cor de fundo', 'corFundo', 'Padrão do tema')}
+          ${htmlCampoCor('cfg-chk-cor-texto', 'Cor do texto', 'corTexto', 'Padrão do tema')}
+          ${htmlCampoCor('cfg-chk-cor-texto-botao', 'Texto do botão', 'corTextoBotao', '#ffffff')}
+        </div>
+        <label style="display:block; font-size:12px; font-weight:600; margin:14px 0 6px;">Arredondamento dos botões</label>
+        ${htmlPilulasCfg('arredondamento', [{ v: 'nenhum', t: 'Nenhum' }, { v: 'pequeno', t: 'Pequeno' }, { v: 'medio', t: 'Médio' }, { v: 'grande', t: 'Grande' }, { v: 'completo', t: 'Completo' }])}`)}
+
+      ${acordeon('imagem', 'Logo e imagem', `
+        <div class="cfg-upload-cab">Logo <span>200×200px</span></div>
+        <p class="cfg-upload-nota">Proporção sugerida: 1:1</p>
+        <button type="button" class="cfg-upload" id="cfg-chk-upload-logo" onclick="document.getElementById('cfg-chk-input-logo').click()"></button>
+        <input type="file" id="cfg-chk-input-logo" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="enviarImagemCheckoutCfg(this, 'logoUrl', 400, 400)">
+        <div class="cfg-upload-cab" style="margin-top:16px;">Banner <span>1200×300px</span></div>
+        <p class="cfg-upload-nota">Proporção sugerida: 4:1</p>
+        <button type="button" class="cfg-upload" id="cfg-chk-upload-banner" onclick="document.getElementById('cfg-chk-input-banner').click()"></button>
+        <input type="file" id="cfg-chk-input-banner" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="enviarImagemCheckoutCfg(this, 'bannerUrl', 1200, 400)">`)}
+
+      ${acordeon('texto', 'Textos customizados', `
+        <div class="field full"><label>Título da página</label><input type="text" maxlength="70" value="${escapeHtml(CFG_FORM.tituloAba)}" placeholder="Ex: Proposta - ${escapeHtml(nomeEmpresaAtualCfg())}" oninput="cfgSet('tituloAba', this.value)"><p class="crm-campo-nota" style="font-size:11px; color:var(--text-soft); margin:4px 0 0;">É o nome que aparece na aba do navegador.</p></div>
+        <div class="field full"><label>Mensagem de boas-vindas</label><textarea rows="3" maxlength="400" placeholder="Mensagem exibida no topo da proposta..." oninput="cfgSet('mensagemBoasVindas', this.value)">${escapeHtml(CFG_FORM.mensagemBoasVindas)}</textarea></div>
+        <div class="field full"><label>Texto do rodapé</label><input type="text" maxlength="160" value="${escapeHtml(CFG_FORM.textoRodape)}" placeholder="Ex: Proposta válida mediante assinatura" oninput="cfgSet('textoRodape', this.value)"></div>
+        <hr class="cfg-divisor" style="margin:14px 0;">
+        <div class="field full"><label>Título de sucesso</label><input type="text" maxlength="70" value="${escapeHtml(CFG_FORM.tituloSucesso)}" placeholder="Proposta aprovada!" oninput="cfgSet('tituloSucesso', this.value)"></div>
+        <div class="field full"><label>Mensagem de sucesso</label><textarea rows="3" maxlength="400" placeholder="Obrigado pela confiança! Entraremos em contato em breve." oninput="cfgSet('mensagemAgradecimento', this.value)">${escapeHtml(CFG_FORM.mensagemAgradecimento)}</textarea></div>`)}
+
+      <p class="cfg-secao-nota" style="margin-top:6px;">Paletas prontas, favicon, avaliações e projetos continuam em <a href="crm.html#orcamentos-aprovacao" style="color:var(--blue-text); font-weight:600;">CRM → Orçamentos → Página de Aprovação</a>. Vale para os próximos orçamentos enviados.</p>`,
+    rodape: '<button type="button" class="btn btn-primary" style="flex:1; justify-content:center;" onclick="salvarCfgCheckout()">Salvar configurações</button>',
+  });
+  renderUploadsCheckoutCfg();
+}
+
+function htmlAreaUploadCfg(url, caminho) {
+  const seguro = urlImagemSegura(url);
+  if (seguro) {
+    return `<img src="${seguro}" alt=""><span>Clique para trocar</span> · <span role="button" tabindex="0" style="color:var(--danger); font-weight:600;" onclick="event.stopPropagation(); cfgSet('${caminho}', ''); renderUploadsCheckoutCfg();">Remover</span>`;
+  }
+  return `${iconeCfg('imagem', 'width:26px; height:26px; stroke:var(--text-soft); fill:none; stroke-width:1.8;')}<strong>Clique para fazer upload</strong>PNG, JPG até 5MB (auto-convertido para WebP)`;
+}
+
+function renderUploadsCheckoutCfg() {
+  const logo = document.getElementById('cfg-chk-upload-logo');
+  const banner = document.getElementById('cfg-chk-upload-banner');
+  if (logo) logo.innerHTML = htmlAreaUploadCfg(CFG_FORM && CFG_FORM.logoUrl, 'logoUrl');
+  if (banner) banner.innerHTML = htmlAreaUploadCfg(CFG_FORM && CFG_FORM.bannerUrl, 'bannerUrl');
+}
+
+function enviarImagemCheckoutCfg(input, caminho, maxW, maxH) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  lerImagemRedimensionada(file, maxW, maxH).then((url) => {
+    cfgSet(caminho, url);
+    renderUploadsCheckoutCfg();
+  }).catch((err) => avisar(err.message));
+}
+
+function salvarCfgCheckout() {
+  if (FIREBASE_PRONTO && TENANT_ID && !CRM_APROVACAO_CARREGADO) { avisar('Ainda carregando — aguarde um instante e tente de novo.'); return; }
+  const f = CFG_FORM;
+  const base = Object.assign(aprovacaoConfigPadrao(), CRM_APROVACAO_DATA || {});
+  const dados = {
+    ...base,
+    corPrimaria: corHexValida(f.corPrimaria) || base.corPrimaria,
+    corFundo: corHexValida(f.corFundo), corTexto: corHexValida(f.corTexto), corTextoBotao: corHexValida(f.corTextoBotao),
+    arredondamento: ARREDONDAMENTOS_BOTAO[f.arredondamento] ? f.arredondamento : 'medio',
+    logoUrl: urlImagemSegura(f.logoUrl), bannerUrl: urlImagemSegura(f.bannerUrl),
+    tituloAba: String(f.tituloAba || '').trim(), mensagemBoasVindas: String(f.mensagemBoasVindas || '').trim(),
+    textoRodape: String(f.textoRodape || '').trim(), tituloSucesso: String(f.tituloSucesso || '').trim(),
+    mensagemAgradecimento: String(f.mensagemAgradecimento || '').trim(),
+  };
+  if (tamanhoAproximadoKb(dados) > 700) { avisar('O logo e o banner juntos ficaram grandes demais. Tente um banner mais leve (ou mais simples).'); return; }
+  CRM_APROVACAO_DATA = dados;
+  cloudSet(CRM_APROVACAO_KEY, dados);
+  fecharModalCfg();
+  avisar('Configurações salvas! A partir de agora, todo orçamento enviado usa esse visual.');
+}
+
+
+function lerPreferenciasAparenciaConfig() {
+  try { return JSON.parse(localStorage.getItem('eagles_prefs_aparencia') || '{}'); } catch (e) { return {}; }
+}
+
+function salvarPreferenciasAparenciaConfig() {
+  const prefs = {
+    faviconUrl: document.getElementById('cfg-favicon-url').value.trim(),
+    ocultarMarca: document.getElementById('cfg-ocultar-marca').checked,
+    contadorProducoes: document.getElementById('cfg-contador-producoes').checked,
+  };
+  localStorage.setItem('eagles_prefs_aparencia', JSON.stringify(prefs));
+}
+
+function selecionarFaviconConfig(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    document.getElementById('cfg-favicon-url').value = e.target.result;
+    salvarPreferenciasAparenciaConfig();
+  };
+  reader.readAsDataURL(file);
+}
+
+
+// ----- Aba: Atualizações -----
+// Changelog de verdade, com o historico real do que foi construido
+// nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
+
+const CFG_CHANGELOG = [
+  { data: '02/10/2026 · Auditoria', itens: [
+    { titulo: 'Correções e textos atualizados', badges: ['corrigido'], texto: 'Título do Kanban acima da barra; projeto antigo ligado como recorrente agora renova todo mês; a página pública de planos se atualiza quando um serviço dela é renomeado ou excluído; Central de Ajuda, tutorial e robozinho atualizados com os níveis de acesso, o menu Criar, Projetos e Serviços.' },
+  ]},
+  { data: '02/10/2026 · Serviços', itens: [
+    { titulo: 'Catálogo de Serviços', badges: ['novo'], texto: 'Cadastre serviços do zero ou a partir de 10 sugestões prontas, com preço, custo, moeda, categoria, recorrência, comissão e um pacote de conteúdos por mês. Categorias próprias com cores. Visão em cartões ou lista.' },
+    { titulo: 'Produtos e Planos', badges: ['novo'], texto: 'Produtos com SKU, NCM, custo, margem, estoque mínimo e histórico de movimentações (no plano ERP + CRM, os mesmos produtos e o mesmo estoque do ERP). Planos que agrupam serviços com valor fixo e uma apresentação pública com link próprio.' },
+    { titulo: 'Integrado ao Novo Projeto e ao Orçamento', badges: ['melhoria'], texto: 'Escolher no Novo Projeto um serviço que gera conteúdos já preenche a etapa Conteúdos. No orçamento, o botão "Adicionar do catálogo" puxa nome e valor do serviço.' },
+  ]},
+  { data: '02/10/2026 · Kanban', itens: [
+    { titulo: 'Botão Criar com 4 opções', badges: ['novo'], texto: 'Novo Projeto (fluxo guiado), Nova Tarefa (completa), Tarefa Rápida (só título e prazo, cai em "A Fazer") e Importar tarefas.' },
+    { titulo: 'Novo Projeto em 6 etapas', badges: ['novo'], texto: 'Informações (cliente, etapa, valor, início, prazo e recorrência), Modelos (cada item vira uma tarefa), Serviços (catálogo com valores que somam no projeto), Equipe, Kanban (colunas próprias do projeto, se quiser) e o plano de Conteúdos. Projeto recorrente renova as tarefas todo mês; Pausado e Cancelado saem do quadro.' },
+  ]},
+  { data: '02/10/2026 · Níveis de acesso', itens: [
+    { titulo: 'Diretor, Administrativo e Financeiro', badges: ['novo'], texto: 'Cada usuário tem um nível. Diretor vê e faz tudo; Administrativo faz tudo menos o financeiro (Painel, Meu Negócio e Financeiro aparecem borrados); Financeiro cuida do financeiro e só visualiza o resto. A proteção vale no banco de dados, não só na tela.' },
+    { titulo: 'Limite de usuários por plano e titular da conta', badges: ['novo'], texto: 'Cada empresa tem o número de usuários contratado (1 a 5). Quem contratou é o titular: sempre Diretor e só a Eagles Labz consegue trocá-lo ou removê-lo.' },
+  ]},
+  { data: '02/10/2026', itens: [
+    { titulo: 'Tutorial no Painel do ERP', badges: ['novo'], texto: 'O Painel ganhou o botão "Tutorial": um guia pelo resumo do mês, comparativo, pendências e calendário financeiro.' },
+    { titulo: 'Tutorial em todo o Comercial', badges: ['novo'], texto: 'Clientes, Pipeline, Leads, Orçamentos e Briefings ganharam o botão "Tutorial", com um guia passo a passo que ilumina cada parte da tela. O Pipeline também ganhou um cabeçalho com título.' },
+  ]},
+  { data: '02/10/2026 · Kanban (Entrega 3)', itens: [
+    { titulo: 'Automações', badges: ['novo'], texto: 'Regras "quando acontecer X, faça Y": ao criar, mover pra uma coluna, concluir ou completar o checklist → definir responsável, prioridade, etiqueta, prazo, mover, adicionar o checklist de um modelo ou arquivar. Dá pra limitar a um projeto e ligar/desligar cada uma.' },
+    { titulo: 'Importar do Trello e de planilha', badges: ['novo'], texto: 'Traga um quadro do Trello (arquivo JSON exportado) com cards, checklists, prazos, etiquetas e listas virando colunas — ou uma planilha CSV, com prévia antes de importar.' },
+    { titulo: 'Fixar atalho, Destacar e Tutorial', badges: ['novo'], texto: 'Salve uma combinação de filtros como botão de um clique, abra o Kanban em tela cheia (Esc pra sair) e conheça a tela com o tutorial guiado.' },
+  ]},
+  { data: '02/10/2026 · Kanban (Entrega 2)', itens: [
+    { titulo: 'Projetos', badges: ['novo'], texto: 'Agrupe tarefas de um mesmo trabalho num projeto, com cor, cliente, responsável e prazo. O projeto aparece como cartão no Quadro (com o progresso das tarefas), tem um modo de exibição próprio e pode ser escolhido no filtro "Todas as tarefas".' },
+    { titulo: 'Subtarefas, Modelos e Recorrentes', badges: ['novo'], texto: 'Divida uma tarefa em subtarefas; crie tarefas a partir de modelos prontos (ou salve as suas como modelo); e marque tarefas que se repetem — ao concluir, a próxima é criada sozinha.' },
+    { titulo: 'Selecionar e Carga', badges: ['novo'], texto: 'Selecione várias tarefas pra mover, mudar prioridade, responsável ou prazo, arquivar ou excluir de uma vez. E veja a carga de cada pessoa da equipe (abertas, atrasadas, para hoje e tempo gasto).' },
+  ]},
+  { data: '02/10/2026 · Operacional', itens: [
+    { titulo: 'Kanban de tarefas', badges: ['novo'], texto: 'Quatro modos de exibição (Quadro, Lista, Tabela e Calendário), arrastar e soltar (no celular: segure o cartão e arraste), checklist direto no cartão, cronômetro de tempo gasto, prioridade, prazo, etiquetas, responsável e cliente, filtros, agrupar por Status ou Data, colunas personalizáveis e tarefas arquivadas. A equipe pode mexer no mesmo quadro ao mesmo tempo sem uma pessoa apagar a mudança da outra.' },
+    { titulo: 'Assistente com perguntas frequentes', badges: ['novo'], texto: 'O botão do canto da tela virou um robozinho com perguntas frequentes clicáveis e respostas prontas, que mudam conforme a tela em que você está.' },
+  ]},
+  { data: '02/10/2026', itens: [
+    { titulo: 'Clientes do CRM separados do ERP', badges: ['corrigido'], texto: 'Cadastrar um cliente no CRM não cria mais um cadastro no ERP. O CRM tem sempre a própria base de clientes; quem tem o plano ERP + CRM usa o novo botão "Importar do ERP" para copiar os clientes de lá, sem duplicar quem já está no CRM.' },
+  ]},
+  { data: '02/10/2026 · Auditoria', itens: [
+    { titulo: 'Regras de segurança reforçadas', badges: ['corrigido'], texto: 'Usuários não conseguem mais alterar o próprio papel nem a própria empresa; links públicos de proposta e briefing continuam abrindo, mas ninguém de fora consegue mais listar os dados de outras empresas; plano e status da empresa só mudam pelo Super Admin; empresa desativada perde o acesso aos dados de verdade.' },
+    { titulo: 'Proteção contra perda de dados', badges: ['corrigido'], texto: 'Nenhuma gravação acontece antes dos dados da nuvem carregarem (antes, em conexão lenta, uma ação podia sobrescrever listas inteiras). Fechar um negócio pelo funil não apaga mais as receitas do mês no Financeiro.' },
+    { titulo: 'Contrato automático mais confiável', badges: ['corrigido'], texto: 'Não duplica com o CRM aberto em duas abas, não se perde se os contratos ainda estiverem carregando e agora respeita a opção "Gerar contrato automático" do orçamento.' },
+    { titulo: 'Correções de segurança e de telas', badges: ['corrigido'], texto: 'Textos digitados (como nome de cidade e de cliente) não conseguem mais executar código no mapa de vendas e nos avisos; "+ Novo negócio" e "Abrir" voltaram a funcionar no Funil de Vendas.' },
+  ]},
+  { data: '02/10/2026', itens: [
+    { titulo: 'Ícones no lugar dos emojis', badges: ['melhoria'], texto: 'Todos os emojis do CRM viraram ícones próprios do sistema, no mesmo traço do menu. Eles usam a cor do tema escolhido em Aparência do Sistema e ficam iguais em qualquer celular ou computador.' },
+    { titulo: 'Aparência do Sistema', badges: ['novo'], texto: '13 temas (escuros e claros) mais um tema com a sua própria cor, cores individuais por cima de qualquer tema e três tamanhos de fonte. Aplica na hora, em todas as páginas.' },
+    { titulo: 'Itens do Menu do CRM', badges: ['novo'], texto: 'Mostre, oculte e reordene (arrastando) os módulos do menu lateral do CRM. O Dashboard é obrigatório e não pode ser ocultado.' },
+    { titulo: 'Aparência do Briefing e do Checkout', badges: ['novo'], texto: 'Tema, cores, logo e mensagens da página pública de briefing; fundo, texto, botões, banner, rodapé e mensagem de sucesso da página de aprovação do orçamento.' },
+    { titulo: 'Portal do Cliente e Categorias de Conteúdo', badges: ['novo'], texto: 'As configurações já ficam salvas na nuvem da empresa e passam a valer quando os módulos do Operacional entrarem no ar.' },
+    { titulo: 'Atalho pro PDF de Orçamento', badges: ['melhoria'], texto: 'O card "PDF de Orçamento" em Configurações abre direto a aba de PDF da Gestão de Orçamentos.' },
+  ]},
+  { data: '01/10/2026', itens: [
+    { titulo: 'Central de Configurações', badges: ['novo'], texto: 'Nova página de Configurações com Perfil, Aparência, Atualizações, Notificações, Automações, Integrações, E-mail e Conteúdos — acessível pelo menu do perfil.' },
+    { titulo: 'Alertas e confirmações com visual próprio', badges: ['melhoria'], texto: 'Todo aviso e confirmação do sistema agora usa um modal com a cara do Eagles Labz, em vez da caixinha feia e genérica do navegador.' },
+    { titulo: 'Correção crítica no Financeiro', badges: ['corrigido'], texto: 'Corrigido um problema sério que podia apagar lançamentos financeiros de meses anteriores em certas condições de carregamento. Adicionadas proteções equivalentes em outros pontos sensíveis do sistema.' },
+  ]},
+  { data: '30/09/2026', itens: [
+    { titulo: 'Cadastro de cliente unificado', badges: ['novo'], texto: 'Botão "Cadastrar Cliente" com modo Simples e Avançado (endereço, CPF/CNPJ, ISS, tags), com opção de já criar o card no Pipeline ou não.' },
+    { titulo: 'Exportar clientes do ERP', badges: ['novo'], texto: 'Exportação de clientes em CSV, liberada só para contas com o plano ERP + CRM.' },
+    { titulo: 'Gráfico financeiro com 4 séries', badges: ['melhoria'], texto: 'Dashboard do CRM passou a mostrar Faturamento Total, BRL, USD e Despesas juntos, com legenda colorida.' },
+    { titulo: 'Tarefas com recorrência', badges: ['novo'], texto: 'Tarefas diárias agora podem repetir (diária, dias úteis, semanal, mensal), com notificação na barra superior.' },
+  ]},
+  { data: '29/09/2026', itens: [
+    { titulo: 'Módulo de Briefings completo', badges: ['novo'], texto: '6 tipos de briefing prontos (Logo, Landing Page, Social Media, Branding, Vídeo, Outro) com perguntas sob medida, templates personalizáveis e link público para o cliente responder.' },
+    { titulo: 'Página de Aprovação personalizável', badges: ['novo'], texto: 'Editor de logo, paleta de cores, textos e avaliações da página que o cliente vê para aprovar o orçamento — com preview ao vivo.' },
+    { titulo: 'PDF de orçamento com a marca do cliente', badges: ['melhoria'], texto: 'O PDF baixado passou a usar a mesma logo e cores configuradas na Página de Aprovação, em vez de um PDF genérico.' },
+  ]},
+  { data: '28/09/2026', itens: [
+    { titulo: 'Gestão de Contratos no CRM', badges: ['novo'], texto: 'Geração automática de contrato a partir de um orçamento aprovado, com editor de modelo e shortcodes ({{Nome do Cliente}}, {{Valor Total}}, etc.).' },
+    { titulo: 'Detecção de contrato duplicado', badges: ['novo'], texto: 'Ao gerar um contrato para um cliente que já tem um, o sistema pergunta se quer substituir ou criar um novo, em vez de duplicar sem avisar.' },
+  ]},
+  { data: '27/09/2026', itens: [
+    { titulo: 'Assistente de Orçamento em 4 passos', badges: ['novo'], texto: 'Fluxo guiado para montar propostas: informações básicas, serviços/planos, condições de pagamento e revisão final.' },
+    { titulo: 'Funil de vendas (Kanban)', badges: ['novo'], texto: 'Pipeline com arrastar-e-soltar, alerta de card parado há mais de 7 dias, e lançamento automático da receita no Financeiro ao marcar como Fechado.' },
+  ]},
+  { data: 'Anteriores', itens: [
+    { titulo: 'ERP completo', badges: ['novo'], texto: '19 páginas: Clientes e Fornecedores, Produtos, Vendedores, Funcionários, Pedidos de Venda, Pedido de Compras, Notas Fiscais, Estoque, Financeiro com ciclos mensais, e mais.' },
+    { titulo: 'Multi-empresa e planos', badges: ['novo'], texto: 'Suporte a múltiplas empresas isoladas, com planos ERP, CRM ou Ambos — cada tela só aparece para quem tem acesso.' },
+  ]},
+];
+
+function renderAbaAtualizacoesConfig() {
+  const el = document.getElementById('cfg-conteudo-aba');
+  const nomesBadge = { novo: 'Novo', corrigido: 'Corrigido', melhoria: 'Melhoria' };
+
+  el.innerHTML = `
+    <div class="cfg-painel">
+      <div class="cfg-painel-titulo">
+        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg></div>
+        <div><h2>Últimas Atualizações</h2><p>Tudo que foi adicionado e corrigido no sistema, em ordem</p></div>
+      </div>
+      ${CFG_CHANGELOG.map((grupo) => `
+        <div class="cfg-update-data">${escapeHtml(grupo.data)}</div>
+        ${grupo.itens.map((item) => `
+          <div class="cfg-update-item">
+            <div class="cfg-update-titulo">${escapeHtml(item.titulo)}${(item.badges || []).map((b) => `<span class="cfg-update-badge ${b}">${nomesBadge[b] || b}</span>`).join('')}</div>
+            <p class="cfg-update-texto">${escapeHtml(item.texto)}</p>
+          </div>`).join('')}
+      `).join('')}
+    </div>`;
+}
+
+
+// ----- Aba: Notificações -----
+// As preferencias ficam salvas de verdade (localStorage), mas sendo
+// honesto: isso ainda nao dispara notificacao push ou e-mail de
+// verdade, porque isso depende de um servico de envio conectado
+// (o mesmo caso do WhatsApp/e-mail automatico que ja conversamos).
+
+const CFG_TIPOS_NOTIFICACAO = [
+  { chave: 'conteudoAtribuido', titulo: 'Conteúdo atribuído a mim', desc: 'Quando alguém te define como responsável por um conteúdo.' },
+  { chave: 'mudancaStatus', titulo: 'Mudança de status em meus conteúdos', desc: 'Avança de etapa, aprovação, agendamento, publicação.' },
+  { chave: 'tarefaAtribuida', titulo: 'Tarefa atribuída a mim', desc: 'Quando você é responsável por uma nova tarefa.' },
+  { chave: 'novosLeads', titulo: 'Novos Leads', desc: 'Seja notificado quando receber novo lead.' },
+  { chave: 'propostasAbertas', titulo: 'Propostas Abertas', desc: 'Quando o cliente visualiza sua proposta.' },
+  { chave: 'prazosProximos', titulo: 'Prazos Próximos', desc: 'Alerta 2 dias antes do prazo.' },
+  { chave: 'pagamentosRecebidos', titulo: 'Pagamentos Recebidos', desc: 'Confirmação de pagamentos.' },
+];
+
+function renderAbaNotificacoesConfig() {
+  const el = document.getElementById('cfg-conteudo-aba');
+  const prefs = lerPreferenciasNotificacoesConfig();
+
+  el.innerHTML = `
+    <div class="cfg-painel">
+      <div class="cfg-painel-titulo">
+        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+        <div><h2>Resumo Diário</h2><p>Receba um resumo com tarefas pendentes e faturamento do dia</p></div>
+      </div>
+      <div class="cfg-linha-toggle">
+        <div><strong>Ativar resumo diário</strong><span>Mostra um card no Dashboard, ao abrir o sistema pela manhã</span></div>
+        <label class="switch"><input type="checkbox" id="cfg-resumo-diario" ${prefs.resumoDiario ? 'checked' : ''} onchange="salvarPreferenciasNotificacoesConfig()"><span class="switch-slider"></span></label>
+      </div>
+      <p style="font-size:11.5px; color:var(--text-soft); margin-top:10px;">${ic('alerta', 'ic-aviso')} Notificação push/e-mail de verdade ainda depende de um serviço de envio conectado — por enquanto isso só liga/desliga o que aparece dentro do próprio sistema.</p>
+    </div>
+
+    <div class="cfg-painel">
+      <div class="cfg-painel-titulo">
+        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+        <div><h2>Tipos de notificação</h2><p>Escolha quais eventos disparam notificações para você</p></div>
+      </div>
+      ${CFG_TIPOS_NOTIFICACAO.map((t) => `
+        <div class="cfg-linha-toggle">
+          <div><strong>${escapeHtml(t.titulo)}</strong><span>${escapeHtml(t.desc)}</span></div>
+          <label class="switch"><input type="checkbox" data-chave="${t.chave}" class="cfg-toggle-notif" ${prefs[t.chave] !== false ? 'checked' : ''} onchange="salvarPreferenciasNotificacoesConfig()"><span class="switch-slider"></span></label>
+        </div>`).join('')}
+    </div>`;
+}
+
+function lerPreferenciasNotificacoesConfig() {
+  try { return JSON.parse(localStorage.getItem('eagles_prefs_notificacoes') || '{}'); } catch (e) { return {}; }
+}
+
+function salvarPreferenciasNotificacoesConfig() {
+  const prefs = { resumoDiario: document.getElementById('cfg-resumo-diario').checked };
+  document.querySelectorAll('.cfg-toggle-notif').forEach((el) => { prefs[el.dataset.chave] = el.checked; });
+  localStorage.setItem('eagles_prefs_notificacoes', JSON.stringify(prefs));
+}
+
+
+// ----- Aba: Integrações -----
+// Pedido especifico: bancos fica em branco por enquanto (nenhuma conta
+// bancaria de verdade conectada). As outras aparecem como cards, e vao
+// ganhando funcao de verdade conforme construirmos o Operacional.
+
+const CFG_INTEGRACOES = [
+  { categoria: 'Pagamentos e bancos', desc: 'Receba de clientes por PIX, boleto e cartão.', itens: [] },
+  { categoria: 'Arquivos e agenda', desc: 'Onde seus arquivos ficam salvos e como sua agenda sincroniza.', itens: [
+    { nome: 'Google Calendar', icone: 'calendario' },
+    { nome: 'Google Drive', icone: 'pasta' },
+  ]},
+  { categoria: 'Comunicação', desc: 'Como você fala com clientes e com a equipe.', itens: [
+    { nome: 'WhatsApp', icone: 'conversa' },
+  ]},
+  { categoria: 'IA e automações', desc: 'Conecte o sistema a IAs e a outros serviços.', itens: [
+    { nome: 'Webhooks', icone: 'link' },
+    { nome: 'IA (Claude/ChatGPT)', icone: 'brilho' },
+  ]},
+  { categoria: 'Marketing e criação', desc: 'Rastreio de anúncios e redes sociais.', itens: [
+    { nome: 'Meta Ads', icone: 'megafone' },
+  ]},
+];
+
+function renderAbaIntegracoesConfig() {
+  const el = document.getElementById('cfg-conteudo-aba');
+  el.innerHTML = CFG_INTEGRACOES.map((cat) => `
+    <div class="cfg-integ-categoria">
+      <h3>${escapeHtml(cat.categoria)}</h3>
+      <p>${escapeHtml(cat.desc)}</p>
+      ${cat.itens.length ? `
+      <div class="cfg-integ-grid">
+        ${cat.itens.map((i) => `
+          <button type="button" class="cfg-integ-card" onclick="abrirIntegracaoConfig('${escapeParaOnclick(i.nome)}')">
+            <div class="cfg-integ-icone">${ic(i.icone)}</div>
+            <span>${escapeHtml(i.nome)}</span>
+          </button>`).join('')}
+      </div>` : `<p style="font-size:12px; color:var(--text-soft); font-style:italic;">Nenhuma conta bancária conectada ainda.</p>`}
+    </div>`).join('') + `
+    <div class="cfg-painel" style="text-align:center;">
+      <strong style="font-size:14px;">Não encontrou a integração que precisa?</strong>
+      <p style="font-size:12.5px; color:var(--text-soft); margin:6px 0 14px;">Me conta o que você precisa conectar e a gente avalia construir.</p>
+    </div>`;
+}
+
+function abrirIntegracaoConfig(nome) {
+  avisar(`A integração com ${nome} ainda não está conectada de verdade — vamos construir isso junto quando chegarmos nessa parte do Operacional.`, nome);
+}
+
+
+// ----- Aba: Automações -----
+
+const CFG_AUTOMACOES_SUBABAS = ['Tarefas', 'Notificações', 'Atalhos'];
+
+function renderAbaAutomacoesConfig(sub) {
+  sub = sub || 'Tarefas';
+  const el = document.getElementById('cfg-conteudo-aba');
+  el.innerHTML = `
+    <div class="cfg-painel">
+      <div class="cfg-painel-titulo">
+        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+        <div><h2>Automações de Tarefas</h2><p>Personalize movimentos, notificações e atalhos</p></div>
+      </div>
+      <div class="cfg-automacoes-layout">
+        <div class="cfg-subnav">
+          ${CFG_AUTOMACOES_SUBABAS.map((s) => `<button type="button" class="${s === sub ? 'ativa' : ''}" onclick="renderAbaAutomacoesConfig('${s}')">${s}</button>`).join('')}
+        </div>
+        <div>${htmlConteudoSubAutomacao(sub)}</div>
+      </div>
+    </div>`;
+}
+
+function htmlConteudoSubAutomacao(sub) {
+  if (sub === 'Tarefas') {
+    const prefs = lerPreferenciasNotificacoesConfig();
+    return `
+      <div class="cfg-linha-toggle">
+        <div><strong>Criar tarefa de acompanhamento ao fechar venda</strong><span>Já existe — é o toggle "Gerar Tarefa ou Projeto" dentro da Venda Rápida.</span></div>
+        <label class="switch"><input type="checkbox" checked disabled><span class="switch-slider"></span></label>
+      </div>
+      <div class="cfg-linha-toggle">
+        <div><strong>Marcar negócio como Fechado ao aprovar orçamento</strong><span>Já existe — acontece automaticamente quando um orçamento é aprovado.</span></div>
+        <label class="switch"><input type="checkbox" checked disabled><span class="switch-slider"></span></label>
+      </div>`;
+  }
+  if (sub === 'Notificações') {
+    return `<p style="font-size:12.5px; color:var(--text-soft);">Use a aba <strong>Notificações</strong> do menu principal de Configurações pra ajustar isso.</p>`;
+  }
+  return `<p style="font-size:12.5px; color:var(--text-soft); font-style:italic;">Ainda em construção — vamos detalhar isso quando chegarmos nessa parte do Operacional.</p>`;
+}
+
+// ----- Aba: E-mail -----
+
+function renderAbaEmailConfig() {
+  const el = document.getElementById('cfg-conteudo-aba');
+  const cards = [
+    { icone: 'enviar', titulo: 'Envio pelo meu domínio (SMTP)', desc: 'Conecte seu e-mail para os envios saírem do seu domínio.' },
+    { icone: 'email', titulo: 'Modelos de e-mail', desc: 'Personalize orçamento, contrato e cobrança com a sua marca.' },
+    { icone: 'cifrao', titulo: 'Automações financeiras', desc: 'Disparar e-mail de cobrança ao criar lançamento, lembrete de vencimento e atraso.' },
+  ];
+  el.innerHTML = `<div class="cfg-grid-cards">
+    ${cards.map((c) => `
+      <button type="button" class="cfg-card" onclick="avisar('Isso depende de conectar um serviço de envio de e-mail (SMTP) de verdade — ainda não construído.', '${escapeParaOnclick(c.titulo)}')">
+        <div class="cfg-card-icone">${iconeAparenciaConfig(c.icone === 'enviar' ? 'link' : c.icone)}</div>
+        <div class="cfg-card-texto"><strong>${escapeHtml(c.titulo)}</strong><span>${escapeHtml(c.desc)}</span></div>
+        <svg class="cfg-card-seta" viewBox="0 0 24 24" style="width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2;"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>`).join('')}
+  </div>`;
+}
+
+// ----- Aba: Conteúdos -----
+
+function renderAbaConteudosConfig() {
+  const el = document.getElementById('cfg-conteudo-aba');
+  el.innerHTML = `
+    <div class="cfg-painel" style="text-align:center; padding:50px 24px;">
+      <div class="ic-circulo">${ic('arquivos')}</div>
+      <h2 style="margin:0 0 8px;">Fluxo de Produção de Conteúdos</h2>
+      <p style="color:var(--text-soft); max-width:480px; margin:0 auto;">Essa configuração é do módulo de <strong>Conteúdos</strong>, que ainda não foi construído — ele faz parte do Operacional, que é o próximo bloco que vamos trabalhar juntos. Quando construirmos o Kanban de Conteúdos de verdade, essa tela ganha as etapas, funções e automações configuráveis.</p>
+    </div>`;
+}
+
+
+// ---------- CRM: Hub unificado (dashboard, clientes, tarefas, placeholders) ----------
+
+
+
+const CRM_TAREFAS_KEY = 'eagles_crm_tarefas_v1';
+let CRM_TAREFAS_DATA = [];
+
+const CRM_EM_CONSTRUCAO_INFO = {
+  'agente-analista': { icone: 'grafico', titulo: 'Agente Analista', texto: 'Leitura automática dos seus dados e relatórios — precisa de acesso a uma IA (custo por uso).' },
+  'agente-copywriter': { icone: 'caneta', titulo: 'Agente Copywriter', texto: 'Geração de textos para anúncios, e-mails e landing pages — precisa de acesso a uma IA (custo por uso).' },
+  'agente-designer': { icone: 'paleta', titulo: 'Agente Designer', texto: 'Apoio na geração de briefings e criativos visuais — precisa de acesso a uma IA (custo por uso).' },
+  conteudos: { icone: 'calendario', titulo: 'Conteúdos', texto: 'Calendário operacional de entregas — planejamento, produção, revisão, aprovação e publicação.' },
+  'portal-cliente': { icone: 'aprovado', titulo: 'Portal do cliente', texto: 'Um link exclusivo pro seu cliente aprovar artes, carrosséis e vídeos, com histórico de quem aprovou e quando.' },
+  agendamentos: { icone: 'enviar', titulo: 'Agendamento de posts', texto: 'Publicação automática nas redes sociais — precisa de app aprovado pela Meta/TikTok.' },
+  'relatorios-redes': { icone: 'tendencia', titulo: 'Relatórios de redes', texto: 'Métricas de desempenho das suas redes sociais — precisa de acesso à API do Meta.' },
+  'anuncios-meta': { icone: 'megafone', titulo: 'Anúncios Meta', texto: 'Acompanhamento de campanhas do Facebook/Instagram Ads — precisa de acesso à API do Meta Ads.' },
+  agenda: { icone: 'calendario', titulo: 'Agenda', texto: 'Link de agendamento de reunião e sincronização com o Google Agenda.' },
+  whatsapp: { icone: 'conversa', titulo: 'Central de WhatsApp', texto: 'Histórico de conversas e dados do CRM lado a lado — precisa de WhatsApp Business API aprovada.' },
+  atendentes: { icone: 'pessoas', titulo: 'Atendentes', texto: 'Vários atendentes usando o mesmo número de WhatsApp — precisa de WhatsApp Business API.' },
+  automacoes: { icone: 'engrenagem', titulo: 'Automações de mensagem', texto: 'Disparos automáticos por evento (novo lead, proposta aprovada, cobrança) — precisa de WhatsApp Business API.' },
+  'monitor-grupos': { icone: 'megafone', titulo: 'Monitor de grupos', texto: 'Acompanhar interações em grupos e comunidades do WhatsApp — precisa de WhatsApp Business API.' },
+  'fin-receber': { icone: 'tendencia', titulo: 'Contas a receber', texto: 'Painel dedicado de tudo que está por receber, com pendentes e vencidas.' },
+  'fin-pagar': { icone: 'documento', titulo: 'Contas a pagar', texto: 'Painel dedicado de tudo que está por pagar, com pendentes e vencidas.' },
+  'fin-recorrencias': { icone: 'recorrente', titulo: 'Recorrências', texto: 'Gestão de mensalidades e contratos de prestação de serviços continuados.' },
+  'fin-relatorios': { icone: 'grafico', titulo: 'Relatórios financeiros', texto: 'DRE completo, fluxo de caixa detalhado e comparativos entre períodos.' },
+  'fin-caixa': { icone: 'banco', titulo: 'Caixa', texto: 'Controle de caixa físico/digital do dia a dia.' },
+  'fin-integracoes': { icone: 'tomada', titulo: 'Integrações financeiras', texto: 'Baixa automática por gateway de pagamento (Asaas, Mercado Pago, PIX) — precisa de conta no gateway escolhido.' },
+  'paginas-landing': { icone: 'globo', titulo: 'Landing pages', texto: 'Construtor de páginas de captura, publicadas com link próprio.' },
+  'paginas-link-bio': { icone: 'link', titulo: 'Link da bio', texto: 'Uma página com vários links, pro Instagram/TikTok da sua empresa.' },
+  'paginas-formularios': { icone: 'tarefas', titulo: 'Formulários', texto: 'Formulários de captura que alimentam o funil de vendas automaticamente.' },
+  'paginas-agendamento': { icone: 'calendarioCheck', titulo: 'Página de agendamento', texto: 'Uma página pública onde o lead escolhe um horário livre na sua agenda.' },
+  'paginas-portfolio': { icone: 'imagem', titulo: 'Portfólio', texto: 'Uma página pública mostrando seus melhores trabalhos.' },
+  'paginas-captura': { icone: 'globo', titulo: 'Páginas de captura', texto: 'Páginas focadas 100% em converter visitante em lead.' },
+};
+
+function initCrmHub() {
+  aplicarPreferenciasMenuCrm();
+  cloudWatch(CRM_NEGOCIOS_KEY, [], (data) => {
+    CRM_NEGOCIOS_DATA = data;
+    CRM_NEGOCIOS_DATA_CARREGADO = true;
+    atualizarSecaoAtivaCrm();
+    converterPropostasAprovadasEmContrato();
+  });
+  cloudWatch(CRM_TAREFAS_KEY, [], (data) => {
+    CRM_TAREFAS_DATA = data;
+    atualizarSecaoAtivaCrm();
+    renderDropdownTarefasDiarias();
+  });
+  cloudWatch(CRM_LEMBRETES_KEY, [], (data) => {
+    CRM_LEMBRETES_DATA = data;
+    atualizarSecaoAtivaCrm();
+  });
+  cloudWatch(CRM_METAS_KEY, { metaReceitaMensal: 10000 }, (data) => {
+    CRM_METAS_DATA = data;
+    atualizarSecaoAtivaCrm();
+  });
+  if (crmUsaDadosDoErp()) {
+    cloudWatch('eagles_produtos_v1', produtosSeed(), (data) => { CADASTROS_DATA['produto'] = data; atualizarSecaoAtivaCrm(); });
+  }
+  if (crmUsaDadosDoErp()) {
+    // só pra ter de onde importar — os clientes do CRM não vêm daqui
+    cloudWatch(CLIENTES_FORN_KEY, clientesFornSeed(), (data) => {
+      CLIENTES_FORN_DATA = data;
+      CLIENTES_FORN_DATA_CARREGADO = true;
+    });
+  }
+  cloudWatch(CRM_CLIENTES_KEY, [], (data) => {
+    CRM_CLIENTES_INDEP_DATA = data;
+    renderFiltroClientesCrm();
+    atualizarSecaoAtivaCrm();
+  });
+  cloudWatch('eagles_contratos_v1', contratosSeed(), (data) => { CADASTROS_DATA['contrato'] = data; atualizarSecaoAtivaCrm(); converterPropostasAprovadasEmContrato(); });
+  FINANCE_MES_ATUAL = mesKeyDoHoje();
+  cloudWatch(FINANCE_TEMPLATE_KEY, financeTemplatePadrao(), (data) => { FINANCE_TEMPLATE_CACHE = data; });
+  cloudWatch(FINANCE_CICLOS_KEY, {}, (data) => {
+    FINANCE_CICLOS_CACHE = data;
+    FINANCE_CICLO = getCicloDoMes(FINANCE_MES_ATUAL);
+    atualizarSecaoAtivaCrm();
+  });
+  cloudWatch(CRM_MODELOS_CONTRATO_KEY, modelosContratoSeed(), (data) => { CRM_MODELOS_CONTRATO_DATA = data; });
+  cloudWatch(CRM_APROVACAO_KEY, aprovacaoConfigPadrao(), (data) => {
+    const primeiraCarga = !CRM_APROVACAO_CARREGADO;
+    CRM_APROVACAO_DATA = Object.assign(aprovacaoConfigPadrao(), data || {});
+    if (!Array.isArray(CRM_APROVACAO_DATA.avaliacoes)) CRM_APROVACAO_DATA.avaliacoes = [];
+    CRM_APROVACAO_CARREGADO = true;
+    // se a aba já estava aberta antes dos dados chegarem, recarrega o
+    // formulário (senão um "Salvar" gravaria o padrão por cima do real)
+    const sub = document.getElementById('crm-orcamentos-sub-aprovacao');
+    if (primeiraCarga && sub && sub.style.display !== 'none') iniciarConfigAprovacao();
+  });
+  cloudWatch(CFG_BRIEFING_VISUAL_KEY, briefingVisualPadrao(), (data) => { CFG_BRIEFING_VISUAL_DATA = data; CFG_BRIEFING_VISUAL_CARREGADO = true; });
+  cloudWatch(CFG_PORTAL_KEY, portalConfigPadrao(), (data) => { CFG_PORTAL_DATA = data; CFG_PORTAL_CARREGADO = true; });
+  cloudWatch(CRM_TEMPLATES_BRIEFING_KEY, [], (data) => { CRM_TEMPLATES_BRIEFING_CUSTOM = data; CRM_TEMPLATES_BRIEFING_CARREGADO = true; });
+  escutarBriefingsCrm();
+  cloudWatch(CRM_NEGOCIO_CONTATOS_KEY, [], (data) => { CRM_NEGOCIO_CONTATOS_DATA = data; CRM_NEGOCIO_SUBCOLECOES_CARREGADAS = true; });
+  cloudWatch(CRM_NEGOCIO_ANOTACOES_KEY, [], (data) => { CRM_NEGOCIO_ANOTACOES_DATA = data; });
+  escutarPropostasCrm();
+  renderFiltroClientesCrm();
+  renderCrmDashboard();
+  abrirSecaoPeloHashCrm();
+}
+
+// Atalhos vindos de outras páginas (ex: Configurações → PDF de
+// Orçamento abre crm.html#orcamentos-pdf direto na aba certa).
+function abrirSecaoPeloHashCrm() {
+  const m = (window.location.hash || '').match(/^#orcamentos-(lista|contratos|aprovacao|pdf)$/);
+  if (!m) return;
+  mostrarSecaoCrm('orcamentos', document.querySelector('[data-menu-id="orcamentos"]'));
+  const botaoSub = Array.from(document.querySelectorAll('.crm-subaba')).find((b) => (b.getAttribute('onclick') || '').includes(`'${m[1]}'`));
+  mostrarSubAbaOrcamento(m[1], botaoSub);
+  if (window.history && history.replaceState) history.replaceState(null, '', window.location.pathname + window.location.search);
+}
+
+function atualizarSecaoAtivaCrm() {
+  const ativa = document.querySelector('.crm-secao:not([style*="display: none"])');
+  if (!ativa) return;
+  const secao = ativa.id.replace('crm-secao-', '');
+  if (secao === 'dashboard') renderCrmDashboard();
+  if (secao === 'clientes') renderCrmClientes();
+  if (secao === 'pipeline') renderFunilKanban();
+  if (secao === 'leads') renderCrmLeads();
+  if (secao === 'orcamentos') renderPropostasListaCrm();
+  if (secao === 'financeiro') renderCrmFinanceiroSecao();
+  if (secao === 'briefings') renderCrmBriefings();
+  if (secao === 'kanban') renderKanbanConteudo(); // só o conteúdo: não apaga a busca digitada
+  if (secao.startsWith('servicos-')) srvRender();
+}
+
+function mostrarSecaoCrm(secao, btn) {
+  if (KB_TUTORIAL_PASSO >= 0) kbFecharTutorial();
+  document.querySelectorAll('.crm-secao').forEach((el) => { el.style.display = 'none'; });
+  const alvo = document.getElementById('crm-secao-' + secao);
+  if (alvo) alvo.style.display = '';
+  document.querySelectorAll('.mn-nav-item, .mn-nav-sublink').forEach((b) => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  if (secao === 'dashboard') renderCrmDashboard();
+  if (secao === 'clientes') renderCrmClientes();
+  if (secao === 'pipeline') renderFunilKanban();
+  if (secao === 'leads') renderCrmLeads();
+  if (secao === 'orcamentos') renderPropostasListaCrm();
+  if (secao === 'financeiro') renderCrmFinanceiroSecao();
+  if (secao === 'briefings') renderCrmBriefings();
+  if (secao.startsWith('servicos-')) renderServicosModulo(secao.slice(9));
+  if (secao === 'kanban') renderKanbanSecao();
+  else {
+    kbFecharPopovers();
+    if (KB_SELECAO) { KB_SELECAO = null; kbRenderBarraSelecao(); }
+    if (document.body.classList.contains('kb-destacado')) kbAlternarDestaque(true);
+    if (KB_TUTORIAL_PASSO >= 0) kbFecharTutorial();
+  }
+  if (CRM_EM_CONSTRUCAO_INFO[secao]) renderCrmEmConstrucao(secao);
+}
+
+function renderCrmEmConstrucao(secao) {
+  const info = CRM_EM_CONSTRUCAO_INFO[secao];
+  const el = document.getElementById('crm-secao-' + secao);
+  if (!el || !info) return;
+  el.innerHTML = `
+    <div class="panel" style="text-align:center; padding:50px 24px;">
+      <div class="ic-circulo">${ic(info.icone)}</div>
+      <h2 style="margin:0 0 8px;">${escapeHtml(info.titulo)}</h2>
+      <p style="color:var(--text-soft); max-width:440px; margin:0 auto;">${escapeHtml(info.texto)}</p>
+      <div style="margin-top:16px;"><span class="badge badge-warning">Em construção</span></div>
+    </div>`;
+}
+
+function renderCrmDashboard() {
+  const negocios = CRM_CLIENTE_FILTRO ? CRM_NEGOCIOS_DATA.filter((n) => n.cliente === CRM_CLIENTE_FILTRO) : CRM_NEGOCIOS_DATA;
+
+  const resumoEl = document.getElementById('crm-dashboard-funil-resumo');
+  if (resumoEl) {
+    resumoEl.innerHTML = CRM_ETAPAS.map((etapa) => {
+      const doGrupo = negocios.filter((n) => (n.etapa || 'lead') === etapa.key);
+      const total = doGrupo.reduce((a, n) => a + Number(n.valor || 0), 0);
+      return `<div class="list-row"><div class="icon-dot" style="background:${etapa.cor}; color:#fff;">${doGrupo.length}</div><div class="list-row-main"><div class="list-row-title">${escapeHtml(etapa.label)}</div></div><div class="list-row-value">${formatMoney(total)}</div></div>`;
+    }).join('');
+  }
+
+  renderCrmDashTopo();
+  renderCrmDashChartFinanceiro();
+  if (!nivelVeFinanceiro()) {
+    const c = document.getElementById('crm-dash-chart-financeiro');
+    if (c) aplicarBloqueioFinanceiro(c.closest('.panel'));
+  }
+  renderCrmTarefas();
+  renderCrmDashTarefasFiltradas();
+  renderCrmLembretes();
+  renderCrmDashAtividade();
+  renderCrmDashReunioes();
+  renderCrmDashEstoque();
+  renderCrmDashSaudeRelacionamento();
+  renderCrmDashNps();
+  renderCrmFinanceiroResumo();
+}
+
+function clientesComSaudeCrm() {
+  // Junta os dois mundos possíveis num formato só: se usa dado do ERP,
+  // não tem "última reunião"/"NPS" ainda (o cadastro do ERP não tem esses
+  // campos), então mostra vazio em vez de inventar número.
+  return CRM_CLIENTES_INDEP_DATA.map((c) => ({ nome: c.nome, ultimaReuniao: c.ultimaReuniao, nps: c.nps }));
+}
+
+function renderCrmDashTopo() {
+  const el = document.getElementById('crm-dash-topo');
+  if (!el) return;
+  const negocios = CRM_CLIENTE_FILTRO ? CRM_NEGOCIOS_DATA.filter((n) => n.cliente === CRM_CLIENTE_FILTRO) : CRM_NEGOCIOS_DATA;
+  const mesAtual = isoHoje().slice(0, 7);
+  const fat = negocios.filter((n) => n.etapa === 'fechado' && (n.atualizadoEm || '').slice(0, 7) === mesAtual).reduce((a, n) => a + Number(n.valor || 0), 0);
+  const meta = Number(CRM_METAS_DATA.metaReceitaMensal || 0);
+  const pctMeta = meta > 0 ? Math.min(100, Math.round((fat / meta) * 100)) : 0;
+  const faltam = Math.max(0, meta - fat);
+  const novosLeads = negocios.filter((n) => (n.etapa || 'lead') === 'lead' && (n.criadoEm || '').slice(0, 7) === mesAtual).length;
+  const fechadosMes = negocios.filter((n) => n.etapa === 'fechado' && (n.atualizadoEm || '').slice(0, 7) === mesAtual).length;
+
+  el.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label" style="display:flex; justify-content:space-between; align-items:center;">Meta de Receita <button type="button" onclick="abrirEditarMetaReceitaCrm()" style="background:none; border:none; color:var(--danger); cursor:pointer; padding:0;" title="Editar meta"><svg viewBox="0 0 24 24" style="width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button></div>
+      <p style="font-size:11.5px; color:var(--text-soft); margin:2px 0 10px;">Progresso do mês atual</p>
+      <div style="display:flex; justify-content:space-between; font-size:13px; margin:6px 0 4px;"><span style="color:var(--text);">${formatMoney(fat)}</span><span style="color:var(--danger); font-weight:700;">${formatMoney(meta)}</span></div>
+      <div style="height:6px; background:var(--bg-soft); border-radius:100px; overflow:hidden;"><div style="height:100%; width:${pctMeta}%; background:var(--success);"></div></div>
+      <div style="font-size:11px; color:var(--text-soft); margin-top:6px;">${pctMeta}% alcançado · Faltam ${formatMoney(faltam)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="crm-stat-icone-badge">${iconeDashboardTopo('cifrao')}</div>
+      <div class="stat-value" style="color:var(--success);">${formatMoney(fat)}</div>
+      <p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Faturamento do mês</p>
+    </div>
+    <div class="stat-card">
+      <div class="crm-stat-icone-badge">${iconeDashboardTopo('pessoas')}</div>
+      <div class="stat-value">${novosLeads}</div>
+      <p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Novos leads</p>
+    </div>
+    <div class="stat-card">
+      <div class="crm-stat-icone-badge">${iconeDashboardTopo('tendencia')}</div>
+      <div class="stat-value">${fechadosMes}</div>
+      <p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Clientes fechados</p>
+    </div>`;
+}
+
+function iconeDashboardTopo(tipo) {
+  const paths = {
+    cifrao: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    pessoas: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    tendencia: '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+  };
+  return `<svg viewBox="0 0 24 24">${paths[tipo]}</svg>`;
+}
+
+let CRM_CHART_FINANCEIRO = null;
+
+function renderCrmDashChartFinanceiro() {
+  if (typeof Chart === 'undefined') return;
+  const ctx = document.getElementById('crm-dash-chart-financeiro');
+  if (!ctx) return;
+  const hoje = new Date(isoHoje() + 'T00:00:00');
+  const meses = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const labels = meses.map((m) => formatMesLabelCurto(m));
+
+  const fatBrl = meses.map((m) => faturamentoCrmDoMesPorMoeda(m, 'BRL'));
+  const fatUsd = meses.map((m) => faturamentoCrmDoMesPorMoeda(m, 'USD'));
+  const fatTotal = meses.map((_, i) => fatBrl[i] + fatUsd[i]);
+  const despesas = meses.map((m) => despesasDoMesCrm(m));
+
+  if (CRM_CHART_FINANCEIRO) CRM_CHART_FINANCEIRO.destroy();
+  CRM_CHART_FINANCEIRO = new Chart(ctx.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Faturamento Total', data: fatTotal, borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.08)', tension: 0.3, fill: false, pointRadius: 3 },
+        { label: 'Faturamento USD', data: fatUsd, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.08)', tension: 0.3, fill: false, pointRadius: 3 },
+        { label: 'Faturamento BRL', data: fatBrl, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', tension: 0.3, fill: false, pointRadius: 3 },
+        { label: 'Despesas', data: despesas, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.08)', tension: 0.3, fill: false, pointRadius: 3 },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { mode: 'index', intersect: false, callbacks: { label: (c) => `${c.dataset.label} : ${formatMoney(c.parsed.y)}` } },
+      },
+      interaction: { mode: 'index', intersect: false },
+      scales: { y: { ticks: { callback: (v) => formatMoney(v) } } },
+    },
+  });
+
+  const legendaEl = document.getElementById('crm-dash-chart-legenda');
+  if (legendaEl) {
+    legendaEl.innerHTML = CRM_CHART_FINANCEIRO.data.datasets.map((ds) => `
+      <span style="display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--text-soft); margin-right:14px;">
+        <span style="width:9px; height:9px; border-radius:50%; background:${ds.borderColor}; display:inline-block;"></span>${escapeHtml(ds.label)}
+      </span>`).join('');
+  }
+}
+
+// Faturamento do mes filtrando por moeda do negocio (BRL por padrao
+// quando o negocio nao tem moeda definida, pra nao sumir com dado antigo).
+function faturamentoCrmDoMesPorMoeda(mesKey, moeda) {
+  return CRM_NEGOCIOS_DATA
+    .filter((n) => n.etapa === 'fechado' && (n.atualizadoEm || '').slice(0, 7) === mesKey && (n.moeda || 'BRL') === moeda)
+    .reduce((a, n) => a + Number(n.valor || 0), 0);
+}
+
+function despesasDoMesCrm(mesKey) {
+  const ciclo = getCicloDoMes(mesKey);
+  return (ciclo.pagamentos || []).reduce((a, p) => a + Number(p.valor || 0), 0);
+}
+
+function renderCrmDashTarefasFiltradas() {
+  const hoje = isoHoje();
+  const elAtrasadas = document.getElementById('crm-dash-tarefas-atrasadas');
+  const elHoje = document.getElementById('crm-dash-tarefas-hoje');
+  if (elAtrasadas) {
+    const atrasadas = CRM_TAREFAS_DATA.filter((t) => (!t.recorrencia || t.recorrencia === 'nenhuma') && !t.feita && t.data && t.data < hoje);
+    elAtrasadas.innerHTML = atrasadas.length
+      ? atrasadas.map((t) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title">${escapeHtml(t.texto)}</div><div class="list-row-sub" style="color:var(--danger);">${formatDatePt(t.data)}</div></div></div>`).join('')
+      : '<div class="crm-dash-vazio"><p>Nenhuma tarefa atrasada ' + ic('festa') + '</p></div>';
+  }
+  if (elHoje) {
+    const deHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje) && !tarefaConcluidaEm(t, hoje));
+    elHoje.innerHTML = deHoje.length
+      ? deHoje.map((t) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title">${escapeHtml(t.texto)}</div></div></div>`).join('')
+      : '<div class="crm-dash-vazio"><p>Nenhuma tarefa para hoje</p></div>';
+  }
+}
+
+function renderCrmDashAtividade() {
+  const el = document.getElementById('crm-dash-atividade');
+  if (!el) return;
+  const eventos = [];
+  CRM_NEGOCIOS_DATA.forEach((n) => eventos.push({ data: n.atualizadoEm || n.criadoEm, texto: `Negócio "${n.nome}" está em ${CRM_ETAPAS.find((e) => e.key === n.etapa)?.label || 'Lead'}` }));
+  CRM_PROPOSTAS_DATA.forEach((p) => eventos.push({ data: p.atualizadoEm || p.criadoEm, texto: `Proposta "${p.titulo}" — ${p.status}` }));
+  eventos.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+  const recentes = eventos.slice(0, 6);
+  el.innerHTML = recentes.length
+    ? recentes.map((e) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title" style="font-size:13px;">${escapeHtml(e.texto)}</div></div></div>`).join('')
+    : '<div class="crm-dash-vazio"><p>Nenhuma atividade recente</p><span>Suas atividades aparecerão aqui</span></div>';
+}
+
+function renderCrmDashReunioes() {
+  const el = document.getElementById('crm-dash-reunioes');
+  if (!el) return;
+  el.innerHTML = '<div class="crm-dash-vazio"><p>Nenhuma reunião agendada</p><span>Vai aparecer aqui quando o módulo de Agenda estiver pronto</span></div>';
+}
+
+function renderCrmDashEstoque() {
+  const card = document.getElementById('crm-dash-estoque-card');
+  const el = document.getElementById('crm-dash-estoque');
+  if (!card || !el) return;
+  if (!crmUsaDadosDoErp()) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const produtos = CADASTROS_DATA['produto'] || [];
+  const baixos = produtos.filter(produtoTemEstoqueBaixo);
+  el.innerHTML = baixos.length
+    ? baixos.slice(0, 5).map((p) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title">${escapeHtml(p.nome)}</div></div><div class="list-row-value" style="color:var(--danger);">${Number(p.estoque || 0)}</div></div>`).join('')
+    : '<div class="crm-dash-vazio"><p>Todos os produtos com estoque adequado ' + ic('aprovado', 'ic-sucesso') + '</p></div>';
+}
+
+function renderCrmDashSaudeRelacionamento() {
+  const el = document.getElementById('crm-dash-saude-relacionamento');
+  if (!el) return;
+  const hoje = new Date(isoHoje() + 'T00:00:00');
+  const clientes = clientesComSaudeCrm();
+  const risco = clientes.filter((c) => {
+    if (!c.ultimaReuniao) return false;
+    const dias = Math.floor((hoje - new Date(c.ultimaReuniao + 'T00:00:00')) / 86400000);
+    return dias > 30;
+  });
+  el.innerHTML = risco.length
+    ? risco.map((c) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title">${escapeHtml(c.nome)}</div></div><div class="list-row-value" style="color:var(--warning);">${formatDatePt(c.ultimaReuniao)}</div></div>`).join('')
+    : '<div class="crm-dash-vazio"><p>Nenhum cliente em risco. Bom trabalho! ' + ic('joinha') + '</p></div>';
+}
+
+function renderCrmDashNps() {
+  const el = document.getElementById('crm-dash-nps');
+  if (!el) return;
+  const clientes = clientesComSaudeCrm().filter((c) => c.nps !== null && c.nps !== undefined);
+  const promotores = clientes.filter((c) => c.nps >= 9).length;
+  const neutros = clientes.filter((c) => c.nps >= 7 && c.nps <= 8).length;
+  const detratores = clientes.filter((c) => c.nps <= 6).length;
+  el.innerHTML = `
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; text-align:center; margin-bottom:12px;">
+      <div><div style="font-size:11px; color:var(--success);">Promotores</div><div style="font-size:20px; font-weight:700;">${promotores}</div></div>
+      <div><div style="font-size:11px; color:var(--warning);">Neutros</div><div style="font-size:20px; font-weight:700;">${neutros}</div></div>
+      <div><div style="font-size:11px; color:var(--danger);">Detratores</div><div style="font-size:20px; font-weight:700;">${detratores}</div></div>
+    </div>
+    ${detratores > 0 ? `<p style="font-size:12px; color:var(--danger); margin:0;">${ic('alerta', 'ic-perigo')} Risco de churn (${detratores})</p>` : '<p style="font-size:12px; color:var(--text-soft); margin:0;">Nenhum cliente em risco no momento.</p>'}`;
+}
+
+function renderCrmFinanceiroResumo() {
+  const el = document.getElementById('crm-financeiro-resumo');
+  if (!el) return;
+
+  const contratos = CADASTROS_DATA['contrato'] || [];
+  const mrr = contratos.filter((c) => c.status === 'vigente').reduce((a, c) => a + Number(c.valor || 0), 0);
+  const mesAtual = isoHoje().slice(0, 7);
+  const churnMes = contratos.filter((c) => c.status === 'encerrado' && (c.dataFim || '').slice(0, 7) === mesAtual).length;
+
+  const ciclo = FINANCE_CICLO || { receitas: [], pagamentos: [] };
+  const hojeNum = Number(isoHoje().slice(8, 10));
+  const receitasPendentes = (ciclo.receitas || []).filter((r) => r.status !== 'pago');
+  const receitasVencidas = receitasPendentes.filter((r) => Number(r.diaAcerto) < hojeNum);
+  const pagamentosPendentes = (ciclo.pagamentos || []).filter((p) => p.status !== 'pago');
+  const totalReceberPendente = receitasPendentes.reduce((a, r) => a + Number(r.valor || 0), 0);
+  const totalPagarPendente = pagamentosPendentes.reduce((a, p) => a + Number(p.valor || 0), 0);
+
+  const receitaTotalMes = (ciclo.receitas || []).reduce((a, r) => a + Number(r.valor || 0), 0);
+  const despesaTotalMes = ['pagamentos', 'adiantamentos', 'variaveis'].reduce((soma, chave) => soma + (ciclo[chave] || []).reduce((a, i) => a + Number(i.valor || 0), 0), 0);
+  const lucroLiquido = receitaTotalMes - despesaTotalMes;
+
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-label">MRR (receita recorrente)</div><div class="stat-value" style="font-size:20px;">${formatMoney(mrr)}</div></div>
+    <div class="stat-card${churnMes > 0 ? ' danger' : ''}"><div class="stat-label">Churn este mês</div><div class="stat-value">${churnMes}</div></div>
+    <div class="stat-card"><div class="stat-label">A receber (pendente)</div><div class="stat-value" style="font-size:18px;">${formatMoney(totalReceberPendente)}</div><div style="font-size:11px; color:${receitasVencidas.length ? 'var(--danger)' : 'var(--text-soft)'}; margin-top:2px;">${receitasVencidas.length} vencida(s)</div></div>
+    <div class="stat-card"><div class="stat-label">A pagar (pendente)</div><div class="stat-value" style="font-size:18px;">${formatMoney(totalPagarPendente)}</div></div>
+    <div class="stat-card"><div class="stat-label">Lucro líquido do mês (DRE)</div><div class="stat-value" style="font-size:18px; color:${lucroLiquido >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatMoney(lucroLiquido)}</div></div>`;
+}
+
+// Dropdown de tarefas na barra superior — mostra as tarefas de hoje
+// (incluindo as recorrentes que caem hoje) com contagem e barra de
+// progresso, igual ao miniapp de tarefas do dashboard.
+function renderDropdownTarefasDiarias() {
+  const badge = document.getElementById('tarefas-topbar-badge');
+  const contador = document.getElementById('tarefas-dropdown-contador');
+  const barra = document.getElementById('tarefas-dropdown-barra');
+  const lista = document.getElementById('tarefas-dropdown-lista');
+  if (!lista) return;
+
+  const hoje = isoHoje();
+  const tarefasHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje));
+  const feitas = tarefasHoje.filter((t) => tarefaConcluidaEm(t, hoje)).length;
+  const pendentes = tarefasHoje.length - feitas;
+  const pct = tarefasHoje.length ? Math.round((feitas / tarefasHoje.length) * 100) : 0;
+
+  if (badge) {
+    if (pendentes > 0) { badge.textContent = pendentes; badge.style.display = 'flex'; }
+    else badge.style.display = 'none';
+  }
+  if (contador) contador.textContent = `${feitas}/${tarefasHoje.length}`;
+  if (barra) barra.style.width = pct + '%';
+
+  lista.innerHTML = tarefasHoje.length ? tarefasHoje.map((t) => {
+    const feita = tarefaConcluidaEm(t, hoje);
+    return `
+    <div class="list-row" style="cursor:pointer; padding:8px 0;" onclick="toggleTarefaCrm('${t.id}')">
+      <div class="icon-dot" style="width:22px; height:22px; background:${feita ? 'var(--success)' : 'var(--bg-soft)'};">${feita ? '✓' : ''}</div>
+      <div class="list-row-main"><div class="list-row-title" style="font-size:13px; ${feita ? 'text-decoration:line-through; color:var(--text-soft);' : ''}">${escapeHtml(t.texto)}</div></div>
+      <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger); padding:2px 6px;" onclick="event.stopPropagation(); excluirTarefaCrm('${t.id}')">✕</button>
+    </div>`;
+  }).join('') : '<p class="empty-state" style="padding:20px 0;">Nenhuma tarefa por hoje.</p>';
+}
+
+function notificarNovaTarefaCriada() {
+  const badge = document.getElementById('tarefas-topbar-badge');
+  if (!badge) return;
+  badge.classList.remove('pulsar');
+  void badge.offsetWidth;
+  badge.classList.add('pulsar');
+}
+
+function abrirNovaTarefaCrm() {
+  document.getElementById('nova-tarefa-titulo').value = '';
+  document.getElementById('nova-tarefa-descricao').value = '';
+  document.querySelector('input[name="nova-tarefa-recorrencia"][value="nenhuma"]').checked = true;
+
+  const selectResp = document.getElementById('nova-tarefa-responsavel');
+  const nomes = new Set();
+  if (USUARIO_NOME) nomes.add(USUARIO_NOME);
+  (USUARIOS_TENANT_DATA || []).forEach((u) => { if (u.nome) nomes.add(u.nome); });
+  selectResp.innerHTML = [...nomes].map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('') || '<option value="">—</option>';
+
+  openModal('modal-nova-tarefa-crm');
+}
+
+function criarNovaTarefaCrm() {
+  const texto = document.getElementById('nova-tarefa-titulo').value.trim();
+  if (!texto) { avisar('Preencha o título da tarefa.'); return; }
+  const descricao = document.getElementById('nova-tarefa-descricao').value.trim();
+  const responsavel = document.getElementById('nova-tarefa-responsavel').value;
+  const recorrencia = document.querySelector('input[name="nova-tarefa-recorrencia"]:checked').value;
+
+  CRM_TAREFAS_DATA.push({
+    id: genId('tf'), texto, descricao, responsavel, recorrencia,
+    feita: false, concluidasEm: [], data: isoHoje(), criadoEm: new Date().toISOString(),
+  });
+  cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA);
+  closeModal('modal-nova-tarefa-crm');
+  renderCrmTarefas();
+  renderCrmDashTarefasFiltradas();
+  renderDropdownTarefasDiarias();
+  notificarNovaTarefaCriada();
+}
+
+// Decide se uma tarefa "vale" pra hoje, considerando a recorrência —
+// tarefa sem recorrência so vale no dia em que foi criada; as
+// recorrentes se repetem conforme o padrao, a partir da data de criação.
+function tarefaValeHoje(t, dataRef) {
+  dataRef = dataRef || isoHoje();
+  if (!t.recorrencia || t.recorrencia === 'nenhuma') return !t.data || t.data === dataRef;
+  const criada = new Date((t.data || t.criadoEm.slice(0, 10)) + 'T00:00:00');
+  const alvo = new Date(dataRef + 'T00:00:00');
+  if (alvo < criada) return false;
+  if (t.recorrencia === 'diaria') return true;
+  if (t.recorrencia === 'dias_uteis') return alvo.getDay() >= 1 && alvo.getDay() <= 5;
+  if (t.recorrencia === 'semanal') return alvo.getDay() === criada.getDay();
+  if (t.recorrencia === 'mensal') return alvo.getDate() === criada.getDate();
+  return false;
+}
+
+function tarefaConcluidaEm(t, data) {
+  if (!t.recorrencia || t.recorrencia === 'nenhuma') return !!t.feita;
+  return (t.concluidasEm || []).includes(data);
+}
+
+function renderCrmTarefas() {
+  const el = document.getElementById('crm-tarefas-lista');
+  if (!el) return;
+  const hoje = isoHoje();
+  const tarefasHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje));
+  el.innerHTML = tarefasHoje.length
+    ? tarefasHoje.map((t) => {
+        const feita = tarefaConcluidaEm(t, hoje);
+        return `
+      <div class="list-row" style="cursor:pointer;" onclick="toggleTarefaCrm('${t.id}')">
+        <div class="icon-dot" style="background:${feita ? 'var(--success)' : 'var(--bg-soft)'};">${feita ? '✓' : ''}</div>
+        <div class="list-row-main"><div class="list-row-title" style="${feita ? 'text-decoration:line-through; color:var(--text-soft);' : ''}">${escapeHtml(t.texto)}</div>${t.responsavel ? `<div class="list-row-sub">${escapeHtml(t.responsavel)}</div>` : ''}</div>
+        <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="event.stopPropagation(); excluirTarefaCrm('${t.id}')">✕</button>
+      </div>`;
+      }).join('')
+    : '<p class="empty-state">Nenhuma tarefa por hoje.</p>';
+}
+
+function adicionarTarefaCrm() {
+  const input = document.getElementById('crm-nova-tarefa');
+  const texto = input.value.trim();
+  if (!texto) return;
+  CRM_TAREFAS_DATA.push({ id: genId('tf'), texto, feita: false, data: isoHoje(), criadoEm: new Date().toISOString() });
+  cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA);
+  input.value = '';
+  renderCrmTarefas();
+}
+
+function toggleTarefaCrm(id) {
+  const t = CRM_TAREFAS_DATA.find((x) => x.id === id);
+  if (!t) return;
+  const hoje = isoHoje();
+  if (!t.recorrencia || t.recorrencia === 'nenhuma') {
+    t.feita = !t.feita;
+  } else {
+    t.concluidasEm = t.concluidasEm || [];
+    const idx = t.concluidasEm.indexOf(hoje);
+    if (idx >= 0) t.concluidasEm.splice(idx, 1);
+    else t.concluidasEm.push(hoje);
+  }
+  cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA);
+  renderCrmTarefas();
+  renderDropdownTarefasDiarias();
+}
+
+function excluirTarefaCrm(id) {
+  CRM_TAREFAS_DATA = CRM_TAREFAS_DATA.filter((x) => x.id !== id);
+  cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA);
+  renderCrmTarefas();
+  renderDropdownTarefasDiarias();
+}
+
+function trocarAbaCadastroCliente(aba) {
+  document.getElementById('cc-aba-simples-btn').classList.toggle('ativa', aba === 'simples');
+  document.getElementById('cc-aba-avancado-btn').classList.toggle('ativa', aba === 'avancado');
+  document.getElementById('cc-campos-avancado').style.display = aba === 'avancado' ? '' : 'none';
+}
+
+function abrirCadastrarClienteCrm() {
+  if (!exigirPodeOperar('cadastrar clientes')) return;
+  trocarAbaCadastroCliente('simples');
+  ['cc-pipeline', 'cc-cpfcnpj', 'cc-cep', 'cc-endereco', 'cc-numero', 'cc-complemento', 'cc-bairro', 'cc-cidade', 'cc-estado', 'cc-projeto', 'cc-nascimento', 'cc-tags', 'cc-aliquota-iss'].forEach((id) => { document.getElementById(id).value = ''; });
+  document.getElementById('cc-nome').value = '';
+  document.getElementById('cc-email').value = '';
+  document.getElementById('cc-telefone').value = '';
+  document.getElementById('cc-observacoes').value = '';
+  document.getElementById('cc-iss-retido').checked = false;
+  document.getElementById('cc-box-iss').classList.remove('ativo');
+  document.getElementById('cc-campo-aliquota').style.display = 'none';
+  openModal('modal-cadastrar-cliente-crm');
+}
+
+// Cadastra o cliente na base certa (ERP compartilhado ou base própria do
+// CRM, dependendo do plano), e so cria um card no Funil se a pessoa
+// escolheu um pipeline — o cliente aparece em Leads de qualquer jeito,
+// porque nomesClientesCrm() /contatosUnificadosCrm() já leem direto das
+// duas bases, com ou sem negócio associado.
+function salvarCadastroClienteCrm() {
+  const nome = document.getElementById('cc-nome').value.trim();
+  if (!nome) { avisar('Preencha o nome do cliente/empresa.'); return; }
+  const email = document.getElementById('cc-email').value.trim();
+  const telefone = document.getElementById('cc-telefone').value.trim();
+  const pipelineEscolhido = document.getElementById('cc-pipeline').value;
+  if (pipelineEscolhido === 'lead' && !negociosProntosOuAvisar()) return;
+
+  const extras = {
+    cpfCnpj: document.getElementById('cc-cpfcnpj').value.trim(),
+    cep: document.getElementById('cc-cep').value.trim(),
+    endereco: document.getElementById('cc-endereco').value.trim(),
+    numero: document.getElementById('cc-numero').value.trim(),
+    complemento: document.getElementById('cc-complemento').value.trim(),
+    bairro: document.getElementById('cc-bairro').value.trim(),
+    cidade: document.getElementById('cc-cidade').value.trim(),
+    estado: document.getElementById('cc-estado').value.trim(),
+    projetoInteresse: document.getElementById('cc-projeto').value,
+    dataNascimento: document.getElementById('cc-nascimento').value,
+    tags: document.getElementById('cc-tags').value.trim(),
+    observacoes: document.getElementById('cc-observacoes').value.trim(),
+    issRetido: document.getElementById('cc-iss-retido').checked,
+    aliquotaIss: document.getElementById('cc-aliquota-iss').value.trim(),
+  };
+
+  // Sempre na base própria do CRM — nunca cria cadastro no ERP.
+  if (CRM_CLIENTES_INDEP_DATA.some((c) => (c.nome || '').trim().toLowerCase() === nome.toLowerCase())) {
+    avisar(`Já existe um cliente chamado "${nome}" no CRM.`);
+    return;
+  }
+  const novaLista = CRM_CLIENTES_INDEP_DATA.concat([{
+    id: genId('ci'), nome, email, telefone, ultimaReuniao: null, nps: null,
+    ...extras, criadoEm: new Date().toISOString(),
+  }]);
+  if (cloudSet('eagles_crm_clientes_v1', novaLista) === false) return; // não grava o lead sem o cliente
+  CRM_CLIENTES_INDEP_DATA = novaLista;
+
+  if (pipelineEscolhido === 'lead') {
+    CRM_NEGOCIOS_DATA.push({
+      id: genId('cr'), nome: 'Novo lead: ' + nome, cliente: nome, valor: 0, etapa: 'lead',
+      email, telefone, origem: 'Cadastro de cliente', criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString(),
+    });
+    cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+  }
+
+  closeModal('modal-cadastrar-cliente-crm');
+  renderCrmClientes();
+  renderFunilKanban();
+  atualizarSecaoAtivaCrm();
+}
+
+// Traz os clientes do cadastro do ERP pra base do CRM (só pra quem tem
+// o plano ERP + CRM). É uma CÓPIA: depois de importado, o cliente do CRM
+// é independente — editar ou excluir de um lado não mexe no outro.
+// Rodar de novo só traz os que ainda não estão no CRM (compara por
+// vínculo de importação, CPF/CNPJ, e-mail e nome), então não duplica.
+function chaveDocumento(v) { return String(v || '').replace(/\D/g, ''); }
+
+function clientesErpParaImportar() {
+  const doErp = (CLIENTES_FORN_DATA || []).filter((c) => c.tipoCadastro === 'cliente' || c.tipoCadastro === 'ambos');
+  const jaNoCrm = CRM_CLIENTES_INDEP_DATA || [];
+  const ids = new Set(jaNoCrm.map((c) => c.origemErpId).filter(Boolean));
+  const docs = new Set(jaNoCrm.map((c) => chaveDocumento(c.cpfCnpj)).filter((d) => d.length >= 11));
+  const emails = new Set(jaNoCrm.map((c) => (c.email || '').trim().toLowerCase()).filter(Boolean));
+  const nomes = new Set(jaNoCrm.map((c) => (c.nome || '').trim().toLowerCase()).filter(Boolean));
+  const novos = [];
+  doErp.forEach((c) => {
+    const nome = (c.fantasia || c.nome || '').trim();
+    if (!nome) return;
+    const doc = chaveDocumento(c.cnpj || c.cpf);
+    const email = (c.email || '').trim().toLowerCase();
+    const repetido = ids.has(c.id) || (doc.length >= 11 && docs.has(doc)) || (email && emails.has(email)) || nomes.has(nome.toLowerCase());
+    if (repetido) return;
+    novos.push(c);
+    // evita duplicar dentro do próprio lote (dois cadastros iguais no ERP)
+    ids.add(c.id); if (doc.length >= 11) docs.add(doc); if (email) emails.add(email); nomes.add(nome.toLowerCase());
+  });
+  return { total: doErp.length, novos };
+}
+
+function importarClientesDoErp() {
+  if (!crmUsaDadosDoErp()) {
+    avisar('Importar clientes do ERP está disponível apenas para contas com o plano ERP + CRM.');
+    return;
+  }
+  if (!chaveCarregadaNaNuvem(CLIENTES_FORN_KEY) || !chaveCarregadaNaNuvem(CRM_CLIENTES_KEY) || !CLIENTES_FORN_DATA_CARREGADO) {
+    avisar('Os clientes ainda estão carregando — aguarde um instante e tente de novo.');
+    return;
+  }
+  const { total, novos } = clientesErpParaImportar();
+  if (!total) { avisar('Não há clientes cadastrados no ERP pra importar.', 'Importar do ERP'); return; }
+  if (!novos.length) { avisar(`Todos os ${total} cliente(s) do ERP já estão no CRM. Nada novo pra importar.`, 'Importar do ERP'); return; }
+  const jaEstao = total - novos.length;
+  confirmarAcao(
+    `Importar ${novos.length} cliente(s) do ERP para o CRM?` +
+    (jaEstao ? `\n\n${jaEstao} já estão no CRM e serão ignorados.` : '') +
+    '\n\nÉ uma cópia: o cadastro do ERP continua igual, e o do CRM passa a ser independente.',
+    () => {
+      const agora = new Date().toISOString();
+      const importados = novos.map((c) => ({
+        id: genId('ci'),
+        nome: (c.fantasia || c.nome || '').trim(),
+        razaoSocial: c.fantasia && c.nome && c.nome !== c.fantasia ? c.nome : '',
+        email: c.email || '',
+        telefone: c.telefone1 || c.telefone2 || '',
+        cpfCnpj: c.cnpj || c.cpf || '',
+        cep: c.cep || '', endereco: c.endereco || '', numero: c.numero || '', complemento: c.complemento || '',
+        bairro: c.bairro || '', cidade: c.cidade || '', estado: c.estado || '',
+        observacoes: c.observacoes || '',
+        ultimaReuniao: null, nps: null,
+        origemErpId: c.id, importadoDoErpEm: agora, criadoEm: agora,
+      }));
+      const lista = CRM_CLIENTES_INDEP_DATA.concat(importados);
+      if (cloudSet(CRM_CLIENTES_KEY, lista) === false) return;
+      CRM_CLIENTES_INDEP_DATA = lista;
+      renderFiltroClientesCrm();
+      renderCrmClientes();
+      avisar(`${importados.length} cliente(s) importado(s) do ERP.`, 'Importar do ERP');
+    },
+    'Importar do ERP'
+  );
+}
+
+function renderCrmClientes() {
+  const tbody = document.getElementById('crm-tabela-clientes-body');
+  const thead = document.getElementById('crm-clientes-thead');
+  const subtitulo = document.getElementById('crm-clientes-subtitulo');
+  const btnImportar = document.getElementById('crm-btn-importar-clientes');
+  if (!tbody) return;
+
+  // Importar só existe pra quem tem os dois planos — sem ERP não há de
+  // onde importar, então o botão nem aparece.
+  if (btnImportar) btnImportar.style.display = crmUsaDadosDoErp() ? '' : 'none';
+  if (subtitulo) {
+    subtitulo.textContent = crmUsaDadosDoErp()
+      ? 'Base de clientes do CRM, separada do ERP. Use "Importar do ERP" para trazer clientes de lá.'
+      : 'Base de clientes própria do CRM';
+  }
+  if (thead) thead.innerHTML = '<tr><th>Nome</th><th>Contato</th><th>Última reunião</th><th>NPS</th><th></th></tr>';
+  tbody.innerHTML = CRM_CLIENTES_INDEP_DATA.length
+    ? CRM_CLIENTES_INDEP_DATA.map((c) => `
+      <tr>
+        <td>${escapeHtml(c.nome)}${c.origemErpId ? ' <span class="badge badge-neutral" style="font-size:10px; margin-left:4px;" title="Copiado do cadastro do ERP">Importado do ERP</span>' : ''}</td>
+        <td>${escapeHtml(c.email || c.telefone || '—')}</td>
+        <td>${c.ultimaReuniao ? formatDatePt(c.ultimaReuniao) : '—'}</td>
+        <td>${c.nps !== null && c.nps !== undefined ? c.nps : '—'}</td>
+        <td style="text-align:right;"><button class="btn btn-small btn-ghost" onclick="abrirEditarClienteIndepCrm('${escapeParaOnclick(c.id)}')">Editar</button></td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-soft);">Nenhum cliente cadastrado ainda — clique em "+ Cadastrar Cliente"${crmUsaDadosDoErp() ? ' ou em "Importar do ERP"' : ''}.</td></tr>`;
+}
+
+// Regra de integração ERP ↔ CRM: só com os DOIS planos (ERP + CRM) o CRM
+// enxerga dados do ERP (Estoque no Dashboard e o botão "Importar do ERP").
+// CLIENTES não são compartilhados em nenhum plano: o CRM tem sempre a
+// própria base, e um cliente criado no CRM nunca aparece no ERP.
+function crmUsaDadosDoErp() {
+  return TENANT_PLANO === 'ambos';
+}
+
+function itemVisivelNoPlano(item) {
+  if (!item.plano) return true;
+  if (!TENANT_PLANO) return true;
+  if (TENANT_PLANO === 'ambos') return true;
+  return item.plano === TENANT_PLANO;
+}
 
 function renderTopbar(activeKey) {
   const nav = document.getElementById('topbar-nav');
   if (!nav) return;
 
   let html = '';
-  NAV_ITEMS.forEach((item) => {
+  NAV_ITEMS.filter(itemVisivelNoPlano).forEach((item) => {
     if (item.type === 'meu-negocio') {
       html += `<div class="topbar-item">
         <button type="button" class="topbar-menu-btn" onclick="toggleDropdown('menu-meu-negocio')">${item.label} <span class="chevron">▾</span></button>
@@ -886,8 +7705,8 @@ async function trocarMinhaSenha() {
     erroEl.style.display = '';
     return;
   }
-  if (senhaNova.length < 6) {
-    erroEl.textContent = 'A nova senha precisa ter pelo menos 6 caracteres.';
+  if (senhaNova.length < 8) {
+    erroEl.textContent = 'A nova senha precisa ter pelo menos 8 caracteres.';
     erroEl.style.display = '';
     return;
   }
@@ -928,8 +7747,8 @@ async function trocarMinhaSenha() {
 function selecionarLogoEmpresa(input) {
   const file = input.files && input.files[0];
   if (!file) return;
-  if (!file.type.startsWith('image/')) { alert('Selecione um arquivo de imagem (PNG ou JPG).'); return; }
-  if (file.size > 8 * 1024 * 1024) { alert('Imagem muito grande (máximo 8 MB).'); return; }
+  if (!file.type.startsWith('image/')) { avisar('Selecione um arquivo de imagem (PNG ou JPG).'); return; }
+  if (file.size > 8 * 1024 * 1024) { avisar('Imagem muito grande (máximo 8 MB).'); return; }
 
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -951,7 +7770,7 @@ function selecionarLogoEmpresa(input) {
       renderProfileBox();
       atualizarPreviewLogoPerfil();
     };
-    img.onerror = () => alert('Não foi possível ler essa imagem. Tente outro arquivo.');
+    img.onerror = () => avisar('Não foi possível ler essa imagem. Tente outro arquivo.');
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
@@ -988,10 +7807,17 @@ function atualizarPreviewLogoPerfil() {
 
 const CLIENTES_FORN_KEY = 'eagles_clientes_fornecedores_v1';
 let CLIENTES_FORN_DATA = [];
+// Vira true assim que os dados reais chegarem da nuvem pelo menos uma
+// vez nesta sessão. Qualquer ação que vá GRAVAR nessa coleção (como
+// cadastrar um cliente novo) espera esse flag antes de gravar, pra não
+// correr o risco de sobrescrever a base inteira com um array quase
+// vazio enquanto os dados de verdade ainda não chegaram.
+let CLIENTES_FORN_DATA_CARREGADO = false;
 
 function initBuscaGlobalWatch() {
   cloudWatch(CLIENTES_FORN_KEY, clientesFornSeed(), (data) => {
     CLIENTES_FORN_DATA = data;
+    CLIENTES_FORN_DATA_CARREGADO = true;
   });
   cloudWatch('eagles_produtos_v1', produtosSeed(), (data) => {
     CADASTROS_DATA['produto'] = data;
@@ -1035,6 +7861,3637 @@ function onBuscaGlobalInput(valor) {
 }
 
 // =====================================================================
+// ---------- CRM → Operacional → Kanban de tarefas ----------
+// =====================================================================
+// Cada tarefa é um DOCUMENTO próprio no Firestore
+// (tenants/{tenant}/kanban_tarefas/{id}), não um item dentro de uma lista
+// única. Assim duas pessoas mexendo no quadro ao mesmo tempo não apagam a
+// mudança uma da outra — cada gravação só toca a tarefa (e os campos)
+// que mudou. As colunas ficam num documento de configuração normal.
+
+const KB_CONFIG_KEY = 'eagles_kanban_config_v1';
+const KB_PREFS_KEY = 'eagles_kanban_prefs_v1';
+const KB_COLECAO = 'kanban_tarefas';
+
+const KB_COLUNAS_PADRAO = [
+  { id: 'backlog', nome: 'Backlog', cor: '#94a3b8' },
+  { id: 'afazer', nome: 'A Fazer', cor: '#06b6d4' },
+  { id: 'progresso', nome: 'Em Progresso', cor: '#f97316' },
+  { id: 'revisao', nome: 'Revisão', cor: '#ef4444' },
+  { id: 'concluido', nome: 'Concluído', cor: '#22c55e', final: true },
+];
+
+const KB_PRIORIDADES = {
+  baixa: { nome: 'Baixa', cor: '#64748b', peso: 1 },
+  media: { nome: 'Média', cor: '#3b82f6', peso: 2 },
+  alta: { nome: 'Alta', cor: '#ef4444', peso: 3 },
+  urgente: { nome: 'Urgente', cor: '#b91c1c', peso: 4 },
+};
+
+let KB_TAREFAS = [];
+let KB_CARREGADO = false;
+let KB_ESCUTANDO = false;
+let KB_CONFIG = null;
+let KB_USUARIOS = [];
+let KB_FILTROS = { cliente: '', tipo: 'todas', projeto: '', busca: '', responsavel: '', prioridade: '', prazo: '', etiqueta: '', arquivadas: false };
+let KB_TIMER = null;
+
+function kbPrefs() {
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem(KB_PREFS_KEY) || '{}') || {}; } catch (e) {}
+  return Object.assign({ modo: 'quadro', agrupar: 'status', exibirChecklist: true, compactar: false, calModo: 'mes', calRef: '', gruposFechados: {}, ordenacao: {},
+    exibirTarefas: true, exibirSubtarefas: false, exibirTarefasProjeto: true, mostrarProjetos: true, mostrarCarga: false, mostrarRecorrentes: true }, p);
+}
+function kbSalvarPrefs(mudancas) {
+  const p = Object.assign(kbPrefs(), mudancas);
+  try { localStorage.setItem(KB_PREFS_KEY, JSON.stringify(p)); } catch (e) {}
+  return p;
+}
+
+function kbNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
+function kbColecaoRef() { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(KB_COLECAO); }
+function kbChaveLocal() { return chaveLocalTenant('eagles_kanban_tarefas_local_v1'); }
+
+// Colunas: as globais (do quadro geral) ou as próprias de um projeto que
+// foi criado com "Personalizar colunas deste projeto".
+function kbColunasGlobais() {
+  return KB_CONFIG && Array.isArray(KB_CONFIG.colunas) && KB_CONFIG.colunas.length ? KB_CONFIG.colunas : KB_COLUNAS_PADRAO;
+}
+function kbColunasDoProjeto(projetoId) {
+  const pj = projetoId && typeof kbProjeto === 'function' ? kbProjeto(projetoId) : null;
+  return pj && Array.isArray(pj.colunas) && pj.colunas.length ? pj.colunas : null;
+}
+// As colunas do quadro que está na tela agora
+function kbColunas() {
+  return (KB_FILTROS.projeto && kbColunasDoProjeto(KB_FILTROS.projeto)) || kbColunasGlobais();
+}
+// As colunas a que UMA tarefa pertence (as do projeto dela, se tiver próprias)
+function kbColunasDaTarefa(t) { return kbColunasDoProjeto(t && t.projetoId) || kbColunasGlobais(); }
+function kbFinalDe(cols) { const f = cols.find((c) => c.final); return (f || cols[cols.length - 1]).id; }
+function kbColunaFinalId() { return kbFinalDe(kbColunas()); }
+function kbColuna(id) {
+  const todas = kbColunas().concat(kbColunasGlobais(), ...(typeof KB_PROJETOS !== 'undefined' ? KB_PROJETOS.map((p) => p.colunas || []) : []));
+  return todas.find((c) => c.id === id) || kbColunas()[0];
+}
+function kbConcluida(t) { return t.status === kbFinalDe(kbColunasDaTarefa(t)); }
+function kbNomeNorm(n) { return String(n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
+// Em qual coluna do quadro atual a tarefa aparece (tarefa de projeto com
+// colunas próprias vista no quadro geral: mesma coluna pelo nome; a
+// concluída vai pra coluna final; o resto, pra "A Fazer").
+function kbColunaNoQuadro(t) {
+  const cols = kbColunas();
+  if (cols.some((c) => c.id === t.status)) return t.status;
+  const propria = kbColunasDaTarefa(t).find((c) => c.id === t.status);
+  if (propria) {
+    if (propria.final) return kbFinalDe(cols);
+    const mesmo = cols.find((c) => kbNomeNorm(c.nome) === kbNomeNorm(propria.nome));
+    if (mesmo) return mesmo.id;
+  }
+  return (cols.find((c) => !c.final && kbNomeNorm(c.nome) === 'a fazer') || cols.find((c) => !c.final) || cols[0]).id;
+}
+// O contrário: soltar a tarefa numa coluna do quadro atual → qual status
+// dela (null = não tem coluna equivalente no projeto dela).
+function kbStatusParaTarefa(t, colId) {
+  const proprias = kbColunasDaTarefa(t);
+  if (proprias.some((c) => c.id === colId)) return colId;
+  const alvo = kbColunas().concat(kbColunasGlobais()).find((c) => c.id === colId);
+  if (!alvo) return null;
+  if (alvo.final) return kbFinalDe(proprias);
+  const m = proprias.find((c) => kbNomeNorm(c.nome) === kbNomeNorm(alvo.nome));
+  return m ? m.id : null;
+}
+
+// ---------- datas (sempre no fuso local, nunca UTC) ----------
+function kbIsoLocal(d) {
+  const z = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
+}
+function kbHoje() { return kbIsoLocal(new Date()); }
+function kbSomarDias(iso, dias) {
+  const [a, m, d] = iso.split('-').map(Number);
+  return kbIsoLocal(new Date(a, m - 1, d + dias));
+}
+function kbFimDaSemana() { // semana de domingo a sábado, igual o calendário
+  const hoje = new Date();
+  return kbSomarDias(kbHoje(), 6 - hoje.getDay());
+}
+function kbDataCurta(iso) {
+  if (!iso) return '';
+  const d = String(iso).slice(0, 10).split('-');
+  return d.length === 3 ? `${d[2]}/${d[1]}/${d[0].slice(2)}` : '';
+}
+
+// ---------- carga dos dados ----------
+function kbIniciarDados() {
+  if (KB_ESCUTANDO) return;
+  KB_ESCUTANDO = true;
+  kbIniciarDadosEntrega2();
+  kbIniciarDadosEntrega3();
+  kbIniciarDadosCriar();
+  cloudWatch(KB_CONFIG_KEY, { colunas: KB_COLUNAS_PADRAO }, (data) => {
+    KB_CONFIG = data && Array.isArray(data.colunas) && data.colunas.length ? data : { colunas: KB_COLUNAS_PADRAO };
+    renderKanbanConteudo();
+  });
+  if (kbNuvem()) {
+    kbColecaoRef().onSnapshot((snap) => {
+      const lista = [];
+      snap.forEach((doc) => lista.push(Object.assign({}, doc.data(), { id: doc.id })));
+      KB_TAREFAS = lista;
+      KB_CARREGADO = true;
+      renderKanbanConteudo();
+    }, (err) => {
+      console.error('Erro ao carregar tarefas do Kanban:', err);
+      const el = document.getElementById('kb-conteudo');
+      if (el) el.innerHTML = '<p class="kb-vazio">Não foi possível carregar as tarefas agora. Recarregue a página.</p>';
+    });
+    firestoreDb.collection('usuarios').where('tenantId', '==', TENANT_ID).get().then((snap) => {
+      const u = [];
+      snap.forEach((doc) => { const d = doc.data() || {}; u.push({ uid: doc.id, nome: d.nome || d.email || 'Usuário', titular: !!d.titular, role: d.role || '' }); });
+      KB_USUARIOS = u.sort((a, b) => a.nome.localeCompare(b.nome));
+      renderKanbanFiltroResponsaveis();
+      renderKanbanConteudo();
+    }).catch(() => {});
+  } else {
+    KB_TAREFAS = lsLoad(kbChaveLocal(), []);
+    KB_CARREGADO = true;
+    KB_USUARIOS = [{ uid: 'local', nome: (typeof USUARIO_NOME !== 'undefined' && USUARIO_NOME) || 'Eu', titular: true, role: 'Diretor' }];
+  }
+}
+
+function kbPronto() {
+  if (!KB_CARREGADO) { avisar('As tarefas ainda estão carregando — aguarde um instante e tente de novo.'); return false; }
+  return true;
+}
+
+function kbMeuUid() {
+  if (kbNuvem() && typeof USUARIO_UID !== 'undefined' && USUARIO_UID) return USUARIO_UID;
+  return 'local';
+}
+
+function kbNomeUsuario(uid) {
+  const u = KB_USUARIOS.find((x) => x.uid === uid);
+  return u ? u.nome : '';
+}
+
+// ---------- gravação (uma tarefa por vez) ----------
+function kbLimpar(obj) { return JSON.parse(JSON.stringify(obj)); } // tira undefined (o Firestore recusa)
+
+function kbGravarLocal() { lsSave(kbChaveLocal(), KB_TAREFAS); }
+
+function kbCriarTarefa(dados) {
+  if (!exigirPodeOperar('criar tarefas')) return null;
+  if (!kbPronto()) return null;
+  const agora = new Date().toISOString();
+  const t = Object.assign({
+    id: genId('kb'), titulo: '', descricao: '', cliente: '', responsavel: '', status: kbColunas()[1] ? kbColunas()[1].id : kbColunas()[0].id,
+    prioridade: 'media', prazo: '', etiquetas: [], checklist: [], tempoGastoSeg: 0, cronometroInicio: null,
+    arquivada: false, ordem: Date.now(), criadoEm: agora, atualizadoEm: agora, criadoPor: kbMeuUid(),
+  }, dados || {});
+  KB_TAREFAS.push(t);
+  if (kbNuvem()) kbColecaoRef().doc(t.id).set(kbLimpar(t)).catch(kbErroGravar);
+  else kbGravarLocal();
+  kbRodarAutomacoes('criada', t);
+  renderKanbanConteudo(true);
+  return t;
+}
+
+// Grava só os campos que mudaram (merge) — o essencial pra edição em equipe.
+function kbAtualizar(id, campos) {
+  if (!exigirPodeOperar('editar tarefas')) return false;
+  if (!kbPronto()) return false;
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!t) return false;
+  const estavaConcluida = kbConcluida(t);
+  const antes = { status: t.status, checklistCompleto: (t.checklist || []).length > 0 && t.checklist.every((c) => c.feito) };
+  const mudancas = Object.assign({}, campos, { atualizadoEm: new Date().toISOString() });
+  Object.assign(t, mudancas);
+  if (kbNuvem()) kbColecaoRef().doc(id).set(kbLimpar(mudancas), { merge: true }).catch(kbErroGravar);
+  else kbGravarLocal();
+  if (!estavaConcluida && kbConcluida(t) && t.recorrencia) kbGerarProximaRecorrencia(t);
+  kbRodarAutomacoes('atualizada', t, antes);
+  renderKanbanConteudo(true);
+  return true;
+}
+
+function kbExcluir(id) {
+  if (!exigirPodeOperar('excluir tarefas')) return;
+  if (!kbPronto()) return;
+  KB_TAREFAS = KB_TAREFAS.filter((x) => x.id !== id);
+  if (kbNuvem()) kbColecaoRef().doc(id).delete().catch(kbErroGravar);
+  else kbGravarLocal();
+  renderKanbanConteudo(true);
+}
+
+function kbErroGravar(err) {
+  console.error('Erro ao salvar tarefa do Kanban:', err);
+  avisar('Não foi possível salvar a tarefa na nuvem agora (sem conexão ou sem permissão). Recarregue a página e tente de novo.');
+}
+
+// ---------- filtros ----------
+function kbEtiquetasTodas() {
+  const s = new Set();
+  KB_TAREFAS.forEach((t) => (t.etiquetas || []).forEach((e) => s.add(e)));
+  return Array.from(s).sort((a, b) => a.localeCompare(b));
+}
+
+function kbFiltrar(lista) {
+  const f = KB_FILTROS;
+  const hoje = kbHoje();
+  const fimSemana = kbFimDaSemana();
+  const busca = (f.busca || '').trim().toLowerCase();
+  const p = kbPrefs();
+  return lista.filter((t) => {
+    if (!!t.arquivada !== !!f.arquivadas) return false;
+    if (f.projeto) { if (t.projetoId !== f.projeto) return false; }
+    else {
+      // Exibir → "Tarefas (selecione o que exibir)"
+      if (t.paiId && !p.exibirSubtarefas) return false;
+      if (!t.paiId && t.projetoId && !p.exibirTarefasProjeto) return false;
+      if (!t.paiId && !t.projetoId && !p.exibirTarefas) return false;
+    }
+    if (f.projeto && t.paiId && !p.exibirSubtarefas) return false;
+    if (f.cliente && t.cliente !== f.cliente) return false;
+    if (f.tipo === 'minhas' && t.responsavel !== kbMeuUid()) return false;
+    if (f.tipo === 'sem-responsavel' && t.responsavel) return false;
+    if (f.responsavel && t.responsavel !== f.responsavel) return false;
+    if (f.prioridade && t.prioridade !== f.prioridade) return false;
+    if (f.etiqueta && !(t.etiquetas || []).includes(f.etiqueta)) return false;
+    if (f.prazo) {
+      const p = t.prazo || '';
+      if (f.prazo === 'atrasadas' && !(p && p < hoje && !kbConcluida(t))) return false;
+      if (f.prazo === 'hoje' && p !== hoje) return false;
+      if (f.prazo === 'semana' && !(p && p >= hoje && p <= fimSemana)) return false;
+      if (f.prazo === 'sem' && p) return false;
+    }
+    if (busca) {
+      const alvo = [t.titulo, t.descricao, t.cliente, (t.etiquetas || []).join(' '), (t.checklist || []).map((c) => c.texto).join(' ')].join(' ').toLowerCase();
+      if (!alvo.includes(busca)) return false;
+    }
+    return true;
+  });
+}
+
+function kbOrdenar(lista, modo) {
+  const l = lista.slice();
+  if (modo === 'prazo') return l.sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999') || (a.ordem || 0) - (b.ordem || 0));
+  if (modo === 'prioridade') return l.sort((a, b) => ((KB_PRIORIDADES[b.prioridade] || {}).peso || 0) - ((KB_PRIORIDADES[a.prioridade] || {}).peso || 0) || (a.ordem || 0) - (b.ordem || 0));
+  if (modo === 'criacao') return l.sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
+  return l.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+}
+
+// Grupos usados pelo Quadro e pela Lista ("Agrupar: Status" ou "Data")
+function kbGrupos(lista) {
+  const p = kbPrefs();
+  if (p.agrupar === 'data') {
+    const hoje = kbHoje(), amanha = kbSomarDias(hoje, 1), fimSemana = kbFimDaSemana();
+    const g = [
+      { id: 'atrasadas', nome: 'Atrasadas', cor: '#ef4444', icone: 'alerta', drop: null, tarefas: [] },
+      { id: 'hoje', nome: 'Hoje', cor: '#22c55e', icone: 'sol', drop: 'data:hoje', tarefas: [] },
+      { id: 'amanha', nome: 'Amanhã', cor: '#94a3b8', icone: 'nascer', drop: 'data:amanha', tarefas: [] },
+      { id: 'semana', nome: 'Esta Semana', cor: '#3b82f6', icone: 'calendario', drop: 'data:semana', tarefas: [] },
+      { id: 'depois', nome: 'Mais tarde', cor: '#8b5cf6', icone: 'calendario', drop: null, tarefas: [] },
+      { id: 'sem', nome: 'Sem Data', cor: '#94a3b8', icone: 'semdata', drop: 'data:sem', tarefas: [] },
+      { id: 'concluidas', nome: 'Concluídas', cor: '#22c55e', icone: 'aprovado', drop: 'data:concluidas', tarefas: [] },
+    ];
+    const por = Object.fromEntries(g.map((x) => [x.id, x]));
+    lista.forEach((t) => {
+      const pz = t.prazo || '';
+      if (kbConcluida(t)) por.concluidas.tarefas.push(t);
+      else if (!pz) por.sem.tarefas.push(t);
+      else if (pz < hoje) por.atrasadas.tarefas.push(t);
+      else if (pz === hoje) por.hoje.tarefas.push(t);
+      else if (pz === amanha) por.amanha.tarefas.push(t);
+      else if (pz <= fimSemana) por.semana.tarefas.push(t);
+      else por.depois.tarefas.push(t);
+    });
+    g.forEach((x) => { x.tarefas = kbOrdenar(x.tarefas, 'prazo'); });
+    // "Mais tarde" e "Concluídas" só aparecem quando têm algo
+    return g.filter((x) => x.tarefas.length || !['depois', 'concluidas'].includes(x.id));
+  }
+  return kbColunas().map((c) => ({
+    id: c.id, nome: c.nome, cor: c.cor, icone: null, drop: 'status:' + c.id, coluna: true,
+    tarefas: kbOrdenar(lista.filter((t) => kbColunaNoQuadro(t) === c.id), (p.ordenacao || {})[c.id] || 'manual'),
+  }));
+}
+
+// ---------- cronômetro ----------
+function kbTempoSeg(t) {
+  let s = Number(t.tempoGastoSeg || 0);
+  if (t.cronometroInicio) s += Math.max(0, (Date.now() - new Date(t.cronometroInicio).getTime()) / 1000);
+  return Math.floor(s);
+}
+function kbFormatarTempo(seg) {
+  const h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60), s = seg % 60;
+  const z = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${z(m)}:${z(s)}` : `${z(m)}:${z(s)}`;
+}
+function kbAlternarCronometro(id) {
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!t) return;
+  if (t.cronometroInicio) kbAtualizar(id, { tempoGastoSeg: kbTempoSeg(t), cronometroInicio: null });
+  else kbAtualizar(id, { cronometroInicio: new Date().toISOString() });
+}
+function kbTickCronometros() {
+  document.querySelectorAll('[data-kb-tempo]').forEach((el) => {
+    const t = KB_TAREFAS.find((x) => x.id === el.dataset.kbTempo);
+    if (t && t.cronometroInicio) el.textContent = kbFormatarTempo(kbTempoSeg(t));
+  });
+}
+function kbGarantirTimer() {
+  const algumRodando = KB_TAREFAS.some((t) => t.cronometroInicio);
+  if (algumRodando && !KB_TIMER) KB_TIMER = setInterval(kbTickCronometros, 1000);
+  if (!algumRodando && KB_TIMER) { clearInterval(KB_TIMER); KB_TIMER = null; }
+}
+
+// ---------- ícones próprios do Kanban (somam aos do sprite) ----------
+const KB_SVG = {
+  olho: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  quadro: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  lista: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  tabela: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>',
+  calendario: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  projetos: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="8" y1="11" x2="8" y2="16"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="16" y1="11" x2="16" y2="16"/>',
+  atualizar: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  arquivo: '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>',
+  robo: '<rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/>',
+  modelos: '<rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  selecionar: '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  mais: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  chapeu: '<path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+  pessoa: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  busca: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  filtro: '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+  alfinete: '<line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z"/>',
+  compactar: '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>',
+  colunas: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  importar: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  destacar: '<rect x="2" y="4" width="20" height="16" rx="2"/><rect x="11" y="11" width="8" height="6" rx="1"/>',
+  ordenar: '<polyline points="7 4 7 20"/><polyline points="3 8 7 4 11 8"/><polyline points="17 20 17 4"/><polyline points="13 16 17 20 21 16"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
+  checkDuplo: '<polyline points="18 6 9 17 4 12"/><polyline points="22 8 14 17"/>',
+  pontos: '<circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/>',
+  play: '<polygon points="6 4 20 12 6 20 6 4"/>',
+  pause: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>',
+  relogio: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M10 2h4"/>',
+  seta: '<polyline points="9 18 15 12 9 6"/>',
+  setaEsq: '<polyline points="15 18 9 12 15 6"/>',
+  externo: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+  checklist: '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  carga: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/>',
+  camadas: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  alerta: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  sol: '<circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/>',
+  nascer: '<path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.2" y1="10.2" x2="5.6" y2="11.6"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.4" y1="11.6" x2="19.8" y2="10.2"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/>',
+  semdata: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="2" y1="2" x2="22" y2="22"/>',
+  aprovado: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  lixeira: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  copiar: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  lapis: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>',
+  x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  setaCima: '<polyline points="18 15 12 9 6 15"/>',
+  setaBaixo: '<polyline points="6 9 12 15 18 9"/>',
+};
+function kbIc(nome, classe) {
+  return `<svg class="kb-ic${classe ? ' ' + classe : ''}" viewBox="0 0 24 24" aria-hidden="true">${KB_SVG[nome] || ''}</svg>`;
+}
+
+// Itens das próximas entregas: aparecem (pra tela ficar igual à
+// referência) mas dizem com honestidade que ainda não funcionam.
+const KB_EM_BREVE = {
+};
+function kbEmBreve(chave) { avisar(KB_EM_BREVE[chave] || 'Esse recurso chega numa próxima entrega.', 'Em breve'); }
+
+// ---------- montagem da seção ----------
+function renderKanbanSecao() {
+  const el = document.getElementById('crm-secao-kanban');
+  if (!el) return;
+  kbIniciarDados();
+  const p = kbPrefs();
+  const modos = [['quadro', 'Quadro'], ['lista', 'Lista'], ['tabela', 'Tabela'], ['calendario', 'Calendário']];
+  el.innerHTML = `
+    <div class="kb">
+      <div class="kb-topo">
+        <h1 class="kb-titulo">Kanban</h1>
+        <div class="kb-barra">
+          <div class="kb-grupo-modos">
+            <span class="kb-rotulo-modos">Modos de exibição</span>
+            <div class="kb-pop-wrap">
+              <button type="button" class="kb-btn kb-btn-exibir" onclick="kbAbrirPopover('kb-pop-exibir', this)">${kbIc('olho')} Exibir ${kbIc('setaBaixo', 'kb-ic-p')}</button>
+            </div>
+            <span class="kb-sep"></span>
+            ${modos.map(([m, nome]) => `<button type="button" class="kb-btn-modo${p.modo === m ? ' ativo' : ''}" data-kb-modo="${m}" title="${nome}" aria-label="${nome}" onclick="kbMudarModo('${m}')">${kbIc(m)}</button>`).join('')}
+            <button type="button" class="kb-btn-modo${p.modo === 'projetos' ? ' ativo' : ''}" data-kb-modo="projetos" title="Projetos" aria-label="Projetos" onclick="kbMudarModo('projetos')">${kbIc('projetos')}</button>
+            <span class="kb-sep"></span>
+            <button type="button" class="kb-btn-modo" title="Atualizar" aria-label="Atualizar" onclick="renderKanbanConteudo(true)">${kbIc('atualizar')}</button>
+          </div>
+          <div class="kb-pop-wrap" id="kb-wrap-agrupar">
+            <button type="button" class="kb-btn" id="kb-btn-agrupar" onclick="kbAbrirPopover('kb-pop-agrupar', this)"></button>
+          </div>
+          <button type="button" class="kb-btn" id="kb-btn-arquivadas" onclick="kbAlternarArquivadas()">${kbIc('arquivo')} Ver arquivadas</button>
+          <button type="button" class="kb-btn" id="kb-btn-automacoes" onclick="kbAbrirAutomacoes()">${kbIc('robo')} Automações</button>
+          <button type="button" class="kb-btn" onclick="kbAbrirModelos()">${kbIc('modelos')} Modelos</button>
+          <button type="button" class="kb-btn" id="kb-btn-selecionar" onclick="kbAlternarSelecao()">${kbIc('selecionar')} Selecionar</button>
+          <button type="button" class="kb-btn kb-btn-criar" id="kb-btn-criar" onclick="kbAbrirMenuCriar(this)">${kbIc('mais')} Criar</button>
+          <button type="button" class="kb-btn kb-btn-tutorial" onclick="kbIniciarTutorial()">${kbIc('chapeu')} Tutorial</button>
+        </div>
+      </div>
+
+      ${(() => { try { return localStorage.getItem('eagles_kanban_banner_trello_ok'); } catch (e) { return '1'; } })() ? '' : `
+      <div class="kb-banner-importar" id="kb-banner-importar">
+        <span class="kb-banner-ic">${kbIc('importar')}</span>
+        <div><strong>Já usa outra ferramenta?</strong><span>Traga suas tarefas para cá em vez de recomeçar do zero. Do Trello vêm os cards, checklists e prazos.</span></div>
+        <span class="kb-espaco"></span>
+        <button type="button" class="kb-btn kb-btn-criar" onclick="kbAbrirImportar('trello')">${kbIc('importar')} Importar do Trello</button>
+        <button type="button" class="kb-link" onclick="try { localStorage.setItem('eagles_kanban_banner_trello_ok', '1'); } catch (e) {} document.getElementById('kb-banner-importar').remove();">Agora não</button>
+      </div>`}
+      <div class="kb-filtros">
+        <span class="kb-filtros-ic">${kbIc('projetos')}</span>
+        <label class="kb-select-wrap">${kbIc('pessoa')}<select id="kb-f-cliente" onchange="kbSetFiltro('cliente', this.value)"></select></label>
+        <label class="kb-select-wrap">${kbIc('projetos')}<select id="kb-f-tipo" onchange="kbSetFiltroTipo(this.value)"></select></label>
+        <label class="kb-busca">${kbIc('busca')}<input type="search" id="kb-f-busca" placeholder="Buscar tarefas..." value="${escapeHtml(KB_FILTROS.busca)}" oninput="kbSetFiltro('busca', this.value)"></label>
+        <div class="kb-pop-wrap"><button type="button" class="kb-btn" id="kb-btn-filtros" onclick="kbAbrirPopover('kb-pop-filtros', this)">${kbIc('filtro')} Filtros</button></div>
+        <span class="kb-espaco"></span>
+        <button type="button" class="kb-btn" onclick="kbAbrirListaProjetos()">${kbIc('projetos')} Projetos</button>
+        <button type="button" class="kb-btn" onclick="kbAbrirProjeto(null)">${kbIc('mais')} Novo Projeto</button>
+      </div>
+
+      <div class="kb-filtros kb-filtros-2">
+        <span class="kb-rotulo">Filtrar:</span>
+        <div class="kb-avatares" id="kb-f-responsaveis"></div>
+        <span class="kb-sep-v"></span>
+        <button type="button" class="kb-btn kb-btn-pontilhado" id="kb-btn-fixar" onclick="kbAbrirFixarAtalho(this)">${kbIc('alfinete')} Fixar atalho</button>
+        <div class="kb-atalhos" id="kb-atalhos"></div>
+        <span class="kb-espaco"></span>
+        <button type="button" class="kb-btn" id="kb-btn-compactar" onclick="kbAlternarCompactar()">${kbIc('compactar')} Compactar</button>
+        <button type="button" class="kb-btn" onclick="kbAbrirColunas()">${kbIc('colunas')} Colunas</button>
+        <button type="button" class="kb-btn" onclick="kbAbrirImportar('csv')">${kbIc('importar')} Importar</button>
+        <button type="button" class="kb-btn" id="kb-btn-destacar" onclick="kbAlternarDestaque()">${kbIc('destacar')} Destacar</button>
+      </div>
+
+      <div id="kb-conteudo" class="kb-conteudo"></div>
+    </div>`;
+  renderKanbanFiltroResponsaveis();
+  renderKanbanConteudo(true);
+}
+
+function kbMudarModo(m) {
+  kbSalvarPrefs({ modo: m });
+  document.querySelectorAll('[data-kb-modo]').forEach((b) => b.classList.toggle('ativo', b.dataset.kbModo === m));
+  renderKanbanConteudo(true);
+}
+function kbSetFiltro(campo, valor) { KB_FILTROS[campo] = valor; renderKanbanConteudo(true); }
+function kbSetFiltroTipo(v) {
+  if (String(v).startsWith('proj:')) { KB_FILTROS.projeto = v.slice(5); KB_FILTROS.tipo = 'todas'; }
+  else { KB_FILTROS.projeto = ''; KB_FILTROS.tipo = v; }
+  renderKanbanConteudo(true);
+}
+function kbAlternarArquivadas() { KB_FILTROS.arquivadas = !KB_FILTROS.arquivadas; renderKanbanConteudo(true); }
+function kbAlternarCompactar() { kbSalvarPrefs({ compactar: !kbPrefs().compactar }); renderKanbanConteudo(true); }
+
+function kbIniciais(nome) {
+  const partes = String(nome || '?').trim().split(/\s+/).filter(Boolean);
+  return ((partes[0] || '?')[0] + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase();
+}
+function kbCorDoNome(nome) {
+  const cores = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#06b6d4', '#ef4444', '#22c55e'];
+  let h = 0; for (const ch of String(nome || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return cores[h % cores.length];
+}
+function kbAvatar(uid, tamanho) {
+  const nome = kbNomeUsuario(uid);
+  if (!uid || !nome) return `<span class="kb-avatar kb-avatar-vazio${tamanho ? ' ' + tamanho : ''}" title="Sem responsável">${kbIc('pessoa')}</span>`;
+  return `<span class="kb-avatar${tamanho ? ' ' + tamanho : ''}" style="background:${kbCorDoNome(nome)};" title="${escapeHtml(nome)}">${escapeHtml(kbIniciais(nome))}</span>`;
+}
+
+function renderKanbanFiltroResponsaveis() {
+  const el = document.getElementById('kb-f-responsaveis');
+  if (!el) return;
+  el.innerHTML = KB_USUARIOS.map((u) => `
+    <button type="button" class="kb-avatar-btn${KB_FILTROS.responsavel === u.uid ? ' ativo' : ''}" title="${escapeHtml(u.nome)}" onclick="kbSetFiltro('responsavel', KB_FILTROS.responsavel === '${escapeParaOnclick(u.uid)}' ? '' : '${escapeParaOnclick(u.uid)}'); renderKanbanFiltroResponsaveis();">
+      <span class="kb-avatar" style="background:${kbCorDoNome(u.nome)};">${escapeHtml(kbIniciais(u.nome))}</span>
+    </button>`).join('');
+}
+
+// Atualiza a barra (estado dos botões, selects) e desenha o modo atual.
+let KB_RENDER_ADIADO = false;
+function renderKanbanConteudo(forcar) {
+  const el = document.getElementById('kb-conteudo');
+  if (!el) return;
+  // não redesenha enquanto alguém digita dentro de um cartão (uma
+  // atualização vinda de outro usuário apagaria o que está sendo escrito)
+  const ativo = document.activeElement;
+  if (!forcar && ativo && el.contains(ativo) && /INPUT|TEXTAREA|SELECT/.test(ativo.tagName)) {
+    if (!KB_RENDER_ADIADO) { KB_RENDER_ADIADO = true; ativo.addEventListener('blur', () => { KB_RENDER_ADIADO = false; setTimeout(() => renderKanbanConteudo(true), 0); }, { once: true }); }
+    return;
+  }
+  const p = kbPrefs();
+  const agrupar = document.getElementById('kb-btn-agrupar');
+  if (agrupar) agrupar.innerHTML = `${kbIc(p.agrupar === 'data' ? 'calendario' : 'checklist')} Agrupar: ${p.agrupar === 'data' ? 'Data' : 'Status'} ${kbIc('setaBaixo', 'kb-ic-p')}`;
+  const wrapAgrupar = document.getElementById('kb-wrap-agrupar');
+  if (wrapAgrupar) wrapAgrupar.style.display = ['calendario', 'tabela', 'projetos'].includes(p.modo) ? 'none' : '';
+  const arq = document.getElementById('kb-btn-arquivadas');
+  if (arq) arq.classList.toggle('ativo', KB_FILTROS.arquivadas);
+  const comp = document.getElementById('kb-btn-compactar');
+  if (comp) comp.classList.toggle('ativo', !!p.compactar);
+  const filtrosAtivos = ['prioridade', 'prazo', 'etiqueta'].filter((k) => KB_FILTROS[k]).length;
+  const bf = document.getElementById('kb-btn-filtros');
+  if (bf) bf.innerHTML = `${kbIc('filtro')} Filtros${filtrosAtivos ? ` <span class="kb-contador">${filtrosAtivos}</span>` : ''}`;
+  const selCli = document.getElementById('kb-f-cliente');
+  if (selCli) {
+    const clientes = Array.from(new Set((typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []).concat(KB_TAREFAS.map((t) => t.cliente).filter(Boolean)))).sort((a, b) => a.localeCompare(b));
+    selCli.innerHTML = '<option value="">Todos os clientes</option>' + clientes.map((c) => `<option value="${escapeHtml(c)}"${KB_FILTROS.cliente === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  }
+  const selTipo = document.getElementById('kb-f-tipo');
+  if (selTipo) {
+    const projs = KB_PROJETOS.filter((x) => !x.arquivado || x.id === KB_FILTROS.projeto);
+    selTipo.innerHTML = `<option value="todas">Todas as tarefas</option><option value="minhas">Minhas tarefas</option><option value="sem-responsavel">Sem responsável</option>${projs.length ? `<optgroup label="Projetos">${projs.map((x) => `<option value="proj:${escapeHtml(x.id)}">${escapeHtml(x.nome)}</option>`).join('')}</optgroup>` : ''}`;
+    selTipo.value = KB_FILTROS.projeto ? 'proj:' + KB_FILTROS.projeto : KB_FILTROS.tipo;
+  }
+  const bSel = document.getElementById('kb-btn-selecionar');
+  if (bSel) bSel.classList.toggle('ativo', !!KB_SELECAO);
+
+  if (!KB_CARREGADO) { el.innerHTML = '<p class="kb-vazio">Carregando tarefas...</p>'; return; }
+  const lista = kbFiltrar(KB_TAREFAS);
+  const aviso = KB_FILTROS.arquivadas ? `<div class="kb-faixa-arquivadas">${kbIc('arquivo')} Mostrando só as tarefas arquivadas. <button type="button" onclick="kbAlternarArquivadas()">Voltar pras ativas</button></div>` : '';
+  const desenhar = { quadro: kbRenderQuadro, lista: kbRenderLista, tabela: kbRenderTabela, calendario: kbRenderCalendario, projetos: kbRenderProjetos }[p.modo] || kbRenderQuadro;
+  const pj = KB_FILTROS.projeto ? kbProjeto(KB_FILTROS.projeto) : null;
+  const faixaProjeto = pj && p.modo !== 'projetos' ? `<div class="kb-faixa-projeto" style="--kb-cor:${corHexValida(pj.cor) || '#8b5cf6'};">${kbIc('projetos')} <strong>${escapeHtml(pj.nome)}</strong><span>${kbProgressoProjeto(pj.id).pct}% concluído</span><button type="button" onclick="kbAbrirTarefa(null, { projetoId: KB_FILTROS.projeto, cliente: (kbProjeto(KB_FILTROS.projeto) || {}).cliente || '' })">${kbIc('mais')} Tarefa no projeto</button><button type="button" onclick="kbAbrirProjeto(KB_FILTROS.projeto)">Editar projeto</button><button type="button" onclick="kbSetFiltro('projeto', '')">Ver todas as tarefas</button></div>` : '';
+  const carga = p.mostrarCarga && p.modo !== 'projetos' ? kbRenderCarga(lista) : '';
+  el.innerHTML = aviso + faixaProjeto + carga + desenhar(lista, p);
+  kbRenderBarraSelecao();
+  kbRenderAtalhos();
+  kbGarantirTimer();
+  kbRenovarProjetosRecorrentes();
+}
+
+// ---------- Cartão (modo Quadro) ----------
+function kbPrazoHtml(t) {
+  if (!t.prazo) return '<span class="kb-prazo kb-prazo-sem">Sem prazo</span>';
+  const hoje = kbHoje();
+  const cls = !kbConcluida(t) && t.prazo < hoje ? ' atrasado' : (t.prazo === hoje ? ' hoje' : '');
+  return `<span class="kb-prazo${cls}">${kbIc('relogio')} ${kbDataCurta(t.prazo)}</span>`;
+}
+function kbEtiquetasHtml(t) {
+  const pr = KB_PRIORIDADES[t.prioridade];
+  return `<div class="kb-etiquetas">
+    ${(t.etiquetas || []).map((e) => `<span class="kb-etiqueta" style="--kb-cor:${kbCorDoNome(e)};">${escapeHtml(e)}</span>`).join('')}
+    ${pr ? `<span class="kb-etiqueta kb-etiqueta-prio" style="--kb-cor:${pr.cor};">${pr.nome}</span>` : ''}
+  </div>`;
+}
+function kbChecklistHtml(t, comAdicionar) {
+  const itens = t.checklist || [];
+  if (!itens.length && !comAdicionar) return '';
+  const feitos = itens.filter((c) => c.feito).length;
+  const pct = itens.length ? Math.round((feitos / itens.length) * 100) : 0;
+  const id = escapeParaOnclick(t.id);
+  return `<div class="kb-checklist">
+    <div class="kb-checklist-cab">${kbIc('checklist')} <strong>Checklist</strong><span class="kb-barra-prog"><i style="width:${pct}%;"></i></span><span class="kb-checklist-n">${feitos}/${itens.length}</span></div>
+    ${itens.map((c) => `<button type="button" class="kb-check-item${c.feito ? ' feito' : ''}" onclick="event.stopPropagation(); kbAlternarItem('${id}', '${escapeParaOnclick(c.id)}')"><span class="kb-check-bola">${c.feito ? kbIc('check') : ''}</span><span>${escapeHtml(c.texto)}</span></button>`).join('')}
+    ${comAdicionar ? `<div class="kb-check-add" onclick="event.stopPropagation();"><span class="kb-check-add-btn" role="button" tabindex="0" onclick="this.style.display='none'; this.nextElementSibling.style.display=''; this.nextElementSibling.focus();">${kbIc('mais')} Adicionar item</span><input type="text" class="kb-check-add-input" style="display:none;" maxlength="200" placeholder="Novo item e Enter" onkeydown="if(event.key==='Enter'){ kbAdicionarItem('${id}', this.value); this.value=''; } if(event.key==='Escape'){ this.blur(); }"></div>` : ''}
+  </div>`;
+}
+
+function kbCardHtml(t, p) {
+  const id = escapeParaOnclick(t.id);
+  const compacto = p.compactar;
+  const concluida = kbConcluida(t);
+  const pj = t.projetoId ? kbProjeto(t.projetoId) : null;
+  const pai = t.paiId ? KB_TAREFAS.find((x) => x.id === t.paiId) : null;
+  const selecionada = KB_SELECAO && KB_SELECAO.has(t.id);
+  return `
+    <div class="kb-card${compacto ? ' compacto' : ''}${concluida ? ' concluida' : ''}${selecionada ? ' selecionada' : ''}" data-kb-card="${escapeHtml(t.id)}" onpointerdown="kbPointerDown(event, '${id}')"${KB_SELECAO ? ` onclick="kbMarcarSelecao('${id}', !KB_SELECAO.has('${id}')); renderKanbanConteudo(true);"` : ''}>
+      ${pj || pai ? `<div class="kb-card-origem">${pj ? `<span style="color:${corHexValida(pj.cor) || '#8b5cf6'};">${kbIc('projetos')} ${escapeHtml(pj.nome)}</span>` : ''}${pai ? `<span>${kbIc('camadas')} Subtarefa de: ${escapeHtml(pai.titulo || '')}</span>` : ''}</div>` : ''}
+      <div class="kb-card-topo">
+        ${KB_SELECAO ? `<input type="checkbox" class="kb-sel" aria-label="Selecionar" ${selecionada ? 'checked' : ''} onclick="event.stopPropagation();" onchange="kbMarcarSelecao('${id}', this.checked); this.closest('.kb-card').classList.toggle('selecionada', this.checked);">` : ''}
+        <strong class="kb-card-titulo">${escapeHtml(t.titulo || 'Sem título')}</strong>
+        ${t.recorrencia && p.mostrarRecorrentes ? `<span class="kb-recorrente" title="Recorrente: ${escapeHtml(KB_RECORRENCIAS[t.recorrencia] || '')}">${kbIc('atualizar')}</span>` : ''}
+        <button type="button" class="kb-card-concluir${concluida ? ' ativo' : ''}" title="${concluida ? 'Reabrir' : 'Marcar como concluída'}" aria-label="Concluir" onclick="event.stopPropagation(); kbAlternarConcluida('${id}')">${kbIc('checkDuplo')}</button>
+        <button type="button" class="kb-card-menu" title="Mais ações" aria-label="Mais ações" onclick="event.stopPropagation(); kbAbrirMenuTarefa('${id}', this)">${kbIc('pontos')}</button>
+      </div>
+      <div class="kb-card-datas"><span>${kbIc('calendario')} ${kbDataCurta(t.criadoEm)}</span>${kbPrazoHtml(t)}</div>
+      ${!compacto && t.descricao ? `<p class="kb-card-desc">${escapeHtml(t.descricao)}</p>` : ''}
+      ${kbEtiquetasHtml(t)}
+      ${!compacto && p.exibirChecklist ? kbChecklistHtml(t, true) : ''}
+      ${kbSubtarefasHtmlCartao(t)}
+      <div class="kb-card-rodape">
+        ${kbAvatar(t.responsavel)}
+        ${t.cliente ? `<span class="kb-card-cliente" title="Cliente">${escapeHtml(t.cliente)}</span>` : ''}
+        <span class="kb-espaco"></span>
+        ${kbTempoBotaoHtml(t)}
+      </div>
+      ${compacto ? '' : `<button type="button" class="kb-card-abrir" onclick="event.stopPropagation(); kbAbrirTarefa('${id}')">${kbIc('externo')} Acessar tarefa completa</button>`}
+    </div>`;
+}
+
+function kbTempoBotaoHtml(t) {
+  const rodando = !!t.cronometroInicio;
+  const id = escapeParaOnclick(t.id);
+  return `<span class="kb-tempo${rodando ? ' rodando' : ''}">${kbIc('relogio')}<span data-kb-tempo="${escapeHtml(t.id)}">${kbFormatarTempo(kbTempoSeg(t))}</span><button type="button" class="kb-tempo-btn" title="${rodando ? 'Pausar cronômetro' : 'Iniciar cronômetro'}" aria-label="Cronômetro" onclick="event.stopPropagation(); kbAlternarCronometro('${id}')">${kbIc(rodando ? 'pause' : 'play')}</button></span>`;
+}
+
+// ---------- Modo Quadro ----------
+function kbRenderQuadro(lista, p) {
+  const grupos = kbGrupos(lista);
+  const projetos = p.mostrarProjetos && p.agrupar !== 'data' && !KB_FILTROS.projeto ? kbProjetosVisiveis().filter((x) => x.situacao !== 'pausado' && x.situacao !== 'cancelado') : [];
+  if (!lista.length && !projetos.length && !KB_FILTROS.arquivadas && !KB_TAREFAS.length) return kbVazioInicial();
+  const projDaColuna = (gid) => projetos.filter((pj) => (kbColunas().some((c) => c.id === pj.status) ? pj.status : kbColunas()[0].id) === gid);
+  const rotulosOrdem = { manual: 'Ordem manual', prazo: 'Por prazo', prioridade: 'Por prioridade', criacao: 'Mais recentes' };
+  return `<div class="kb-quadro">${grupos.map((g) => {
+    const modoOrdem = (p.ordenacao || {})[g.id] || 'manual';
+    return `
+    <section class="kb-coluna" ${g.drop ? `data-kb-drop="${g.drop}"` : ''}>
+      <header class="kb-coluna-cab">
+        <span class="kb-coluna-nome" style="color:${g.cor};">${g.icone ? kbIc(g.icone) + ' ' : ''}${escapeHtml(g.nome)}</span><span class="kb-coluna-n">(${g.tarefas.length + (g.coluna ? projDaColuna(g.id).length : 0)})</span>
+        <span class="kb-espaco"></span>
+        ${g.drop ? `<button type="button" class="kb-btn-ic" title="Nova tarefa aqui" aria-label="Nova tarefa aqui" onclick="kbNovaNoGrupo('${g.drop}')">${kbIc('mais')}</button>` : ''}
+        ${g.coluna ? `<button type="button" class="kb-btn-ic${modoOrdem !== 'manual' ? ' ativo' : ''}" title="Ordenar: ${rotulosOrdem[modoOrdem]}" aria-label="Ordenar" onclick="kbCiclarOrdenacao('${g.id}')">${kbIc('ordenar')}</button>` : ''}
+      </header>
+      <div class="kb-coluna-corpo">
+        ${(g.coluna ? projDaColuna(g.id).map(kbCardProjetoHtml).join('') : '') + g.tarefas.map((t) => kbCardHtml(t, p)).join('') || '<div class="kb-coluna-vazia">Arraste uma tarefa pra cá</div>'}
+      </div>
+    </section>`;
+  }).join('')}</div>`;
+}
+
+function kbVazioInicial() {
+  return `<div class="kb-vazio-grande">
+    <div class="ic-circulo">${kbIc('quadro')}</div>
+    <h3>Nenhuma tarefa ainda</h3>
+    <p>Crie a primeira tarefa e organize o trabalho da equipe por etapas.</p>
+    <button type="button" class="btn btn-primary" onclick="kbAbrirTarefa(null)">${kbIc('mais')} Criar tarefa</button>
+  </div>`;
+}
+
+function kbCiclarOrdenacao(colId) {
+  const ordem = ['manual', 'prazo', 'prioridade', 'criacao'];
+  const atual = (kbPrefs().ordenacao || {})[colId] || 'manual';
+  const ord = Object.assign({}, kbPrefs().ordenacao, { [colId]: ordem[(ordem.indexOf(atual) + 1) % ordem.length] });
+  kbSalvarPrefs({ ordenacao: ord });
+  renderKanbanConteudo(true);
+}
+
+// ---------- Modo Lista (agrupada) ----------
+function kbRenderLista(lista, p) {
+  const grupos = kbGrupos(lista);
+  if (!lista.length && !KB_TAREFAS.length) return kbVazioInicial();
+  const fechados = p.gruposFechados || {};
+  return `<div class="kb-lista">${grupos.map((g) => {
+    const aberto = fechados[g.id] === undefined ? g.tarefas.length > 0 : !fechados[g.id];
+    return `
+    <div class="kb-lista-grupo" style="--kb-cor:${g.cor};" ${g.drop ? `data-kb-drop="${g.drop}"` : ''}>
+      <button type="button" class="kb-lista-cab" onclick="kbAlternarGrupo('${g.id}', ${aberto ? 'true' : 'false'})">
+        <span class="kb-lista-seta${aberto ? ' aberta' : ''}">${kbIc('seta')}</span>
+        ${g.icone ? kbIc(g.icone) : `<span class="kb-bolinha" style="background:${g.cor};"></span>`}
+        <span class="kb-lista-nome">${escapeHtml(g.nome)}</span>
+        <span class="kb-espaco"></span>
+        <span class="kb-lista-n">${g.tarefas.length}</span>
+      </button>
+      ${aberto ? `<div class="kb-lista-itens">${g.tarefas.map((t) => kbLinhaListaHtml(t)).join('') || '<div class="kb-coluna-vazia">Nenhuma tarefa</div>'}</div>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+let KB_LINHAS_ABERTAS = new Set();
+function kbLinhaListaHtml(t) {
+  const id = escapeParaOnclick(t.id);
+  const aberta = KB_LINHAS_ABERTAS.has(t.id);
+  const pr = KB_PRIORIDADES[t.prioridade];
+  return `
+    <div class="kb-linha" data-kb-card="${escapeHtml(t.id)}" onpointerdown="kbPointerDown(event, '${id}')">
+      <div class="kb-linha-principal" onclick="kbAbrirTarefa('${id}')">
+        ${KB_SELECAO ? `<input type="checkbox" class="kb-sel" aria-label="Selecionar" ${KB_SELECAO.has(t.id) ? 'checked' : ''} onclick="event.stopPropagation();" onchange="kbMarcarSelecao('${id}', this.checked)">` : ''}
+        <button type="button" class="kb-lista-seta${aberta ? ' aberta' : ''}" aria-label="Detalhes" onclick="event.stopPropagation(); kbAlternarLinha('${id}')">${kbIc('seta')}</button>
+        <span class="kb-linha-titulo">${escapeHtml(t.titulo || 'Sem título')}</span>
+        ${(t.etiquetas || []).slice(0, 2).map((e) => `<span class="kb-etiqueta" style="--kb-cor:${kbCorDoNome(e)};">${escapeHtml(e)}</span>`).join('')}
+        <span class="kb-espaco"></span>
+        ${kbSelectStatusHtml(t)}
+        ${pr ? `<span class="kb-linha-prio" style="color:${pr.cor};">${pr.nome}</span>` : ''}
+        ${kbAvatar(t.responsavel)}
+        ${kbTempoBotaoHtml(t)}
+      </div>
+      ${aberta ? `<div class="kb-linha-detalhe" onclick="event.stopPropagation();">
+        ${t.descricao ? `<p class="kb-card-desc">${escapeHtml(t.descricao)}</p>` : ''}
+        <div class="kb-card-datas"><span>Criada em ${kbDataCurta(t.criadoEm)}</span>${kbPrazoHtml(t)}</div>
+        ${kbChecklistHtml(t, true)}
+      </div>` : ''}
+    </div>`;
+}
+function kbAlternarLinha(id) { if (KB_LINHAS_ABERTAS.has(id)) KB_LINHAS_ABERTAS.delete(id); else KB_LINHAS_ABERTAS.add(id); renderKanbanConteudo(true); }
+function kbAlternarGrupo(gid, estavaAberto) {
+  const f = Object.assign({}, kbPrefs().gruposFechados, { [gid]: estavaAberto });
+  kbSalvarPrefs({ gruposFechados: f });
+  renderKanbanConteudo(true);
+}
+
+function kbSelectStatusHtml(t) {
+  const cols = kbColunasDaTarefa(t);
+  const col = cols.find((c) => c.id === t.status) || kbColuna(kbColunaNoQuadro(t));
+  return `<span class="kb-status-pill" style="--kb-cor:${col.cor};" onclick="event.stopPropagation();"><select aria-label="Status" onchange="kbAtualizar('${escapeParaOnclick(t.id)}', { status: this.value })">
+    ${cols.map((c) => `<option value="${escapeHtml(c.id)}"${c.id === col.id ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}
+  </select></span>`;
+}
+
+// ---------- Modo Tabela ----------
+function kbRenderTabela(lista) {
+  if (!lista.length && !KB_TAREFAS.length) return kbVazioInicial();
+  const linhas = kbOrdenar(lista, 'manual');
+  const opcoesResp = (sel) => '<option value="">—</option>' + KB_USUARIOS.map((u) => `<option value="${escapeHtml(u.uid)}"${u.uid === sel ? ' selected' : ''}>${escapeHtml(u.nome)}</option>`).join('');
+  return `<div class="kb-tabela-wrap"><table class="kb-tabela">
+    <thead><tr><th>Tarefa</th><th>Responsável</th><th>Status</th><th>Prazo</th><th>Prioridade</th><th>Tempo</th><th></th></tr></thead>
+    <tbody>
+      <tr class="kb-tabela-grupo"><td colspan="7"><span class="kb-lista-seta aberta">${kbIc('seta')}</span> <strong>Todas as tarefas</strong> <span class="kb-lista-n">${linhas.length}</span></td></tr>
+      ${linhas.map((t) => {
+        const id = escapeParaOnclick(t.id);
+        return `<tr data-kb-card="${escapeHtml(t.id)}">
+          <td>${KB_SELECAO ? `<input type="checkbox" class="kb-sel" aria-label="Selecionar" ${KB_SELECAO.has(t.id) ? 'checked' : ''} onchange="kbMarcarSelecao('${id}', this.checked)"> ` : ''}<button type="button" class="kb-tabela-titulo" onclick="kbAbrirTarefa('${id}')">${escapeHtml(t.titulo || 'Sem título')}</button>${t.projetoId && kbProjeto(t.projetoId) ? `<span class="kb-tabela-proj">${escapeHtml(kbProjeto(t.projetoId).nome)}</span>` : ''}</td>
+          <td><span class="kb-tabela-resp">${kbAvatar(t.responsavel, 'p')}<select aria-label="Responsável" onchange="kbAtualizar('${id}', { responsavel: this.value })">${opcoesResp(t.responsavel)}</select></span></td>
+          <td>${kbSelectStatusHtml(t)}</td>
+          <td><input type="date" class="kb-tabela-data${!kbConcluida(t) && t.prazo && t.prazo < kbHoje() ? ' atrasado' : ''}" value="${escapeHtml(t.prazo || '')}" aria-label="Prazo" onchange="kbAtualizar('${id}', { prazo: this.value })"></td>
+          <td><select class="kb-tabela-prio" aria-label="Prioridade" style="color:${(KB_PRIORIDADES[t.prioridade] || {}).cor || 'inherit'};" onchange="kbAtualizar('${id}', { prioridade: this.value })">${Object.entries(KB_PRIORIDADES).map(([k, v]) => `<option value="${k}"${k === t.prioridade ? ' selected' : ''}>${v.nome}</option>`).join('')}</select></td>
+          <td>${kbTempoBotaoHtml(t)}</td>
+          <td style="text-align:right;"><button type="button" class="kb-btn-ic" aria-label="Mais ações" onclick="kbAbrirMenuTarefa('${id}', this)">${kbIc('pontos')}</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="7" class="kb-vazio">Nenhuma tarefa encontrada.</td></tr>'}
+    </tbody></table></div>`;
+}
+
+// ---------- Modo Calendário (Mês e Dia) ----------
+function kbRenderCalendario(lista, p) {
+  const ref = p.calRef || kbHoje();
+  const [ano, mes, dia] = ref.split('-').map(Number);
+  const nomesMes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const semData = lista.filter((t) => !t.prazo);
+  const porDia = {};
+  lista.filter((t) => t.prazo).forEach((t) => { (porDia[t.prazo] = porDia[t.prazo] || []).push(t); });
+  const hoje = kbHoje();
+  const chip = (t) => {
+    const pr = KB_PRIORIDADES[t.prioridade] || {};
+    return `<div class="kb-cal-chip${kbConcluida(t) ? ' concluida' : ''}" style="--kb-cor:${pr.cor || '#94a3b8'};" data-kb-card="${escapeHtml(t.id)}" onpointerdown="kbPointerDown(event, '${escapeParaOnclick(t.id)}')" onclick="event.stopPropagation(); kbAbrirTarefa('${escapeParaOnclick(t.id)}')"><span>${escapeHtml(t.titulo || 'Sem título')}</span>${kbAvatar(t.responsavel, 'p')}</div>`;
+  };
+  const cab = `
+    <div class="kb-cal-cab">
+      <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Anterior" onclick="kbNavegarCalendario(-1)">${kbIc('setaEsq')}</button>
+      <h2>${p.calModo === 'dia' ? `${String(dia).padStart(2, '0')} de ${nomesMes[mes - 1]} ${ano}` : `${nomesMes[mes - 1]} ${ano}`}</h2>
+      <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Próximo" onclick="kbNavegarCalendario(1)">${kbIc('seta')}</button>
+      <button type="button" class="kb-link" onclick="kbSalvarPrefs({ calRef: '' }); renderKanbanConteudo(true);">Hoje</button>
+      <span class="kb-espaco"></span>
+      <div class="kb-segmento"><button type="button" class="${p.calModo !== 'dia' ? 'ativo' : ''}" onclick="kbSalvarPrefs({ calModo: 'mes' }); renderKanbanConteudo(true);">Mês</button><button type="button" class="${p.calModo === 'dia' ? 'ativo' : ''}" onclick="kbSalvarPrefs({ calModo: 'dia' }); renderKanbanConteudo(true);">Dia</button></div>
+      <span class="kb-cal-semdata-n">${kbIc('calendario')} ${semData.length} sem data</span>
+    </div>`;
+  let corpo;
+  if (p.calModo === 'dia') {
+    const doDia = kbOrdenar(porDia[ref] || [], 'prioridade');
+    corpo = `<div class="kb-cal-dia" data-kb-drop="dia:${ref}">
+      ${doDia.map((t) => kbCardHtml(t, Object.assign({}, p, { compactar: true }))).join('') || `<div class="kb-coluna-vazia">Nenhuma tarefa com prazo nesse dia. <button type="button" class="kb-link" onclick="kbAbrirTarefa(null, { prazo: '${ref}' })">Criar uma</button></div>`}
+    </div>`;
+  } else {
+    const primeiro = new Date(ano, mes - 1, 1);
+    const diasNoMes = new Date(ano, mes, 0).getDate();
+    const celulas = [];
+    for (let i = 0; i < primeiro.getDay(); i++) celulas.push('<div class="kb-cal-celula vazia"></div>');
+    for (let d = 1; d <= diasNoMes; d++) {
+      const iso = kbIsoLocal(new Date(ano, mes - 1, d));
+      const doDia = porDia[iso] || [];
+      celulas.push(`<div class="kb-cal-celula${iso === hoje ? ' hoje' : ''}" data-kb-drop="dia:${iso}" onclick="if(event.target===this||event.target.classList.contains('kb-cal-num')) kbAbrirTarefa(null, { prazo: '${iso}' })" title="Clique pra criar uma tarefa nesse dia">
+        <span class="kb-cal-num">${d}</span>
+        ${doDia.slice(0, 3).map(chip).join('')}
+        ${doDia.length > 3 ? `<button type="button" class="kb-link kb-cal-mais" onclick="event.stopPropagation(); kbSalvarPrefs({ calModo: 'dia', calRef: '${iso}' }); renderKanbanConteudo(true);">+${doDia.length - 3} mais</button>` : ''}
+      </div>`);
+    }
+    while (celulas.length % 7) celulas.push('<div class="kb-cal-celula vazia"></div>');
+    corpo = `<div class="kb-cal-grade">
+      ${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((n) => `<div class="kb-cal-semana">${n}</div>`).join('')}
+      ${celulas.join('')}
+    </div>`;
+  }
+  return `<div class="kb-cal">${cab}${corpo}
+    <div class="kb-cal-semdata" data-kb-drop="data:sem">
+      <div class="kb-cal-semdata-tit">${kbIc('calendario')} Tarefas sem data (${semData.length})</div>
+      <div class="kb-cal-semdata-lista">${semData.map(chip).join('') || '<span class="kb-vazio-mini">Nenhuma — arraste uma tarefa pra cá pra tirar a data dela.</span>'}</div>
+    </div>
+  </div>`;
+}
+
+function kbNavegarCalendario(passo) {
+  const p = kbPrefs();
+  const ref = p.calRef || kbHoje();
+  const [a, m, d] = ref.split('-').map(Number);
+  const nova = p.calModo === 'dia' ? kbSomarDias(ref, passo) : kbIsoLocal(new Date(a, m - 1 + passo, 1));
+  kbSalvarPrefs({ calRef: nova });
+  renderKanbanConteudo(true);
+}
+
+// ---------- ações rápidas ----------
+function kbAlternarConcluida(id) {
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!t) return;
+  const cols = kbColunasDaTarefa(t);
+  if (kbConcluida(t)) kbAtualizar(id, { status: t.statusAntesDeConcluir && cols.some((c) => c.id === t.statusAntesDeConcluir) ? t.statusAntesDeConcluir : cols[0].id });
+  else {
+    const campos = { status: kbFinalDe(cols), statusAntesDeConcluir: t.status, concluidaEm: new Date().toISOString() };
+    if (t.cronometroInicio) { campos.tempoGastoSeg = kbTempoSeg(t); campos.cronometroInicio = null; }
+    kbAtualizar(id, campos);
+  }
+}
+function kbAlternarItem(id, itemId) {
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!t) return;
+  kbAtualizar(id, { checklist: (t.checklist || []).map((c) => (c.id === itemId ? Object.assign({}, c, { feito: !c.feito }) : c)) });
+}
+function kbAdicionarItem(id, texto) {
+  const v = String(texto || '').trim();
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!v || !t) return;
+  kbAtualizar(id, { checklist: (t.checklist || []).concat([{ id: genId('ck'), texto: v.slice(0, 200), feito: false }]) });
+  // devolve o foco pro campo, pra ir digitando vários itens seguidos
+  setTimeout(() => {
+    const card = document.querySelector(`[data-kb-card="${CSS.escape ? CSS.escape(id) : id}"]`);
+    const inp = card && card.querySelector('.kb-check-add-input');
+    if (inp) { inp.previousElementSibling.style.display = 'none'; inp.style.display = ''; inp.focus(); }
+  }, 0);
+}
+function kbNovaNoGrupo(drop) {
+  const [tipo, valor] = drop.split(':');
+  const dados = {};
+  if (tipo === 'status') dados.status = valor;
+  else Object.assign(dados, kbCamposDoDropData(valor) || {});
+  kbAbrirTarefa(null, dados);
+}
+function kbCamposDoDropData(valor) {
+  const hoje = kbHoje();
+  if (valor === 'hoje') return { prazo: hoje };
+  if (valor === 'amanha') return { prazo: kbSomarDias(hoje, 1) };
+  if (valor === 'semana') return { prazo: kbFimDaSemana() < kbSomarDias(hoje, 2) ? kbSomarDias(hoje, 2) : kbFimDaSemana() };
+  if (valor === 'sem') return { prazo: '' };
+  if (valor === 'concluidas') return { status: kbColunaFinalId() };
+  return null;
+}
+
+// ---------- popovers (Exibir, Agrupar, Filtros, menu da tarefa) ----------
+function kbFecharPopovers() {
+  document.querySelectorAll('.kb-popover').forEach((p) => p.remove());
+  document.removeEventListener('pointerdown', kbFecharPopoverFora, true);
+}
+function kbFecharPopoverFora(e) { if (!e.target.closest('.kb-popover')) kbFecharPopovers(); }
+
+function kbMostrarPopover(html, ancora, classeExtra) {
+  const jaAberto = document.querySelector('.kb-popover');
+  const mesmo = jaAberto && jaAberto.dataset.ancora === ancora.id && ancora.id;
+  kbFecharPopovers();
+  if (mesmo) return null;
+  const pop = document.createElement('div');
+  pop.className = 'kb-popover' + (classeExtra ? ' ' + classeExtra : '');
+  if (ancora.id) pop.dataset.ancora = ancora.id;
+  pop.innerHTML = html;
+  document.body.appendChild(pop);
+  const r = ancora.getBoundingClientRect();
+  const largura = pop.offsetWidth || 260;
+  let left = r.left;
+  if (left + largura > window.innerWidth - 8) left = Math.max(8, r.right - largura);
+  pop.style.left = left + 'px';
+  pop.style.top = (r.bottom + 6) + 'px';
+  setTimeout(() => document.addEventListener('pointerdown', kbFecharPopoverFora, true), 0);
+  return pop;
+}
+
+function kbAbrirPopover(qual, ancora) {
+  if (!ancora.id) ancora.id = 'kb-ancora-' + qual;
+  const p = kbPrefs();
+  const item = (icone, texto, ativo, acao, breve) => `<button type="button" class="kb-pop-item${breve ? ' kb-em-breve' : ''}" onclick="${acao}">${kbIc(icone)}<span>${texto}</span>${ativo ? kbIc('checkDuplo', 'kb-pop-check') : (breve ? '<em>em breve</em>' : '')}</button>`;
+  if (qual === 'kb-pop-exibir') {
+    const alt = (chave) => `kbSalvarPrefs({ ${chave}: !kbPrefs().${chave} }); kbFecharPopovers(); renderKanbanConteudo(true);`;
+    kbMostrarPopover(`
+      <div class="kb-pop-titulo">Cartões</div>
+      ${item('checklist', 'Checklist nos cards', p.exibirChecklist, alt('exibirChecklist'))}
+      ${item('carga', 'Carga', p.mostrarCarga, alt('mostrarCarga'))}
+      ${item('atualizar', 'Recorrentes', p.mostrarRecorrentes, alt('mostrarRecorrentes'))}
+      <div class="kb-pop-titulo">Cards de projeto</div>
+      ${item('projetos', 'Mostrar projetos', p.mostrarProjetos, alt('mostrarProjetos'))}
+      <div class="kb-pop-titulo">Tarefas (selecione o que exibir)</div>
+      ${item('checklist', 'Exibir Tarefas', p.exibirTarefas, alt('exibirTarefas'))}
+      ${item('camadas', 'Exibir Subtarefas', p.exibirSubtarefas, alt('exibirSubtarefas'))}
+      ${item('projetos', 'Exibir Tarefas de Projetos', p.exibirTarefasProjeto, alt('exibirTarefasProjeto'))}`, ancora);
+  } else if (qual === 'kb-pop-agrupar') {
+    kbMostrarPopover(`
+      ${item('checklist', 'Status', p.agrupar !== 'data', "kbSalvarPrefs({ agrupar: 'status' }); kbFecharPopovers(); renderKanbanConteudo(true);")}
+      ${item('calendario', 'Data', p.agrupar === 'data', "kbSalvarPrefs({ agrupar: 'data' }); kbFecharPopovers(); renderKanbanConteudo(true);")}`, ancora);
+  } else if (qual === 'kb-pop-filtros') {
+    const f = KB_FILTROS;
+    const sel = (campo, opcoes) => `<select onchange="kbSetFiltro('${campo}', this.value)">${opcoes.map(([v, t]) => `<option value="${escapeHtml(v)}"${f[campo] === v ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+    kbMostrarPopover(`
+      <div class="kb-pop-form">
+        <label>Prioridade ${sel('prioridade', [['', 'Todas']].concat(Object.entries(KB_PRIORIDADES).map(([k, v]) => [k, v.nome])))}</label>
+        <label>Prazo ${sel('prazo', [['', 'Qualquer prazo'], ['atrasadas', 'Atrasadas'], ['hoje', 'Para hoje'], ['semana', 'Esta semana'], ['sem', 'Sem prazo']])}</label>
+        <label>Etiqueta ${sel('etiqueta', [['', 'Todas']].concat(kbEtiquetasTodas().map((e) => [e, e])))}</label>
+        <button type="button" class="btn btn-small" onclick="Object.assign(KB_FILTROS, { prioridade: '', prazo: '', etiqueta: '' }); kbFecharPopovers(); renderKanbanConteudo(true);">Limpar filtros</button>
+      </div>`, ancora, 'kb-popover-form');
+  }
+}
+
+function kbAbrirMenuTarefa(id, ancora) {
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!t) return;
+  const sid = escapeParaOnclick(id);
+  ancora.id = ancora.id || 'kb-menu-' + id.replace(/[^\w-]/g, '');
+  kbMostrarPopover(`
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); kbAbrirTarefa('${sid}')">${kbIc('lapis')}<span>Abrir / editar</span></button>
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); kbDuplicar('${sid}')">${kbIc('copiar')}<span>Duplicar</span></button>
+    ${t.paiId ? '' : `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); kbAbrirTarefa('${sid}'); setTimeout(() => { const i = document.getElementById('kb-m-sub-novo'); if (i) i.focus(); }, 60);">${kbIc('camadas')}<span>Nova subtarefa</span></button>`}
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); kbSalvarComoModelo('${sid}')">${kbIc('modelos')}<span>Salvar como modelo</span></button>
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); kbAtualizar('${sid}', { arquivada: ${t.arquivada ? 'false' : 'true'} })">${kbIc('arquivo')}<span>${t.arquivada ? 'Desarquivar' : 'Arquivar'}</span></button>
+    <button type="button" class="kb-pop-item kb-pop-perigo" onclick="kbFecharPopovers(); kbConfirmarExcluir('${sid}')">${kbIc('lixeira')}<span>Excluir</span></button>`, ancora);
+}
+
+function kbDuplicar(id) {
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!t) return;
+  const copia = kbLimpar(t);
+  delete copia.id;
+  Object.assign(copia, { titulo: (t.titulo || '') + ' (cópia)', tempoGastoSeg: 0, cronometroInicio: null, criadoEm: new Date().toISOString(), ordem: (t.ordem || Date.now()) + 1, arquivada: false,
+    checklist: (t.checklist || []).map((c) => ({ id: genId('ck'), texto: c.texto, feito: false })) });
+  kbCriarTarefa(copia);
+}
+function kbConfirmarExcluir(id) {
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!t) return;
+  const subs = KB_TAREFAS.filter((x) => x.paiId === id);
+  confirmarAcao(`Excluir a tarefa "${t.titulo || 'Sem título'}"${subs.length ? ` e as ${subs.length} subtarefa(s) dela` : ''}? Isso não pode ser desfeito. Se quiser só tirar do quadro, use "Arquivar".`, () => { subs.forEach((x) => kbExcluir(x.id)); kbExcluir(id); fecharModalKb(); }, 'Excluir tarefa');
+}
+
+// ---------- arrastar e soltar (mouse e toque) ----------
+// Mouse: arrasta ao mover 6px. Toque: segura ~0,35s e arrasta (assim
+// rolar o quadro com o dedo continua funcionando normal).
+let KB_ARRASTE = null;
+let KB_ACABOU_DE_ARRASTAR = 0;
+
+function kbPointerDown(ev, id) {
+  if (ev.button && ev.button !== 0) return;
+  if (ev.target.closest('button, input, select, textarea, a, .kb-check-add')) return;
+  const el = ev.currentTarget;
+  const estado = { id, el, x0: ev.clientX, y0: ev.clientY, ativo: false, toque: ev.pointerType === 'touch', timer: null, ghost: null, alvo: null };
+  KB_ARRASTE = estado;
+  if (estado.toque) estado.timer = setTimeout(() => { if (KB_ARRASTE === estado) kbComecarArraste(estado, estado.x0, estado.y0); }, 350);
+  document.addEventListener('pointermove', kbPointerMove);
+  document.addEventListener('pointerup', kbPointerUp);
+  document.addEventListener('pointercancel', kbPointerCancel);
+}
+
+function kbComecarArraste(e, x, y) {
+  e.ativo = true;
+  const r = e.el.getBoundingClientRect();
+  e.dx = x - r.left; e.dy = y - r.top;
+  const g = e.el.cloneNode(true);
+  g.classList.add('kb-ghost');
+  g.style.width = r.width + 'px';
+  document.body.appendChild(g);
+  e.ghost = g;
+  e.el.classList.add('kb-arrastando');
+  document.body.classList.add('kb-arrastando-algo');
+  kbMoverGhost(e, x, y);
+}
+function kbMoverGhost(e, x, y) {
+  if (e.ghost) { e.ghost.style.left = (x - e.dx) + 'px'; e.ghost.style.top = (y - e.dy) + 'px'; }
+  const alvo = document.elementFromPoint(x, y);
+  const drop = alvo && alvo.closest('[data-kb-drop]');
+  if (e.alvo !== drop) {
+    if (e.alvo) e.alvo.classList.remove('kb-drop-alvo');
+    if (drop) drop.classList.add('kb-drop-alvo');
+    e.alvo = drop;
+  }
+  e.antesDe = null;
+  if (drop) {
+    const cards = Array.from(drop.querySelectorAll('[data-kb-card]')).filter((c) => c !== e.el);
+    for (const c of cards) { const rc = c.getBoundingClientRect(); if (y < rc.top + rc.height / 2) { e.antesDe = c.dataset.kbCard; break; } }
+  }
+}
+function kbPointerMove(ev) {
+  const e = KB_ARRASTE;
+  if (!e) return;
+  if (!e.ativo) {
+    const longe = Math.abs(ev.clientX - e.x0) > 6 || Math.abs(ev.clientY - e.y0) > 6;
+    if (e.toque) { if (longe) kbPointerCancel(); return; } // dedo andou antes de segurar = é rolagem
+    if (longe) kbComecarArraste(e, ev.clientX, ev.clientY); else return;
+  }
+  ev.preventDefault();
+  kbMoverGhost(e, ev.clientX, ev.clientY);
+}
+function kbLimparArraste() {
+  const e = KB_ARRASTE;
+  document.removeEventListener('pointermove', kbPointerMove);
+  document.removeEventListener('pointerup', kbPointerUp);
+  document.removeEventListener('pointercancel', kbPointerCancel);
+  if (!e) return;
+  clearTimeout(e.timer);
+  if (e.ghost) e.ghost.remove();
+  if (e.alvo) e.alvo.classList.remove('kb-drop-alvo');
+  if (e.el) e.el.classList.remove('kb-arrastando');
+  document.body.classList.remove('kb-arrastando-algo');
+  KB_ARRASTE = null;
+}
+function kbPointerCancel() { kbLimparArraste(); }
+function kbPointerUp() {
+  const e = KB_ARRASTE;
+  if (e && e.ativo) {
+    KB_ACABOU_DE_ARRASTAR = Date.now();
+    const drop = e.alvo ? e.alvo.dataset.kbDrop : null;
+    const antes = e.antesDe;
+    kbLimparArraste();
+    if (drop) kbSoltar(e.id, drop, antes);
+    return;
+  }
+  kbLimparArraste();
+}
+// impede que o "click" no fim de um arraste abra a tarefa
+document.addEventListener('click', (ev) => {
+  if (Date.now() - KB_ACABOU_DE_ARRASTAR < 250 && ev.target.closest && ev.target.closest('[data-kb-card]')) { ev.stopPropagation(); ev.preventDefault(); }
+}, true);
+document.addEventListener('touchmove', (ev) => { if (KB_ARRASTE && KB_ARRASTE.ativo) ev.preventDefault(); }, { passive: false });
+
+function kbSoltar(id, drop, antesDeId) {
+  const [tipo, valorDrop] = drop.split(':');
+  let valor = valorDrop;
+  if (kbEhProjeto(id)) {
+    const pj = kbProjeto(id);
+    if (!pj) return;
+    if (tipo === 'status') kbGravarProjeto(pj, { status: valor });
+    else if (tipo === 'dia') kbGravarProjeto(pj, { prazo: valor });
+    else if (tipo === 'data') { const c = kbCamposDoDropData(valor); if (c && c.prazo !== undefined) kbGravarProjeto(pj, { prazo: c.prazo }); }
+    return;
+  }
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!t) return;
+  let campos = null;
+  if (tipo === 'status') {
+    const statusDela = kbStatusParaTarefa(t, valor);
+    if (!statusDela) {
+      const pj = kbProjeto(t.projetoId);
+      avisar(`Essa tarefa usa as colunas do projeto "${pj ? pj.nome : ''}", que não tem uma coluna "${(kbColuna(valor) || {}).nome || ''}". Abra o projeto pra mover ela entre as etapas dele.`);
+      return;
+    }
+    valor = statusDela;
+    campos = { status: valor };
+    // posição dentro da coluna (só vale na ordem manual)
+    const irmas = kbOrdenar(KB_TAREFAS.filter((x) => x.status === valor && x.id !== id && !x.arquivada), 'manual');
+    const idx = antesDeId ? irmas.findIndex((x) => x.id === antesDeId) : -1;
+    if (idx === -1) campos.ordem = irmas.length ? (irmas[irmas.length - 1].ordem || 0) + 1000 : Date.now();
+    else campos.ordem = idx === 0 ? (irmas[0].ordem || 0) - 1000 : ((irmas[idx - 1].ordem || 0) + (irmas[idx].ordem || 0)) / 2;
+    if (valor === kbFinalDe(kbColunasDaTarefa(t)) && !kbConcluida(t)) {
+      Object.assign(campos, { statusAntesDeConcluir: t.status, concluidaEm: new Date().toISOString() });
+      if (t.cronometroInicio) { campos.tempoGastoSeg = kbTempoSeg(t); campos.cronometroInicio = null; }
+    }
+  } else if (tipo === 'data') {
+    campos = kbCamposDoDropData(valor);
+    if (campos && campos.status) campos.status = kbStatusParaTarefa(t, campos.status) || kbFinalDe(kbColunasDaTarefa(t));
+    if (campos && kbConcluida(t) && valor !== 'concluidas') { const cols = kbColunasDaTarefa(t); campos.status = t.statusAntesDeConcluir && cols.some((c) => c.id === t.statusAntesDeConcluir) ? t.statusAntesDeConcluir : cols[0].id; }
+  } else if (tipo === 'dia') {
+    campos = { prazo: valor };
+  }
+  if (campos) kbAtualizar(id, campos);
+}
+
+// ---------- Tarefa completa (criar / editar) ----------
+let KB_EDITANDO = null; // cópia da tarefa sendo editada
+
+function kbGarantirModal() {
+  let ov = document.getElementById('modal-kb-tarefa');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.id = 'modal-kb-tarefa';
+    inserirModalNoBody(ov);
+    ov.addEventListener('mousedown', (e) => { if (e.target === ov) fecharModalKb(); });
+  }
+  return ov;
+}
+function fecharModalKb() {
+  const ov = document.getElementById('modal-kb-tarefa');
+  if (ov) closeModal('modal-kb-tarefa');
+  KB_EDITANDO = null;
+}
+
+function kbAbrirTarefa(id, padrao) {
+  if (!kbPronto()) return;
+  if (Date.now() - KB_ACABOU_DE_ARRASTAR < 250) return;
+  const existente = id ? KB_TAREFAS.find((x) => x.id === id) : null;
+  if (id && !existente) { avisar('Essa tarefa não existe mais (pode ter sido excluída por outra pessoa).'); return; }
+  KB_EDITANDO = existente ? kbLimpar(existente) : Object.assign({ id: null, titulo: '', descricao: '', cliente: KB_FILTROS.cliente || ((KB_FILTROS.projeto && kbProjeto(KB_FILTROS.projeto)) || {}).cliente || '', projetoId: KB_FILTROS.projeto || '', recorrencia: '', responsavel: '', status: kbColunas()[1] ? kbColunas()[1].id : kbColunas()[0].id, prioridade: 'media', prazo: '', etiquetas: [], checklist: [] }, padrao || {});
+  const t = KB_EDITANDO;
+  const clientes = Array.from(new Set((typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []).concat(t.cliente ? [t.cliente] : []))).sort((a, b) => a.localeCompare(b));
+  const ov = kbGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${existente ? 'Tarefa' : 'Nova tarefa'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="fecharModalKb()">✕</button></div>
+      <div class="kb-modal-grade">
+        <div class="kb-modal-principal">
+          <div class="field full"><label>Título *</label><input type="text" id="kb-m-titulo" maxlength="140" value="${escapeHtml(t.titulo)}" placeholder="Ex: Campanha de Tráfego Pago"></div>
+          <div class="field full"><label>Descrição</label><textarea id="kb-m-descricao" rows="4" maxlength="3000" placeholder="Detalhes, links, combinados com o cliente...">${escapeHtml(t.descricao)}</textarea></div>
+          <div class="field full">
+            <label>Checklist</label>
+            <div id="kb-m-checklist"></div>
+            <div class="kb-m-check-add"><input type="text" id="kb-m-check-novo" maxlength="200" placeholder="Novo item e Enter" onkeydown="if(event.key==='Enter'){ event.preventDefault(); kbModalAddItem(); }"><button type="button" class="btn btn-small" onclick="kbModalAddItem()">${kbIc('mais')} Adicionar</button></div>
+          </div>
+          ${existente && existente.paiId ? `<p class="kb-vazio-mini">${kbIc('camadas')} Subtarefa de: <button type="button" class="kb-link" onclick="kbAbrirTarefa('${escapeParaOnclick(existente.paiId)}')">${escapeHtml((KB_TAREFAS.find((x) => x.id === existente.paiId) || {}).titulo || 'tarefa principal')}</button></p>` : ''}
+          ${existente && !existente.paiId ? `<div class="field full">
+            <label>Subtarefas</label>
+            <div id="kb-m-subtarefas"></div>
+            <div class="kb-m-check-add"><input type="text" id="kb-m-sub-novo" maxlength="140" placeholder="Nova subtarefa e Enter" onkeydown="if(event.key==='Enter'){ event.preventDefault(); kbAdicionarSubtarefa('${escapeParaOnclick(existente.id)}', this.value); this.value=''; }"><button type="button" class="btn btn-small" onclick="const i=document.getElementById('kb-m-sub-novo'); kbAdicionarSubtarefa('${escapeParaOnclick(existente.id)}', i.value); i.value='';">${kbIc('mais')} Adicionar</button></div>
+          </div>` : ''}
+        </div>
+        <div class="kb-modal-lateral">
+          <div class="field"><label>Status</label><select id="kb-m-status">${kbOpcoesStatusHtml(t.projetoId, t.status)}</select></div>
+          <div class="field"><label>Prioridade</label><select id="kb-m-prioridade">${Object.entries(KB_PRIORIDADES).map(([k, v]) => `<option value="${k}"${k === t.prioridade ? ' selected' : ''}>${v.nome}</option>`).join('')}</select></div>
+          <div class="field"><label>Prazo</label><input type="date" id="kb-m-prazo" value="${escapeHtml(t.prazo || '')}"></div>
+          <div class="field"><label>Responsável</label><select id="kb-m-responsavel"><option value="">Sem responsável</option>${KB_USUARIOS.map((u) => `<option value="${escapeHtml(u.uid)}"${u.uid === t.responsavel ? ' selected' : ''}>${escapeHtml(u.nome)}</option>`).join('')}</select></div>
+          <div class="field"><label>Cliente</label><select id="kb-m-cliente"><option value="">Sem cliente</option>${clientes.map((c) => `<option value="${escapeHtml(c)}"${c === t.cliente ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select></div>
+          <div class="field"><label>Projeto</label><select id="kb-m-projeto" onchange="const st = document.getElementById('kb-m-status'); st.innerHTML = kbOpcoesStatusHtml(this.value, st.value);"><option value="">Sem projeto</option>${KB_PROJETOS.filter((x) => !x.arquivado || x.id === t.projetoId).map((x) => `<option value="${escapeHtml(x.id)}"${x.id === t.projetoId ? ' selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select></div>
+          <div class="field"><label>Etiquetas</label><input type="text" id="kb-m-etiquetas" maxlength="200" value="${escapeHtml((t.etiquetas || []).join(', '))}" placeholder="Separe por vírgula: modelo, urgente"></div>
+          <div class="field"><label>Repetir</label><select id="kb-m-recorrencia"><option value="">Não repete</option>${Object.entries(KB_RECORRENCIAS).map(([k, v]) => `<option value="${k}"${k === t.recorrencia ? ' selected' : ''}>${v}</option>`).join('')}</select><p class="kb-vazio-mini" style="margin:4px 0 0;">Ao concluir, a próxima é criada sozinha.</p></div>
+          ${existente ? `<div class="kb-m-info">
+            <div><span>Tempo gasto</span>${kbTempoBotaoHtml(existente)}</div>
+            <div><span>Criada em</span><strong>${kbDataCurta(existente.criadoEm)}</strong></div>
+            ${existente.concluidaEm && kbConcluida(existente) ? `<div><span>Concluída em</span><strong>${kbDataCurta(existente.concluidaEm)}</strong></div>` : ''}
+          </div>` : ''}
+        </div>
+      </div>
+      <div class="cfg-modal-rodape kb-modal-rodape">
+        ${existente ? `<button type="button" class="btn btn-ghost kb-btn-perigo" onclick="kbConfirmarExcluir('${escapeParaOnclick(existente.id)}')">${kbIc('lixeira')} Excluir</button>
+        <button type="button" class="btn btn-ghost" onclick="kbAtualizar('${escapeParaOnclick(existente.id)}', { arquivada: ${existente.arquivada ? 'false' : 'true'} }); fecharModalKb();">${kbIc('arquivo')} ${existente.arquivada ? 'Desarquivar' : 'Arquivar'}</button>
+        <button type="button" class="btn btn-ghost" onclick="fecharModalKb(); kbDuplicar('${escapeParaOnclick(existente.id)}')">${kbIc('copiar')} Duplicar</button>` : ''}
+        <span class="kb-espaco"></span>
+        <button type="button" class="btn" onclick="fecharModalKb()">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="kbSalvarModal()">${existente ? 'Salvar' : 'Criar tarefa'}</button>
+      </div>
+    </div>`;
+  kbRenderChecklistModal();
+  kbRenderSubtarefasModal();
+  openModal('modal-kb-tarefa');
+  setTimeout(() => { const i = document.getElementById('kb-m-titulo'); if (i && !existente) i.focus(); }, 30);
+}
+
+function kbOpcoesStatusHtml(projetoId, atual) {
+  const cols = kbColunasDoProjeto(projetoId) || kbColunasGlobais();
+  const sel = cols.some((c) => c.id === atual) ? atual : (cols.find((c) => kbNomeNorm(c.nome) === 'a fazer') || cols[0]).id;
+  return cols.map((c) => `<option value="${escapeHtml(c.id)}"${c.id === sel ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('');
+}
+
+function kbRenderChecklistModal() {
+  const el = document.getElementById('kb-m-checklist');
+  if (!el || !KB_EDITANDO) return;
+  const itens = KB_EDITANDO.checklist || [];
+  el.innerHTML = itens.map((c, i) => `
+    <div class="kb-m-check">
+      <input type="checkbox" ${c.feito ? 'checked' : ''} aria-label="Feito" onchange="KB_EDITANDO.checklist[${i}].feito = this.checked">
+      <input type="text" value="${escapeHtml(c.texto)}" maxlength="200" aria-label="Item" oninput="KB_EDITANDO.checklist[${i}].texto = this.value">
+      <button type="button" class="kb-btn-ic" aria-label="Subir" onclick="kbModalMoverItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}>${kbIc('setaCima')}</button>
+      <button type="button" class="kb-btn-ic" aria-label="Descer" onclick="kbModalMoverItem(${i}, 1)" ${i === itens.length - 1 ? 'disabled' : ''}>${kbIc('setaBaixo')}</button>
+      <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Remover" onclick="KB_EDITANDO.checklist.splice(${i}, 1); kbRenderChecklistModal();">${kbIc('x')}</button>
+    </div>`).join('') || '<p class="kb-vazio-mini">Nenhum item ainda.</p>';
+}
+function kbModalAddItem() {
+  const inp = document.getElementById('kb-m-check-novo');
+  const v = (inp.value || '').trim();
+  if (!v) return;
+  KB_EDITANDO.checklist = (KB_EDITANDO.checklist || []).concat([{ id: genId('ck'), texto: v, feito: false }]);
+  inp.value = '';
+  kbRenderChecklistModal();
+  inp.focus();
+}
+function kbModalMoverItem(i, passo) {
+  const l = KB_EDITANDO.checklist;
+  const j = i + passo;
+  if (j < 0 || j >= l.length) return;
+  [l[i], l[j]] = [l[j], l[i]];
+  kbRenderChecklistModal();
+}
+
+function kbSalvarModal() {
+  const t = KB_EDITANDO;
+  if (!t) return;
+  const titulo = document.getElementById('kb-m-titulo').value.trim();
+  if (!titulo) { avisar('Dê um título pra tarefa.'); return; }
+  const etiquetas = Array.from(new Set(document.getElementById('kb-m-etiquetas').value.split(',').map((e) => e.trim()).filter(Boolean).map((e) => e.slice(0, 30)))).slice(0, 10);
+  const campos = {
+    titulo: titulo.slice(0, 140),
+    descricao: document.getElementById('kb-m-descricao').value.slice(0, 3000),
+    status: document.getElementById('kb-m-status').value,
+    prioridade: KB_PRIORIDADES[document.getElementById('kb-m-prioridade').value] ? document.getElementById('kb-m-prioridade').value : 'media',
+    prazo: document.getElementById('kb-m-prazo').value || '',
+    responsavel: document.getElementById('kb-m-responsavel').value,
+    cliente: document.getElementById('kb-m-cliente').value,
+    etiquetas,
+    projetoId: document.getElementById('kb-m-projeto').value,
+    recorrencia: KB_RECORRENCIAS[document.getElementById('kb-m-recorrencia').value] ? document.getElementById('kb-m-recorrencia').value : '',
+    checklist: (t.checklist || []).map((c) => ({ id: c.id || genId('ck'), texto: String(c.texto || '').trim().slice(0, 200), feito: !!c.feito })).filter((c) => c.texto),
+  };
+  if (t.id) {
+    const atual = KB_TAREFAS.find((x) => x.id === t.id);
+    if (atual && campos.status === kbFinalDe(kbColunasDoProjeto(campos.projetoId) || kbColunasGlobais()) && !kbConcluida(atual)) Object.assign(campos, { statusAntesDeConcluir: atual.status, concluidaEm: new Date().toISOString() });
+    kbAtualizar(t.id, campos);
+  } else {
+    if (campos.status === kbFinalDe(kbColunasDoProjeto(campos.projetoId) || kbColunasGlobais())) campos.concluidaEm = new Date().toISOString();
+    if (!kbCriarTarefa(campos)) return;
+  }
+  fecharModalKb();
+}
+
+// ---------- Colunas (renomear, cor, ordem, criar, excluir) ----------
+let KB_COLUNAS_EDIT = null;
+let KB_COLUNAS_EDIT_PROJETO = null;
+function kbAbrirColunas() {
+  KB_COLUNAS_EDIT_PROJETO = KB_FILTROS.projeto && kbColunasDoProjeto(KB_FILTROS.projeto) ? KB_FILTROS.projeto : null;
+  KB_COLUNAS_EDIT = kbLimpar(kbColunas());
+  const ov = kbGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal kb-modal-estreito" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Colunas do quadro</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="fecharModalKb()">✕</button></div>
+      <p class="cfg-modal-sub">Renomeie, mude a cor e a ordem das etapas. A coluna marcada como "concluídas" é a que conta como tarefa terminada.</p>
+      <div id="kb-colunas-lista"></div>
+      <button type="button" class="btn btn-small" style="margin-top:10px;" onclick="KB_COLUNAS_EDIT.push({ id: genId('col'), nome: 'Nova coluna', cor: '#94a3b8' }); kbRenderColunasEdit();">${kbIc('mais')} Nova coluna</button>
+      <div class="cfg-modal-rodape">
+        <button type="button" class="btn btn-ghost" onclick="KB_COLUNAS_EDIT = kbLimpar(KB_COLUNAS_PADRAO); kbRenderColunasEdit();">Restaurar padrão</button>
+        <span class="kb-espaco"></span>
+        <button type="button" class="btn" onclick="fecharModalKb()">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="kbSalvarColunas()">Salvar colunas</button>
+      </div>
+    </div>`;
+  kbRenderColunasEdit();
+  openModal('modal-kb-tarefa');
+}
+function kbRenderColunasEdit() {
+  const el = document.getElementById('kb-colunas-lista');
+  if (!el) return;
+  const l = KB_COLUNAS_EDIT;
+  el.innerHTML = l.map((c, i) => {
+    const qtd = KB_TAREFAS.filter((t) => t.status === c.id).length;
+    return `<div class="kb-col-edit">
+      <input type="color" value="${expandirHex(c.cor) || '#94a3b8'}" aria-label="Cor" oninput="KB_COLUNAS_EDIT[${i}].cor = this.value">
+      <input type="text" value="${escapeHtml(c.nome)}" maxlength="30" aria-label="Nome" oninput="KB_COLUNAS_EDIT[${i}].nome = this.value">
+      <span class="kb-col-qtd" title="Tarefas nessa coluna">${qtd}</span>
+      <label class="kb-col-final" title="Coluna de concluídas"><input type="radio" name="kb-col-final" ${c.final ? 'checked' : ''} onchange="KB_COLUNAS_EDIT.forEach((x, j) => { x.final = j === ${i}; })"> concluídas</label>
+      <button type="button" class="kb-btn-ic" aria-label="Subir" onclick="kbMoverColuna(${i}, -1)" ${i === 0 ? 'disabled' : ''}>${kbIc('setaCima')}</button>
+      <button type="button" class="kb-btn-ic" aria-label="Descer" onclick="kbMoverColuna(${i}, 1)" ${i === l.length - 1 ? 'disabled' : ''}>${kbIc('setaBaixo')}</button>
+      <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir coluna" onclick="kbRemoverColuna(${i})" ${l.length <= 1 ? 'disabled' : ''}>${kbIc('lixeira')}</button>
+    </div>`;
+  }).join('');
+}
+function kbMoverColuna(i, passo) {
+  const l = KB_COLUNAS_EDIT, j = i + passo;
+  if (j < 0 || j >= l.length) return;
+  [l[i], l[j]] = [l[j], l[i]];
+  kbRenderColunasEdit();
+}
+function kbRemoverColuna(i) {
+  const c = KB_COLUNAS_EDIT[i];
+  const qtd = KB_TAREFAS.filter((t) => t.status === c.id).length;
+  const remover = () => { KB_COLUNAS_EDIT.splice(i, 1); kbRenderColunasEdit(); };
+  if (qtd) confirmarAcao(`A coluna "${c.nome}" tem ${qtd} tarefa(s). Ao salvar, elas vão para a primeira coluna. Continuar?`, remover, 'Excluir coluna');
+  else remover();
+}
+function kbSalvarColunas() {
+  const l = KB_COLUNAS_EDIT.map((c) => ({ id: c.id, nome: String(c.nome || '').trim().slice(0, 30) || 'Sem nome', cor: corHexValida(c.cor) || '#94a3b8', final: !!c.final }));
+  if (!l.length) return;
+  if (!l.some((c) => c.final)) l[l.length - 1].final = true;
+  if (KB_COLUNAS_EDIT_PROJETO) {
+    if (!kbGravarProjeto(kbProjeto(KB_COLUNAS_EDIT_PROJETO), { colunas: l })) return;
+  } else {
+    if (cloudSet(KB_CONFIG_KEY, { colunas: l }) === false) return;
+    KB_CONFIG = { colunas: l };
+  }
+  // tarefas de colunas que sumiram vão pra primeira coluna
+  const ids = new Set(l.map((c) => c.id));
+  KB_TAREFAS.filter((t) => (KB_COLUNAS_EDIT_PROJETO ? t.projetoId === KB_COLUNAS_EDIT_PROJETO : !kbColunasDoProjeto(t.projetoId)) && !ids.has(t.status)).forEach((t) => kbAtualizar(t.id, { status: l[0].id }));
+  fecharModalKb();
+  renderKanbanConteudo(true);
+}
+
+
+// =====================================================================
+// ---------- Kanban · Entrega 2 ----------
+// Projetos, subtarefas, modelos, seleção em massa, recorrência e carga.
+// =====================================================================
+
+const KB_COLECAO_PROJETOS = 'kanban_projetos';
+const KB_MODELOS_KEY = 'eagles_kanban_modelos_v1';
+let KB_PROJETOS = [];
+let KB_PROJETOS_CARREGADO = false;
+let KB_MODELOS = null;
+let KB_SELECAO = null; // null = modo seleção desligado; Set de ids quando ligado
+
+const KB_MODELOS_PADRAO = [
+  { id: 'mdl-trafego', icone: 'grafico', titulo: 'Campanha de Tráfego Pago', descricao: 'Setup completo de campanha de anúncios', prioridade: 'alta', etiquetas: ['tráfego'],
+    checklist: ['Definir objetivo e orçamento', 'Criar públicos-alvo', 'Produzir criativos', 'Escrever copies dos anúncios', 'Configurar campanhas na plataforma', 'Instalar e verificar pixels', 'Monitorar e otimizar'] },
+  { id: 'mdl-site', icone: 'globo', titulo: 'Desenvolvimento de Website', descricao: 'Etapas para criar um site do zero', prioridade: 'alta', etiquetas: ['site'],
+    checklist: ['Briefing com o cliente', 'Arquitetura e mapa do site', 'Textos e conteúdo', 'Layout e design', 'Desenvolvimento', 'SEO básico e performance', 'Revisão do cliente', 'Publicação e testes'] },
+  { id: 'mdl-lancamento', icone: 'raio', titulo: 'Lançamento de Produto Digital', descricao: 'Etapas para lançar um infoproduto ou serviço digital', prioridade: 'alta', etiquetas: ['lançamento'],
+    checklist: ['Definir oferta e preço', 'Criar página de vendas', 'Configurar checkout e pagamento', 'Produzir conteúdos de aquecimento', 'Montar sequência de e-mails', 'Executar o lançamento', 'Análise de resultados'] },
+  { id: 'mdl-onboarding', icone: 'usuario', titulo: 'Onboarding de Novo Cliente', descricao: 'Checklist completo para receber um novo cliente', prioridade: 'media', etiquetas: ['onboarding'],
+    checklist: ['Reunião de kickoff', 'Coletar acessos e materiais', 'Enviar briefing', 'Definir metas e KPIs', 'Montar cronograma', 'Apresentar plano de trabalho', 'Configurar canais de comunicação'] },
+  { id: 'mdl-conteudo-mensal', icone: 'calendario', titulo: 'Produção de Conteúdo Mensal', descricao: 'Ciclo mensal de produção de conteúdo', prioridade: 'media', etiquetas: ['conteúdo'],
+    checklist: ['Planejamento de pautas do mês', 'Produção de roteiros e legendas', 'Criação das artes e vídeos', 'Aprovação do cliente', 'Agendamento das publicações', 'Relatório de resultados'] },
+  { id: 'mdl-post', icone: 'imagem', titulo: 'Post para redes sociais', descricao: 'Do roteiro à publicação', prioridade: 'media', etiquetas: ['conteúdo'],
+    checklist: ['Definir pauta e objetivo', 'Escrever legenda', 'Criar arte / vídeo', 'Enviar para aprovação do cliente', 'Agendar publicação'] },
+];
+
+const KB_RECORRENCIAS = { diaria: 'Todo dia', semanal: 'Toda semana', quinzenal: 'A cada 15 dias', mensal: 'Todo mês' };
+
+function kbColecaoProjetosRef() { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(KB_COLECAO_PROJETOS); }
+function kbChaveLocalProjetos() { return chaveLocalTenant('eagles_kanban_projetos_local_v1'); }
+
+function kbIniciarDadosEntrega2() {
+  cloudWatch(KB_MODELOS_KEY, KB_MODELOS_PADRAO, (data) => { KB_MODELOS = Array.isArray(data) ? data : KB_MODELOS_PADRAO; });
+  if (kbNuvem()) {
+    kbColecaoProjetosRef().onSnapshot((snap) => {
+      const l = [];
+      snap.forEach((doc) => l.push(Object.assign({}, doc.data(), { id: doc.id })));
+      KB_PROJETOS = l;
+      KB_PROJETOS_CARREGADO = true;
+      renderKanbanConteudo();
+    }, (err) => console.error('Erro ao carregar projetos do Kanban:', err));
+  } else {
+    KB_PROJETOS = lsLoad(kbChaveLocalProjetos(), []);
+    KB_PROJETOS_CARREGADO = true;
+  }
+}
+
+function kbProjeto(id) { return KB_PROJETOS.find((p) => p.id === id) || null; }
+function kbEhProjeto(id) { return String(id || '').startsWith('pj'); }
+
+function kbGravarProjeto(pj, campos) {
+  if (!exigirPodeOperar('editar projetos')) return false;
+  if (!KB_PROJETOS_CARREGADO) { avisar('Os projetos ainda estão carregando — aguarde um instante e tente de novo.'); return false; }
+  const existe = KB_PROJETOS.find((x) => x.id === pj.id);
+  const mudancas = Object.assign({}, campos || pj, { atualizadoEm: new Date().toISOString() });
+  if (existe) Object.assign(existe, mudancas); else KB_PROJETOS.push(Object.assign(pj, mudancas));
+  if (kbNuvem()) {
+    const ref = kbColecaoProjetosRef().doc(pj.id);
+    (existe ? ref.set(kbLimpar(mudancas), { merge: true }) : ref.set(kbLimpar(pj))).catch(kbErroGravar);
+  } else lsSave(kbChaveLocalProjetos(), KB_PROJETOS);
+  renderKanbanConteudo(true);
+  return true;
+}
+
+function kbExcluirProjeto(id) {
+  if (!exigirPodeOperar('excluir projetos')) return;
+  KB_PROJETOS = KB_PROJETOS.filter((p) => p.id !== id);
+  if (kbNuvem()) kbColecaoProjetosRef().doc(id).delete().catch(kbErroGravar);
+  else lsSave(kbChaveLocalProjetos(), KB_PROJETOS);
+  // as tarefas do projeto continuam existindo, só ficam sem projeto
+  KB_TAREFAS.filter((t) => t.projetoId === id).forEach((t) => kbAtualizar(t.id, { projetoId: '' }));
+  if (KB_FILTROS.projeto === id) KB_FILTROS.projeto = '';
+  renderKanbanConteudo(true);
+}
+
+function kbProgressoProjeto(id) {
+  const tarefas = KB_TAREFAS.filter((t) => t.projetoId === id && !t.arquivada);
+  const feitas = tarefas.filter(kbConcluida).length;
+  return { total: tarefas.length, feitas, pct: tarefas.length ? Math.round((feitas / tarefas.length) * 100) : 0, atrasadas: tarefas.filter((t) => !kbConcluida(t) && t.prazo && t.prazo < kbHoje()).length };
+}
+
+// Projetos aparecem como cartões no Quadro (agrupado por Status) — o
+// projeto também tem uma etapa e pode ser arrastado entre colunas.
+function kbProjetosVisiveis() {
+  const f = KB_FILTROS;
+  const busca = (f.busca || '').trim().toLowerCase();
+  return KB_PROJETOS.filter((p) => {
+    if (!!p.arquivado !== !!f.arquivadas) return false;
+    if (f.cliente && p.cliente !== f.cliente) return false;
+    if (f.projeto && p.id !== f.projeto) return false;
+    if (f.responsavel && p.responsavel !== f.responsavel) return false;
+    if (busca && !`${p.nome} ${p.descricao || ''} ${p.cliente || ''}`.toLowerCase().includes(busca)) return false;
+    return true;
+  });
+}
+
+function kbCardProjetoHtml(pj) {
+  const id = escapeParaOnclick(pj.id);
+  const pr = kbProgressoProjeto(pj.id);
+  const cor = corHexValida(pj.cor) || '#8b5cf6';
+  return `
+    <div class="kb-card kb-card-projeto" style="--kb-cor:${cor};" data-kb-card="${escapeHtml(pj.id)}" onpointerdown="kbPointerDown(event, '${id}')">
+      <div class="kb-card-topo">
+        <span class="kb-projeto-ic">${kbIc('projetos')}</span>
+        <strong class="kb-card-titulo">${escapeHtml(pj.nome || 'Projeto')}</strong>
+        <button type="button" class="kb-card-menu" title="Mais ações" aria-label="Mais ações" onclick="event.stopPropagation(); kbAbrirMenuProjeto('${id}', this)">${kbIc('pontos')}</button>
+      </div>
+      <div class="kb-card-datas"><span>Projeto${pj.cliente ? ' · ' + escapeHtml(pj.cliente) : ''}</span>${pj.prazo ? kbPrazoHtml({ prazo: pj.prazo, status: pj.status }) : '<span class="kb-prazo kb-prazo-sem">Sem prazo</span>'}</div>
+      ${pj.descricao && !kbPrefs().compactar ? `<p class="kb-card-desc">${escapeHtml(pj.descricao)}</p>` : ''}
+      <div class="kb-checklist-cab">${kbIc('checklist')} <strong>${pr.feitas}/${pr.total} tarefas</strong><span class="kb-barra-prog"><i style="width:${pr.pct}%; background:${cor};"></i></span><span class="kb-checklist-n">${pr.pct}%</span></div>
+      ${pr.atrasadas ? `<span class="kb-prazo atrasado">${kbIc('alerta')} ${pr.atrasadas} atrasada(s)</span>` : ''}
+      <div class="kb-card-rodape">${kbAvatar(pj.responsavel)}<span class="kb-espaco"></span>
+        <button type="button" class="kb-link" onclick="event.stopPropagation(); kbVerTarefasDoProjeto('${id}')">Ver tarefas</button>
+      </div>
+    </div>`;
+}
+
+function kbVerTarefasDoProjeto(id) {
+  KB_FILTROS.projeto = id;
+  kbSalvarPrefs({ exibirTarefasProjeto: true });
+  if (kbPrefs().modo === 'projetos') kbMudarModo('quadro'); else renderKanbanConteudo(true);
+}
+
+// ---------- Modo de exibição: Projetos ----------
+function kbRenderProjetos() {
+  const lista = kbProjetosVisiveis();
+  if (!KB_PROJETOS.length) {
+    return `<div class="kb-vazio-grande"><div class="ic-circulo">${kbIc('projetos')}</div><h3>Nenhum projeto ainda</h3>
+      <p>Projetos agrupam tarefas de um mesmo trabalho (ex: "Site da ACME") e mostram o progresso de tudo junto.</p>
+      <button type="button" class="btn btn-primary" onclick="kbAbrirProjeto(null)">${kbIc('mais')} Novo projeto</button></div>`;
+  }
+  return `<div class="kb-projetos-grade">${lista.map((pj) => {
+    const pr = kbProgressoProjeto(pj.id);
+    const cor = corHexValida(pj.cor) || '#8b5cf6';
+    const col = kbColuna(pj.status);
+    const id = escapeParaOnclick(pj.id);
+    return `<div class="kb-projeto-tile" style="--kb-cor:${cor};" onclick="kbVerTarefasDoProjeto('${id}')">
+      <div class="kb-projeto-tile-cab"><span class="kb-projeto-ic">${kbIc('projetos')}</span><strong>${escapeHtml(pj.nome)}</strong>
+        <button type="button" class="kb-card-menu" aria-label="Mais ações" onclick="event.stopPropagation(); kbAbrirMenuProjeto('${id}', this)">${kbIc('pontos')}</button></div>
+      ${pj.cliente ? `<span class="kb-card-cliente">${escapeHtml(pj.cliente)}</span>` : ''}
+      ${pj.descricao ? `<p class="kb-card-desc">${escapeHtml(pj.descricao)}</p>` : ''}
+      <div class="kb-projeto-num"><strong>${pr.pct}%</strong><span>${pr.feitas} de ${pr.total} tarefas concluídas</span></div>
+      <span class="kb-barra-prog kb-barra-grossa"><i style="width:${pr.pct}%; background:${cor};"></i></span>
+      <div class="kb-card-rodape">
+        ${pj.situacao === 'pausado' || pj.situacao === 'cancelado' ? `<span class="kb-selo-situacao ${pj.situacao}">${pj.situacao === 'pausado' ? 'Pausado' : 'Cancelado'}</span>` : `<span class="kb-status-mini" style="color:${col.cor};">● ${escapeHtml(col.nome)}</span>`}
+        ${pj.valor ? `<span class="kb-status-mini">${formatMoney(Number(pj.valor))}</span>` : ''}${pj.recorrente ? `<span class="kb-recorrente" title="Projeto recorrente (mensal)">${kbIc('atualizar')}</span>` : ''}
+        ${pr.atrasadas ? `<span class="kb-prazo atrasado">${pr.atrasadas} atrasada(s)</span>` : ''}
+        <span class="kb-espaco"></span>${pj.prazo ? `<span class="kb-prazo">${kbIc('relogio')} ${kbDataCurta(pj.prazo)}</span>` : ''}${kbAvatar(pj.responsavel, 'p')}
+      </div>
+    </div>`;
+  }).join('') || '<p class="kb-vazio">Nenhum projeto com esses filtros.</p>'}
+  <button type="button" class="kb-projeto-tile kb-projeto-novo" onclick="kbAbrirProjeto(null)">${kbIc('mais')}<span>Novo projeto</span></button>
+  </div>`;
+}
+
+// ---------- Criar / editar projeto ----------
+let KB_PROJETO_EDIT = null;
+function kbAbrirProjeto(id) {
+  if (!id) { kbAbrirWizardProjeto(); return; } // projeto novo: assistente de 6 etapas
+  if (!KB_PROJETOS_CARREGADO) { avisar('Os projetos ainda estão carregando — aguarde um instante.'); return; }
+  const existente = id ? kbProjeto(id) : null;
+  KB_PROJETO_EDIT = existente ? kbLimpar(existente) : { id: null, nome: '', descricao: '', cliente: KB_FILTROS.cliente || '', cor: '#8b5cf6', responsavel: '', prazo: '', status: kbColunas()[1] ? kbColunas()[1].id : kbColunas()[0].id };
+  const pj = KB_PROJETO_EDIT;
+  const clientes = Array.from(new Set((typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []).concat(pj.cliente ? [pj.cliente] : []))).sort((a, b) => a.localeCompare(b));
+  const ov = kbGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal kb-modal-estreito" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${existente ? 'Projeto' : 'Novo projeto'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="fecharModalKb()">✕</button></div>
+      <div class="field full"><label>Nome do projeto *</label><input type="text" id="kb-p-nome" maxlength="100" value="${escapeHtml(pj.nome)}" placeholder="Ex: Site da ACME"></div>
+      <div class="field full"><label>Descrição</label><textarea id="kb-p-descricao" rows="3" maxlength="2000">${escapeHtml(pj.descricao || '')}</textarea></div>
+      <div class="kb-campos-2">
+        <div class="field"><label>Cliente</label><select id="kb-p-cliente"><option value="">Sem cliente</option>${clientes.map((c) => `<option value="${escapeHtml(c)}"${c === pj.cliente ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select></div>
+        <div class="field"><label>Responsável</label><select id="kb-p-responsavel"><option value="">Sem responsável</option>${KB_USUARIOS.map((u) => `<option value="${escapeHtml(u.uid)}"${u.uid === pj.responsavel ? ' selected' : ''}>${escapeHtml(u.nome)}</option>`).join('')}</select></div>
+        <div class="field"><label>Etapa</label><select id="kb-p-status">${kbOpcoesEtapaProjetoHtml(kbEtapaDoProjeto(pj))}</select></div>
+        <div class="field"><label>Valor</label><input type="number" id="kb-p-valor" min="0" step="0.01" value="${escapeHtml(pj.valor ? String(pj.valor) : '')}" placeholder="0,00"></div>
+        <div class="field"><label>Data de início</label><input type="date" id="kb-p-inicio" value="${escapeHtml(pj.dataInicio || '')}"></div>
+        <div class="field"><label>Prazo de entrega</label><input type="date" id="kb-p-prazo" value="${escapeHtml(pj.prazo || '')}"></div>
+        <div class="field"><label>Cor</label><input type="color" id="kb-p-cor" value="${expandirHex(pj.cor) || '#8b5cf6'}" style="height:42px; padding:3px; cursor:pointer;"></div>
+      </div>
+      <div class="kb-wiz-caixa kb-linha-switch"><div><strong>Projeto recorrente</strong><span>Todo mês as tarefas dos modelos do projeto são criadas de novo.</span></div><label class="switch"><input type="checkbox" id="kb-p-recorrente" ${pj.recorrente ? 'checked' : ''}><span class="switch-slider"></span></label></div>
+      ${existente ? `<p class="cfg-secao-nota">${kbProgressoProjeto(existente.id).total} tarefa(s) neste projeto${(existente.servicos || []).length ? ' · serviços: ' + existente.servicos.map((x) => escapeHtml(x.nome)).join(', ') : ''}${existente.planoConteudo && existente.planoConteudo.ativo ? ` · plano de ${existente.planoConteudo.totalPrevisto || 0} conteúdo(s)` : ''}.</p>` : ''}
+      <div class="cfg-modal-rodape">
+        ${existente ? `<button type="button" class="btn btn-ghost kb-btn-perigo" onclick="kbConfirmarExcluirProjeto('${escapeParaOnclick(existente.id)}')">${kbIc('lixeira')} Excluir</button>
+          <button type="button" class="btn btn-ghost" onclick="kbGravarProjeto(kbProjeto('${escapeParaOnclick(existente.id)}'), { arquivado: ${existente.arquivado ? 'false' : 'true'} }); fecharModalKb();">${kbIc('arquivo')} ${existente.arquivado ? 'Desarquivar' : 'Arquivar'}</button>` : ''}
+        <span class="kb-espaco"></span>
+        <button type="button" class="btn" onclick="fecharModalKb()">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="kbSalvarProjetoModal()">${existente ? 'Salvar' : 'Criar projeto'}</button>
+      </div>
+    </div>`;
+  openModal('modal-kb-tarefa');
+}
+function kbSalvarProjetoModal() {
+  const nome = document.getElementById('kb-p-nome').value.trim();
+  if (!nome) { avisar('Dê um nome pro projeto.'); return; }
+  const campos = {
+    nome: nome.slice(0, 100), descricao: document.getElementById('kb-p-descricao').value.slice(0, 2000),
+    cliente: document.getElementById('kb-p-cliente').value, responsavel: document.getElementById('kb-p-responsavel').value,
+    ...kbCamposDaEtapa(document.getElementById('kb-p-status').value, (kbProjeto(KB_PROJETO_EDIT.id) || {}).status),
+    prazo: document.getElementById('kb-p-prazo').value || '', dataInicio: document.getElementById('kb-p-inicio').value || '',
+    valor: Math.max(0, Number(document.getElementById('kb-p-valor').value) || 0),
+    recorrente: document.getElementById('kb-p-recorrente').checked,
+    recorrencia: document.getElementById('kb-p-recorrente').checked ? 'mensal' : '',
+    // projeto antigo (sem data de renovação): passa a renovar a partir do mês que vem
+    ...(document.getElementById('kb-p-recorrente').checked && !((kbProjeto(KB_PROJETO_EDIT.id) || {}).ultimaRenovacao) ? { ultimaRenovacao: kbHoje().slice(0, 7) } : {}),
+    cor: corHexValida(document.getElementById('kb-p-cor').value) || '#8b5cf6',
+  };
+  if (KB_PROJETO_EDIT.id) { if (!kbGravarProjeto(kbProjeto(KB_PROJETO_EDIT.id), campos)) return; }
+  else {
+    const agora = new Date().toISOString();
+    if (!kbGravarProjeto(Object.assign({ id: genId('pj'), arquivado: false, ordem: Date.now(), criadoEm: agora, criadoPor: kbMeuUid(), ultimaRenovacao: kbHoje().slice(0, 7) }, campos))) return;
+  }
+  fecharModalKb();
+}
+function kbConfirmarExcluirProjeto(id) {
+  const pj = kbProjeto(id);
+  if (!pj) return;
+  const n = kbProgressoProjeto(id).total;
+  confirmarAcao(`Excluir o projeto "${pj.nome}"?${n ? ` As ${n} tarefa(s) dele NÃO são apagadas — só ficam sem projeto.` : ''}`, () => { kbExcluirProjeto(id); fecharModalKb(); }, 'Excluir projeto');
+}
+function kbAbrirMenuProjeto(id, ancora) {
+  const pj = kbProjeto(id);
+  if (!pj) return;
+  ancora.id = ancora.id || 'kb-menu-' + id.replace(/[^\w-]/g, '');
+  const sid = escapeParaOnclick(id);
+  kbMostrarPopover(`
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); kbAbrirProjeto('${sid}')">${kbIc('lapis')}<span>Editar projeto</span></button>
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); kbVerTarefasDoProjeto('${sid}')">${kbIc('checklist')}<span>Ver tarefas do projeto</span></button>
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); kbAbrirTarefa(null, { projetoId: '${sid}', cliente: kbProjeto('${sid}').cliente || '' })">${kbIc('mais')}<span>Nova tarefa no projeto</span></button>
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); kbGravarProjeto(kbProjeto('${sid}'), { arquivado: ${pj.arquivado ? 'false' : 'true'} })">${kbIc('arquivo')}<span>${pj.arquivado ? 'Desarquivar' : 'Arquivar'}</span></button>
+    <button type="button" class="kb-pop-item kb-pop-perigo" onclick="kbFecharPopovers(); kbConfirmarExcluirProjeto('${sid}')">${kbIc('lixeira')}<span>Excluir</span></button>`, ancora);
+}
+
+// Lista de projetos (botão "Projetos")
+function kbAbrirListaProjetos() {
+  const ov = kbGarantirModal();
+  const ativos = KB_PROJETOS.filter((p) => !p.arquivado);
+  const arquivados = KB_PROJETOS.filter((p) => p.arquivado);
+  const linha = (pj) => {
+    const pr = kbProgressoProjeto(pj.id);
+    const id = escapeParaOnclick(pj.id);
+    return `<div class="kb-col-edit" style="--kb-cor:${corHexValida(pj.cor) || '#8b5cf6'};">
+      <span class="kb-projeto-ic">${kbIc('projetos')}</span>
+      <div style="flex:1; min-width:0;"><strong style="font-size:13.5px;">${escapeHtml(pj.nome)}</strong><div style="font-size:11.5px; color:var(--text-soft);">${pj.cliente ? escapeHtml(pj.cliente) + ' · ' : ''}${pr.feitas}/${pr.total} tarefas · ${pr.pct}%</div></div>
+      <button type="button" class="btn btn-small" onclick="fecharModalKb(); kbVerTarefasDoProjeto('${id}')">Ver tarefas</button>
+      <button type="button" class="kb-btn-ic" aria-label="Editar" onclick="kbAbrirProjeto('${id}')">${kbIc('lapis')}</button>
+    </div>`;
+  };
+  ov.innerHTML = `
+    <div class="modal kb-modal kb-modal-estreito" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Projetos</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="fecharModalKb()">✕</button></div>
+      ${ativos.map(linha).join('') || '<p class="kb-vazio-mini">Nenhum projeto ativo.</p>'}
+      ${arquivados.length ? `<div class="cfg-secao-rotulo">Arquivados</div>${arquivados.map(linha).join('')}` : ''}
+      <div class="cfg-modal-rodape">
+        ${KB_FILTROS.projeto ? `<button type="button" class="btn btn-ghost" onclick="KB_FILTROS.projeto=''; fecharModalKb(); renderKanbanConteudo(true);">Ver todas as tarefas</button>` : ''}
+        <span class="kb-espaco"></span>
+        <button type="button" class="btn btn-primary" onclick="kbAbrirProjeto(null)">${kbIc('mais')} Novo projeto</button>
+      </div>
+    </div>`;
+  openModal('modal-kb-tarefa');
+}
+
+// ---------- Subtarefas ----------
+function kbSubtarefas(paiId) { return kbOrdenar(KB_TAREFAS.filter((t) => t.paiId === paiId && !t.arquivada), 'manual'); }
+
+function kbSubtarefasHtmlCartao(t) {
+  const subs = kbSubtarefas(t.id);
+  if (!subs.length) return '';
+  const feitas = subs.filter(kbConcluida).length;
+  return `<div class="kb-subs-resumo">${kbIc('camadas')} ${feitas}/${subs.length} subtarefa${subs.length > 1 ? 's' : ''}</div>`;
+}
+
+function kbAdicionarSubtarefa(paiId, titulo) {
+  const v = String(titulo || '').trim();
+  const pai = KB_TAREFAS.find((x) => x.id === paiId);
+  if (!v || !pai) return;
+  kbCriarTarefa({ titulo: v.slice(0, 140), paiId, projetoId: pai.projetoId || '', cliente: pai.cliente || '', responsavel: pai.responsavel || '', status: pai.status === kbColunaFinalId() ? (kbColunas()[1] || kbColunas()[0]).id : pai.status, prioridade: pai.prioridade || 'media' });
+  kbRenderSubtarefasModal();
+}
+
+function kbRenderSubtarefasModal() {
+  const el = document.getElementById('kb-m-subtarefas');
+  if (!el || !KB_EDITANDO || !KB_EDITANDO.id) return;
+  const subs = kbSubtarefas(KB_EDITANDO.id);
+  el.innerHTML = subs.map((s) => `
+    <div class="kb-m-check">
+      <input type="checkbox" ${kbConcluida(s) ? 'checked' : ''} aria-label="Concluída" onchange="kbAlternarConcluida('${escapeParaOnclick(s.id)}'); kbRenderSubtarefasModal();">
+      <button type="button" class="kb-sub-link${kbConcluida(s) ? ' feito' : ''}" onclick="kbAbrirTarefa('${escapeParaOnclick(s.id)}')">${escapeHtml(s.titulo)}</button>
+      <span class="kb-status-mini" style="color:${kbColuna(s.status).cor};">● ${escapeHtml(kbColuna(s.status).nome)}</span>
+    </div>`).join('') || '<p class="kb-vazio-mini">Nenhuma subtarefa.</p>';
+}
+
+// ---------- Recorrência ----------
+function kbProximaData(base, freq) {
+  const b = base || kbHoje();
+  const [a, m, d] = b.split('-').map(Number);
+  if (freq === 'diaria') return kbSomarDias(b, 1);
+  if (freq === 'semanal') return kbSomarDias(b, 7);
+  if (freq === 'quinzenal') return kbSomarDias(b, 15);
+  if (freq === 'mensal') { const ultimo = new Date(a, m + 1, 0).getDate(); return kbIsoLocal(new Date(a, m, Math.min(d, ultimo))); }
+  return '';
+}
+
+// Chamado quando uma tarefa recorrente é concluída: cria a próxima.
+// "recorrenciaProximaId" impede gerar duas vezes a mesma ocorrência.
+function kbGerarProximaRecorrencia(t) {
+  if (!t.recorrencia || !KB_RECORRENCIAS[t.recorrencia] || t.recorrenciaProximaId) return;
+  const base = t.prazo && t.prazo >= kbHoje() ? t.prazo : kbHoje();
+  const nova = kbCriarTarefa({
+    titulo: t.titulo, descricao: t.descricao, cliente: t.cliente, responsavel: t.responsavel, prioridade: t.prioridade,
+    etiquetas: (t.etiquetas || []).slice(), projetoId: t.projetoId || '', paiId: t.paiId || '',
+    checklist: (t.checklist || []).map((c) => ({ id: genId('ck'), texto: c.texto, feito: false })),
+    status: (kbColunasDaTarefa(t).find((c) => !c.final && c.id !== 'backlog') || kbColunasDaTarefa(t)[0]).id,
+    prazo: kbProximaData(base, t.recorrencia), recorrencia: t.recorrencia, recorrenciaOrigemId: t.recorrenciaOrigemId || t.id,
+  });
+  if (nova) kbAtualizar(t.id, { recorrenciaProximaId: nova.id });
+}
+
+// ---------- Modelos ----------
+function kbModelos() { return Array.isArray(KB_MODELOS) ? KB_MODELOS : KB_MODELOS_PADRAO; }
+
+function kbAbrirModelos() {
+  const ov = kbGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal kb-modal-estreito" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Modelos de tarefa</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="fecharModalKb()">✕</button></div>
+      <p class="cfg-modal-sub">Tarefas prontas com checklist. Use pra não montar do zero o que se repete. Pra criar um modelo seu, abra uma tarefa → menu ⋮ → "Salvar como modelo".</p>
+      <div id="kb-modelos-lista"></div>
+      ${KB_MODELOS_PADRAO.some((m) => !kbModelos().some((x) => x.id === m.id)) ? '<div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn btn-small" onclick="kbCompletarModelosProntos()">Adicionar os modelos prontos que faltam</button></div>' : ''}
+    </div>`;
+  kbRenderModelos();
+  openModal('modal-kb-tarefa');
+}
+function kbRenderModelos() {
+  const el = document.getElementById('kb-modelos-lista');
+  if (!el) return;
+  el.innerHTML = kbModelos().map((m) => `
+    <div class="kb-modelo">
+      <div style="flex:1; min-width:0;">
+        <strong>${escapeHtml(m.titulo)}</strong>
+        <div class="kb-modelo-info">${(m.checklist || []).length} itens no checklist${m.descricao ? ' · ' + escapeHtml(m.descricao) : ''}</div>
+      </div>
+      <button type="button" class="btn btn-small btn-primary" onclick="kbUsarModelo('${escapeParaOnclick(m.id)}')">Usar</button>
+      <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir modelo" onclick="kbExcluirModelo('${escapeParaOnclick(m.id)}')">${kbIc('lixeira')}</button>
+    </div>`).join('') || `<p class="kb-vazio-mini">Nenhum modelo. <button type="button" class="kb-link" onclick="kbRestaurarModelos()">Restaurar os modelos prontos</button></p>`;
+}
+function kbUsarModelo(mid) {
+  const m = kbModelos().find((x) => x.id === mid);
+  if (!m) return;
+  fecharModalKb();
+  kbAbrirTarefa(null, {
+    titulo: m.titulo, descricao: m.descricao || '', prioridade: m.prioridade || 'media', etiquetas: (m.etiquetas || []).slice(),
+    checklist: (m.checklist || []).map((texto) => ({ id: genId('ck'), texto, feito: false })), cliente: KB_FILTROS.cliente || '', projetoId: KB_FILTROS.projeto || '',
+  });
+}
+function kbSalvarComoModelo(id) {
+  const t = KB_TAREFAS.find((x) => x.id === id);
+  if (!t) return;
+  const lista = kbModelos().concat([{ id: genId('mdl'), titulo: t.titulo, descricao: t.descricao || '', prioridade: t.prioridade, etiquetas: (t.etiquetas || []).slice(), checklist: (t.checklist || []).map((c) => c.texto) }]);
+  if (cloudSet(KB_MODELOS_KEY, lista) === false) return;
+  KB_MODELOS = lista;
+  avisar(`"${t.titulo}" agora é um modelo. Use em Modelos → Usar.`, 'Modelo salvo');
+}
+function kbExcluirModelo(mid) {
+  const m = kbModelos().find((x) => x.id === mid);
+  if (!m) return;
+  confirmarAcao(`Excluir o modelo "${m.titulo}"? As tarefas já criadas com ele não mudam.`, () => {
+    const lista = kbModelos().filter((x) => x.id !== mid);
+    if (cloudSet(KB_MODELOS_KEY, lista) === false) return;
+    KB_MODELOS = lista;
+    kbRenderModelos();
+  }, 'Excluir modelo');
+}
+function kbCompletarModelosProntos() {
+  const faltam = KB_MODELOS_PADRAO.filter((m) => !kbModelos().some((x) => x.id === m.id));
+  if (!faltam.length) return;
+  const lista = kbModelos().concat(kbLimpar(faltam));
+  if (cloudSet(KB_MODELOS_KEY, lista) === false) return;
+  KB_MODELOS = lista;
+  kbAbrirModelos();
+}
+function kbRestaurarModelos() {
+  if (cloudSet(KB_MODELOS_KEY, KB_MODELOS_PADRAO) === false) return;
+  KB_MODELOS = kbLimpar(KB_MODELOS_PADRAO);
+  kbRenderModelos();
+}
+
+// ---------- Selecionar (ações em massa) ----------
+function kbAlternarSelecao() {
+  KB_SELECAO = KB_SELECAO ? null : new Set();
+  renderKanbanConteudo(true);
+}
+function kbMarcarSelecao(id, marcado) {
+  if (!KB_SELECAO) return;
+  if (marcado) KB_SELECAO.add(id); else KB_SELECAO.delete(id);
+  kbRenderBarraSelecao();
+}
+function kbSelecionarTodasVisiveis() {
+  if (!KB_SELECAO) return;
+  document.querySelectorAll('#kb-conteudo [data-kb-card]').forEach((el) => { if (!kbEhProjeto(el.dataset.kbCard)) KB_SELECAO.add(el.dataset.kbCard); });
+  renderKanbanConteudo(true);
+}
+function kbRenderBarraSelecao() {
+  let barra = document.getElementById('kb-barra-selecao');
+  if (!KB_SELECAO) { if (barra) barra.remove(); return; }
+  if (!barra) { barra = document.createElement('div'); barra.id = 'kb-barra-selecao'; barra.className = 'kb-barra-selecao'; document.body.appendChild(barra); }
+  const n = KB_SELECAO.size;
+  const opcoes = (lista) => lista.map(([v, t]) => `<option value="${escapeHtml(v)}">${escapeHtml(t)}</option>`).join('');
+  barra.innerHTML = `
+    <strong>${n} selecionada${n === 1 ? '' : 's'}</strong>
+    <button type="button" class="kb-link" onclick="kbSelecionarTodasVisiveis()">Selecionar todas visíveis</button>
+    <span class="kb-sep-v"></span>
+    <select ${n ? '' : 'disabled'} onchange="if(this.value) kbAcaoEmMassa('status', this.value); this.value='';"><option value="">Mover para...</option>${opcoes(kbColunas().map((c) => [c.id, c.nome]))}</select>
+    <select ${n ? '' : 'disabled'} onchange="if(this.value) kbAcaoEmMassa('prioridade', this.value); this.value='';"><option value="">Prioridade...</option>${opcoes(Object.entries(KB_PRIORIDADES).map(([k, v]) => [k, v.nome]))}</select>
+    <select ${n ? '' : 'disabled'} onchange="if(this.value) kbAcaoEmMassa('responsavel', this.value === '__nenhum' ? '' : this.value); this.value='';"><option value="">Responsável...</option><option value="__nenhum">Sem responsável</option>${opcoes(KB_USUARIOS.map((u) => [u.uid, u.nome]))}</select>
+    <input type="date" ${n ? '' : 'disabled'} aria-label="Prazo" title="Definir prazo" onchange="if(this.value) kbAcaoEmMassa('prazo', this.value);">
+    <button type="button" class="btn btn-small" ${n ? '' : 'disabled'} onclick="kbAcaoEmMassa('arquivada', ${KB_FILTROS.arquivadas ? 'false' : 'true'})">${kbIc('arquivo')} ${KB_FILTROS.arquivadas ? 'Desarquivar' : 'Arquivar'}</button>
+    <button type="button" class="btn btn-small kb-btn-perigo" ${n ? '' : 'disabled'} onclick="kbExcluirEmMassa()">${kbIc('lixeira')} Excluir</button>
+    <span class="kb-espaco"></span>
+    <button type="button" class="btn btn-small" onclick="kbAlternarSelecao()">Cancelar</button>`;
+}
+function kbAcaoEmMassa(campo, valor) {
+  if (!KB_SELECAO || !KB_SELECAO.size || !kbPronto()) return;
+  const ids = Array.from(KB_SELECAO);
+  ids.forEach((id) => {
+    const t = KB_TAREFAS.find((x) => x.id === id);
+    const v = campo === 'status' && t ? kbStatusParaTarefa(t, valor) : valor;
+    if (campo === 'status' && !v) return; // tarefa de projeto sem coluna equivalente: fica onde está
+    const campos = { [campo]: v };
+    if (campo === 'status' && t && v === kbFinalDe(kbColunasDaTarefa(t)) && !kbConcluida(t)) Object.assign(campos, { statusAntesDeConcluir: t.status, concluidaEm: new Date().toISOString() });
+    kbAtualizar(id, campos);
+  });
+  if (campo === 'arquivada') KB_SELECAO.clear();
+  renderKanbanConteudo(true);
+}
+function kbExcluirEmMassa() {
+  if (!KB_SELECAO || !KB_SELECAO.size) return;
+  const n = KB_SELECAO.size;
+  confirmarAcao(`Excluir ${n} tarefa(s)? Isso não pode ser desfeito. Se quiser só tirar do quadro, use "Arquivar".`, () => {
+    Array.from(KB_SELECAO).forEach((id) => kbExcluir(id));
+    KB_SELECAO.clear();
+    renderKanbanConteudo(true);
+  }, 'Excluir tarefas');
+}
+
+// ---------- Carga da equipe ----------
+function kbRenderCarga(lista) {
+  const abertas = lista.filter((t) => !kbConcluida(t));
+  const hoje = kbHoje();
+  const pessoas = KB_USUARIOS.map((u) => ({ uid: u.uid, nome: u.nome })).concat([{ uid: '', nome: 'Sem responsável' }]);
+  const dados = pessoas.map((p) => {
+    const minhas = abertas.filter((t) => (t.responsavel || '') === p.uid);
+    return { ...p, total: minhas.length, atrasadas: minhas.filter((t) => t.prazo && t.prazo < hoje).length, hoje: minhas.filter((t) => t.prazo === hoje).length,
+      tempo: lista.filter((t) => (t.responsavel || '') === p.uid).reduce((a, t) => a + kbTempoSeg(t), 0) };
+  }).filter((p) => p.uid || p.total);
+  const max = Math.max(1, ...dados.map((d) => d.total));
+  return `<div class="kb-carga">
+    <div class="kb-carga-tit">${kbIc('carga')} Carga da equipe <span>tarefas abertas com os filtros atuais</span></div>
+    <div class="kb-carga-lista">${dados.map((d) => `
+      <button type="button" class="kb-carga-linha${KB_FILTROS.responsavel === d.uid && d.uid ? ' ativo' : ''}" title="Filtrar por ${escapeHtml(d.nome)}" onclick="${d.uid ? `kbSetFiltro('responsavel', KB_FILTROS.responsavel === '${escapeParaOnclick(d.uid)}' ? '' : '${escapeParaOnclick(d.uid)}'); renderKanbanFiltroResponsaveis();` : "kbSetFiltro('tipo', KB_FILTROS.tipo === 'sem-responsavel' ? 'todas' : 'sem-responsavel')"}">
+        ${kbAvatar(d.uid, 'p')}<span class="kb-carga-nome">${escapeHtml(d.nome)}</span>
+        <span class="kb-carga-barra"><i style="width:${Math.round((d.total / max) * 100)}%;"></i></span>
+        <span class="kb-carga-num"><strong>${d.total}</strong> abertas</span>
+        <span class="kb-carga-num${d.atrasadas ? ' atrasado' : ''}">${d.atrasadas} atrasadas</span>
+        <span class="kb-carga-num">${d.hoje} hoje</span>
+        <span class="kb-carga-num">${kbIc('relogio')} ${kbFormatarTempo(d.tempo)}</span>
+      </button>`).join('') || '<p class="kb-vazio-mini">Nenhuma tarefa aberta.</p>'}</div>
+  </div>`;
+}
+
+
+// =====================================================================
+// ---------- Kanban · Entrega 3 ----------
+// Automações, Importar (planilha e Trello), Fixar atalho, Destacar e
+// Tutorial.
+// =====================================================================
+
+// ---------- Automações ----------
+// Regras "quando X acontecer, faça Y". Rodam no navegador de quem fez a
+// mudança, uma vez só (as ações de uma automação não disparam outras
+// automações, pra nunca entrar em ciclo).
+const KB_AUTOMACOES_KEY = 'eagles_kanban_automacoes_v1';
+let KB_AUTOMACOES = [];
+let KB_AUTOMACAO_RODANDO = false;
+let KB_IMPORTANDO = false;
+
+const KB_GATILHOS = {
+  criada: { nome: 'uma tarefa for criada' },
+  movida: { nome: 'uma tarefa for movida para a coluna', pedeColuna: true },
+  concluida: { nome: 'uma tarefa for concluída' },
+  checklist: { nome: 'todo o checklist for marcado' },
+};
+const KB_ACOES = {
+  responsavel: { nome: 'definir o responsável como', tipo: 'usuario' },
+  prioridade: { nome: 'mudar a prioridade para', tipo: 'prioridade' },
+  etiqueta: { nome: 'adicionar a etiqueta', tipo: 'texto' },
+  mover: { nome: 'mover para a coluna', tipo: 'coluna' },
+  prazo: { nome: 'definir o prazo para daqui a (dias)', tipo: 'numero' },
+  checklist: { nome: 'adicionar o checklist do modelo', tipo: 'modelo' },
+  arquivar: { nome: 'arquivar a tarefa', tipo: null },
+};
+
+function kbIniciarDadosEntrega3() {
+  cloudWatch(KB_AUTOMACOES_KEY, [], (data) => { KB_AUTOMACOES = Array.isArray(data) ? data : []; });
+}
+
+function kbDescreverAutomacao(a) {
+  const g = KB_GATILHOS[a.gatilho] || {};
+  const ac = KB_ACOES[a.acao] || {};
+  const col = (id) => (kbColunas().find((c) => c.id === id) || {}).nome || '?';
+  let valor = '';
+  if (ac.tipo === 'usuario') valor = kbNomeUsuario(a.valor) || 'ninguém';
+  else if (ac.tipo === 'prioridade') valor = (KB_PRIORIDADES[a.valor] || {}).nome || '';
+  else if (ac.tipo === 'coluna') valor = col(a.valor);
+  else if (ac.tipo === 'modelo') valor = (kbModelos().find((m) => m.id === a.valor) || {}).titulo || 'modelo removido';
+  else if (ac.tipo) valor = String(a.valor || '');
+  const projeto = a.projetoId ? ` (só no projeto "${(kbProjeto(a.projetoId) || {}).nome || '?'}")` : '';
+  return `Quando ${g.nome || '?'}${g.pedeColuna ? ' "' + col(a.coluna) + '"' : ''}${projeto}, ${ac.nome || '?'}${valor ? ' "' + valor + '"' : ''}.`;
+}
+
+// evento: 'criada' | 'atualizada'; antes: {status, checklistCompleto}
+function kbRodarAutomacoes(evento, t, antes) {
+  if (KB_AUTOMACAO_RODANDO || KB_IMPORTANDO || !t || !KB_AUTOMACOES.length) return;
+  const completo = (x) => (x.checklist || []).length > 0 && x.checklist.every((c) => c.feito);
+  const disparadas = KB_AUTOMACOES.filter((a) => {
+    if (!a.ativa) return false;
+    if (a.projetoId && t.projetoId !== a.projetoId) return false;
+    if (a.gatilho === 'criada') return evento === 'criada';
+    if (evento !== 'atualizada' || !antes) return false;
+    if (a.gatilho === 'movida') return antes.status !== t.status && t.status === a.coluna;
+    if (a.gatilho === 'concluida') return antes.status !== kbColunaFinalId() && kbConcluida(t);
+    if (a.gatilho === 'checklist') return !antes.checklistCompleto && completo(t);
+    return false;
+  });
+  if (!disparadas.length) return;
+  KB_AUTOMACAO_RODANDO = true;
+  try {
+    disparadas.forEach((a) => {
+      const atual = KB_TAREFAS.find((x) => x.id === t.id);
+      if (!atual) return;
+      const campos = {};
+      if (a.acao === 'responsavel') campos.responsavel = a.valor || '';
+      else if (a.acao === 'prioridade' && KB_PRIORIDADES[a.valor]) campos.prioridade = a.valor;
+      else if (a.acao === 'etiqueta' && a.valor) { if (!(atual.etiquetas || []).includes(a.valor)) campos.etiquetas = (atual.etiquetas || []).concat([String(a.valor).slice(0, 30)]); }
+      else if (a.acao === 'mover' && kbColunas().some((c) => c.id === a.valor)) campos.status = a.valor;
+      else if (a.acao === 'prazo') campos.prazo = kbSomarDias(kbHoje(), Math.max(0, Math.min(365, parseInt(a.valor, 10) || 0)));
+      else if (a.acao === 'checklist') {
+        const m = kbModelos().find((x) => x.id === a.valor);
+        if (m) {
+          const ja = new Set((atual.checklist || []).map((c) => c.texto));
+          const novos = (m.checklist || []).filter((txt) => !ja.has(txt)).map((txt) => ({ id: genId('ck'), texto: txt, feito: false }));
+          if (novos.length) campos.checklist = (atual.checklist || []).concat(novos);
+        }
+      } else if (a.acao === 'arquivar') campos.arquivada = true;
+      if (Object.keys(campos).length) kbAtualizar(t.id, campos);
+    });
+  } finally {
+    KB_AUTOMACAO_RODANDO = false;
+  }
+}
+
+let KB_AUTOMACAO_NOVA = null;
+function kbAbrirAutomacoes() {
+  KB_AUTOMACAO_NOVA = { gatilho: 'movida', coluna: kbColunaFinalId(), acao: 'arquivar', valor: '', projetoId: '' };
+  const ov = kbGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal kb-modal-estreito" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Automações</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="fecharModalKb()">✕</button></div>
+      <p class="cfg-modal-sub">Regras que trabalham sozinhas: "quando acontecer X, faça Y". Valem pra toda a equipe.</p>
+      <div id="kb-auto-lista"></div>
+      <div class="cfg-secao-rotulo">Nova automação</div>
+      <div class="kb-auto-form" id="kb-auto-form"></div>
+      <p class="kb-vazio-mini" style="margin-top:12px;">Avisar o cliente por WhatsApp ou e-mail vai entrar como ação quando essas integrações forem conectadas.</p>
+    </div>`;
+  kbRenderAutomacoes();
+  openModal('modal-kb-tarefa');
+}
+function kbRenderAutomacoes() {
+  const lista = document.getElementById('kb-auto-lista');
+  if (lista) {
+    lista.innerHTML = KB_AUTOMACOES.map((a) => `
+      <div class="kb-modelo${a.ativa ? '' : ' kb-auto-inativa'}">
+        <span class="kb-projeto-ic">${kbIc('robo')}</span>
+        <div style="flex:1; min-width:0; font-size:13px;">${escapeHtml(kbDescreverAutomacao(a))}</div>
+        <label class="switch" title="${a.ativa ? 'Ligada' : 'Desligada'}"><input type="checkbox" ${a.ativa ? 'checked' : ''} onchange="kbAlternarAutomacao('${escapeParaOnclick(a.id)}', this.checked)"><span class="switch-slider"></span></label>
+        <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir automação" onclick="kbExcluirAutomacao('${escapeParaOnclick(a.id)}')">${kbIc('lixeira')}</button>
+      </div>`).join('') || `<div class="cfg-vazio" style="padding:18px;">Nenhuma automação ainda. Exemplos:<div class="kb-auto-sugestoes">
+        <button type="button" class="kb-link" onclick="kbCriarAutomacao({ gatilho: 'concluida', acao: 'arquivar' })">Ao concluir, arquivar a tarefa</button>
+        <button type="button" class="kb-link" onclick="kbCriarAutomacao({ gatilho: 'movida', coluna: 'revisao', acao: 'prioridade', valor: 'alta' })">Ao ir pra Revisão, prioridade Alta</button>
+        <button type="button" class="kb-link" onclick="kbCriarAutomacao({ gatilho: 'checklist', acao: 'mover', valor: kbColunaFinalId() })">Checklist completo → Concluído</button>
+      </div></div>`;
+  }
+  const f = document.getElementById('kb-auto-form');
+  if (!f || !KB_AUTOMACAO_NOVA) return;
+  const n = KB_AUTOMACAO_NOVA;
+  const ac = KB_ACOES[n.acao] || {};
+  const opt = (lista, sel) => lista.map(([v, t]) => `<option value="${escapeHtml(v)}"${v === sel ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('');
+  const colunas = kbColunas().map((c) => [c.id, c.nome]);
+  let campoValor = '';
+  if (ac.tipo === 'usuario') campoValor = `<select onchange="KB_AUTOMACAO_NOVA.valor = this.value"><option value="">Sem responsável</option>${opt(KB_USUARIOS.map((u) => [u.uid, u.nome]), n.valor)}</select>`;
+  else if (ac.tipo === 'prioridade') campoValor = `<select onchange="KB_AUTOMACAO_NOVA.valor = this.value">${opt(Object.entries(KB_PRIORIDADES).map(([k, v]) => [k, v.nome]), n.valor)}</select>`;
+  else if (ac.tipo === 'coluna') campoValor = `<select onchange="KB_AUTOMACAO_NOVA.valor = this.value">${opt(colunas, n.valor)}</select>`;
+  else if (ac.tipo === 'modelo') campoValor = `<select onchange="KB_AUTOMACAO_NOVA.valor = this.value">${opt(kbModelos().map((m) => [m.id, m.titulo]), n.valor)}</select>`;
+  else if (ac.tipo === 'numero') campoValor = `<input type="number" min="0" max="365" value="${escapeHtml(n.valor || '3')}" oninput="KB_AUTOMACAO_NOVA.valor = this.value">`;
+  else if (ac.tipo === 'texto') campoValor = `<input type="text" maxlength="30" value="${escapeHtml(n.valor || '')}" placeholder="ex: revisar" oninput="KB_AUTOMACAO_NOVA.valor = this.value">`;
+  f.innerHTML = `
+    <label>Quando <select onchange="KB_AUTOMACAO_NOVA.gatilho = this.value; kbRenderAutomacoes();">${opt(Object.entries(KB_GATILHOS).map(([k, v]) => [k, v.nome]), n.gatilho)}</select></label>
+    ${KB_GATILHOS[n.gatilho] && KB_GATILHOS[n.gatilho].pedeColuna ? `<label>Coluna <select onchange="KB_AUTOMACAO_NOVA.coluna = this.value">${opt(colunas, n.coluna)}</select></label>` : ''}
+    <label>Então <select onchange="KB_AUTOMACAO_NOVA.acao = this.value; KB_AUTOMACAO_NOVA.valor = ''; kbRenderAutomacoes();">${opt(Object.entries(KB_ACOES).map(([k, v]) => [k, v.nome]), n.acao)}</select></label>
+    ${campoValor ? `<label>Valor ${campoValor}</label>` : ''}
+    <label>Valer pra <select onchange="KB_AUTOMACAO_NOVA.projetoId = this.value"><option value="">Todas as tarefas</option>${opt(KB_PROJETOS.filter((x) => !x.arquivado).map((x) => [x.id, 'Só o projeto: ' + x.nome]), n.projetoId)}</select></label>
+    <button type="button" class="btn btn-primary" onclick="kbCriarAutomacao(KB_AUTOMACAO_NOVA)">${kbIc('mais')} Criar automação</button>`;
+}
+function kbCriarAutomacao(dados) {
+  const a = Object.assign({ id: genId('auto'), ativa: true, coluna: '', valor: '', projetoId: '' }, kbLimpar(dados));
+  const ac = KB_ACOES[a.acao];
+  if (!KB_GATILHOS[a.gatilho] || !ac) return;
+  if (KB_GATILHOS[a.gatilho].pedeColuna && !a.coluna) a.coluna = kbColunas()[0].id;
+  if (ac.tipo === 'prioridade' && !KB_PRIORIDADES[a.valor]) a.valor = 'alta';
+  if (ac.tipo === 'coluna' && !a.valor) a.valor = kbColunas()[0].id;
+  if (ac.tipo === 'modelo' && !a.valor) a.valor = (kbModelos()[0] || {}).id || '';
+  if (ac.tipo === 'numero' && !a.valor) a.valor = '3';
+  if (ac.tipo === 'texto' && !String(a.valor).trim()) { avisar('Escreva o nome da etiqueta.'); return; }
+  if (a.gatilho === 'movida' && a.acao === 'mover' && a.coluna === a.valor) { avisar('Essa automação moveria a tarefa pra mesma coluna — escolha outra.'); return; }
+  const lista = KB_AUTOMACOES.concat([a]);
+  if (cloudSet(KB_AUTOMACOES_KEY, lista) === false) return;
+  KB_AUTOMACOES = lista;
+  KB_AUTOMACAO_NOVA = { gatilho: 'movida', coluna: kbColunaFinalId(), acao: 'arquivar', valor: '', projetoId: '' };
+  kbRenderAutomacoes();
+}
+function kbAlternarAutomacao(id, ativa) {
+  const lista = KB_AUTOMACOES.map((a) => (a.id === id ? Object.assign({}, a, { ativa }) : a));
+  if (cloudSet(KB_AUTOMACOES_KEY, lista) === false) return;
+  KB_AUTOMACOES = lista;
+  kbRenderAutomacoes();
+}
+function kbExcluirAutomacao(id) {
+  confirmarAcao('Excluir essa automação?', () => {
+    const lista = KB_AUTOMACOES.filter((a) => a.id !== id);
+    if (cloudSet(KB_AUTOMACOES_KEY, lista) === false) return;
+    KB_AUTOMACOES = lista;
+    kbRenderAutomacoes();
+  }, 'Excluir automação');
+}
+
+// ---------- Importar (planilha CSV e Trello) ----------
+function kbNorm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
+
+// CSV com aspas, quebras de linha dentro de aspas, ";" ou "," (detecta).
+function kbParseCsv(texto) {
+  let t = String(texto || '').replace(/^\uFEFF/, '');
+  const primeira = t.split(/\r?\n/)[0] || '';
+  const sep = (primeira.match(/;/g) || []).length >= (primeira.match(/,/g) || []).length ? ';' : ',';
+  const linhas = [];
+  let campo = '', linha = [], aspas = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (aspas) {
+      if (c === '"') { if (t[i + 1] === '"') { campo += '"'; i++; } else aspas = false; }
+      else campo += c;
+    } else if (c === '"') aspas = true;
+    else if (c === sep) { linha.push(campo); campo = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && t[i + 1] === '\n') i++;
+      linha.push(campo); linhas.push(linha); linha = []; campo = '';
+    } else campo += c;
+  }
+  if (campo !== '' || linha.length) { linha.push(campo); linhas.push(linha); }
+  return linhas.filter((l) => l.some((x) => String(x).trim() !== ''));
+}
+
+function kbDataImportada(v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m && s.length > 10) { const d = new Date(s); return isNaN(d) ? `${m[1]}-${m[2]}-${m[3]}` : kbIsoLocal(d); }
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (m) {
+    const ano = m[3].length === 2 ? '20' + m[3] : m[3];
+    const d = new Date(Number(ano), Number(m[2]) - 1, Number(m[1]));
+    if (d.getMonth() === Number(m[2]) - 1) return kbIsoLocal(d);
+  }
+  return '';
+}
+
+function kbPrioridadeImportada(v) {
+  const n = kbNorm(v);
+  if (!n) return 'media';
+  if (/urgent/.test(n)) return 'urgente';
+  if (/alta|high/.test(n)) return 'alta';
+  if (/baixa|low/.test(n)) return 'baixa';
+  return 'media';
+}
+
+const KB_CSV_CAMPOS = {
+  titulo: ['titulo', 'tarefa', 'nome', 'title', 'name', 'card'],
+  descricao: ['descricao', 'description', 'desc', 'detalhes'],
+  status: ['status', 'etapa', 'coluna', 'lista', 'list'],
+  prioridade: ['prioridade', 'priority'],
+  prazo: ['prazo', 'vencimento', 'data', 'due', 'due date', 'entrega'],
+  responsavel: ['responsavel', 'assignee', 'membro', 'dono'],
+  cliente: ['cliente', 'client', 'customer'],
+  etiquetas: ['etiquetas', 'etiqueta', 'tags', 'labels'],
+  checklist: ['checklist', 'itens', 'subitens'],
+};
+
+// Lê o CSV e devolve tarefas "cruas" + os nomes de coluna que apareceram
+function kbLerCsvTarefas(texto) {
+  const linhas = kbParseCsv(texto);
+  if (linhas.length < 2) throw new Error('A planilha precisa ter uma linha de cabeçalho e pelo menos uma tarefa.');
+  const cab = linhas[0].map(kbNorm);
+  const idx = {};
+  Object.entries(KB_CSV_CAMPOS).forEach(([campo, nomes]) => { const i = cab.findIndex((h) => nomes.includes(h)); if (i >= 0) idx[campo] = i; });
+  if (idx.titulo === undefined) throw new Error('Não achei a coluna de título. O cabeçalho precisa ter uma coluna "Título" (ou "Tarefa").');
+  const val = (l, c) => (idx[c] === undefined ? '' : String(l[idx[c]] || '').trim());
+  return linhas.slice(1).map((l) => ({
+    titulo: val(l, 'titulo'), descricao: val(l, 'descricao'), coluna: val(l, 'status'), prioridade: kbPrioridadeImportada(val(l, 'prioridade')),
+    prazo: kbDataImportada(val(l, 'prazo')), responsavelNome: val(l, 'responsavel'), cliente: val(l, 'cliente'),
+    etiquetas: val(l, 'etiquetas').split(/[;|,]/).map((e) => e.trim()).filter(Boolean),
+    checklist: val(l, 'checklist').split('|').map((e) => e.trim()).filter(Boolean).map((texto) => ({ texto, feito: false })),
+    arquivada: false, concluida: false,
+  })).filter((t) => t.titulo);
+}
+
+// Lê o JSON de exportação de um quadro do Trello
+function kbLerTrello(texto) {
+  let j;
+  try { j = JSON.parse(String(texto || '').replace(/^\uFEFF/, '')); } catch (e) { throw new Error('Esse arquivo não é um JSON válido. No Trello: Menu do quadro → Imprimir, exportar e compartilhar → Exportar como JSON.'); }
+  if (!j || !Array.isArray(j.cards) || !Array.isArray(j.lists)) throw new Error('Esse JSON não parece ser a exportação de um quadro do Trello (faltam "cards" e "lists").');
+  const listas = {}; j.lists.forEach((l) => { listas[l.id] = l; });
+  const membros = {}; (j.members || []).forEach((m) => { membros[m.id] = m.fullName || m.username || ''; });
+  const checks = {};
+  (j.checklists || []).forEach((c) => {
+    const itens = (c.checkItems || []).slice().sort((a, b) => (a.pos || 0) - (b.pos || 0)).map((it) => ({ texto: String(it.name || '').trim(), feito: it.state === 'complete' })).filter((it) => it.texto);
+    (checks[c.idCard] = checks[c.idCard] || []).push(...itens);
+  });
+  const cards = j.cards.slice().sort((a, b) => (a.pos || 0) - (b.pos || 0));
+  return { nomeQuadro: j.name || 'Trello', tarefas: cards.map((c) => {
+    const lista = listas[c.idList] || {};
+    return {
+      titulo: String(c.name || '').trim(), descricao: String(c.desc || ''), coluna: lista.name || '', prioridade: 'media',
+      prazo: c.due ? kbDataImportada(c.due) : '', responsavelNome: (c.idMembers || []).map((id) => membros[id]).filter(Boolean)[0] || '', cliente: '',
+      etiquetas: (c.labels || []).map((l) => String(l.name || l.color || '').trim()).filter(Boolean),
+      checklist: checks[c.id] || [], arquivada: !!(c.closed || lista.closed), concluida: !!c.dueComplete,
+    };
+  }).filter((t) => t.titulo) };
+}
+
+let KB_IMPORTACAO = null; // { origem, nome, tarefas }
+function kbAbrirImportar(aba) {
+  KB_IMPORTACAO = null;
+  const ov = kbGarantirModal();
+  const trello = aba === 'trello';
+  ov.innerHTML = `
+    <div class="modal kb-modal kb-modal-estreito" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Importar tarefas</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="fecharModalKb()">✕</button></div>
+      <div class="kb-segmento" style="margin-bottom:14px;">
+        <button type="button" class="${trello ? '' : 'ativo'}" onclick="kbAbrirImportar('csv')">Planilha (CSV)</button>
+        <button type="button" class="${trello ? 'ativo' : ''}" onclick="kbAbrirImportar('trello')">Trello</button>
+      </div>
+      ${trello ? `
+        <p class="cfg-modal-sub" style="margin-top:0;">No Trello, abra o quadro → menu (⋯) → <strong>Imprimir, exportar e compartilhar</strong> → <strong>Exportar como JSON</strong>. Depois envie o arquivo aqui. Vêm os cards, checklists, prazos, etiquetas e as listas viram colunas.</p>
+        <button type="button" class="cfg-upload" onclick="document.getElementById('kb-imp-arquivo').click()">${kbIc('importar')}<strong>Escolher o arquivo .json do Trello</strong>Até 15MB</button>
+        <input type="file" id="kb-imp-arquivo" accept=".json,application/json" style="display:none;" onchange="kbLerArquivoImportacao(this, 'trello')">`
+      : `
+        <p class="cfg-modal-sub" style="margin-top:0;">Uma tarefa por linha. Só a coluna <strong>Título</strong> é obrigatória; as outras (Descrição, Status, Prioridade, Prazo, Responsável, Cliente, Etiquetas, Checklist) são opcionais. No Excel: Salvar como → CSV.</p>
+        <button type="button" class="kb-link" style="margin-bottom:10px; padding:0;" onclick="kbBaixarModeloCsv()">${kbIc('importar')} Baixar planilha de exemplo</button>
+        <button type="button" class="cfg-upload" onclick="document.getElementById('kb-imp-arquivo').click()">${kbIc('importar')}<strong>Escolher o arquivo .csv</strong>Até 15MB</button>
+        <input type="file" id="kb-imp-arquivo" accept=".csv,text/csv" style="display:none;" onchange="kbLerArquivoImportacao(this, 'csv')">`}
+      <div id="kb-imp-previa"></div>
+    </div>`;
+  openModal('modal-kb-tarefa');
+}
+
+function kbLerArquivoImportacao(input, origem) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  if (file.size > 15 * 1024 * 1024) { avisar('Arquivo muito grande (máximo 15MB).'); return; }
+  const r = new FileReader();
+  r.onerror = () => avisar('Não foi possível ler esse arquivo.');
+  r.onload = () => kbPrepararImportacao(String(r.result || ''), origem, file.name);
+  r.readAsText(file, 'utf-8');
+}
+
+function kbPrepararImportacao(texto, origem, nomeArquivo) {
+  try {
+    const dados = origem === 'trello' ? kbLerTrello(texto) : { nomeQuadro: nomeArquivo || 'planilha', tarefas: kbLerCsvTarefas(texto) };
+    if (!dados.tarefas.length) throw new Error('Não encontrei nenhuma tarefa com título nesse arquivo.');
+    if (dados.tarefas.length > 1000) throw new Error(`Esse arquivo tem ${dados.tarefas.length} tarefas — o limite por importação é 1000. Divida em arquivos menores.`);
+    KB_IMPORTACAO = { origem, nome: dados.nomeQuadro, tarefas: dados.tarefas };
+    kbRenderPreviaImportacao();
+  } catch (e) {
+    avisar(e.message, 'Importar');
+  }
+}
+
+function kbColunaPorNome(nome) {
+  const n = kbNorm(nome);
+  return n ? kbColunas().find((c) => kbNorm(c.nome) === n) : null;
+}
+
+function kbRenderPreviaImportacao() {
+  const el = document.getElementById('kb-imp-previa');
+  if (!el || !KB_IMPORTACAO) return;
+  const imp = KB_IMPORTACAO;
+  const nomesColunas = Array.from(new Set(imp.tarefas.map((t) => t.coluna).filter(Boolean)));
+  const novas = nomesColunas.filter((n) => !kbColunaPorNome(n));
+  const arquivadas = imp.tarefas.filter((t) => t.arquivada).length;
+  const comCheck = imp.tarefas.filter((t) => t.checklist.length).length;
+  el.innerHTML = `
+    <div class="kb-imp-resumo">
+      <strong>${imp.tarefas.length} tarefa(s) encontradas</strong> em "${escapeHtml(imp.nome)}"
+      <ul>
+        <li>${comCheck} com checklist · ${imp.tarefas.filter((t) => t.prazo).length} com prazo · ${imp.tarefas.filter((t) => t.etiquetas.length).length} com etiquetas</li>
+        ${nomesColunas.length ? `<li>Colunas no arquivo: ${nomesColunas.map((n) => escapeHtml(n)).join(', ')}</li>` : ''}
+        ${arquivadas ? `<li>${arquivadas} arquivada(s) no Trello</li>` : ''}
+      </ul>
+      <div class="kb-imp-amostra">${imp.tarefas.slice(0, 5).map((t) => `<div>• ${escapeHtml(t.titulo)}${t.coluna ? ` <span>(${escapeHtml(t.coluna)})</span>` : ''}</div>`).join('')}${imp.tarefas.length > 5 ? `<div><span>... e mais ${imp.tarefas.length - 5}</span></div>` : ''}</div>
+    </div>
+    ${novas.length ? `<label class="kb-imp-opcao"><input type="checkbox" id="kb-imp-criar-colunas" checked> Criar as colunas que ainda não existem no quadro: ${novas.map((n) => escapeHtml(n)).join(', ')}</label><p class="kb-vazio-mini">Desmarcado, essas tarefas vão pra coluna "${escapeHtml((kbColunas()[1] || kbColunas()[0]).nome)}".</p>` : ''}
+    ${arquivadas ? `<label class="kb-imp-opcao"><input type="checkbox" id="kb-imp-arquivadas"> Trazer também as ${arquivadas} arquivadas (entram como arquivadas)</label>` : ''}
+    <label class="kb-imp-opcao">Projeto <select id="kb-imp-projeto"><option value="">Sem projeto</option>${KB_PROJETOS.filter((x) => !x.arquivado).map((x) => `<option value="${escapeHtml(x.id)}"${x.id === KB_FILTROS.projeto ? ' selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select></label>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="fecharModalKb()">Cancelar</button><button type="button" class="btn btn-primary" onclick="kbConfirmarImportacao()">${kbIc('importar')} Importar ${imp.tarefas.filter((t) => !t.arquivada).length} tarefa(s)</button></div>`;
+}
+
+function kbConfirmarImportacao() {
+  const imp = KB_IMPORTACAO;
+  if (!imp || !kbPronto()) return;
+  const criarColunas = !!(document.getElementById('kb-imp-criar-colunas') || {}).checked;
+  const comArquivadas = !!(document.getElementById('kb-imp-arquivadas') || {}).checked;
+  const projetoId = (document.getElementById('kb-imp-projeto') || {}).value || '';
+  // 1) colunas novas (uma gravação só na configuração)
+  if (criarColunas) {
+    const cores = ['#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b', '#06b6d4', '#64748b'];
+    const novas = Array.from(new Set(imp.tarefas.map((t) => t.coluna).filter(Boolean))).filter((n) => !kbColunaPorNome(n));
+    if (novas.length) {
+      const atuais = kbColunas().slice();
+      const iFinal = atuais.findIndex((c) => c.final);
+      const adicionar = novas.map((n, i) => ({ id: genId('col'), nome: n.slice(0, 30), cor: cores[i % cores.length] }));
+      if (iFinal >= 0) atuais.splice(iFinal, 0, ...adicionar); else atuais.push(...adicionar);
+      if (cloudSet(KB_CONFIG_KEY, { colunas: atuais }) === false) return;
+      KB_CONFIG = { colunas: atuais };
+    }
+  }
+  // 2) tarefas (um documento por tarefa)
+  const padrao = (kbColunas()[1] || kbColunas()[0]).id;
+  const porNome = (nome) => { const n = kbNorm(nome); return n ? (KB_USUARIOS.find((u) => kbNorm(u.nome) === n) || {}).uid || '' : ''; };
+  const base = Date.now();
+  let n = 0;
+  KB_IMPORTANDO = true;
+  try {
+    imp.tarefas.forEach((t, i) => {
+      if (t.arquivada && !comArquivadas) return;
+      const col = kbColunaPorNome(t.coluna);
+      const status = t.concluida ? kbColunaFinalId() : (col ? col.id : padrao);
+      kbCriarTarefa({
+        titulo: t.titulo.slice(0, 140), descricao: t.descricao.slice(0, 3000), status, prioridade: t.prioridade, prazo: t.prazo,
+        responsavel: porNome(t.responsavelNome), cliente: t.cliente.slice(0, 100), projetoId,
+        etiquetas: Array.from(new Set(t.etiquetas.map((e) => e.slice(0, 30)))).slice(0, 10),
+        checklist: t.checklist.slice(0, 100).map((c) => ({ id: genId('ck'), texto: c.texto.slice(0, 200), feito: !!c.feito })),
+        arquivada: !!t.arquivada, ordem: base + i, importadoDe: imp.origem,
+      });
+      n++;
+    });
+  } finally {
+    KB_IMPORTANDO = false;
+  }
+  try { localStorage.setItem('eagles_kanban_banner_trello_ok', '1'); } catch (e) {}
+  fecharModalKb();
+  renderKanbanSecao();
+  avisar(`${n} tarefa(s) importada(s) com sucesso.`, 'Importar');
+}
+
+function kbBaixarModeloCsv() {
+  const csv = '\uFEFFTítulo;Descrição;Status;Prioridade;Prazo;Responsável;Cliente;Etiquetas;Checklist\n' +
+    'Campanha de Tráfego Pago;Setup completo de campanha;A Fazer;Alta;15/10/2026;;ACME;tráfego;Definir objetivo|Criar públicos|Produzir criativos\n' +
+    'Post de lançamento;;Backlog;Média;;;ACME;conteúdo;\n';
+  try {
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'modelo-importar-tarefas.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) { avisar('Não foi possível gerar o arquivo neste navegador.'); }
+}
+
+// ---------- Fixar atalho (filtros salvos) ----------
+function kbFiltrosAtuaisParaAtalho() {
+  const f = KB_FILTROS;
+  return { cliente: f.cliente, tipo: f.tipo, projeto: f.projeto, responsavel: f.responsavel, prioridade: f.prioridade, prazo: f.prazo, etiqueta: f.etiqueta };
+}
+function kbAtalhoAtivo(a) {
+  const atual = kbFiltrosAtuaisParaAtalho();
+  return Object.keys(atual).every((k) => (a.filtros[k] || '') === (atual[k] || '')) && kbPrefs().modo === a.modo;
+}
+function kbAbrirFixarAtalho(ancora) {
+  if (!ancora.id) ancora.id = 'kb-ancora-fixar';
+  const f = kbFiltrosAtuaisParaAtalho();
+  const partes = [];
+  if (f.cliente) partes.push(f.cliente);
+  if (f.projeto && kbProjeto(f.projeto)) partes.push(kbProjeto(f.projeto).nome);
+  if (f.responsavel) partes.push(kbNomeUsuario(f.responsavel));
+  if (f.tipo === 'minhas') partes.push('Minhas');
+  if (f.prazo) partes.push({ atrasadas: 'Atrasadas', hoje: 'Hoje', semana: 'Semana', sem: 'Sem prazo' }[f.prazo]);
+  if (f.prioridade) partes.push(KB_PRIORIDADES[f.prioridade].nome);
+  if (f.etiqueta) partes.push(f.etiqueta);
+  const sugestao = partes.join(' · ').slice(0, 40) || 'Minha visão';
+  kbMostrarPopover(`
+    <div class="kb-pop-form">
+      <label>Nome do atalho<input type="text" id="kb-atalho-nome" maxlength="40" value="${escapeHtml(sugestao)}" onkeydown="if(event.key==='Enter') kbSalvarAtalho();"></label>
+      <p class="kb-vazio-mini" style="margin:0;">Salva os filtros e o modo de exibição de agora como um botão de um clique.</p>
+      <button type="button" class="btn btn-small btn-primary" onclick="kbSalvarAtalho()">${kbIc('alfinete')} Fixar</button>
+    </div>`, ancora, 'kb-popover-form');
+  setTimeout(() => { const i = document.getElementById('kb-atalho-nome'); if (i) { i.focus(); i.select && i.select(); } }, 20);
+}
+function kbSalvarAtalho() {
+  const nome = (document.getElementById('kb-atalho-nome') || {}).value || '';
+  if (!nome.trim()) return;
+  const atalhos = (kbPrefs().atalhos || []).concat([{ id: genId('at'), nome: nome.trim().slice(0, 40), filtros: kbFiltrosAtuaisParaAtalho(), modo: kbPrefs().modo }]).slice(-12);
+  kbSalvarPrefs({ atalhos });
+  kbFecharPopovers();
+  kbRenderAtalhos();
+}
+function kbAplicarAtalho(id) {
+  const a = (kbPrefs().atalhos || []).find((x) => x.id === id);
+  if (!a) return;
+  Object.assign(KB_FILTROS, { cliente: '', tipo: 'todas', projeto: '', responsavel: '', prioridade: '', prazo: '', etiqueta: '' }, a.filtros);
+  renderKanbanFiltroResponsaveis();
+  kbMudarModo(a.modo || 'quadro');
+}
+function kbRemoverAtalho(id) {
+  kbSalvarPrefs({ atalhos: (kbPrefs().atalhos || []).filter((x) => x.id !== id) });
+  kbRenderAtalhos();
+}
+function kbRenderAtalhos() {
+  const el = document.getElementById('kb-atalhos');
+  if (!el) return;
+  el.innerHTML = (kbPrefs().atalhos || []).map((a) => `
+    <span class="kb-atalho${kbAtalhoAtivo(a) ? ' ativo' : ''}">
+      <button type="button" onclick="kbAplicarAtalho('${escapeParaOnclick(a.id)}')">${kbIc('alfinete')} ${escapeHtml(a.nome)}</button>
+      <button type="button" class="kb-atalho-x" aria-label="Remover atalho" title="Remover atalho" onclick="kbRemoverAtalho('${escapeParaOnclick(a.id)}')">${kbIc('x')}</button>
+    </span>`).join('');
+}
+
+// ---------- Destacar (Kanban em tela cheia) ----------
+function kbAlternarDestaque(forcarSair) {
+  const ligar = forcarSair ? false : !document.body.classList.contains('kb-destacado');
+  document.body.classList.toggle('kb-destacado', ligar);
+  const b = document.getElementById('kb-btn-destacar');
+  if (b) b.innerHTML = ligar ? `${kbIc('x')} Sair do destaque` : `${kbIc('destacar')} Destacar`;
+  try {
+    if (ligar && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+    if (!ligar && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+  } catch (e) {}
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.body.classList.contains('kb-destacado') && !document.querySelector('.modal-overlay.open')) kbAlternarDestaque(true);
+});
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && document.body.classList.contains('kb-destacado')) kbAlternarDestaque(true);
+});
+
+// ---------- Tutorial guiado (motor genérico) ----------
+// Cada tela tem uma lista de passos: { alvo: seletor, titulo, texto,
+// preparar?: função }. Passos cujo alvo não está visível são pulados
+// sozinhos (ex.: "Importar do ERP" só aparece no plano ERP + CRM).
+const KB_TUTORIAL = [
+  { alvo: '.kb-grupo-modos', titulo: 'Modos de exibição', texto: 'Veja as mesmas tarefas como Quadro, Lista, Tabela, Calendário ou por Projetos. Em "Exibir" você escolhe o que aparece nos cartões.' },
+  { alvo: '.kb-btn-criar', titulo: 'Criar', texto: 'Abre 4 opções: Novo Projeto (fluxo guiado com cliente, equipe, serviços, tarefas e conteúdos), Nova Tarefa (completa), Tarefa Rápida (só título e prazo) e Importar do Trello.' },
+  { alvo: '#kb-btn-agrupar', titulo: 'Agrupar', texto: 'Por Status, as colunas são as etapas. Por Data, as tarefas se separam em Atrasadas, Hoje, Amanhã e Esta Semana.' },
+  { alvo: '#kb-conteudo', titulo: 'Arraste os cartões', texto: 'Arraste um cartão pra mudar de etapa (no celular, segure um instante antes de arrastar). Marque o checklist e use o ▶ pra contar o tempo, direto no cartão.' },
+  { alvo: '.kb-filtros', titulo: 'Filtros', texto: 'Filtre por cliente, por projeto, busque por texto e use "Filtros" pra prioridade, prazo e etiqueta.' },
+  { alvo: '#kb-f-responsaveis', titulo: 'Equipe', texto: 'Clique na bolinha de alguém pra ver só as tarefas dessa pessoa. Em Exibir → Carga, você vê quanto cada um tem pra fazer.' },
+  { alvo: '#kb-btn-fixar', titulo: 'Fixar atalho', texto: 'Gostou de uma combinação de filtros? Fixe como atalho e volte nela com um clique.' },
+  { alvo: '#kb-btn-automacoes', titulo: 'Automações', texto: 'Deixe o quadro trabalhar sozinho: "quando concluir, arquivar", "quando ir pra Revisão, prioridade Alta"...' },
+  { alvo: '#chatbot-launcher', titulo: 'Ficou com dúvida?', texto: 'O robozinho no canto responde as perguntas mais comuns sobre o Kanban a qualquer hora.' },
+];
+
+let TOUR_PASSOS = null;
+let KB_TUTORIAL_PASSO = -1; // índice do passo atual (-1 = fechado)
+
+function tourVisivel(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    if (n.hidden || (n.style && n.style.display === 'none')) return false;
+  }
+  return !!el && el.isConnected;
+}
+function iniciarTour(passos) {
+  if (!Array.isArray(passos) || !passos.length) return;
+  TOUR_PASSOS = passos;
+  KB_TUTORIAL_PASSO = 0;
+  kbRenderTutorial();
+}
+function kbIniciarTutorial() { iniciarTour(KB_TUTORIAL); }
+function kbFecharTutorial() {
+  KB_TUTORIAL_PASSO = -1;
+  TOUR_PASSOS = null;
+  const el = document.getElementById('kb-tutorial');
+  if (el) el.remove();
+}
+function kbPassoTutorial(d) {
+  if (!TOUR_PASSOS) return;
+  // voltando, pula pra trás os passos sem alvo visível
+  let i = KB_TUTORIAL_PASSO + d;
+  if (d < 0) while (i > 0 && !kbAlvoDoPasso(TOUR_PASSOS[i])) i--;
+  KB_TUTORIAL_PASSO = Math.max(0, i);
+  if (KB_TUTORIAL_PASSO >= TOUR_PASSOS.length) { kbFecharTutorial(); return; }
+  kbRenderTutorial();
+}
+function kbAlvoDoPasso(passo) {
+  if (!passo) return null;
+  const el = document.querySelector(passo.alvo);
+  return el && tourVisivel(el) ? el : null;
+}
+function kbRenderTutorial() {
+  if (!TOUR_PASSOS) return;
+  const total = TOUR_PASSOS.length;
+  while (KB_TUTORIAL_PASSO < total) {
+    const pp = TOUR_PASSOS[KB_TUTORIAL_PASSO];
+    if (pp.preparar) { try { pp.preparar(); } catch (e) {} }
+    if (kbAlvoDoPasso(pp)) break;
+    KB_TUTORIAL_PASSO++;
+  }
+  if (KB_TUTORIAL_PASSO >= total) { kbFecharTutorial(); return; }
+  const passo = TOUR_PASSOS[KB_TUTORIAL_PASSO];
+  const alvo = kbAlvoDoPasso(passo);
+  if (alvo.scrollIntoView) alvo.scrollIntoView({ block: 'center', behavior: 'auto' });
+  const r = alvo.getBoundingClientRect();
+  let el = document.getElementById('kb-tutorial');
+  if (!el) { el = document.createElement('div'); el.id = 'kb-tutorial'; document.body.appendChild(el); }
+  const pad = 6;
+  const alto = Math.min(r.height + pad * 2, window.innerHeight * 0.7);
+  const caixaAbaixo = r.top + alto + 200 < window.innerHeight;
+  const top = caixaAbaixo ? r.top + alto - pad + 12 : Math.max(12, r.top - pad - 200);
+  const left = Math.max(12, Math.min(r.left, window.innerWidth - 352));
+  const ultimo = !TOUR_PASSOS.slice(KB_TUTORIAL_PASSO + 1).some((x) => document.querySelector(x.alvo));
+  el.innerHTML = `
+    <div class="kb-tut-foco" style="top:${r.top - pad}px; left:${r.left - pad}px; width:${r.width + pad * 2}px; height:${alto}px;"></div>
+    <div class="kb-tut-caixa" role="dialog" aria-live="polite" style="top:${top}px; left:${left}px;">
+      <span class="kb-tut-passo">${KB_TUTORIAL_PASSO + 1} de ${total}</span>
+      <strong>${escapeHtml(passo.titulo)}</strong>
+      <p>${escapeHtml(passo.texto)}</p>
+      <div class="kb-tut-acoes">
+        <button type="button" class="kb-link" onclick="kbFecharTutorial()">Pular</button>
+        <span class="kb-espaco"></span>
+        ${KB_TUTORIAL_PASSO > 0 ? '<button type="button" class="btn btn-small" onclick="kbPassoTutorial(-1)">Voltar</button>' : ''}
+        <button type="button" class="btn btn-small btn-primary" onclick="kbPassoTutorial(1)">${ultimo ? 'Concluir' : 'Próximo'}</button>
+      </div>
+    </div>`;
+}
+window.addEventListener('resize', () => { if (KB_TUTORIAL_PASSO >= 0) kbRenderTutorial(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && KB_TUTORIAL_PASSO >= 0) kbFecharTutorial(); });
+
+// ---------- Tutoriais do CRM → Comercial ----------
+const TOURS_CRM = {
+  clientes: [
+    { alvo: '#crm-secao-clientes h1', titulo: 'Clientes do CRM', texto: 'Aqui fica a base de clientes do CRM. Ela é separada do cadastro do ERP: o que você cadastra aqui não aparece lá.' },
+    { alvo: '#crm-secao-clientes .page-header .btn-primary', titulo: 'Cadastrar cliente', texto: 'Cadastre um cliente no modo Simples (só o essencial) ou Avançado (CPF/CNPJ, endereço, data de nascimento...). Dá pra já colocar ele como lead no Pipeline na hora.' },
+    { alvo: '#crm-btn-importar-clientes', titulo: 'Importar do ERP', texto: 'Como sua conta tem ERP + CRM, dá pra copiar os clientes do ERP pra cá com um clique. Quem já está no CRM não é duplicado.' },
+    { alvo: '#crm-tabela-clientes-body', titulo: 'Sua lista', texto: 'Contato, última reunião e NPS de cada cliente. Clique em "Editar" pra abrir a ficha completa.' },
+    { alvo: '#crm-filtro-clientes', titulo: 'Foco num cliente', texto: 'As bolinhas no topo deixam o CRM focado num cliente só — o Pipeline, por exemplo, passa a mostrar só os negócios dele. Clique de novo pra voltar a ver todos.' },
+  ],
+  pipeline: [
+    { alvo: '#crm-secao-pipeline .page-header h1', titulo: 'Pipeline de vendas', texto: 'Cada negócio passa pelas etapas: Lead → Contato feito → Proposta enviada → Negociação → Fechado (ou Perdido).' },
+    { alvo: '#funil-kanban .funil-coluna', titulo: 'Etapas e totais', texto: 'Cada coluna mostra quantos negócios estão naquela etapa e quanto eles valem somados.' },
+    { alvo: '#funil-kanban .funil-card', titulo: 'O cartão do negócio', texto: 'Arraste o cartão pra mudar de etapa (ou use as setas). Ele mostra quando o lead entrou e o contato. Se ficar 7 dias sem mexer, ganha o alerta "Parado há X dias".' },
+    { alvo: '#funil-kanban .funil-card-menu-btn', titulo: 'Mais ações', texto: 'No ⋮ ficam as ações do negócio: abrir os detalhes completos, duplicar e excluir.' },
+    { alvo: '#funil-kanban .funil-card-btn-ganha', titulo: 'Ganhou!', texto: 'Ao marcar como ganho (ou arrastar pra Fechado), a receita entra sozinha no Financeiro do mês.' },
+    { alvo: '#crm-filtro-clientes', titulo: 'Filtrar por cliente', texto: 'Use as bolinhas do topo pra ver só os negócios de um cliente.' },
+  ],
+  leads: [
+    { alvo: '#crm-secao-leads h1', titulo: 'Leads', texto: 'Todos os contatos da base num lugar só: quem entrou pelo Pipeline, quem virou cliente e quem já comprou.' },
+    { alvo: '#crm-secao-leads .stat-grid', titulo: 'Os números', texto: 'Quantos contatos você tem, quantos viraram clientes, quantos já compraram e quanto isso rendeu.' },
+    { alvo: '#crm-secao-leads table', titulo: 'A lista', texto: 'Cada linha mostra de onde o contato veio, quando entrou e em que ponto da jornada ele está.' },
+    { alvo: '#crm-secao-leads table .btn-ghost', titulo: 'Jornada do contato', texto: 'Abre a linha do tempo do contato: quando entrou, quando virou cliente, os orçamentos e as compras.' },
+  ],
+  orcamentos: [
+    { alvo: '#crm-secao-orcamentos .page-header .btn-primary', titulo: 'Novo orçamento', texto: 'O assistente monta o orçamento em 4 passos, com uma revisão no final. Ao concluir, ele gera um link pro cliente aprovar e assinar.', preparar: () => mostrarSubAbaOrcamento('lista', document.querySelector('#crm-secao-orcamentos .crm-subaba')) },
+    { alvo: '#crm-secao-orcamentos .crm-subabas', titulo: 'As abas', texto: 'Orçamentos (a lista), Contratos (gerados das propostas aprovadas), Página de Aprovação (o visual que o cliente vê) e PDF.' },
+    { alvo: '#crm-orcamentos-stats', titulo: 'Resumo', texto: 'Quantos orçamentos estão em rascunho, enviados e aprovados, e o valor total aprovado — atualiza na hora quando o cliente responde.' },
+    { alvo: '#crm-orcamentos-busca', titulo: 'Busca e filtro', texto: 'Encontre um orçamento pelo cliente ou título e filtre pelo status.' },
+    { alvo: '#crm-propostas-lista', titulo: 'Seus orçamentos', texto: 'No ⋮ de cada um: copiar ou compartilhar o link, enviar por e-mail, ver como o cliente vê, aprovar manualmente, duplicar e mais. Quando o cliente aprova, o contrato é gerado sozinho.' },
+    { alvo: '#crm-secao-orcamentos .page-header .btn:not(.btn-primary)', titulo: 'Modelos de contrato', texto: 'Edite o texto do contrato que é gerado quando uma proposta é aprovada.' },
+  ],
+  briefings: [
+    { alvo: '#crm-secao-briefings .page-header .btn-primary', titulo: 'Novo briefing', texto: 'Escolha um dos modelos prontos (ou um seu) e o cliente. O sistema gera um link pro cliente responder, sem precisar de login.' },
+    { alvo: '#crm-secao-briefings .page-header .btn:not(.btn-primary)', titulo: 'Meus templates', texto: 'Monte seus próprios modelos de briefing, com as perguntas do seu jeito.' },
+    { alvo: '#crm-briefings-stats', titulo: 'Resumo', texto: 'O total de briefings, quantos estão aguardando resposta, quantos já foram respondidos e quantos tipos você usa.' },
+    { alvo: '#crm-briefings-busca', titulo: 'Busca e filtros', texto: 'Encontre pelo cliente e filtre por status ou tipo de briefing.' },
+    { alvo: '#crm-briefings-lista-wrap', titulo: 'Seus briefings', texto: 'No ⋮ de cada um: copiar o link, abrir, ver as respostas ou excluir. A aparência da página do cliente fica em Configurações → Aparência → Briefings.' },
+  ],
+};
+// ---------- Tutorial do Painel do ERP (index.html) ----------
+TOURS_CRM['painel-erp'] = [
+  { alvo: '.page-header h1', titulo: 'Painel', texto: 'O resumo do mês da sua empresa. Aqui é só pra consultar — pra lançar ou editar valores, use o Financeiro.' },
+  { alvo: '#painel-mes', titulo: 'Mês de referência', texto: 'Troque o mês pra ver o resumo de qualquer período. Todos os números da tela acompanham.' },
+  { alvo: '#painel-resumo', titulo: 'Receita, despesas e resultado', texto: 'A receita soma os clientes ativos do mês; as despesas somam pagamentos, adiantamentos e saídas variáveis.' },
+  { alvo: '#fin-balao-lucro', titulo: 'Resultado do mês', texto: 'Receitas menos despesas. Fica verde quando o mês dá lucro e vermelho quando fecha no prejuízo.' },
+  { alvo: '#painel-despesas-detalhe', titulo: 'De onde saem as despesas', texto: 'As despesas separadas em pagamentos, adiantamentos e saídas variáveis — pra você ver o que mais pesa.' },
+  { alvo: '#fin-comp-grid', titulo: 'Comparativo', texto: 'Receita, despesas e lucro comparados com o mês anterior, e a categoria de despesa que mais pesou no mês.' },
+  { alvo: '#fin-pendentes-lista', titulo: 'Pendente', texto: 'As receitas do mês que ainda não foram pagas, com o total em aberto. Pra marcar como pago, vá no Financeiro.' },
+  { alvo: '#fin-calendario-grid', titulo: 'Calendário financeiro', texto: 'Os dias de acerto dos clientes e de pagamento das despesas. Clique num dia pra ver o detalhe ao lado.' },
+  { alvo: '#fin-dia-detalhe', titulo: 'Detalhe do dia', texto: 'Mostra o que entra e o que sai no dia que você clicou no calendário.' },
+  { alvo: '#chatbot-launcher', titulo: 'Ficou com dúvida?', texto: 'O robozinho no canto responde as perguntas mais comuns sobre o sistema a qualquer hora.' },
+];
+
+function iniciarTourCrm(secao) { iniciarTour(TOURS_CRM[secao]); }
+function htmlBotaoTour(secao) {
+  return `<button type="button" class="kb-btn kb-btn-tutorial" onclick="iniciarTourCrm('${secao}')">${kbIc('chapeu')} Tutorial</button>`;
+}
+
+
+// =====================================================================
+// ---------- Kanban · Criar (menu), Tarefa Rápida e Novo Projeto ----------
+// =====================================================================
+
+const KB_SERVICOS_KEY = 'eagles_servicos_v1';
+let KB_SERVICOS = [];
+let KB_SERVICOS_CARREGADO = false;
+let KB_RENOVANDO = new Set();
+
+// Tipos de conteúdo do plano (os da empresa, de Configurações →
+// Categorias de Conteúdo, entram junto).
+const KB_TIPOS_CONTEUDO = [
+  { id: 'feed', nome: 'Feed (post)', cor: '#8b5cf6', icone: 'imagem' },
+  { id: 'reels', nome: 'Reels', cor: '#ec4899', icone: 'reuniao' },
+  { id: 'stories', nome: 'Stories', cor: '#f59e0b', icone: 'relogio' },
+  { id: 'carrossel', nome: 'Carrossel', cor: '#06b6d4', icone: 'camadas' },
+  { id: 'artigo', nome: 'Artigo / Blog', cor: '#10b981', icone: 'documento' },
+  { id: 'branding', nome: 'Branding', cor: '#ef4444', icone: 'paleta' },
+  { id: 'apresentacao', nome: 'Apresentação', cor: '#6366f1', icone: 'grafico' },
+  { id: 'foto', nome: 'Foto', cor: '#0ea5e9', icone: 'imagem' },
+  { id: 'landing', nome: 'Landing page', cor: '#84cc16', icone: 'globo' },
+  { id: 'email', nome: 'E-mail marketing', cor: '#a855f7', icone: 'email' },
+];
+
+function kbIniciarDadosCriar() {
+  cloudWatch(KB_SERVICOS_KEY, [], (data) => { KB_SERVICOS = Array.isArray(data) ? data : []; KB_SERVICOS_CARREGADO = true; if (KB_WIZ && KB_WIZ.passo === 2) kbRenderWizard(); });
+  if (typeof CFG_CATEGORIAS_CONTEUDO_KEY !== 'undefined') cloudWatch(CFG_CATEGORIAS_CONTEUDO_KEY, [], (data) => { CFG_CATEGORIAS_DATA = Array.isArray(data) ? data : []; CFG_CATEGORIAS_CARREGADO = true; });
+}
+
+// ---------- menu do botão Criar ----------
+function kbAbrirMenuCriar(ancora) {
+  if (!ancora.id) ancora.id = 'kb-btn-criar';
+  const item = (icone, titulo, desc, acao) => `<button type="button" class="kb-criar-item" onclick="kbFecharPopovers(); ${acao}"><span class="kb-criar-ic">${ic(icone, 'ic-herda')}</span><span><strong>${titulo}</strong><small>${desc}</small></span></button>`;
+  kbMostrarPopover(`
+    ${item('maleta', 'Novo Projeto', 'Fluxo guiado: cliente, equipe, serviços, tarefas e conteúdos', 'kbAbrirWizardProjeto()')}
+    ${item('aprovado', 'Nova Tarefa', 'Tarefa completa com prazo, responsável, prioridade e vínculos', 'kbAbrirTarefa(null)')}
+    ${item('raio', 'Tarefa Rápida', 'Só título + prazo. Cai no Kanban como "A Fazer"', 'kbAbrirTarefaRapida()')}
+    <div class="kb-criar-sep"></div>
+    ${item('baixar', 'Importar tarefas', 'Traga seus cards do Trello, com checklists e prazos', "kbAbrirImportar('trello')")}`, ancora, 'kb-popover-criar');
+  const pop = document.querySelector('.kb-popover-criar');
+  if (pop) { const r = ancora.getBoundingClientRect(); pop.style.left = Math.max(8, r.right - pop.offsetWidth) + 'px'; }
+}
+
+// ---------- Tarefa Rápida ----------
+function kbAbrirTarefaRapida() {
+  if (!kbPronto() || !exigirPodeOperar('criar tarefas')) return;
+  const ov = kbGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal kb-modal-estreito" style="max-width:460px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${ic('raio')} Tarefa rápida</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="fecharModalKb()">✕</button></div>
+      <div class="field full"><label>O que precisa ser feito?</label><input type="text" id="kb-r-titulo" maxlength="140" placeholder="Ex: Enviar proposta pro cliente" onkeydown="if(event.key==='Enter') kbSalvarTarefaRapida();"></div>
+      <div class="field full"><label>Prazo (opcional)</label><input type="date" id="kb-r-prazo"></div>
+      <p class="kb-vazio-mini">Entra em "A Fazer"${KB_FILTROS.projeto && kbProjeto(KB_FILTROS.projeto) ? ` no projeto "${escapeHtml(kbProjeto(KB_FILTROS.projeto).nome)}"` : ''}. Os outros detalhes você completa depois, se precisar.</p>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="fecharModalKb()">Cancelar</button><button type="button" class="btn btn-primary" onclick="kbSalvarTarefaRapida()">Criar</button></div>
+    </div>`;
+  openModal('modal-kb-tarefa');
+  setTimeout(() => { const i = document.getElementById('kb-r-titulo'); if (i) i.focus(); }, 30);
+}
+function kbSalvarTarefaRapida() {
+  const titulo = (document.getElementById('kb-r-titulo').value || '').trim();
+  if (!titulo) { avisar('Escreva o que precisa ser feito.'); return; }
+  const cols = kbColunas();
+  const status = (cols.find((c) => !c.final && kbNomeNorm(c.nome) === 'a fazer') || cols.find((c) => !c.final) || cols[0]).id;
+  const pj = KB_FILTROS.projeto ? kbProjeto(KB_FILTROS.projeto) : null;
+  if (!kbCriarTarefa({ titulo: titulo.slice(0, 140), prazo: document.getElementById('kb-r-prazo').value || '', status, projetoId: pj ? pj.id : '', cliente: pj ? (pj.cliente || '') : (KB_FILTROS.cliente || '') })) return;
+  fecharModalKb();
+}
+
+// ---------- Etapa do projeto: coluna do quadro ou fora dele ----------
+function kbEtapaDoProjeto(pj) { return pj.situacao === 'pausado' || pj.situacao === 'cancelado' ? 'sit:' + pj.situacao : 'col:' + (pj.status || ''); }
+function kbOpcoesEtapaProjetoHtml(valor) {
+  return `<optgroup label="Colunas do quadro">${kbColunasGlobais().map((c) => `<option value="col:${escapeHtml(c.id)}"${valor === 'col:' + c.id ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</optgroup>
+    <optgroup label="Fora do quadro"><option value="sit:pausado"${valor === 'sit:pausado' ? ' selected' : ''}>Pausado</option><option value="sit:cancelado"${valor === 'sit:cancelado' ? ' selected' : ''}>Cancelado</option></optgroup>`;
+}
+function kbCamposDaEtapa(valor, statusAtual) {
+  if (valor === 'sit:pausado' || valor === 'sit:cancelado') return { situacao: valor.slice(4), status: statusAtual || (kbColunasGlobais()[1] || kbColunasGlobais()[0]).id };
+  const col = String(valor || '').replace(/^col:/, '');
+  return { situacao: 'ativo', status: kbColunasGlobais().some((c) => c.id === col) ? col : (kbColunasGlobais()[1] || kbColunasGlobais()[0]).id };
+}
+
+// ---------- Assistente de Novo Projeto (6 etapas) ----------
+const KB_WIZ_PASSOS = [
+  { titulo: 'Informações', icone: 'maleta' },
+  { titulo: 'Modelos', icone: 'documento' },
+  { titulo: 'Serviços', icone: 'aprovado' },
+  { titulo: 'Equipe', icone: 'pessoas' },
+  { titulo: 'Kanban', icone: 'kanban' },
+  { titulo: 'Conteúdos', icone: 'brilho' },
+];
+let KB_WIZ = null;
+
+function kbNovoBlocoConteudo() {
+  return { id: genId('blc'), ativo: true, fluxo: 'padrao', qtd: {}, periodo: 1, datas: 'uniforme', dias: [1, 3, 5], responsavel: kbMeuUid(), modoResp: 'bloco', respPorTipo: {}, tiposExtras: [] };
+}
+
+function kbAbrirWizardProjeto() {
+  if (!KB_PROJETOS_CARREGADO || !kbPronto()) { avisar('Os projetos ainda estão carregando — aguarde um instante.'); return; }
+  if (!exigirPodeOperar('criar projetos')) return;
+  KB_WIZ = {
+    passo: 0, maxPasso: 0,
+    d: { nome: '', descricao: '', cliente: KB_FILTROS.cliente || '', etapa: 'col:' + ((kbColunasGlobais().find((c) => kbNomeNorm(c.nome) === 'a fazer') || kbColunasGlobais()[0]).id), valor: '', dataInicio: kbHoje(), prazo: '', recorrente: false },
+    modelos: new Set(), servicos: new Set(), membros: new Set([kbMeuUid()]),
+    colunasModo: 'padrao', colunas: kbLimpar(kbColunasGlobais()),
+    conteudo: { ativo: false, blocos: [] },
+    valorAuto: true, novoServico: null, novoTipoBloco: null,
+  };
+  const ov = kbGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal kb-wiz" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Novo Projeto</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="kbFecharWizard()">✕</button></div>
+      <div class="kb-wiz-passos" id="kb-wiz-passos"></div>
+      <div class="kb-wiz-corpo" id="kb-wiz-corpo"></div>
+      <div class="cfg-modal-rodape kb-modal-rodape" id="kb-wiz-rodape"></div>
+    </div>`;
+  openModal('modal-kb-tarefa');
+  kbRenderWizard();
+}
+function kbFecharWizard() { KB_WIZ = null; fecharModalKb(); }
+
+function kbIrPassoWizard(n) {
+  if (!KB_WIZ) return;
+  if (n > KB_WIZ.passo && !kbValidarPassoWizard()) return;
+  KB_WIZ.passo = Math.max(0, Math.min(KB_WIZ_PASSOS.length - 1, n));
+  KB_WIZ.maxPasso = Math.max(KB_WIZ.maxPasso, KB_WIZ.passo);
+  kbRenderWizard();
+}
+function kbValidarPassoWizard() {
+  const w = KB_WIZ;
+  if (w.passo === 0 && !w.d.nome.trim()) { avisar('Dê um nome pro projeto.'); return false; }
+  if (w.passo === 0 && w.d.prazo && w.d.dataInicio && w.d.prazo < w.d.dataInicio) { avisar('O prazo de entrega está antes da data de início.'); return false; }
+  if (w.passo === 3 && !w.membros.size) { avisar('Escolha pelo menos uma pessoa da equipe.'); return false; }
+  if (w.passo === 4 && w.colunasModo === 'personalizar') {
+    const nomes = w.colunas.map((c) => String(c.nome || '').trim());
+    if (!w.colunas.length || nomes.some((n) => !n)) { avisar('Dê um nome pra cada coluna do projeto.'); return false; }
+  }
+  return true;
+}
+
+function kbRenderWizard() {
+  const w = KB_WIZ;
+  if (!w) return;
+  const passosEl = document.getElementById('kb-wiz-passos');
+  if (!passosEl) return;
+  passosEl.innerHTML = KB_WIZ_PASSOS.map((p, i) => `
+    ${i ? `<span class="kb-wiz-linha${i <= w.maxPasso ? ' feita' : ''}"></span>` : ''}
+    <button type="button" class="kb-wiz-passo${i === w.passo ? ' ativo' : (i <= w.maxPasso ? ' feito' : '')}" ${i <= w.maxPasso ? `onclick="kbIrPassoWizard(${i})"` : 'disabled'}>${ic(p.icone, 'ic-herda')} ${p.titulo}</button>`).join('');
+  const corpo = [kbWizInformacoes, kbWizModelos, kbWizServicos, kbWizEquipe, kbWizKanban, kbWizConteudos][w.passo]();
+  document.getElementById('kb-wiz-corpo').innerHTML = corpo;
+  const ultimo = w.passo === KB_WIZ_PASSOS.length - 1;
+  document.getElementById('kb-wiz-rodape').innerHTML = `
+    ${w.passo ? `<button type="button" class="btn btn-ghost" onclick="kbIrPassoWizard(${w.passo - 1})">← Voltar</button>` : ''}
+    <span class="kb-espaco"></span>
+    <button type="button" class="btn" onclick="kbFecharWizard()">Cancelar</button>
+    <button type="button" class="btn btn-primary" onclick="${ultimo ? 'kbCriarProjetoWizard()' : `kbIrPassoWizard(${w.passo + 1})`}">${ultimo ? 'Criar Projeto' : 'Próximo →'}</button>`;
+}
+
+// 1) Informações
+function kbWizInformacoes() {
+  const d = KB_WIZ.d;
+  const clientes = Array.from(new Set(typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : [])).sort((a, b) => a.localeCompare(b));
+  return `
+    <div class="field full"><label>Nome do projeto *</label><input type="text" maxlength="100" value="${escapeHtml(d.nome)}" placeholder="Ex: Redesign do site" oninput="KB_WIZ.d.nome = this.value"></div>
+    <div class="field full"><label>Descrição</label><textarea rows="3" maxlength="2000" placeholder="Descreva o escopo do projeto..." oninput="KB_WIZ.d.descricao = this.value">${escapeHtml(d.descricao)}</textarea></div>
+    <div class="field full"><label>Cliente</label><input type="text" list="kb-wiz-clientes" maxlength="100" value="${escapeHtml(d.cliente)}" placeholder="Buscar cliente..." oninput="KB_WIZ.d.cliente = this.value"><datalist id="kb-wiz-clientes">${clientes.map((c) => `<option value="${escapeHtml(c)}">`).join('')}</datalist></div>
+    <div class="kb-campos-2">
+      <div class="field"><label>Etapa</label><select onchange="KB_WIZ.d.etapa = this.value">${kbOpcoesEtapaProjetoHtml(d.etapa)}</select></div>
+      <div class="field"><label>Valor</label><input type="number" min="0" step="0.01" value="${escapeHtml(d.valor)}" placeholder="0,00" oninput="KB_WIZ.d.valor = this.value; KB_WIZ.valorAuto = this.value === '';"></div>
+      <div class="field"><label>Data de início</label><input type="date" value="${escapeHtml(d.dataInicio)}" onchange="KB_WIZ.d.dataInicio = this.value"></div>
+      <div class="field"><label>Prazo de entrega</label><input type="date" value="${escapeHtml(d.prazo)}" onchange="KB_WIZ.d.prazo = this.value"></div>
+    </div>
+    <div class="kb-wiz-caixa kb-linha-switch">
+      <div><strong>Projeto recorrente</strong><span>Todo mês o projeto se renova: as tarefas dos modelos escolhidos são criadas de novo (e, quando o módulo Conteúdos chegar, os conteúdos do plano).</span></div>
+      <label class="switch"><input type="checkbox" ${d.recorrente ? 'checked' : ''} onchange="KB_WIZ.d.recorrente = this.checked"><span class="switch-slider"></span></label>
+    </div>`;
+}
+
+// 2) Modelos (cada item do modelo vira uma tarefa do projeto)
+function kbWizModelos() {
+  const lista = kbModelos();
+  return `
+    <div class="kb-wiz-tit">Modelos de tarefas</div>
+    <p class="cfg-secao-nota">Selecione modelos para criar tarefas automaticamente no projeto — cada item do modelo vira uma tarefa.</p>
+    <div class="kb-wiz-lista">${lista.map((m) => {
+      const sel = KB_WIZ.modelos.has(m.id);
+      return `<button type="button" class="kb-wiz-opcao${sel ? ' ativo' : ''}" onclick="KB_WIZ.modelos.${sel ? 'delete' : 'add'}('${escapeParaOnclick(m.id)}'); kbRenderWizard();">
+        <span class="kb-wiz-radio">${sel ? ic('aprovado', 'ic-herda') : ''}</span>
+        <span class="kb-wiz-opcao-ic">${ic(m.icone || 'documento')}</span>
+        <span class="kb-wiz-opcao-txt"><strong>${escapeHtml(m.titulo)}</strong><small>${escapeHtml(m.descricao || '')}</small></span>
+        <span class="kb-wiz-pilula">${(m.checklist || []).length} tarefa(s)</span>
+      </button>`;
+    }).join('') || '<p class="kb-vazio-mini">Nenhum modelo. Crie em Modelos (ou salve uma tarefa como modelo).</p>'}</div>
+    ${KB_WIZ.modelos.size ? `<p class="kb-wiz-resumo">Serão criadas <strong>${lista.filter((m) => KB_WIZ.modelos.has(m.id)).reduce((a, m) => a + (m.checklist || []).length, 0)} tarefa(s)</strong> no projeto.</p>` : ''}`;
+}
+
+// 3) Serviços
+function kbWizServicos() {
+  const w = KB_WIZ;
+  const busca = kbNomeNorm(w.buscaServico || '');
+  const lista = KB_SERVICOS.filter((x) => x.ativo !== false && (!busca || kbNomeNorm(x.nome + ' ' + (x.categoria || '')).includes(busca)));
+  const soma = KB_SERVICOS.filter((x) => w.servicos.has(x.id)).reduce((a, x) => a + Number(x.valor || 0), 0);
+  return `
+    <div class="kb-wiz-tit">Vincular serviços ao projeto</div>
+    <div class="kb-wiz-busca">
+      <input type="search" placeholder="Buscar serviço..." value="${escapeHtml(w.buscaServico || '')}" oninput="KB_WIZ.buscaServico = this.value; kbRenderWizard(); const i = document.querySelector('.kb-wiz-busca input'); i.focus(); i.setSelectionRange(i.value.length, i.value.length);">
+      <button type="button" class="btn" title="Novo serviço" aria-label="Novo serviço" onclick="KB_WIZ.novoServico = { nome: '', categoria: '', valor: '' }; kbRenderWizard();">${ic('mais', 'ic-herda')}</button>
+    </div>
+    ${w.novoServico ? `<div class="kb-wiz-caixa kb-wiz-novo">
+      <div class="kb-campos-3">
+        <div class="field"><label>Nome do serviço</label><input type="text" id="kb-ws-nome" maxlength="80" placeholder="Ex: Landing Page"></div>
+        <div class="field"><label>Categoria</label><input type="text" id="kb-ws-cat" maxlength="40" placeholder="Ex: Web"></div>
+        <div class="field"><label>Valor (R$)</label><input type="number" id="kb-ws-valor" min="0" step="0.01" placeholder="0,00"></div>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;"><button type="button" class="btn btn-small" onclick="KB_WIZ.novoServico = null; kbRenderWizard();">Cancelar</button><button type="button" class="btn btn-small btn-primary" onclick="kbSalvarServicoWizard()">Salvar serviço</button></div>
+    </div>` : ''}
+    <div class="kb-wiz-lista">${lista.map((x) => {
+      const sel = w.servicos.has(x.id);
+      return `<button type="button" class="kb-wiz-opcao${sel ? ' ativo' : ''}" onclick="kbAlternarServicoWizard('${escapeParaOnclick(x.id)}')">
+        <span class="kb-wiz-radio">${sel ? ic('aprovado', 'ic-herda') : ''}</span>
+        <span class="kb-wiz-opcao-txt"><strong>${escapeHtml(x.nome)}</strong><small>${escapeHtml(x.categoria || 'Geral')}${x.geraConteudos ? ' · gera conteúdos' : ''}</small></span>
+        <span class="kb-wiz-preco">${formatMoney(Number(x.valor || 0))}</span>
+      </button>`;
+    }).join('') || `<p class="kb-vazio-mini">${KB_SERVICOS.length ? 'Nenhum serviço com essa busca.' : 'Nenhum serviço cadastrado ainda — clique no + pra criar o primeiro. Eles ficam salvos pra usar nos próximos projetos.'}</p>`}</div>
+    ${w.servicos.size ? `<p class="kb-wiz-resumo">${w.servicos.size} serviço(s) · total <strong>${formatMoney(soma)}</strong>${w.valorAuto ? ' — vai como valor do projeto' : ''}</p>` : ''}`;
+}
+function kbAlternarServicoWizard(id) {
+  const w = KB_WIZ;
+  if (w.servicos.has(id)) w.servicos.delete(id); else w.servicos.add(id);
+  srvSincronizarConteudosDoServico(id, w.servicos.has(id));
+  if (w.valorAuto) {
+    const soma = KB_SERVICOS.filter((x) => w.servicos.has(x.id)).reduce((a, x) => a + Number(x.valor || 0), 0);
+    w.d.valor = soma ? String(Math.round(soma * 100) / 100) : '';
+  }
+  kbRenderWizard();
+}
+function kbSalvarServicoWizard() {
+  const nome = (document.getElementById('kb-ws-nome').value || '').trim();
+  if (!nome) { avisar('Dê um nome pro serviço.'); return; }
+  if (KB_SERVICOS.some((x) => kbNomeNorm(x.nome) === kbNomeNorm(nome))) { avisar('Já existe um serviço com esse nome.'); return; }
+  const novo = { id: genId('srv'), nome: nome.slice(0, 80), categoria: (document.getElementById('kb-ws-cat').value || '').trim().slice(0, 40) || 'Geral', valor: Math.max(0, Number(document.getElementById('kb-ws-valor').value || 0)), moeda: 'BRL', ativo: true, exibirPublico: true, exibirFormulario: true, criadoEm: new Date().toISOString() };
+  const lista = KB_SERVICOS.concat([novo]);
+  if (cloudSet(KB_SERVICOS_KEY, lista) === false) return;
+  KB_SERVICOS = lista;
+  KB_WIZ.novoServico = null;
+  kbAlternarServicoWizard(novo.id);
+}
+
+// 4) Equipe
+function kbWizEquipe() {
+  const w = KB_WIZ;
+  return `
+    <div class="kb-wiz-tit">Selecionar membros da equipe</div>
+    <div class="kb-wiz-lista">${KB_USUARIOS.map((u) => {
+      const sel = w.membros.has(u.uid);
+      return `<button type="button" class="kb-wiz-opcao${sel ? ' ativo' : ''}" onclick="KB_WIZ.membros.${sel ? 'delete' : 'add'}('${escapeParaOnclick(u.uid)}'); kbRenderWizard();">
+        <span class="kb-wiz-radio">${sel ? ic('aprovado', 'ic-herda') : ''}</span>
+        ${kbAvatar(u.uid)}
+        <span class="kb-wiz-opcao-txt"><strong>${escapeHtml(u.nome)}</strong><small>${u.titular ? 'Proprietário' : escapeHtml(traduzirRole(u.role || ''))}</small></span>
+      </button>`;
+    }).join('')}</div>
+    <span class="kb-wiz-pilula">${w.membros.size} membro(s) selecionado(s)</span>`;
+}
+
+// 5) Kanban (colunas do projeto)
+function kbWizKanban() {
+  const w = KB_WIZ;
+  const op = (v, t, d) => `<button type="button" class="kb-wiz-opcao${w.colunasModo === v ? ' ativo' : ''}" onclick="KB_WIZ.colunasModo = '${v}'; kbRenderWizard();"><span class="kb-wiz-radio redondo">${w.colunasModo === v ? '<i></i>' : ''}</span><span class="kb-wiz-opcao-txt"><strong>${t}</strong><small>${d}</small></span></button>`;
+  return `
+    <div class="kb-wiz-tit">Colunas do Kanban deste projeto</div>
+    <p class="cfg-secao-nota">As colunas do projeto são independentes dos quadros externos (globais).</p>
+    <div class="kb-wiz-lista">
+      ${op('padrao', 'Usar colunas padrão', 'Herda as colunas globais (mesmas dos quadros externos).')}
+      ${op('personalizar', 'Personalizar colunas deste projeto', 'Defina colunas que existirão apenas neste projeto.')}
+    </div>
+    ${w.colunasModo === 'personalizar' ? `<div class="kb-wiz-caixa">
+      ${w.colunas.map((c, i) => `<div class="kb-col-edit">
+        <input type="color" value="${expandirHex(c.cor) || '#94a3b8'}" aria-label="Cor" oninput="KB_WIZ.colunas[${i}].cor = this.value">
+        <input type="text" value="${escapeHtml(c.nome)}" maxlength="30" aria-label="Nome" oninput="KB_WIZ.colunas[${i}].nome = this.value">
+        <label class="kb-col-final"><input type="radio" name="kb-wiz-final" ${c.final ? 'checked' : ''} onchange="KB_WIZ.colunas.forEach((x, j) => { x.final = j === ${i}; })"> concluídas</label>
+        <button type="button" class="kb-btn-ic" aria-label="Subir" onclick="kbWizMoverColuna(${i}, -1)" ${i === 0 ? 'disabled' : ''}>${kbIc('setaCima')}</button>
+        <button type="button" class="kb-btn-ic" aria-label="Descer" onclick="kbWizMoverColuna(${i}, 1)" ${i === w.colunas.length - 1 ? 'disabled' : ''}>${kbIc('setaBaixo')}</button>
+        <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir coluna" onclick="KB_WIZ.colunas.splice(${i}, 1); kbRenderWizard();" ${w.colunas.length <= 1 ? 'disabled' : ''}>${kbIc('lixeira')}</button>
+      </div>`).join('')}
+      <button type="button" class="btn btn-small" onclick="KB_WIZ.colunas.push({ id: genId('col'), nome: 'Nova coluna', cor: '#94a3b8' }); kbRenderWizard();">${kbIc('mais')} Nova coluna</button>
+    </div>` : ''}`;
+}
+function kbWizMoverColuna(i, passo) {
+  const l = KB_WIZ.colunas, j = i + passo;
+  if (j < 0 || j >= l.length) return;
+  [l[i], l[j]] = [l[j], l[i]];
+  kbRenderWizard();
+}
+
+// 6) Conteúdos (plano salvo no projeto; os conteúdos em rascunho são
+// gerados quando o módulo Conteúdos entrar no ar)
+function kbTiposDoBloco(b) {
+  const empresa = (typeof CFG_CATEGORIAS_DATA !== 'undefined' && Array.isArray(CFG_CATEGORIAS_DATA) ? CFG_CATEGORIAS_DATA : []).map((c) => ({ id: 'cat:' + c.id, nome: c.nome, cor: corHexValida(c.cor) || '#94a3b8', icone: 'tag' }));
+  return KB_TIPOS_CONTEUDO.concat(empresa, (b.tiposExtras || []).map((t) => ({ ...t, icone: 'tag' })));
+}
+function kbTotalConteudos(blocos) {
+  return (blocos || []).filter((b) => b.ativo).reduce((a, b) => a + Object.values(b.qtd || {}).reduce((x, n) => x + Math.max(0, Number(n) || 0), 0) * (Number(b.periodo) || 1), 0);
+}
+function kbWizConteudos() {
+  const c = KB_WIZ.conteudo;
+  const membros = KB_USUARIOS.filter((u) => KB_WIZ.membros.has(u.uid));
+  const optsMembros = (sel) => membros.map((u) => `<option value="${escapeHtml(u.uid)}"${u.uid === sel ? ' selected' : ''}>${escapeHtml(u.nome)}</option>`).join('');
+  const blocos = c.blocos.map((b, bi) => {
+    const tipos = kbTiposDoBloco(b);
+    const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return `<div class="kb-wiz-caixa kb-bloco${b.ativo ? '' : ' inativo'}">
+      <div class="kb-bloco-cab"><strong>${escapeHtml(b.titulo || 'Bloco avulso')}</strong><span class="kb-espaco"></span>
+        <button type="button" class="btn btn-small" onclick="KB_WIZ.conteudo.blocos.splice(${bi}, 1); kbRenderWizard();">Remover</button>
+        <label class="switch" title="Ligar/desligar este bloco"><input type="checkbox" ${b.ativo ? 'checked' : ''} onchange="KB_WIZ.conteudo.blocos[${bi}].ativo = this.checked; kbRenderWizard();"><span class="switch-slider"></span></label>
+      </div>
+      <div class="field full"><label>Fluxo</label><select disabled><option>Fluxo de Produção (padrão)</option></select></div>
+      <div class="kb-bloco-tipos-cab"><label>Quantidade por tipo (por mês)</label><span class="kb-espaco"></span><button type="button" class="kb-link" onclick="KB_WIZ.novoTipoBloco = ${bi}; kbRenderWizard(); setTimeout(() => { const i = document.getElementById('kb-wc-novo-tipo'); if (i) i.focus(); }, 20);">${kbIc('colunas')} Novo tipo</button></div>
+      ${KB_WIZ.novoTipoBloco === bi ? `<div class="kb-m-check-add" style="margin-bottom:8px;"><input type="text" id="kb-wc-novo-tipo" maxlength="40" placeholder="Ex: Podcast" onkeydown="if(event.key==='Enter') kbAddTipoConteudo(${bi}, this.value);"><button type="button" class="btn btn-small" onclick="kbAddTipoConteudo(${bi}, document.getElementById('kb-wc-novo-tipo').value)">Adicionar</button></div>` : ''}
+      <div class="kb-bloco-tipos">${tipos.map((t) => {
+        const n = Number((b.qtd || {})[t.id]) || 0;
+        const tid = escapeParaOnclick(t.id);
+        return `<div class="kb-bloco-tipo">
+          <span class="kb-tipo-ic" style="--kb-cor:${t.cor};">${ic(t.icone, 'ic-herda')}</span><span class="kb-tipo-nome">${escapeHtml(t.nome)}</span>
+          ${b.modoResp === 'conteudo' && n ? `<select class="nivel-select" aria-label="Responsável" onchange="KB_WIZ.conteudo.blocos[${bi}].respPorTipo['${tid}'] = this.value">${optsMembros((b.respPorTipo || {})[t.id] || b.responsavel)}</select>` : ''}
+          <span class="kb-contador-qtd">
+            <button type="button" aria-label="Menos" onclick="kbQtdConteudo(${bi}, '${tid}', -1)">−</button>
+            <input type="number" min="0" max="99" value="${n}" aria-label="Quantidade" onchange="kbQtdConteudo(${bi}, '${tid}', 0, this.value)">
+            <button type="button" aria-label="Mais" onclick="kbQtdConteudo(${bi}, '${tid}', 1)">+</button>
+          </span>
+        </div>`;
+      }).join('')}</div>
+      <div class="kb-campos-2" style="margin-top:12px;">
+        <div class="field"><label>Período</label><select onchange="KB_WIZ.conteudo.blocos[${bi}].periodo = Number(this.value); kbRenderWizard();">${[1, 3, 6, 12].map((m) => `<option value="${m}"${Number(b.periodo) === m ? ' selected' : ''}>${m} ${m > 1 ? 'meses' : 'mês'}</option>`).join('')}</select></div>
+        <div class="field"><label>Datas</label><select onchange="KB_WIZ.conteudo.blocos[${bi}].datas = this.value; kbRenderWizard();">
+          <option value="uniforme"${b.datas === 'uniforme' ? ' selected' : ''}>Espalhar uniformemente</option>
+          <option value="semana"${b.datas === 'semana' ? ' selected' : ''}>Dias específicos da semana</option>
+          <option value="rascunho"${b.datas === 'rascunho' ? ' selected' : ''}>Sem data (rascunho)</option>
+        </select></div>
+      </div>
+      ${b.datas === 'semana' ? `<div class="kb-dias">${dias.map((nome, di) => `<label class="kb-dia${(b.dias || []).includes(di) ? ' ativo' : ''}"><input type="checkbox" ${(b.dias || []).includes(di) ? 'checked' : ''} onchange="kbAlternarDiaBloco(${bi}, ${di}, this.checked)">${nome}</label>`).join('')}</div>` : ''}
+      <div class="kb-bloco-tipos-cab" style="margin-top:4px;"><label>Responsável pelos conteúdos</label><span class="kb-espaco"></span>
+        <div class="kb-segmento kb-segmento-p"><button type="button" class="${b.modoResp !== 'conteudo' ? 'ativo' : ''}" onclick="KB_WIZ.conteudo.blocos[${bi}].modoResp = 'bloco'; kbRenderWizard();">Por bloco</button><button type="button" class="${b.modoResp === 'conteudo' ? 'ativo' : ''}" onclick="KB_WIZ.conteudo.blocos[${bi}].modoResp = 'conteudo'; kbRenderWizard();">Por conteúdo</button></div>
+      </div>
+      <select ${b.modoResp === 'conteudo' ? 'disabled title="Escolha o responsável em cada tipo, acima"' : ''} onchange="KB_WIZ.conteudo.blocos[${bi}].responsavel = this.value; kbRenderWizard();">${optsMembros(b.responsavel)}</select>
+    </div>`;
+  }).join('');
+  const total = kbTotalConteudos(c.blocos);
+  const nomesResp = Array.from(new Set(c.blocos.filter((b) => b.ativo).flatMap((b) => (b.modoResp === 'conteudo' ? Object.entries(b.qtd || {}).filter(([, n]) => Number(n) > 0).map(([t]) => (b.respPorTipo || {})[t] || b.responsavel) : [b.responsavel])).map(kbNomeUsuario).filter(Boolean)));
+  return `
+    <div class="kb-wiz-caixa kb-linha-switch">
+      <div><strong>${ic('brilho')} Produzir conteúdos para o cliente?</strong><span>Monte o plano de conteúdos do projeto: quantos de cada tipo, por quanto tempo e quem produz.</span></div>
+      <label class="switch"><input type="checkbox" ${c.ativo ? 'checked' : ''} onchange="KB_WIZ.conteudo.ativo = this.checked; if (this.checked && !KB_WIZ.conteudo.blocos.length) KB_WIZ.conteudo.blocos.push(kbNovoBlocoConteudo()); kbRenderWizard();"><span class="switch-slider"></span></label>
+    </div>
+    ${c.ativo ? `${blocos}
+      <button type="button" class="btn kb-wiz-add-bloco" onclick="KB_WIZ.conteudo.blocos.push(kbNovoBlocoConteudo()); kbRenderWizard();">${kbIc('mais')} Adicionar bloco avulso</button>
+      <div class="kb-wiz-resumo kb-wiz-resumo-verde">Serão criados <strong>${total} conteúdo(s)</strong> em rascunho${nomesResp.length ? ` para <strong>${escapeHtml(nomesResp.join(', '))}</strong>` : ''}.</div>
+      <p class="kb-vazio-mini">O plano fica salvo no projeto. Os conteúdos em rascunho são gerados a partir dele assim que o módulo Conteúdos entrar no ar — nada se perde.</p>` : ''}`;
+}
+function kbQtdConteudo(bi, tipoId, passo, valorDigitado) {
+  const b = KB_WIZ.conteudo.blocos[bi];
+  if (!b) return;
+  const atual = Number((b.qtd || {})[tipoId]) || 0;
+  const novo = valorDigitado !== undefined ? Number(valorDigitado) || 0 : atual + passo;
+  b.qtd = Object.assign({}, b.qtd, { [tipoId]: Math.max(0, Math.min(99, Math.round(novo))) });
+  kbRenderWizard();
+}
+function kbAlternarDiaBloco(bi, dia, ligado) {
+  const b = KB_WIZ.conteudo.blocos[bi];
+  const s = new Set(b.dias || []);
+  if (ligado) s.add(dia); else s.delete(dia);
+  b.dias = Array.from(s).sort();
+  kbRenderWizard();
+}
+// Novo tipo: o Diretor cria a categoria pra empresa toda; os outros
+// níveis criam um tipo só dentro deste plano.
+function kbAddTipoConteudo(bi, nome) {
+  const n = String(nome || '').trim().slice(0, 40);
+  if (!n) return;
+  const b = KB_WIZ.conteudo.blocos[bi];
+  if (kbTiposDoBloco(b).some((t) => kbNomeNorm(t.nome) === kbNomeNorm(n))) { avisar('Esse tipo já existe na lista.'); return; }
+  if (nivelEhDiretor() && typeof CFG_CATEGORIAS_CONTEUDO_KEY !== 'undefined') {
+    const lista = (CFG_CATEGORIAS_DATA || []).concat([{ id: genId('cat'), nome: n, cor: '#94a3b8', criadoEm: new Date().toISOString() }]);
+    if (cloudSet(CFG_CATEGORIAS_CONTEUDO_KEY, lista) !== false) CFG_CATEGORIAS_DATA = lista;
+  } else {
+    b.tiposExtras = (b.tiposExtras || []).concat([{ id: 'x:' + genId('t'), nome: n, cor: '#94a3b8' }]);
+  }
+  KB_WIZ.novoTipoBloco = null;
+  kbRenderWizard();
+}
+
+// ---------- criar o projeto ----------
+function kbCriarProjetoWizard() {
+  const w = KB_WIZ;
+  if (!w) return;
+  w.passo = 0;
+  if (!kbValidarPassoWizard()) { kbRenderWizard(); return; }
+  const agora = new Date().toISOString();
+  const etapa = kbCamposDaEtapa(w.d.etapa, '');
+  const membros = KB_USUARIOS.filter((u) => w.membros.has(u.uid)).map((u) => u.uid);
+  const colunas = w.colunasModo === 'personalizar'
+    ? w.colunas.map((c) => ({ id: genId('pc'), nome: String(c.nome || '').trim().slice(0, 30), cor: corHexValida(c.cor) || '#94a3b8', final: !!c.final }))
+    : null;
+  if (colunas && !colunas.some((c) => c.final)) colunas[colunas.length - 1].final = true;
+  const pj = {
+    id: genId('pj'), nome: w.d.nome.trim().slice(0, 100), descricao: w.d.descricao.slice(0, 2000), cliente: w.d.cliente.trim().slice(0, 100),
+    status: etapa.status, situacao: etapa.situacao, valor: Math.max(0, Number(w.d.valor) || 0), dataInicio: w.d.dataInicio || '', prazo: w.d.prazo || '',
+    recorrente: !!w.d.recorrente, recorrencia: w.d.recorrente ? 'mensal' : '', ultimaRenovacao: kbHoje().slice(0, 7),
+    cor: '#8b5cf6', responsavel: membros.includes(kbMeuUid()) ? kbMeuUid() : (membros[0] || ''), membros,
+    servicos: KB_SERVICOS.filter((x) => w.servicos.has(x.id)).map((x) => ({ id: x.id, nome: x.nome, categoria: x.categoria || '', valor: Number(x.valor || 0) })),
+    modelosIds: Array.from(w.modelos), colunas,
+    planoConteudo: w.conteudo.ativo ? { ativo: true, blocos: kbLimpar(w.conteudo.blocos), totalPrevisto: kbTotalConteudos(w.conteudo.blocos), gerado: false } : { ativo: false, blocos: [] },
+    arquivado: false, ordem: Date.now(), criadoEm: agora, criadoPor: kbMeuUid(),
+  };
+  if (!kbGravarProjeto(pj)) return;
+  const n = kbCriarTarefasDosModelos(pj);
+  KB_WIZ = null;
+  fecharModalKb();
+  kbVerTarefasDoProjeto(pj.id);
+  avisar(`Projeto "${pj.nome}" criado${n ? ` com ${n} tarefa(s)` : ''}.${pj.planoConteudo.ativo ? ` Plano de ${pj.planoConteudo.totalPrevisto} conteúdo(s) salvo no projeto.` : ''}`, 'Projeto criado');
+}
+
+// Cria as tarefas dos modelos do projeto (na criação e a cada renovação)
+function kbCriarTarefasDosModelos(pj, etiquetaExtra) {
+  const cols = kbColunasDoProjeto(pj.id) || kbColunasGlobais();
+  const status = (cols.find((c) => !c.final && kbNomeNorm(c.nome) === 'a fazer') || cols.find((c) => !c.final) || cols[0]).id;
+  let n = 0;
+  const base = Date.now();
+  (pj.modelosIds || []).forEach((mid) => {
+    const m = kbModelos().find((x) => x.id === mid);
+    if (!m) return;
+    (m.checklist || []).forEach((item) => {
+      const etiquetas = (m.etiquetas || []).slice();
+      if (etiquetaExtra) etiquetas.push(etiquetaExtra);
+      if (kbCriarTarefa({ titulo: String(item).slice(0, 140), projetoId: pj.id, cliente: pj.cliente || '', responsavel: pj.responsavel || '', status, prioridade: m.prioridade || 'media', etiquetas, ordem: base + n, origemModeloId: m.id })) n++;
+    });
+  });
+  return n;
+}
+
+// Projeto recorrente: no mês novo, o primeiro navegador de quem opera
+// "reivindica" a renovação (transação no documento do projeto, então
+// duas abas não criam as tarefas duas vezes) e recria as tarefas.
+function kbRenovarProjetosRecorrentes() {
+  if (!KB_PROJETOS_CARREGADO || !KB_CARREGADO || !nivelPodeOperar()) return;
+  const mes = kbHoje().slice(0, 7);
+  KB_PROJETOS.filter((p) => p.recorrente && !p.arquivado && p.situacao !== 'pausado' && p.situacao !== 'cancelado' && p.ultimaRenovacao && p.ultimaRenovacao < mes && !KB_RENOVANDO.has(p.id)).forEach((pj) => {
+    KB_RENOVANDO.add(pj.id);
+    let reivindicar;
+    if (kbNuvem() && typeof firestoreDb.runTransaction === 'function') {
+      const ref = kbColecaoProjetosRef().doc(pj.id);
+      reivindicar = firestoreDb.runTransaction(async (tx) => {
+        const d = await tx.get(ref);
+        if (!d.exists || (d.data().ultimaRenovacao || '') >= mes) return false;
+        tx.set(ref, { ultimaRenovacao: mes }, { merge: true });
+        return true;
+      });
+    } else reivindicar = Promise.resolve(kbGravarProjeto(pj, { ultimaRenovacao: mes }));
+    reivindicar.then((ganhou) => {
+      if (!ganhou) return;
+      pj.ultimaRenovacao = mes;
+      const [a, m] = mes.split('-');
+      const rotulo = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][Number(m) - 1] + '/' + a;
+      kbCriarTarefasDosModelos(pj, rotulo);
+    }).catch((err) => console.error('Erro ao renovar projeto recorrente:', err));
+  });
+}
+
+
+// =====================================================================
+// ---------- CRM → Operacional → Serviços (Serviços, Produtos, Planos) ----------
+// =====================================================================
+// Serviços e planos são da base do CRM. Produtos: quem tem só o CRM tem
+// uma base própria; quem tem ERP + CRM vê os MESMOS produtos do ERP (um
+// produto físico não pode ter dois estoques), no mesmo formato de dados.
+
+const SRV_CATEGORIAS_KEY = 'eagles_servicos_categorias_v1';
+const SRV_PLANOS_KEY = 'eagles_planos_v1';
+const SRV_PAGINA_PLANOS_KEY = 'eagles_planos_pagina_v1';
+const SRV_COLECAO_PLANOS_PUBLICOS = 'planos_publicos';
+
+const SRV_CORES = ['#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#64748b', '#84cc16'];
+const SRV_CATEGORIAS_PADRAO = [
+  { id: 'design', nome: 'Design', cor: '#ec4899', padrao: true },
+  { id: 'trafego', nome: 'Tráfego Pago', cor: '#f97316', padrao: true },
+  { id: 'social', nome: 'Social Media', cor: '#8b5cf6', padrao: true },
+  { id: 'consultoria', nome: 'Consultoria', cor: '#22c55e', padrao: true },
+  { id: 'desenvolvimento', nome: 'Desenvolvimento', cor: '#3b82f6', padrao: true },
+  { id: 'outro', nome: 'Outro', cor: '#64748b', padrao: true },
+];
+const SRV_MOEDAS = { BRL: 'R$ BRL', USD: 'US$ USD', EUR: '€ EUR' };
+const SRV_RECORRENCIAS = { mensal: 'Mensal', trimestral: 'Trimestral', anual: 'Anual' };
+const SRV_RECORRENCIA_SUFIXO = { mensal: '/mês', trimestral: '/trimestre', anual: '/ano' };
+const SRV_UNIDADES = ['Unidade', 'Caixa', 'Pacote', 'Kg', 'Grama', 'Litro', 'Metro', 'Hora'];
+
+// Sugestões prontas (imagem de referência). Social Media Pack já vem com
+// um pacote de conteúdos, pra mostrar o recurso.
+const SRV_SUGESTOES = [
+  { grupo: 'Para Designers e Freelancers', itens: [
+    { nome: 'Logo Design', descricao: 'Criação de identidade visual completa', valor: 1500, categoriaId: 'design' },
+    { nome: 'Social Media Pack', descricao: 'Pacote mensal de posts para redes sociais', valor: 800, recorrente: true, recorrencia: 'mensal', categoriaId: 'social', geraConteudos: true, pacote: { feed: 12, carrossel: 4, stories: 12 } },
+    { nome: 'Landing Page', descricao: 'Design de página de vendas', valor: 2500, categoriaId: 'desenvolvimento' },
+    { nome: 'UI/UX Design', descricao: 'Interface completa para aplicativo ou sistema', valor: 3500, categoriaId: 'design' },
+    { nome: 'Branding Completo', descricao: 'Manual de marca, logo, aplicações', valor: 5000, categoriaId: 'design' },
+  ] },
+  { grupo: 'Para Gestores de Tráfego e Editores', itens: [
+    { nome: 'Gestão de Tráfego Pago', descricao: 'Gerenciamento mensal de campanhas', valor: 1500, recorrente: true, recorrencia: 'mensal', categoriaId: 'trafego' },
+    { nome: 'Setup de Campanhas', descricao: 'Configuração inicial de campanhas', valor: 800, categoriaId: 'trafego' },
+    { nome: 'Consultoria de Estratégia', descricao: 'Planejamento estratégico de marketing', valor: 1200, categoriaId: 'consultoria' },
+    { nome: 'Otimização de Conversão', descricao: 'Análise e otimização de funil de vendas', valor: 2000, categoriaId: 'consultoria' },
+    { nome: 'Relatórios e Análises', descricao: 'Relatório mensal detalhado de resultados', valor: 600, recorrente: true, recorrencia: 'mensal', categoriaId: 'consultoria' },
+  ] },
+];
+
+let SRV_CATEGORIAS = SRV_CATEGORIAS_PADRAO.slice();
+let SRV_PRODUTOS = [];
+let SRV_MOVIMENTOS = [];
+let SRV_PLANOS = [];
+let SRV_PAGINA = null;
+let SRV_INICIADO = false;
+let SRV_ABA = 'servicos';
+let SRV_FILTRO = { busca: '', categoria: '', visao: 'grade', buscaPlano: '', movProduto: '', movTipo: '' };
+
+function srvChaveProdutos() { return crmUsaDadosDoErp() ? 'eagles_produtos_v1' : 'eagles_crm_produtos_v1'; }
+function srvChaveMovimentos() { return crmUsaDadosDoErp() ? 'eagles_lancamentos_estoque_v1' : 'eagles_crm_mov_estoque_v1'; }
+
+function srvIniciarDados() {
+  if (SRV_INICIADO) return;
+  SRV_INICIADO = true;
+  if (!KB_SERVICOS_CARREGADO) cloudWatch(KB_SERVICOS_KEY, [], (data) => { KB_SERVICOS = Array.isArray(data) ? data : []; KB_SERVICOS_CARREGADO = true; srvRender(); });
+  cloudWatch(SRV_CATEGORIAS_KEY, SRV_CATEGORIAS_PADRAO, (data) => { SRV_CATEGORIAS = Array.isArray(data) && data.length ? data : SRV_CATEGORIAS_PADRAO.slice(); srvRender(); });
+  cloudWatch(srvChaveProdutos(), [], (data) => { SRV_PRODUTOS = Array.isArray(data) ? data : []; srvRender(); });
+  cloudWatch(srvChaveMovimentos(), [], (data) => { SRV_MOVIMENTOS = Array.isArray(data) ? data : []; srvRender(); });
+  cloudWatch(SRV_PLANOS_KEY, [], (data) => { SRV_PLANOS = Array.isArray(data) ? data : []; srvRender(); });
+  cloudWatch(SRV_PAGINA_PLANOS_KEY, null, (data) => { SRV_PAGINA = data; });
+  if (typeof CFG_CATEGORIAS_CONTEUDO_KEY !== 'undefined' && !CFG_CATEGORIAS_CARREGADO) cloudWatch(CFG_CATEGORIAS_CONTEUDO_KEY, [], (data) => { CFG_CATEGORIAS_DATA = Array.isArray(data) ? data : []; CFG_CATEGORIAS_CARREGADO = true; });
+}
+
+function srvMoeda(valor, moeda) {
+  const m = SRV_MOEDAS[moeda] ? moeda : 'BRL';
+  try { return new Intl.NumberFormat(m === 'BRL' ? 'pt-BR' : m === 'EUR' ? 'de-DE' : 'en-US', { style: 'currency', currency: m }).format(Number(valor) || 0); }
+  catch (e) { return formatMoney(Number(valor) || 0); }
+}
+function srvCategoria(s) {
+  const porId = SRV_CATEGORIAS.find((c) => c.id === s.categoriaId);
+  if (porId) return porId;
+  const porNome = s.categoria && SRV_CATEGORIAS.find((c) => kbNomeNorm(c.nome) === kbNomeNorm(s.categoria));
+  return porNome || { id: '', nome: s.categoria || 'Geral', cor: '#64748b' };
+}
+function srvPrecoHtml(s) {
+  return `${srvMoeda(s.valor, s.moeda)}${s.recorrente ? `<small>${SRV_RECORRENCIA_SUFIXO[s.recorrencia] || '/mês'}</small>` : ''}`;
+}
+
+// ---------- montagem da tela ----------
+function renderServicosModulo(aba) {
+  srvIniciarDados();
+  if (aba) SRV_ABA = aba;
+  srvRender();
+}
+function srvSecaoAtual() {
+  // Checkout não tem seção própria no menu: desenha na seção de Serviços
+  // que estiver aberta (Serviços, Produtos ou Planos)
+  if (SRV_ABA === 'checkout') return ['servicos', 'produtos', 'planos'].map((a) => document.getElementById('crm-secao-servicos-' + a)).find((el) => el && el.style.display !== 'none') || null;
+  return document.getElementById('crm-secao-servicos-' + SRV_ABA);
+}
+function srvIrAba(aba) {
+  if (aba === 'checkout') { SRV_ABA = 'checkout'; srvRender(); return; }
+  mostrarSecaoCrm('servicos-' + aba, document.querySelector(`[data-menu-id="servicos-${aba}"]`));
+}
+
+function srvRender() {
+  const el = srvSecaoAtual();
+  if (!el || el.style.display === 'none') return;
+  const abas = [['servicos', 'Serviços', 'pacote'], ['produtos', 'Produtos', 'pacote'], ['planos', 'Planos', 'camadas'], ['checkout', 'Checkout', 'carteira']];
+  const corpo = { servicos: srvHtmlServicos, produtos: srvHtmlProdutos, planos: srvHtmlPlanos, checkout: srvHtmlCheckout }[SRV_ABA]();
+  // não apaga o que está sendo digitado na busca
+  const ativo = document.activeElement;
+  const buscaId = ativo && el.contains(ativo) && ativo.id;
+  const pos = buscaId && ativo.selectionStart;
+  el.innerHTML = `
+    <div class="srv">
+      <div class="page-header" style="margin-bottom:14px;">
+        <div><h1 style="font-size:22px;">Meus Serviços</h1><p style="color:var(--text-soft); margin:0;">Gerencie seu catálogo de serviços e preços</p></div>
+      </div>
+      <div class="kb-segmento srv-abas">${abas.map(([a, n, icone]) => `<button type="button" class="${SRV_ABA === a ? 'ativo' : ''}" onclick="srvIrAba('${a}')">${ic(icone, 'ic-herda')} ${n}</button>`).join('')}</div>
+      ${corpo}
+    </div>`;
+  if (buscaId) { const i = document.getElementById(buscaId); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} } }
+}
+
+// ---------- aba Serviços ----------
+function srvServicosFiltrados() {
+  const b = kbNomeNorm(SRV_FILTRO.busca);
+  return KB_SERVICOS.filter((s) => {
+    if (SRV_FILTRO.categoria && srvCategoria(s).id !== SRV_FILTRO.categoria) return false;
+    if (b && !kbNomeNorm(`${s.nome} ${s.descricao || ''} ${srvCategoria(s).nome}`).includes(b)) return false;
+    return true;
+  });
+}
+function srvHtmlServicos() {
+  const lista = srvServicosFiltrados();
+  const tagDestinos = (s) => `${s.exibirPublico !== false ? `<span class="srv-tag">${ic('documento', 'ic-herda')} Portfólio</span>` : ''}${s.exibirFormulario !== false ? `<span class="srv-tag">${ic('tarefas', 'ic-herda')} Formulário</span>` : ''}${s.geraConteudos ? `<span class="srv-tag">${ic('brilho', 'ic-herda')} Conteúdos</span>` : ''}`;
+  const status = (s) => `<button type="button" class="srv-status${s.ativo === false ? ' inativo' : ''}" title="Clique pra ${s.ativo === false ? 'ativar' : 'desativar'}" onclick="srvAlternarAtivo('${escapeParaOnclick(s.id)}')">${s.ativo === false ? 'Inativo' : 'Ativo'}</button>`;
+  const grade = lista.map((s) => {
+    const cat = srvCategoria(s);
+    const id = escapeParaOnclick(s.id);
+    return `<div class="srv-card${s.ativo === false ? ' inativo' : ''}">
+      <div class="srv-card-cab"><strong>${escapeHtml(s.nome)}</strong>${status(s)}</div>
+      ${tagDestinos(s) ? `<div class="srv-tags">${tagDestinos(s)}</div>` : ''}
+      <div class="srv-card-linha"><span>Categoria:</span><span class="srv-cat" style="--srv-cor:${corHexValida(cat.cor) || '#64748b'};">${escapeHtml(cat.nome)}</span></div>
+      <div class="srv-card-linha"><span>Preço:</span><span class="srv-preco">${srvPrecoHtml(s)}</span></div>
+      <div class="srv-card-acoes"><button type="button" class="btn" onclick="srvAbrirServico('${id}')">${ic('lapis', 'ic-herda')} Editar</button><button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir serviço" onclick="srvExcluirServico('${id}')">${ic('lixeira', 'ic-herda')}</button></div>
+    </div>`;
+  }).join('');
+  const tabela = `<div class="kb-tabela-wrap"><table class="kb-tabela"><thead><tr><th>Serviço</th><th>Categoria</th><th>Preço</th><th>Status</th><th></th></tr></thead><tbody>
+    ${lista.map((s) => { const cat = srvCategoria(s); const id = escapeParaOnclick(s.id); return `<tr>
+      <td><strong>${escapeHtml(s.nome)}</strong>${s.descricao ? `<div style="font-size:12px; color:var(--text-soft);">${escapeHtml(s.descricao)}</div>` : ''}</td>
+      <td><span class="srv-cat" style="--srv-cor:${corHexValida(cat.cor) || '#64748b'};">${escapeHtml(cat.nome)}</span></td>
+      <td><span class="srv-preco">${srvPrecoHtml(s)}</span></td><td>${status(s)}</td>
+      <td style="text-align:right; white-space:nowrap;"><button type="button" class="btn btn-small" onclick="srvAbrirServico('${id}')">Editar</button> <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir serviço" onclick="srvExcluirServico('${id}')">${ic('lixeira', 'ic-herda')}</button></td></tr>`; }).join('')}
+    </tbody></table></div>`;
+  return `
+    <div class="srv-acoes">
+      <button type="button" class="btn" onclick="srvAbrirCategorias()">${ic('pasta', 'ic-herda')} Gerenciar Categorias</button>
+      <button type="button" class="btn srv-btn-contorno" onclick="abrirWizardOrcamento()">${ic('documento', 'ic-herda')} Novo Orçamento</button>
+      <button type="button" class="btn btn-primary" onclick="srvNovoServico()">${ic('mais', 'ic-herda')} Novo Serviço</button>
+    </div>
+    <div class="srv-filtros">
+      <label class="kb-busca">${kbIc('busca')}<input type="search" id="srv-busca" placeholder="Buscar por nome, descrição ou categoria..." value="${escapeHtml(SRV_FILTRO.busca)}" oninput="SRV_FILTRO.busca = this.value; srvRender();"></label>
+      <select class="srv-select" onchange="SRV_FILTRO.categoria = this.value; srvRender();"><option value="">Todas categorias</option>${SRV_CATEGORIAS.map((c) => `<option value="${escapeHtml(c.id)}"${SRV_FILTRO.categoria === c.id ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select>
+      <button type="button" class="kb-btn-modo${SRV_FILTRO.visao === 'grade' ? ' ativo' : ''}" title="Cartões" aria-label="Cartões" onclick="SRV_FILTRO.visao = 'grade'; srvRender();">${kbIc('quadro')}</button>
+      <button type="button" class="kb-btn-modo${SRV_FILTRO.visao === 'lista' ? ' ativo' : ''}" title="Lista" aria-label="Lista" onclick="SRV_FILTRO.visao = 'lista'; srvRender();">${kbIc('lista')}</button>
+    </div>
+    ${lista.length ? (SRV_FILTRO.visao === 'lista' ? tabela : `<div class="srv-grade">${grade}</div>`)
+      : `<div class="kb-vazio-grande"><div class="ic-circulo">${ic('pacote')}</div><h3>${KB_SERVICOS.length ? 'Nenhum serviço com esses filtros' : 'Nenhum serviço cadastrado'}</h3><p>${KB_SERVICOS.length ? 'Tente outra busca ou categoria.' : 'Monte seu catálogo pra usar em projetos, planos e orçamentos.'}</p>${KB_SERVICOS.length ? '' : `<button type="button" class="btn btn-primary" onclick="srvNovoServico()">${ic('mais', 'ic-herda')} Novo Serviço</button>`}</div>`}`;
+}
+
+function srvGarantirModal() {
+  let ov = document.getElementById('modal-srv');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = 'modal-overlay'; ov.id = 'modal-srv';
+    inserirModalNoBody(ov);
+    ov.addEventListener('mousedown', (e) => { if (e.target === ov) srvFecharModal(); });
+  }
+  return ov;
+}
+function srvFecharModal() { closeModal('modal-srv'); SRV_EDIT = null; }
+
+function srvGravar(chave, lista, alvo) {
+  if (cloudSet(chave, lista) === false) return false;
+  if (alvo === 'servicos') KB_SERVICOS = lista;
+  else if (alvo === 'categorias') SRV_CATEGORIAS = lista;
+  else if (alvo === 'produtos') SRV_PRODUTOS = lista;
+  else if (alvo === 'movimentos') SRV_MOVIMENTOS = lista;
+  else if (alvo === 'planos') SRV_PLANOS = lista;
+  srvRender();
+  return true;
+}
+
+function srvAlternarAtivo(id) {
+  if (!exigirPodeOperar('editar serviços')) return;
+  srvGravar(KB_SERVICOS_KEY, KB_SERVICOS.map((s) => (s.id === id ? Object.assign({}, s, { ativo: s.ativo === false }) : s)), 'servicos');
+}
+function srvExcluirServico(id) {
+  if (!exigirPodeOperar('excluir serviços')) return;
+  const s = KB_SERVICOS.find((x) => x.id === id);
+  if (!s) return;
+  const emPlanos = SRV_PLANOS.filter((p) => (p.servicoIds || []).includes(id)).length;
+  confirmarAcao(`Excluir o serviço "${s.nome}"?${emPlanos ? ` Ele sai também de ${emPlanos} plano(s).` : ''} Projetos e orçamentos que já usam ele não mudam.`, () => {
+    const publicado = SRV_PAGINA && SRV_PAGINA.slug && SRV_PLANOS.some((p) => (SRV_PAGINA.planoIds || []).includes(p.id) && (p.servicoIds || []).includes(id));
+    if (!srvGravar(KB_SERVICOS_KEY, KB_SERVICOS.filter((x) => x.id !== id), 'servicos')) return;
+    if (emPlanos) srvGravar(SRV_PLANOS_KEY, SRV_PLANOS.map((p) => Object.assign({}, p, { servicoIds: (p.servicoIds || []).filter((x) => x !== id) })), 'planos');
+    if (publicado) srvPublicarPaginaPlanos(SRV_PAGINA, true);
+  }, 'Excluir serviço');
+}
+
+// ---------- Novo serviço: modelo pronto ou personalizado ----------
+function srvNovoServico() {
+  if (!exigirPodeOperar('cadastrar serviços')) return;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Cadastrar Novo Serviço</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub" style="text-align:center;">Como deseja criar seu serviço?</p>
+      <div class="srv-escolha">
+        <button type="button" onclick="srvAbrirSugestoes()">${ic('brilho')}<strong>Usar modelo pré-definido</strong><span>Escolha entre sugestões prontas para designers, gestores de tráfego e mais</span></button>
+        <button type="button" onclick="srvAbrirServico(null)">${ic('mais')}<strong>Criar personalizado</strong><span>Preencha todos os campos manualmente do zero</span></button>
+      </div>
+    </div>`;
+  openModal('modal-srv');
+}
+function srvAbrirSugestoes() {
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:620px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Cadastrar Novo Serviço</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="kb-wiz-tit" style="color:var(--blue-text);">${ic('brilho')} Sugestões de Serviços</div>
+      ${SRV_SUGESTOES.map((g, gi) => `<div class="cfg-secao-rotulo">${escapeHtml(g.grupo)}</div>
+        <div class="srv-sugestoes">${g.itens.map((s, si) => `<button type="button" class="srv-sugestao" onclick="srvUsarSugestao(${gi}, ${si})"><strong>${escapeHtml(s.nome)}</strong><span>${escapeHtml(s.descricao)}</span><b>${srvMoeda(s.valor, 'BRL')}${s.recorrente ? ' /mês' : ''}</b></button>`).join('')}</div>`).join('')}
+      <button type="button" class="btn" style="width:100%; justify-content:center; margin-top:14px;" onclick="srvAbrirServico(null)">Ou criar serviço personalizado</button>
+    </div>`;
+  openModal('modal-srv');
+}
+function srvUsarSugestao(gi, si) {
+  const s = SRV_SUGESTOES[gi].itens[si];
+  srvAbrirServico(null, { nome: s.nome, descricao: s.descricao, valor: s.valor, recorrente: !!s.recorrente, recorrencia: s.recorrencia || 'mensal', categoriaId: SRV_CATEGORIAS.some((c) => c.id === s.categoriaId) ? s.categoriaId : '', geraConteudos: !!s.geraConteudos, pacote: kbLimpar(s.pacote || {}) });
+}
+
+// ---------- formulário do serviço ----------
+let SRV_EDIT = null;
+function srvAbrirServico(id, padrao) {
+  if (!exigirPodeOperar('cadastrar serviços')) return;
+  const existente = id ? KB_SERVICOS.find((s) => s.id === id) : null;
+  SRV_EDIT = existente ? kbLimpar(existente) : Object.assign({ id: null, nome: '', descricao: '', valor: '', custo: '', moeda: 'BRL', categoriaId: '', recorrente: false, recorrencia: 'mensal', exibirPublico: true, exibirFormulario: true, comissao: '', geraConteudos: false, pacote: {}, ativo: true }, padrao || {});
+  if (existente && !SRV_EDIT.categoriaId) SRV_EDIT.categoriaId = srvCategoria(existente).id || '';
+  SRV_EDIT.pacote = SRV_EDIT.pacote || {};
+  srvRenderFormServico();
+  openModal('modal-srv');
+}
+function srvRenderFormServico() {
+  const e = SRV_EDIT;
+  if (!e) return;
+  const ov = srvGarantirModal();
+  const sw = (campo, titulo, desc, nota) => `<div class="kb-wiz-caixa kb-linha-switch"><div><strong>${titulo}</strong><span>${desc}</span>${nota ? `<span class="srv-nota">${nota}</span>` : ''}</div><label class="switch"><input type="checkbox" ${e[campo] ? 'checked' : ''} onchange="SRV_EDIT.${campo} = this.checked; srvRenderFormServico();"><span class="switch-slider"></span></label></div>`;
+  const tipos = KB_TIPOS_CONTEUDO.concat((typeof CFG_CATEGORIAS_DATA !== 'undefined' && Array.isArray(CFG_CATEGORIAS_DATA) ? CFG_CATEGORIAS_DATA : []).map((c) => ({ id: 'cat:' + c.id, nome: c.nome, cor: corHexValida(c.cor) || '#94a3b8', icone: 'tag' })));
+  const totalPacote = Object.values(e.pacote || {}).reduce((a, n) => a + (Number(n) || 0), 0);
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:620px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${e.id ? 'Editar Serviço' : 'Cadastrar Novo Serviço'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="kb-wiz-corpo">
+        <div class="field full"><label>Nome do Serviço *</label><input type="text" maxlength="80" value="${escapeHtml(e.nome)}" placeholder="Ex: Logo Design" oninput="SRV_EDIT.nome = this.value"></div>
+        <div class="field full"><label>Descrição</label><textarea rows="3" maxlength="1000" placeholder="Descreva o que está incluso no serviço" oninput="SRV_EDIT.descricao = this.value">${escapeHtml(e.descricao || '')}</textarea></div>
+        <div class="srv-campos-4">
+          <div class="field"><label>Preço *</label><input type="number" min="0" step="0.01" value="${escapeHtml(String(e.valor ?? ''))}" placeholder="1500.00" oninput="SRV_EDIT.valor = this.value"></div>
+          <div class="field"><label>Custo</label><input type="number" min="0" step="0.01" value="${escapeHtml(String(e.custo ?? ''))}" placeholder="0.00" oninput="SRV_EDIT.custo = this.value"></div>
+          <div class="field"><label>Moeda</label><select onchange="SRV_EDIT.moeda = this.value">${Object.entries(SRV_MOEDAS).map(([k, v]) => `<option value="${k}"${e.moeda === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+          <div class="field"><label>Categoria</label><select onchange="SRV_EDIT.categoriaId = this.value"><option value="">Selecione</option>${SRV_CATEGORIAS.map((c) => `<option value="${escapeHtml(c.id)}"${e.categoriaId === c.id ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select></div>
+        </div>
+        ${sw('recorrente', 'Serviço Recorrente', 'Cobrança mensal, trimestral ou anual')}
+        ${e.recorrente ? `<div class="field full" style="margin-top:-4px;"><label>Cobrança</label><select onchange="SRV_EDIT.recorrencia = this.value">${Object.entries(SRV_RECORRENCIAS).map(([k, v]) => `<option value="${k}"${e.recorrencia === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>` : ''}
+        ${sw('exibirPublico', 'Exibir na Página Pública', 'Mostrar este serviço na sua landing page/portfólio', 'Vale quando a Página Pública (Portfólio) for construída.')}
+        ${sw('exibirFormulario', 'Exibir no Formulário de Leads', 'Disponibilizar como opção no formulário de captação', 'Vale quando os Formulários forem construídos.')}
+        <div class="field full"><label>Comissão padrão (%)</label><input type="number" min="0" max="100" step="0.1" value="${escapeHtml(String(e.comissao ?? ''))}" placeholder="Ex: 10" oninput="SRV_EDIT.comissao = this.value">
+          <p class="nivel-ajuda">Percentual de comissão padrão para este serviço. Usado quando o membro da equipe tem comissão do tipo "Por produto" — vale quando a comissão da equipe for construída.</p></div>
+        ${sw('geraConteudos', `${ic('brilho')} Este serviço gera conteúdos`, 'Quando esse serviço for adicionado a um projeto, sugerimos automaticamente esses conteúdos.')}
+        ${e.geraConteudos ? `<div class="kb-wiz-caixa">
+          <div class="kb-bloco-tipos-cab"><label>Conteúdos por mês</label><span class="kb-espaco"></span><span class="kb-wiz-pilula">${totalPacote} por mês</span></div>
+          <div class="kb-bloco-tipos">${tipos.map((t) => { const n = Number(e.pacote[t.id]) || 0; const tid = escapeParaOnclick(t.id); return `<div class="kb-bloco-tipo">
+            <span class="kb-tipo-ic" style="--kb-cor:${t.cor};">${ic(t.icone, 'ic-herda')}</span><span class="kb-tipo-nome">${escapeHtml(t.nome)}</span>
+            <span class="kb-contador-qtd"><button type="button" aria-label="Menos" onclick="srvQtdPacote('${tid}', -1)">−</button><input type="number" min="0" max="99" value="${n}" aria-label="Quantidade" onchange="srvQtdPacote('${tid}', 0, this.value)"><button type="button" aria-label="Mais" onclick="srvQtdPacote('${tid}', 1)">+</button></span>
+          </div>`; }).join('')}</div>
+        </div>` : ''}
+      </div>
+      <div class="cfg-modal-rodape">
+        ${e.id ? '' : '<button type="button" class="btn" onclick="srvAbrirSugestoes()">Ver Sugestões</button>'}
+        <span class="kb-espaco"></span>
+        <button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="srvSalvarServico()">${e.id ? 'Salvar alterações' : 'Cadastrar Novo Serviço'}</button>
+      </div>
+    </div>`;
+}
+function srvQtdPacote(tipoId, passo, valor) {
+  const atual = Number(SRV_EDIT.pacote[tipoId]) || 0;
+  const n = valor !== undefined ? Number(valor) || 0 : atual + passo;
+  SRV_EDIT.pacote = Object.assign({}, SRV_EDIT.pacote, { [tipoId]: Math.max(0, Math.min(99, Math.round(n))) });
+  srvRenderFormServico();
+}
+function srvSalvarServico() {
+  const e = SRV_EDIT;
+  if (!e) return;
+  const nome = String(e.nome || '').trim();
+  if (!nome) { avisar('Dê um nome pro serviço.'); return; }
+  if (e.valor === '' || e.valor === null || isNaN(Number(e.valor))) { avisar('Informe o preço do serviço.'); return; }
+  if (KB_SERVICOS.some((s) => s.id !== e.id && kbNomeNorm(s.nome) === kbNomeNorm(nome))) { avisar('Já existe um serviço com esse nome.'); return; }
+  const pacote = {};
+  Object.entries(e.pacote || {}).forEach(([k, v]) => { if (Number(v) > 0) pacote[k] = Math.min(99, Math.round(Number(v))); });
+  const cat = SRV_CATEGORIAS.find((c) => c.id === e.categoriaId);
+  const dados = {
+    nome: nome.slice(0, 80), descricao: String(e.descricao || '').slice(0, 1000), valor: Math.max(0, Number(e.valor) || 0), custo: Math.max(0, Number(e.custo) || 0),
+    moeda: SRV_MOEDAS[e.moeda] ? e.moeda : 'BRL', categoriaId: cat ? cat.id : '', categoria: cat ? cat.nome : 'Geral',
+    recorrente: !!e.recorrente, recorrencia: e.recorrente && SRV_RECORRENCIAS[e.recorrencia] ? e.recorrencia : '',
+    exibirPublico: !!e.exibirPublico, exibirFormulario: !!e.exibirFormulario, comissao: Math.max(0, Math.min(100, Number(e.comissao) || 0)),
+    geraConteudos: !!e.geraConteudos && Object.keys(pacote).length > 0, pacote: e.geraConteudos ? pacote : {}, ativo: e.ativo !== false,
+  };
+  if (e.geraConteudos && !Object.keys(pacote).length) { avisar('Coloque a quantidade de pelo menos um tipo de conteúdo, ou desligue "Este serviço gera conteúdos".'); return; }
+  const lista = e.id ? KB_SERVICOS.map((s) => (s.id === e.id ? Object.assign({}, s, dados, { atualizadoEm: new Date().toISOString() }) : s))
+    : KB_SERVICOS.concat([Object.assign({ id: genId('srv'), criadoEm: new Date().toISOString() }, dados)]);
+  if (!srvGravar(KB_SERVICOS_KEY, lista, 'servicos')) return;
+  srvFecharModal();
+  srvRepublicarSeUsaServico(e.id);
+}
+// A página pública guarda uma cópia dos nomes dos serviços: se um
+// serviço de um plano publicado muda, a cópia é refeita.
+function srvRepublicarSeUsaServico(servicoId) {
+  if (!servicoId || !SRV_PAGINA || !SRV_PAGINA.slug) return;
+  const usa = SRV_PLANOS.some((p) => (SRV_PAGINA.planoIds || []).includes(p.id) && (p.servicoIds || []).includes(servicoId));
+  if (usa) srvPublicarPaginaPlanos(SRV_PAGINA, true);
+}
+
+// ---------- Categorias de serviços ----------
+let SRV_COR_NOVA = SRV_CORES[0];
+function srvAbrirCategorias() {
+  const ov = srvGarantirModal();
+  const usados = (cid) => KB_SERVICOS.filter((s) => srvCategoria(s).id === cid).length;
+  ov.innerHTML = `
+    <div class="modal kb-modal kb-modal-estreito" style="max-width:460px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Categorias de Serviços</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="kb-wiz-caixa">
+        <span class="kb-caixa-titulo" style="font-weight:700; font-size:13px; display:block; margin-bottom:8px;">Nova Categoria</span>
+        <input type="text" id="srv-cat-nome" maxlength="30" placeholder="Nome da categoria" onkeydown="if(event.key==='Enter') srvAdicionarCategoria();">
+        <div class="srv-paleta">${SRV_CORES.map((c) => `<button type="button" class="srv-cor${SRV_COR_NOVA === c ? ' ativo' : ''}" style="background:${c};" aria-label="Cor ${c}" onclick="SRV_COR_NOVA = '${c}'; document.querySelectorAll('.srv-cor').forEach((b) => b.classList.toggle('ativo', b === this));"></button>`).join('')}</div>
+        <button type="button" class="btn btn-primary" style="width:100%; justify-content:center;" onclick="srvAdicionarCategoria()">${ic('mais', 'ic-herda')} Adicionar</button>
+      </div>
+      <div class="cfg-secao-rotulo">Categorias Existentes</div>
+      ${SRV_CATEGORIAS.map((c) => `<div class="srv-cat-linha">
+        <span class="kb-bolinha" style="background:${corHexValida(c.cor) || '#64748b'};"></span><span style="flex:1;">${escapeHtml(c.nome)}</span>
+        <span class="kb-vazio-mini">${usados(c.id)} serviço(s)</span>
+        ${c.padrao ? '<span class="srv-padrao">PADRÃO</span>' : `<button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir categoria" onclick="srvExcluirCategoria('${escapeParaOnclick(c.id)}')">${ic('lixeira', 'ic-herda')}</button>`}
+      </div>`).join('')}
+    </div>`;
+  openModal('modal-srv');
+  setTimeout(() => { const i = document.getElementById('srv-cat-nome'); if (i) i.focus(); }, 30);
+}
+function srvAdicionarCategoria() {
+  if (!exigirPodeOperar('criar categorias')) return;
+  const nome = (document.getElementById('srv-cat-nome').value || '').trim();
+  if (!nome) { avisar('Escreva o nome da categoria.'); return; }
+  if (SRV_CATEGORIAS.some((c) => kbNomeNorm(c.nome) === kbNomeNorm(nome))) { avisar('Já existe uma categoria com esse nome.'); return; }
+  if (!srvGravar(SRV_CATEGORIAS_KEY, SRV_CATEGORIAS.concat([{ id: genId('scat'), nome: nome.slice(0, 30), cor: corHexValida(SRV_COR_NOVA) || '#6366f1', padrao: false }]), 'categorias')) return;
+  srvAbrirCategorias();
+}
+function srvExcluirCategoria(id) {
+  if (!exigirPodeOperar('excluir categorias')) return;
+  const c = SRV_CATEGORIAS.find((x) => x.id === id);
+  if (!c || c.padrao) return;
+  const n = KB_SERVICOS.filter((s) => srvCategoria(s).id === id).length;
+  confirmarAcao(`Excluir a categoria "${c.nome}"?${n ? ` Os ${n} serviço(s) dela vão para "Outro".` : ''}`, () => {
+    // descobre os serviços da categoria ANTES de removê-la (depois, ela
+    // não existe mais e não daria pra saber quem era dela)
+    const daCategoria = new Set(KB_SERVICOS.filter((s) => srvCategoria(s).id === id).map((s) => s.id));
+    if (!srvGravar(SRV_CATEGORIAS_KEY, SRV_CATEGORIAS.filter((x) => x.id !== id), 'categorias')) return;
+    if (daCategoria.size) srvGravar(KB_SERVICOS_KEY, KB_SERVICOS.map((s) => (daCategoria.has(s.id) ? Object.assign({}, s, { categoriaId: 'outro', categoria: 'Outro' }) : s)), 'servicos');
+    srvAbrirCategorias();
+  }, 'Excluir categoria');
+}
+
+// ---------- aba Produtos ----------
+function srvHtmlProdutos() {
+  const erp = crmUsaDadosDoErp();
+  const cards = SRV_PRODUTOS.map((p) => {
+    const id = escapeParaOnclick(p.id);
+    const preco = Number(p.precoVenda) || 0, custo = Number(p.custo) || 0;
+    const margem = preco > 0 && custo > 0 ? Math.round(((preco - custo) / preco) * 100) : null;
+    const baixo = Number(p.estoque || 0) <= Number(p.quantidadeMinima || 0) && Number(p.quantidadeMinima || 0) > 0;
+    return `<div class="srv-card">
+      <div class="srv-card-cab"><strong>${escapeHtml(p.nome)}</strong>${p.sku ? `<span class="srv-tag">${escapeHtml(p.sku)}</span>` : ''}</div>
+      <div class="srv-card-linha"><span>Categoria:</span><span class="srv-cat" style="--srv-cor:#64748b;">${escapeHtml(p.categoria || 'Geral')}</span></div>
+      <div class="srv-card-linha"><span>Preço:</span><span class="srv-preco">${srvMoeda(preco, p.moeda)}</span></div>
+      <div class="srv-card-linha"><span>Custo / margem:</span><span>${custo ? srvMoeda(custo, p.moeda) : '—'}${margem !== null ? ` · <strong style="color:${margem >= 0 ? 'var(--success)' : 'var(--danger)'};">${margem}%</strong>` : ''}</span></div>
+      <div class="srv-card-linha"><span>Estoque:</span><span class="${baixo ? 'srv-estoque-baixo' : ''}">${Number(p.estoque || 0)} ${escapeHtml(p.unidade || 'Unidade')}${baixo ? ' · abaixo do mínimo' : ''}</span></div>
+      <div class="srv-card-acoes"><button type="button" class="btn" onclick="srvAbrirProduto('${id}')">${ic('lapis', 'ic-herda')} Editar</button><button type="button" class="btn" onclick="srvAbrirMovimento('${id}')">${ic('recorrente', 'ic-herda')} Estoque</button><button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir produto" onclick="srvExcluirProduto('${id}')">${ic('lixeira', 'ic-herda')}</button></div>
+    </div>`;
+  }).join('');
+  const movs = SRV_MOVIMENTOS.filter((m) => (!SRV_FILTRO.movProduto || m.produto === SRV_FILTRO.movProduto) && (!SRV_FILTRO.movTipo || m.tipo === SRV_FILTRO.movTipo))
+    .slice().sort((a, b) => String(b.criadoEm || b.data || '').localeCompare(String(a.criadoEm || a.data || ''))).slice(0, 200);
+  return `
+    <div class="srv-acoes"><button type="button" class="btn btn-primary" onclick="srvAbrirProduto(null)">${ic('mais', 'ic-herda')} Novo Produto</button>
+      ${erp ? '<span class="kb-vazio-mini">Os mesmos produtos e o mesmo estoque do ERP (sua conta tem ERP + CRM).</span>' : ''}</div>
+    ${SRV_PRODUTOS.length ? `<div class="srv-grade">${cards}</div>` : `<div class="kb-wiz-caixa" style="text-align:center; padding:36px 16px;">
+      <div class="ic-circulo">${ic('pacote')}</div><h3 style="margin:4px 0;">Nenhum produto cadastrado</h3>
+      <p style="color:var(--text-soft); margin:0 0 14px;">Cadastre seus produtos para controlar estoque, custos e margens.</p>
+      <button type="button" class="btn btn-primary" onclick="srvAbrirProduto(null)">${ic('mais', 'ic-herda')} Novo Produto</button></div>`}
+    <div class="kb-wiz-caixa srv-historico">
+      <div class="srv-historico-cab"><strong>${ic('recorrente')} Histórico de Movimentações</strong><span class="kb-espaco"></span>
+        <select class="srv-select" onchange="SRV_FILTRO.movProduto = this.value; srvRender();"><option value="">Todos os produtos</option>${SRV_PRODUTOS.map((p) => `<option value="${escapeHtml(p.nome)}"${SRV_FILTRO.movProduto === p.nome ? ' selected' : ''}>${escapeHtml(p.nome)}</option>`).join('')}</select>
+        <select class="srv-select" onchange="SRV_FILTRO.movTipo = this.value; srvRender();"><option value="">Todos os tipos</option><option value="entrada"${SRV_FILTRO.movTipo === 'entrada' ? ' selected' : ''}>Entrada</option><option value="saida"${SRV_FILTRO.movTipo === 'saida' ? ' selected' : ''}>Saída</option></select>
+      </div>
+      ${movs.length ? `<div class="kb-tabela-wrap"><table class="kb-tabela" style="min-width:560px;"><thead><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Qtd.</th><th>Motivo</th></tr></thead><tbody>
+        ${movs.map((m) => `<tr><td>${escapeHtml(kbDataCurta(m.data || m.criadoEm))}</td><td>${escapeHtml(m.produto)}</td><td>${m.tipo === 'saida' ? '<span class="srv-mov saida">Saída</span>' : '<span class="srv-mov">Entrada</span>'}</td><td>${Number(m.quantidade) || 0}</td><td>${escapeHtml(m.motivo || '—')}</td></tr>`).join('')}
+      </tbody></table></div>` : '<p class="kb-vazio" style="padding:22px;">Nenhuma movimentação encontrada</p>'}
+    </div>`;
+}
+
+function srvAbrirProduto(id) {
+  if (!exigirPodeOperar('cadastrar produtos')) return;
+  const p = id ? SRV_PRODUTOS.find((x) => x.id === id) : null;
+  const v = (campo, padrao) => escapeHtml(String(p && p[campo] !== undefined && p[campo] !== null ? p[campo] : padrao));
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${p ? 'Editar Produto' : 'Novo Produto'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="field full"><label>Nome *</label><input type="text" id="srv-p-nome" maxlength="100" value="${v('nome', '')}" placeholder="Nome do produto"></div>
+      <div class="field full"><label>Descrição</label><textarea id="srv-p-desc" rows="2" maxlength="1000" placeholder="Descrição do produto">${v('descricao', '')}</textarea></div>
+      <div class="srv-campos-3">
+        <div class="field"><label>SKU</label><input type="text" id="srv-p-sku" maxlength="40" value="${v('sku', '')}" placeholder="Código SKU"></div>
+        <div class="field"><label>NCM</label><input type="text" id="srv-p-ncm" maxlength="12" value="${v('ncm', '')}" placeholder="Código NCM"></div>
+        <div class="field"><label>Categoria</label><input type="text" id="srv-p-cat" maxlength="40" value="${v('categoria', 'Geral')}"></div>
+        <div class="field"><label>Preço de Venda *</label><input type="number" id="srv-p-preco" min="0" step="0.01" value="${v('precoVenda', '')}" placeholder="0.00"></div>
+        <div class="field"><label>Custo</label><input type="number" id="srv-p-custo" min="0" step="0.01" value="${v('custo', '')}" placeholder="0.00"></div>
+        <div class="field"><label>Moeda</label><select id="srv-p-moeda">${Object.entries(SRV_MOEDAS).map(([k, t]) => `<option value="${k}"${(p && p.moeda || 'BRL') === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+        <div class="field"><label>Estoque${p ? ' (use "Estoque" pra movimentar)' : ''}</label><input type="number" id="srv-p-estoque" min="0" step="1" value="${v('estoque', 0)}" ${p ? 'disabled' : ''}></div>
+        <div class="field"><label>Estoque Mínimo</label><input type="number" id="srv-p-min" min="0" step="1" value="${v('quantidadeMinima', 0)}"></div>
+        <div class="field"><label>Unidade</label><select id="srv-p-unidade">${SRV_UNIDADES.map((u) => `<option${(p && p.unidade || 'Unidade') === u ? ' selected' : ''}>${u}</option>`).join('')}</select></div>
+      </div>
+      <div class="cfg-modal-rodape"><button type="button" class="btn" style="flex:1; justify-content:center;" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" style="flex:2; justify-content:center;" onclick="srvSalvarProduto(${p ? `'${escapeParaOnclick(p.id)}'` : 'null'})">${p ? 'Salvar alterações' : 'Criar Produto'}</button></div>
+    </div>`;
+  openModal('modal-srv');
+}
+function srvSalvarProduto(id) {
+  const g = (i) => document.getElementById(i).value;
+  const nome = g('srv-p-nome').trim();
+  if (!nome) { avisar('Dê um nome pro produto.'); return; }
+  if (g('srv-p-preco') === '' || isNaN(Number(g('srv-p-preco')))) { avisar('Informe o preço de venda.'); return; }
+  if (SRV_PRODUTOS.some((p) => p.id !== id && kbNomeNorm(p.nome) === kbNomeNorm(nome))) { avisar('Já existe um produto com esse nome.'); return; }
+  const dados = {
+    nome: nome.slice(0, 100), descricao: g('srv-p-desc').slice(0, 1000), sku: g('srv-p-sku').trim().slice(0, 40), ncm: g('srv-p-ncm').replace(/[^\d.]/g, '').slice(0, 12),
+    categoria: g('srv-p-cat').trim().slice(0, 40) || 'Geral', precoVenda: Math.max(0, Number(g('srv-p-preco')) || 0), custo: Math.max(0, Number(g('srv-p-custo')) || 0),
+    moeda: SRV_MOEDAS[g('srv-p-moeda')] ? g('srv-p-moeda') : 'BRL', quantidadeMinima: Math.max(0, Math.round(Number(g('srv-p-min')) || 0)), unidade: g('srv-p-unidade'),
+  };
+  if (id) {
+    const antigo = SRV_PRODUTOS.find((p) => p.id === id);
+    if (!srvGravar(srvChaveProdutos(), SRV_PRODUTOS.map((p) => (p.id === id ? Object.assign({}, p, dados) : p)), 'produtos')) return;
+    // renomeou: o histórico acompanha
+    if (antigo && antigo.nome !== dados.nome && SRV_MOVIMENTOS.some((m) => m.produto === antigo.nome)) srvGravar(srvChaveMovimentos(), SRV_MOVIMENTOS.map((m) => (m.produto === antigo.nome ? Object.assign({}, m, { produto: dados.nome }) : m)), 'movimentos');
+  } else {
+    const estoque = Math.max(0, Math.round(Number(g('srv-p-estoque')) || 0));
+    const novo = Object.assign({ id: genId('prd'), situacao: 'ativo', estoque, criadoEm: new Date().toISOString() }, dados);
+    if (!srvGravar(srvChaveProdutos(), SRV_PRODUTOS.concat([novo]), 'produtos')) return;
+    if (estoque > 0) srvGravar(srvChaveMovimentos(), SRV_MOVIMENTOS.concat([{ id: genId('mov'), produto: novo.nome, tipo: 'entrada', quantidade: estoque, data: kbHoje(), motivo: 'Estoque inicial', criadoEm: new Date().toISOString() }]), 'movimentos');
+  }
+  srvFecharModal();
+}
+function srvExcluirProduto(id) {
+  if (!exigirPodeOperar('excluir produtos')) return;
+  const p = SRV_PRODUTOS.find((x) => x.id === id);
+  if (!p) return;
+  confirmarAcao(`Excluir o produto "${p.nome}"?${crmUsaDadosDoErp() ? ' Ele também sai do cadastro de produtos do ERP.' : ''} O histórico de movimentações continua.`, () => {
+    srvGravar(srvChaveProdutos(), SRV_PRODUTOS.filter((x) => x.id !== id), 'produtos');
+  }, 'Excluir produto');
+}
+function srvAbrirMovimento(id) {
+  if (!exigirPodeOperar('movimentar estoque')) return;
+  const p = SRV_PRODUTOS.find((x) => x.id === id);
+  if (!p) return;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:440px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Estoque — ${escapeHtml(p.nome)}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub">Estoque atual: <strong>${Number(p.estoque || 0)} ${escapeHtml(p.unidade || 'Unidade')}</strong></p>
+      <div class="field full"><label>Movimentação</label><select id="srv-m-tipo"><option value="entrada">Entrada (compra, devolução...)</option><option value="saida">Saída (venda, perda...)</option><option value="ajuste">Ajuste (contagem: definir o estoque)</option></select></div>
+      <div class="field full"><label>Quantidade</label><input type="number" id="srv-m-qtd" min="0" step="1" placeholder="0"></div>
+      <div class="field full"><label>Motivo</label><input type="text" id="srv-m-motivo" maxlength="120" placeholder="Ex: compra do fornecedor"></div>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="srvSalvarMovimento('${escapeParaOnclick(id)}')">Registrar</button></div>
+    </div>`;
+  openModal('modal-srv');
+}
+function srvSalvarMovimento(id) {
+  const p = SRV_PRODUTOS.find((x) => x.id === id);
+  if (!p) return;
+  const tipo = document.getElementById('srv-m-tipo').value;
+  const qtd = Math.round(Number(document.getElementById('srv-m-qtd').value));
+  const motivoDigitado = document.getElementById('srv-m-motivo').value.trim().slice(0, 120);
+  if (!(qtd >= 0) || document.getElementById('srv-m-qtd').value === '') { avisar('Informe a quantidade.'); return; }
+  const atual = Number(p.estoque || 0);
+  let novo, mov;
+  if (tipo === 'ajuste') {
+    if (qtd === atual) { avisar('O estoque já é ' + atual + '.'); return; }
+    novo = qtd;
+    mov = { tipo: qtd > atual ? 'entrada' : 'saida', quantidade: Math.abs(qtd - atual), motivo: 'Ajuste de contagem' + (motivoDigitado ? ': ' + motivoDigitado : '') };
+  } else {
+    if (!qtd) { avisar('A quantidade precisa ser maior que zero.'); return; }
+    if (tipo === 'saida' && qtd > atual) { avisar(`Não há estoque suficiente (atual: ${atual}).`); return; }
+    novo = tipo === 'entrada' ? atual + qtd : atual - qtd;
+    mov = { tipo, quantidade: qtd, motivo: motivoDigitado };
+  }
+  if (!srvGravar(srvChaveProdutos(), SRV_PRODUTOS.map((x) => (x.id === id ? Object.assign({}, x, { estoque: novo }) : x)), 'produtos')) return;
+  srvGravar(srvChaveMovimentos(), SRV_MOVIMENTOS.concat([Object.assign({ id: genId('mov'), produto: p.nome, data: kbHoje(), criadoEm: new Date().toISOString() }, mov)]), 'movimentos');
+  srvFecharModal();
+}
+
+// ---------- aba Planos ----------
+function srvHtmlPlanos() {
+  const b = kbNomeNorm(SRV_FILTRO.buscaPlano);
+  const lista = SRV_PLANOS.filter((p) => !b || kbNomeNorm(`${p.nome} ${p.descricao || ''} ${p.categoria || ''}`).includes(b));
+  return `
+    <div class="srv-acoes">
+      <label class="kb-busca">${kbIc('busca')}<input type="search" id="srv-busca-plano" placeholder="Buscar planos..." value="${escapeHtml(SRV_FILTRO.buscaPlano)}" oninput="SRV_FILTRO.buscaPlano = this.value; srvRender();"></label>
+      <button type="button" class="btn" onclick="srvAbrirPaginaPlanos()">${ic('brilho', 'ic-herda')} Apresentação pública</button>
+      <button type="button" class="btn btn-primary" onclick="srvAbrirPlano(null)">${ic('mais', 'ic-herda')} Novo Plano</button>
+    </div>
+    ${lista.length ? `<div class="srv-grade">${lista.map((p) => {
+      const servs = (p.servicoIds || []).map((sid) => KB_SERVICOS.find((s) => s.id === sid)).filter(Boolean);
+      const id = escapeParaOnclick(p.id);
+      return `<div class="srv-card">
+        <div class="srv-card-cab"><strong>${escapeHtml(p.nome)}</strong>${p.categoria ? `<span class="srv-cat" style="--srv-cor:#64748b;">${escapeHtml(p.categoria)}</span>` : ''}</div>
+        ${p.descricao ? `<p class="kb-card-desc" style="color:var(--text-soft);">${escapeHtml(p.descricao)}</p>` : ''}
+        <div class="srv-preco srv-preco-grande">${srvMoeda(p.valor, p.moeda)}</div>
+        <div class="srv-plano-servicos">${servs.map((s) => `<span>${ic('aprovado', 'ic-herda')} ${escapeHtml(s.nome)}</span>`).join('') || '<span class="kb-vazio-mini">Nenhum serviço incluso</span>'}</div>
+        <div class="srv-card-acoes"><button type="button" class="btn" onclick="srvAbrirPlano('${id}')">${ic('lapis', 'ic-herda')} Editar</button><button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir plano" onclick="srvExcluirPlano('${id}')">${ic('lixeira', 'ic-herda')}</button></div>
+      </div>`;
+    }).join('')}</div>`
+      : `<div class="kb-vazio-grande"><div class="ic-circulo">${ic('camadas')}</div><h3>${SRV_PLANOS.length ? 'Nenhum plano com essa busca' : 'Nenhum plano cadastrado'}</h3><p>Crie planos agrupando serviços existentes com um valor fixo.</p></div>`}`;
+}
+let SRV_PLANO_EDIT = null;
+function srvAbrirPlano(id) {
+  if (!exigirPodeOperar('criar planos')) return;
+  const p = id ? SRV_PLANOS.find((x) => x.id === id) : null;
+  SRV_PLANO_EDIT = p ? kbLimpar(p) : { id: null, nome: '', descricao: '', valor: '', moeda: 'BRL', categoria: '', servicoIds: [] };
+  srvRenderFormPlano();
+  openModal('modal-srv');
+}
+function srvRenderFormPlano() {
+  const e = SRV_PLANO_EDIT;
+  const ov = srvGarantirModal();
+  const soma = KB_SERVICOS.filter((s) => e.servicoIds.includes(s.id)).reduce((a, s) => a + Number(s.valor || 0), 0);
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${e.id ? 'Editar Plano' : 'Criar Plano'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="field full"><label>Nome do Plano *</label><input type="text" maxlength="80" value="${escapeHtml(e.nome)}" placeholder="Ex: Plano de Marketing Digital" oninput="SRV_PLANO_EDIT.nome = this.value"></div>
+      <div class="field full"><label>Descrição</label><textarea rows="3" maxlength="1000" placeholder="Descreva o que está incluso no plano..." oninput="SRV_PLANO_EDIT.descricao = this.value">${escapeHtml(e.descricao || '')}</textarea></div>
+      <div class="kb-campos-2">
+        <div class="field"><label>Valor do Plano *</label><input type="number" min="0" step="0.01" value="${escapeHtml(String(e.valor ?? ''))}" placeholder="0.00" oninput="SRV_PLANO_EDIT.valor = this.value"></div>
+        <div class="field"><label>Moeda</label><select onchange="SRV_PLANO_EDIT.moeda = this.value">${Object.entries(SRV_MOEDAS).map(([k, t]) => `<option value="${k}"${e.moeda === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+      </div>
+      <div class="field full"><label>Categoria</label><input type="text" maxlength="40" value="${escapeHtml(e.categoria || '')}" placeholder="Ex: Marketing, Design, Consultoria..." oninput="SRV_PLANO_EDIT.categoria = this.value"><p class="nivel-ajuda">Usada para agrupar os planos. Deixe em branco para "Sem categoria".</p></div>
+      <div class="field full"><label>Serviços inclusos no plano</label><p class="nivel-ajuda" style="margin:0 0 8px;">Selecione os serviços que compõem este plano. O valor é definido manualmente acima, independente da soma dos serviços${soma ? ` (soma atual: ${formatMoney(soma)})` : ''}.</p>
+        <div class="kb-wiz-lista" style="margin:0;">${KB_SERVICOS.map((s) => { const sel = e.servicoIds.includes(s.id); return `<button type="button" class="kb-wiz-opcao${sel ? ' ativo' : ''}" onclick="srvAlternarServicoPlano('${escapeParaOnclick(s.id)}')"><span class="kb-wiz-radio">${sel ? ic('aprovado', 'ic-herda') : ''}</span><span class="kb-wiz-opcao-txt"><strong>${escapeHtml(s.nome)}</strong></span><span class="kb-wiz-preco">${srvMoeda(s.valor, s.moeda)}</span></button>`; }).join('') || '<p class="kb-vazio-mini">Cadastre serviços na aba Serviços primeiro.</p>'}</div>
+      </div>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="srvSalvarPlano()">${e.id ? 'Salvar alterações' : 'Criar Plano'}</button></div>
+    </div>`;
+}
+function srvAlternarServicoPlano(sid) {
+  const l = SRV_PLANO_EDIT.servicoIds;
+  SRV_PLANO_EDIT.servicoIds = l.includes(sid) ? l.filter((x) => x !== sid) : l.concat([sid]);
+  srvRenderFormPlano();
+}
+function srvSalvarPlano() {
+  const e = SRV_PLANO_EDIT;
+  const nome = String(e.nome || '').trim();
+  if (!nome) { avisar('Dê um nome pro plano.'); return; }
+  if (e.valor === '' || isNaN(Number(e.valor))) { avisar('Informe o valor do plano.'); return; }
+  const dados = { nome: nome.slice(0, 80), descricao: String(e.descricao || '').slice(0, 1000), valor: Math.max(0, Number(e.valor) || 0), moeda: SRV_MOEDAS[e.moeda] ? e.moeda : 'BRL', categoria: String(e.categoria || '').trim().slice(0, 40), servicoIds: e.servicoIds.filter((sid) => KB_SERVICOS.some((s) => s.id === sid)) };
+  const lista = e.id ? SRV_PLANOS.map((p) => (p.id === e.id ? Object.assign({}, p, dados) : p)) : SRV_PLANOS.concat([Object.assign({ id: genId('pln'), criadoEm: new Date().toISOString() }, dados)]);
+  if (!srvGravar(SRV_PLANOS_KEY, lista, 'planos')) return;
+  srvFecharModal();
+  if (SRV_PAGINA && SRV_PAGINA.slug && (SRV_PAGINA.planoIds || []).includes(e.id)) srvPublicarPaginaPlanos(SRV_PAGINA, true);
+}
+function srvExcluirPlano(id) {
+  if (!exigirPodeOperar('excluir planos')) return;
+  const p = SRV_PLANOS.find((x) => x.id === id);
+  if (!p) return;
+  confirmarAcao(`Excluir o plano "${p.nome}"? Ele também sai da apresentação pública.`, () => {
+    if (!srvGravar(SRV_PLANOS_KEY, SRV_PLANOS.filter((x) => x.id !== id), 'planos')) return;
+    if (SRV_PAGINA && (SRV_PAGINA.planoIds || []).includes(id)) srvPublicarPaginaPlanos(Object.assign({}, SRV_PAGINA, { planoIds: SRV_PAGINA.planoIds.filter((x) => x !== id) }), true);
+  }, 'Excluir plano');
+}
+
+// ---------- Apresentação pública de planos ----------
+// O cliente final abre por link, sem login. Como ele não pode ler os
+// dados da empresa, a página publicada é uma CÓPIA (planos_publicos/{endereço})
+// com só o que aparece na tela — atualizada sempre que você salva.
+function srvSlug(t) { return kbNomeNorm(t).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40); }
+function srvLinkPlanos(slug) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'planos.html?p=' + encodeURIComponent(slug); }
+let SRV_PAG_EDIT = null;
+function srvAbrirPaginaPlanos() {
+  if (!exigirPodeOperar('editar a apresentação pública')) return;
+  const nomeEmp = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || 'minha-empresa';
+  SRV_PAG_EDIT = Object.assign({ slug: srvSlug(nomeEmp) + '-planos-' + Math.random().toString(36).slice(2, 6), titulo: 'Nossos Planos', subtitulo: 'Escolha o pacote ideal para o seu projeto.', cor: '#ef4444', tema: 'escuro', logoUrl: '', rodape: '', ativa: true, planoIds: SRV_PLANOS.map((p) => p.id) }, SRV_PAGINA ? kbLimpar(SRV_PAGINA) : {});
+  srvRenderPaginaPlanos();
+  openModal('modal-srv');
+}
+function srvRenderPaginaPlanos() {
+  const e = SRV_PAG_EDIT;
+  const ov = srvGarantirModal();
+  const link = srvLinkPlanos(e.slug);
+  const prefixo = srvLinkPlanos('').replace(/^https?:\/\//, '');
+  ov.innerHTML = `
+    <div class="modal kb-modal srv-pag-modal" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${ic('brilho')} Apresentação pública de planos</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="srv-pag-grade">
+        <div class="srv-pag-form">
+          <div class="field full"><label>Endereço público</label><div class="srv-endereco"><span title="${escapeHtml(prefixo)}">…planos.html?p=</span><input type="text" maxlength="40" value="${escapeHtml(e.slug)}" oninput="SRV_PAG_EDIT.slug = srvSlug(this.value); document.getElementById('srv-pag-link').value = srvLinkPlanos(SRV_PAG_EDIT.slug);"></div></div>
+          <div class="field full"><label>Título</label><input type="text" maxlength="60" value="${escapeHtml(e.titulo)}" oninput="SRV_PAG_EDIT.titulo = this.value; srvPreviewPlanos();"></div>
+          <div class="field full"><label>Subtítulo</label><textarea rows="2" maxlength="200" oninput="SRV_PAG_EDIT.subtitulo = this.value; srvPreviewPlanos();">${escapeHtml(e.subtitulo)}</textarea></div>
+          <div class="kb-campos-2">
+            <div class="field"><label>Cor de destaque</label><div class="cfg-cor-linha"><input type="color" value="${expandirHex(e.cor) || '#ef4444'}" oninput="SRV_PAG_EDIT.cor = this.value; this.nextElementSibling.value = this.value; srvPreviewPlanos();"><input type="text" value="${escapeHtml(e.cor)}" maxlength="7" oninput="const v = corHexValida(this.value); if (v) { SRV_PAG_EDIT.cor = v; this.previousElementSibling.value = expandirHex(v); srvPreviewPlanos(); }"></div></div>
+            <div class="field"><label>Tema</label><select onchange="SRV_PAG_EDIT.tema = this.value; srvPreviewPlanos();"><option value="escuro"${e.tema === 'escuro' ? ' selected' : ''}>Escuro</option><option value="claro"${e.tema === 'claro' ? ' selected' : ''}>Claro</option></select></div>
+          </div>
+          <div class="field full"><label>URL do logo (opcional)</label><input type="url" value="${escapeHtml(e.logoUrl || '')}" placeholder="https://..." oninput="SRV_PAG_EDIT.logoUrl = this.value.trim(); srvPreviewPlanos();"></div>
+          <div class="field full"><label>Texto de rodapé (opcional)</label><textarea rows="2" maxlength="300" placeholder="Cada entrega segue um método claro..." oninput="SRV_PAG_EDIT.rodape = this.value; srvPreviewPlanos();">${escapeHtml(e.rodape || '')}</textarea></div>
+          <div class="kb-linha-switch" style="margin:6px 0 12px;"><label class="switch"><input type="checkbox" ${e.ativa ? 'checked' : ''} onchange="SRV_PAG_EDIT.ativa = this.checked"><span class="switch-slider"></span></label><div><strong>Página ativa</strong><span>Desligada, o link mostra "página indisponível".</span></div></div>
+          <div class="cfg-secao-rotulo" style="margin-top:4px;">${kbIc('colunas')} Planos exibidos</div>
+          ${SRV_PLANOS.length ? SRV_PLANOS.map((p) => `<label class="kb-imp-opcao" style="margin-top:6px;"><input type="checkbox" ${e.planoIds.includes(p.id) ? 'checked' : ''} onchange="SRV_PAG_EDIT.planoIds = this.checked ? SRV_PAG_EDIT.planoIds.concat(['${escapeParaOnclick(p.id)}']) : SRV_PAG_EDIT.planoIds.filter((x) => x !== '${escapeParaOnclick(p.id)}'); srvPreviewPlanos();"> ${escapeHtml(p.nome)} <span class="kb-vazio-mini">${srvMoeda(p.valor, p.moeda)}</span></label>`).join('') : '<p class="kb-vazio-mini">Nenhum plano cadastrado. Crie planos primeiro na aba Planos.</p>'}
+          <div class="field full" style="margin-top:14px;"><label>Link público</label><div class="srv-endereco"><input type="text" id="srv-pag-link" readonly value="${escapeHtml(link)}"><button type="button" class="kb-btn-ic kb-btn-borda" title="Copiar" aria-label="Copiar link" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('srv-pag-link').value); this.innerHTML = '✓';">${ic('link', 'ic-herda')}</button><button type="button" class="kb-btn-ic kb-btn-borda" title="Abrir" aria-label="Abrir" onclick="window.open(document.getElementById('srv-pag-link').value, '_blank')">${ic('abrir', 'ic-herda')}</button></div>
+            <p class="nivel-ajuda">O link passa a funcionar depois de "Salvar e publicar".</p></div>
+        </div>
+        <div class="srv-pag-preview" id="srv-pag-preview"></div>
+      </div>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Fechar</button><button type="button" class="btn btn-primary" onclick="srvPublicarPaginaPlanos(SRV_PAG_EDIT)">Salvar e publicar</button></div>
+    </div>`;
+  srvPreviewPlanos();
+}
+function srvDadosPublicosPlanos(cfg) {
+  return (cfg.planoIds || []).map((pid) => SRV_PLANOS.find((p) => p.id === pid)).filter(Boolean).map((p) => ({
+    nome: p.nome, descricao: p.descricao || '', valor: Number(p.valor) || 0, moeda: p.moeda || 'BRL', categoria: p.categoria || '',
+    servicos: (p.servicoIds || []).map((sid) => KB_SERVICOS.find((s) => s.id === sid)).filter(Boolean).map((s) => s.nome),
+  }));
+}
+function srvHtmlPaginaPlanos(cfg, planos, preview) {
+  const cor = corHexValida(cfg.cor) || '#ef4444';
+  const logo = urlImagemSegura(cfg.logoUrl);
+  return `<div class="pp ${cfg.tema === 'claro' ? 'pp-claro' : 'pp-escuro'}" style="--pp-cor:${cor};">
+    ${preview ? '<div class="pp-rotulo">Pré-visualização</div>' : ''}
+    ${logo ? `<img class="pp-logo" src="${escapeHtml(logo)}" alt="">` : ''}
+    <h1>${escapeHtml(cfg.titulo || 'Nossos Planos')}</h1>
+    ${cfg.subtitulo ? `<p class="pp-sub">${escapeHtml(cfg.subtitulo)}</p>` : ''}
+    <div class="pp-grade">${planos.map((p) => `<div class="pp-plano">
+      ${p.categoria ? `<span class="pp-cat">${escapeHtml(p.categoria)}</span>` : ''}
+      <h2>${escapeHtml(p.nome)}</h2>
+      <div class="pp-preco">${srvMoeda(p.valor, p.moeda)}</div>
+      ${p.descricao ? `<p>${escapeHtml(p.descricao)}</p>` : ''}
+      ${p.servicos.length ? `<ul>${p.servicos.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : ''}
+    </div>`).join('') || `<p class="pp-sub">${preview ? 'Selecione planos para visualizar' : 'Nenhum plano disponível no momento.'}</p>`}</div>
+    ${cfg.rodape ? `<p class="pp-rodape">${escapeHtml(cfg.rodape)}</p>` : ''}
+  </div>`;
+}
+function srvPreviewPlanos() {
+  const el = document.getElementById('srv-pag-preview');
+  if (el && SRV_PAG_EDIT) el.innerHTML = srvHtmlPaginaPlanos(SRV_PAG_EDIT, srvDadosPublicosPlanos(SRV_PAG_EDIT), true);
+}
+async function srvPublicarPaginaPlanos(cfg, silencioso) {
+  if (!cfg) return;
+  const slug = srvSlug(cfg.slug);
+  if (slug.length < 3) { avisar('O endereço público precisa ter pelo menos 3 letras ou números.'); return; }
+  const logo = String(cfg.logoUrl || '').trim();
+  if (logo && !urlImagemSegura(logo)) { avisar('A URL do logo precisa começar com https://'); return; }
+  const anterior = SRV_PAGINA && SRV_PAGINA.slug;
+  const nova = Object.assign({}, cfg, { slug, cor: corHexValida(cfg.cor) || '#ef4444', tema: cfg.tema === 'claro' ? 'claro' : 'escuro', logoUrl: urlImagemSegura(logo), planoIds: (cfg.planoIds || []).filter((id) => SRV_PLANOS.some((p) => p.id === id)), titulo: String(cfg.titulo || '').slice(0, 60), subtitulo: String(cfg.subtitulo || '').slice(0, 200), rodape: String(cfg.rodape || '').slice(0, 300), ativa: !!cfg.ativa });
+  if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
+    try {
+      await firestoreDb.collection(SRV_COLECAO_PLANOS_PUBLICOS).doc(slug).set({
+        tenantId: TENANT_ID, ativa: nova.ativa, titulo: nova.titulo, subtitulo: nova.subtitulo, cor: nova.cor, tema: nova.tema, logoUrl: nova.logoUrl, rodape: nova.rodape,
+        planos: srvDadosPublicosPlanos(nova), atualizadoEm: new Date().toISOString(),
+      });
+      if (anterior && anterior !== slug) await firestoreDb.collection(SRV_COLECAO_PLANOS_PUBLICOS).doc(anterior).delete().catch(() => {});
+    } catch (err) {
+      console.error('Erro ao publicar planos:', err);
+      if (String(err && err.code).includes('permission-denied')) avisar('Não foi possível publicar: esse endereço já é usado por outra empresa (escolha outro) — ou as regras novas do Firebase ainda não foram publicadas.');
+      else avisar(mensagemErroFirestore(err));
+      return;
+    }
+  }
+  if (cloudSet(SRV_PAGINA_PLANOS_KEY, nova) === false) return;
+  SRV_PAGINA = nova;
+  if (!silencioso) { srvFecharModal(); avisar(`Página publicada! Link: ${srvLinkPlanos(slug)}`, 'Apresentação pública'); }
+}
+
+// Página pública (planos.html)
+async function carregarPaginaPlanosPublica() {
+  initFirebase();
+  const slug = srvSlug(new URLSearchParams(location.search).get('p') || '');
+  const el = document.getElementById('pp-conteudo');
+  const erro = (t) => { el.innerHTML = `<div class="pp pp-escuro" style="--pp-cor:#64748b;"><h1>Página indisponível</h1><p class="pp-sub">${escapeHtml(t)}</p></div>`; };
+  if (!slug || !firestoreDb) { erro('O link pode estar incorreto.'); return; }
+  try {
+    const snap = await firestoreDb.collection(SRV_COLECAO_PLANOS_PUBLICOS).doc(slug).get();
+    if (!snap.exists || !snap.data().ativa) { erro('Essa página não existe ou foi desativada.'); return; }
+    const d = snap.data();
+    document.title = d.titulo || 'Planos';
+    document.body.classList.add(d.tema === 'claro' ? 'pp-body-claro' : 'pp-body-escuro');
+    el.innerHTML = srvHtmlPaginaPlanos(d, Array.isArray(d.planos) ? d.planos : [], false);
+  } catch (err) {
+    erro('Essa página não existe ou foi desativada.');
+  }
+}
+
+// ---------- aba Checkout ----------
+function srvHtmlCheckout() {
+  return `<div class="kb-vazio-grande"><div class="ic-circulo">${ic('carteira')}</div><h3>Checkout — em breve</h3>
+    <p>Vender seus serviços e planos com pagamento online (link de pagamento, Pix, cartão) depende de conectar um meio de pagamento. Essa aba ganha vida quando fizermos essa integração.</p></div>`;
+}
+
+// ---------- integração: orçamento puxa do catálogo ----------
+function srvAbrirCatalogoNoOrcamento(ancora) {
+  const ativos = KB_SERVICOS.filter((s) => s.ativo !== false);
+  if (!ancora.id) ancora.id = 'srv-btn-catalogo-orc';
+  kbMostrarPopover(ativos.length ? `<div class="kb-pop-titulo">Adicionar do catálogo</div>${ativos.map((s) => `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); srvAdicionarServicoNoOrcamento('${escapeParaOnclick(s.id)}')">${ic('pacote', 'ic-herda')}<span>${escapeHtml(s.nome)}</span><em>${srvMoeda(s.valor, s.moeda)}</em></button>`).join('')}`
+    : '<div class="kb-pop-form"><p class="kb-vazio-mini" style="margin:0;">Nenhum serviço no catálogo ainda. Cadastre em Operacional → Serviços.</p></div>', ancora);
+}
+function srvAdicionarServicoNoOrcamento(id) {
+  const s = KB_SERVICOS.find((x) => x.id === id);
+  if (!s || typeof ORCAMENTO_WIZARD === 'undefined' || !ORCAMENTO_WIZARD) return;
+  const w = ORCAMENTO_WIZARD;
+  const vazio = w.itens.length === 1 && !w.itens[0].descricao && !Number(w.itens[0].valorUnit);
+  const item = { descricao: s.nome, obs: s.descricao || '', prazo: '', qtd: 1, valorUnit: Number(s.valor) || 0, servicoId: s.id };
+  w.itens = vazio ? [item] : w.itens.concat([item]);
+  renderPassoWizard();
+}
+
+// ---------- integração: Novo Projeto usa o pacote de conteúdos do serviço ----------
+function srvSincronizarConteudosDoServico(servicoId, selecionado) {
+  if (!KB_WIZ) return;
+  const s = KB_SERVICOS.find((x) => x.id === servicoId);
+  const c = KB_WIZ.conteudo;
+  c.blocos = c.blocos.filter((b) => b.origemServicoId !== servicoId);
+  if (selecionado && s && s.geraConteudos && s.pacote && Object.keys(s.pacote).length) {
+    const b = kbNovoBlocoConteudo();
+    Object.assign(b, { titulo: 'Pacote: ' + s.nome, origemServicoId: s.id, qtd: kbLimpar(s.pacote) });
+    c.blocos.push(b);
+    c.ativo = true;
+  }
+  if (!c.blocos.length) c.ativo = false;
+}
+
+// =====================================================================
 // ---------- Central de Atendimento (chatbot por regras) ----------
 // =====================================================================
 
@@ -1043,8 +11500,8 @@ const CHATBOT_KB = [
   { padroes: ['o que é esse sistema', 'como funciona o sistema', 'pra que serve', 'o que da pra fazer aqui'], resposta: 'O Eagles Labz é um sistema de gestão (ERP): cadastro de clientes/fornecedores/produtos, controle de vendas (pedidos), estoque, financeiro mês a mês, e dashboards pra acompanhar como o negócio está indo. Cada empresa que usa o sistema tem os próprios dados, totalmente separados de qualquer outra.' },
   { padroes: ['por onde eu começo', 'primeiro passo', 'como comecar', 'sou novo aqui'], resposta: 'Sugestão de ordem: 1) Meu Perfil → preencha os dados da sua empresa. 2) Cadastros → cadastre seus produtos e seus clientes/fornecedores. 3) Vendas → registre seus pedidos. 4) Financeiro → acompanhe receitas e despesas do mês. O Painel e o Meu Negócio vão se preenchendo sozinhos conforme você usa o resto.' },
   { padroes: ['diferenca entre painel e financeiro', 'painel ou financeiro'], resposta: 'O Painel é só pra CONSULTA — um resumo rápido do mês. Pra editar qualquer valor (lançar receita, pagamento, etc.), você precisa ir na aba Financeiro mesmo.' },
-  { padroes: ['super admin', 'superadmin', 'administrador da plataforma'], resposta: 'Super Admin é quem administra a PLATAFORMA inteira (cria empresas novas, suspende acesso por falta de pagamento). É diferente do "Administrador da empresa" (TenantAdmin), que só gerencia a própria empresa e a própria equipe.' },
-  { padroes: ['papeis', 'papéis', 'permissao', 'permissão', 'tipos de usuario'], resposta: 'Existem 3 papéis: Super Admin (dono da plataforma), Administrador (dono de uma empresa cliente, pode gerenciar a própria equipe) e Operacional (uso do dia a dia, sem acesso a Usuários/configurações).' },
+  { padroes: ['super admin', 'superadmin', 'administrador da plataforma'], resposta: 'Super Admin é quem administra a PLATAFORMA inteira (cria empresas, define o plano e quantos usuários cada uma pode ter, suspende acesso). É diferente do Diretor de uma empresa, que só gerencia a própria empresa e a própria equipe.' },
+  { padroes: ['papeis', 'papéis', 'permissao', 'permissão', 'tipos de usuario'], resposta: 'Dentro de cada empresa existem 3 níveis: Diretor (tudo, inclusive usuários e configurações), Administrativo (tudo, menos o financeiro — Painel, Meu Negócio e Financeiro ficam bloqueados) e Financeiro (o financeiro completo e, no resto, só visualiza). Acima deles está o Super Admin, que administra a plataforma.' },
 
   // ---------- Cadastros ----------
   { padroes: ['cadastrar cliente', 'novo cliente', 'adicionar cliente', 'incluir cliente'], resposta: 'Vá em Cadastros → Clientes e Fornecedores e clique em "+ Incluir cadastro". Preencha os dados e salve. O CPF/CNPJ é validado de verdade (confere o dígito) — se digitar errado, o sistema não deixa salvar.' },
@@ -1090,11 +11547,11 @@ const CHATBOT_KB = [
   { padroes: ['venda por vendedor', 'ranking de vendedor'], resposta: 'Em Meu Negócio → Venda por vendedor tem o ranking de vendas por vendedor, por produto, e a evolução das vendas mês a mês.' },
 
   // ---------- Conta, segurança e usuários ----------
-  { padroes: ['tema', 'cor', 'escuro', 'claro', 'modo noturno'], resposta: 'Clique no seu perfil no canto superior esquerdo — lá tem a opção de tema Claro ou Escuro. Também dá pra trocar em Meu Perfil → aba Tema.' },
+  { padroes: ['tema', 'cores do sistema', 'mudar a cor', 'trocar a cor', 'modo escuro', 'modo claro', 'modo noturno'], resposta: 'Clique na engrenagem no topo da tela (ou no seu perfil → Configurações) → aba Aparência → "Aparência do Sistema". Lá tem 14 temas, cores individuais e tamanho da fonte. Os botões Claro/Escuro do menu do perfil continuam funcionando como atalho.' },
   { padroes: ['logo', 'logotipo', 'imagem da empresa'], resposta: 'Em Meu Perfil → Dados da empresa, no topo do formulário, tem "Enviar imagem" — ela substitui a letra do avatar no menu pela sua logo.' },
   { padroes: ['trocar senha', 'mudar senha', 'alterar senha'], resposta: 'Vá no seu perfil (canto superior esquerdo) → Dados da empresa → aba Segurança. Lá você troca sua própria senha a qualquer momento, sem precisar de ajuda de ninguém.' },
   { padroes: ['esqueci', 'esqueci a senha', 'recuperar senha'], resposta: 'Na tela de login, clique em "Esqueceu a senha?" — chega um link no seu e-mail pra você criar uma senha nova.' },
-  { padroes: ['criar usuario', 'criar acesso', 'novo usuario', 'adicionar usuario', 'equipe', 'convidar'], resposta: 'Se você é administrador da empresa, vá no seu perfil → Usuários, e clique em "+ Novo usuário". Dá pra cadastrar até 5 pessoas da sua equipe, cada uma com e-mail e senha próprios, como Operacional ou Administrador.' },
+  { padroes: ['criar usuario', 'criar acesso', 'novo usuario', 'adicionar usuario', 'equipe', 'convidar'], resposta: 'Se você é Diretor da empresa, vá no seu perfil → Usuários e clique em "+ Novo usuário". Cada pessoa tem e-mail e senha próprios e um nível (Diretor, Administrativo ou Financeiro). Quantas pessoas cabem depende do seu plano — o contador fica no topo da tela.' },
   { padroes: ['remover acesso', 'tirar usuario', 'demitir'], resposta: 'Em Usuários, ao lado do nome da pessoa tem "Remover acesso" — ela deixa de conseguir entrar no sistema na hora.' },
   { padroes: ['instalar', 'aplicativo', 'app', 'pwa'], resposta: 'Dá pra instalar o sistema como um app de verdade, com ícone na tela e uso offline. O botão fica em Meu Perfil → Tema, ou direto no menu do seu perfil. No iPhone, use "Compartilhar" → "Adicionar à Tela de Início" no Safari.' },
   { padroes: ['busca', 'pesquisar', 'procurar cliente', 'procurar produto'], resposta: 'A barra de busca no topo procura por nome em Clientes/Fornecedores e Produtos em tempo real — clique num resultado pra ir direto pra aquele cadastro.' },
@@ -1106,26 +11563,86 @@ const CHATBOT_KB = [
 
 let CHATBOT_INICIADO = false;
 
+// Perguntas frequentes com resposta pronta (o "robozinho"). Aparecem como
+// botões clicáveis, e a lista muda conforme a tela: no Kanban, as do
+// Kanban vêm primeiro; no CRM, as do CRM; no resto, as gerais.
+const CHATBOT_FAQ = [
+  { id: 'kanban', titulo: 'Kanban', perguntas: [
+    { p: 'Como crio uma tarefa?', r: 'Clique em "+ Criar" no topo do Kanban e escolha Nova Tarefa (completa) ou Tarefa Rápida (só título e prazo, cai em "A Fazer"). Pra já criar numa etapa, use o "+" no topo da coluna. No Calendário, clicar num dia cria a tarefa com aquele prazo.' },
+    { p: 'Como crio um projeto?', r: '"+ Criar" → Novo Projeto. São 6 etapas: Informações, Modelos (cada item vira uma tarefa), Serviços, Equipe, Kanban (colunas próprias, se quiser) e Conteúdos. Projeto recorrente recria as tarefas todo mês.' },
+    { p: 'Como mudo uma tarefa de etapa?', r: 'Arraste o cartão pra outra coluna (no celular, segure o cartão um instante e arraste). Na Lista e na Tabela, troque pelo seletor de status da linha. O ✓ duplo no cartão marca como concluída.' },
+    { p: 'Como funciona o checklist?', r: 'No cartão, clique num item pra marcar como feito e em "Adicionar item" pra incluir (Enter adiciona e já deixa pronto pro próximo). A barra mostra o progresso. Pra editar ou reordenar itens, abra "Acessar tarefa completa". Pra esconder os checklists dos cartões: Exibir → Checklist nos cards.' },
+    { p: 'Como marco o tempo gasto?', r: 'Clique no ▶ do cronômetro no cartão (ou na linha da Lista/Tabela). Clique de novo pra pausar — o tempo vai somando. Concluir a tarefa pausa o cronômetro sozinho.' },
+    { p: 'Como mudo as colunas?', r: 'Botão "Colunas": dá pra renomear, mudar a cor, reordenar, criar e excluir etapas, e escolher qual coluna conta como "concluídas". Se excluir uma coluna com tarefas, elas vão pra primeira coluna.' },
+    { p: 'Agrupar por Status ou por Data?', r: 'Por Status, as colunas são as etapas (A Fazer, Em Progresso...). Por Data, as tarefas se separam em Atrasadas, Hoje, Amanhã, Esta Semana e Sem Data — e arrastar pra um grupo já muda o prazo.' },
+    { p: 'O que é arquivar uma tarefa?', r: 'Arquivar tira a tarefa do quadro sem apagar. Pra encontrar e desarquivar, clique em "Ver arquivadas". Excluir apaga de vez.' },
+    { p: 'Como funcionam as automações?', r: 'Botão "Automações": crie regras do tipo "quando acontecer X, faça Y" — ex.: quando concluir, arquivar; quando for pra Revisão, prioridade Alta; quando o checklist ficar completo, mover pra Concluído. Dá pra limitar a um projeto e ligar/desligar cada regra.' },
+    { p: 'Como trago minhas tarefas do Trello?', r: 'Botão "Importar" → aba Trello. No Trello: menu do quadro → Imprimir, exportar e compartilhar → Exportar como JSON. Envie o arquivo: vêm cards, checklists, prazos e etiquetas, e as listas viram colunas. Também dá pra importar de planilha (CSV).' },
+    { p: 'Como salvo um filtro que uso sempre?', r: 'Monte os filtros (cliente, projeto, responsável, prazo...) e clique em "Fixar atalho". Ele vira um botão ao lado — um clique e o quadro volta naquela visão.' },
+    { p: 'Minha equipe vê as mesmas tarefas?', r: 'Sim — todo mundo da empresa vê o mesmo quadro. Cada tarefa é salva separada, então duas pessoas podem mexer ao mesmo tempo sem uma apagar a mudança da outra. Use o filtro de responsável (as bolinhas ao lado de "Filtrar:") pra ver só as de alguém.' },
+  ] },
+  { id: 'crm', titulo: 'CRM', perguntas: [
+    { p: 'Como cadastro um cliente no CRM?', r: 'CRM → Clientes → "+ Cadastrar Cliente". O cliente fica só na base do CRM — não aparece no cadastro do ERP.' },
+    { p: 'Como trago os clientes do ERP?', r: 'Quem tem o plano ERP + CRM tem o botão "Importar do ERP" em CRM → Clientes. Ele copia os clientes de lá sem duplicar quem já está no CRM. É uma cópia: editar de um lado não mexe no outro.' },
+    { p: 'Como envio um orçamento?', r: 'CRM → Orçamentos → "+ Novo orçamento". O assistente tem 4 passos; no fim, você gera um link pro cliente aprovar e assinar. A aparência dessa página fica em Configurações → Aparência → Página de Aprovação / Checkout.' },
+    { p: 'Como envio um briefing?', r: 'CRM → Briefings → escolha um dos modelos (ou um template seu) e o cliente. O sistema gera um link pro cliente responder sem precisar de login. As respostas aparecem em "Ver respostas".' },
+    { p: 'Como cadastro meus serviços?', r: 'Operacional → Serviços → "+ Novo Serviço": use uma das sugestões prontas ou crie do zero, com preço, categoria, recorrência e, se quiser, um pacote de conteúdos por mês — que já preenche o Novo Projeto. No orçamento, "Adicionar do catálogo" puxa nome e valor.' },
+    { p: 'Como mostro meus planos pro cliente?', r: 'Serviços → aba Planos: crie os planos (valor fixo + serviços inclusos) e clique em "Apresentação pública". Escolha endereço, cores e quais planos aparecem, e clique em "Salvar e publicar" — o link abre sem login.' },
+    { p: 'O financeiro do CRM e do ERP é o mesmo?', r: 'Sim. O caixa é um só: o que entra pelo CRM (negócio fechado, venda rápida, contrato) aparece no mesmo Financeiro do ERP. Quem tem os dois planos vê os mesmos números nos dois painéis.' },
+  ] },
+  { id: 'geral', titulo: 'Sistema', perguntas: [
+    { p: 'Como mudo o tema e as cores?', r: 'Engrenagem no topo da tela → Aparência → "Aparência do Sistema": 14 temas, cores individuais e tamanho da fonte. Fica salvo neste navegador.' },
+    { p: 'Como escondo itens do menu do CRM?', r: 'Configurações → Aparência → "Itens do Menu": dá pra ocultar e reordenar (arrastando) os módulos do menu lateral do CRM.' },
+    { p: 'Como adiciono alguém da equipe?', r: 'Diretores criam o acesso em Usuários → "+ Novo usuário", escolhendo o nível: Diretor, Administrativo ou Financeiro. O número de usuários depende do seu plano — o contador aparece no topo da tela de Usuários.' },
+    { p: 'O que cada nível de acesso pode fazer?', r: 'Diretor: tudo, inclusive usuários e configurações da empresa. Administrativo: tudo, menos o financeiro (Painel, Meu Negócio e Financeiro ficam borrados) — ele pode fechar negócios e a receita entra no caixa sem ele ver os números. Financeiro: o financeiro completo e, no resto do sistema, só visualiza.' },
+    { p: 'Esqueci minha senha', r: 'Na tela de login, clique em "Esqueceu a senha?" — chega um e-mail pra criar uma nova. Logado, dá pra trocar em Configurações → Perfil.' },
+    { p: 'Falar com o suporte', r: 'Clique no "?" no topo da tela → Suporte. Abre uma conversa no WhatsApp com a nossa equipe.' },
+  ] },
+];
+
+function chatbotContexto() {
+  const kanban = document.getElementById('crm-secao-kanban');
+  if (kanban && kanban.style.display !== 'none' && kanban.innerHTML) return 'kanban';
+  if (document.getElementById('crm-sidebar-painel') || /funil-vendas/.test(location.pathname)) return 'crm';
+  return 'geral';
+}
+
 function montarChatbotWidget() {
   if (document.getElementById('chatbot-launcher')) return;
+  const robo = '<svg style="width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="9" width="16" height="11" rx="3"/><circle cx="12" cy="4.5" r="1.5"/><line x1="12" y1="6" x2="12" y2="9"/><circle cx="9" cy="14.5" r="1.2" fill="currentColor"/><circle cx="15" cy="14.5" r="1.2" fill="currentColor"/><line x1="2" y1="13" x2="2" y2="16"/><line x1="22" y1="13" x2="22" y2="16"/></svg>';
   const wrap = document.createElement('div');
   wrap.innerHTML = `
-    <button class="chatbot-launcher" id="chatbot-launcher" onclick="toggleChatbot()" title="Central de Atendimento"><svg style="width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>
-    <div class="chatbot-window" id="chatbot-window">
-      <div class="chatbot-header"><span>Central de Atendimento</span><button type="button" onclick="toggleChatbot()">&times;</button></div>
+    <button class="chatbot-launcher" id="chatbot-launcher" onclick="toggleChatbot()" title="Assistente Eagles — perguntas frequentes" aria-label="Abrir assistente de perguntas frequentes">${robo}</button>
+    <div class="chatbot-window" id="chatbot-window" role="dialog" aria-label="Assistente Eagles">
+      <div class="chatbot-header"><span class="chatbot-header-titulo">${robo.replace('width:26px;height:26px', 'width:18px;height:18px')} Assistente Eagles</span><button type="button" onclick="toggleChatbot()" aria-label="Fechar">&times;</button></div>
       <div class="chatbot-body" id="chatbot-body"></div>
-      <div class="chatbot-suggestions">
-        <button type="button" onclick="chatbotPerguntaRapida('Como cadastrar um cliente?')">Cadastrar cliente</button>
-        <button type="button" onclick="chatbotPerguntaRapida('Como mudar o tema?')">Mudar tema</button>
-        <button type="button" onclick="chatbotPerguntaRapida('Como exportar relatório?')">Exportar relatório</button>
-      </div>
+      <div class="chatbot-faq" id="chatbot-faq"></div>
       <div class="chatbot-input-row">
-        <input type="text" id="chatbot-input" placeholder="Digite sua dúvida..." onkeydown="if(event.key==='Enter'){chatbotEnviar();}">
-        <button type="button" onclick="chatbotEnviar()"><svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+        <input type="text" id="chatbot-input" placeholder="Ou digite sua dúvida..." onkeydown="if(event.key==='Enter'){chatbotEnviar();}">
+        <button type="button" onclick="chatbotEnviar()" aria-label="Enviar"><svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
       </div>
     </div>
   `;
   document.body.appendChild(wrap);
+}
+
+function chatbotRenderFaq(categoriaId) {
+  const el = document.getElementById('chatbot-faq');
+  if (!el) return;
+  const ctx = categoriaId || chatbotContexto();
+  const ordem = CHATBOT_FAQ.slice().sort((a, b) => (a.id === ctx ? -1 : b.id === ctx ? 1 : 0));
+  const atual = ordem[0];
+  el.innerHTML = `
+    <div class="chatbot-faq-abas">${ordem.map((c) => `<button type="button" class="${c.id === atual.id ? 'ativo' : ''}" onclick="chatbotRenderFaq('${c.id}')">${escapeHtml(c.titulo)}</button>`).join('')}</div>
+    <div class="chatbot-faq-lista">${atual.perguntas.map((q, i) => `<button type="button" onclick="chatbotPerguntaFaq('${atual.id}', ${i})">${escapeHtml(q.p)}</button>`).join('')}</div>`;
+}
+
+function chatbotPerguntaFaq(catId, i) {
+  const cat = CHATBOT_FAQ.find((c) => c.id === catId);
+  const q = cat && cat.perguntas[i];
+  if (!q) return;
+  chatbotAdicionarMsg('user', q.p);
+  setTimeout(() => chatbotAdicionarMsg('bot', q.r), 250);
 }
 
 function abrirChatbot() {
@@ -1133,19 +11650,20 @@ function abrirChatbot() {
   const win = document.getElementById('chatbot-window');
   if (win) win.classList.add('open');
   chatbotIniciarSeNecessario();
+  chatbotRenderFaq();
 }
 
 function toggleChatbot() {
   const win = document.getElementById('chatbot-window');
   if (!win) return;
   win.classList.toggle('open');
-  if (win.classList.contains('open')) chatbotIniciarSeNecessario();
+  if (win.classList.contains('open')) { chatbotIniciarSeNecessario(); chatbotRenderFaq(); }
 }
 
 function chatbotIniciarSeNecessario() {
   if (CHATBOT_INICIADO) return;
   CHATBOT_INICIADO = true;
-  chatbotAdicionarMsg('bot', 'Oi! Eu sou o assistente da Eagles Labz 🦅. Posso ajudar com dúvidas sobre cadastros, financeiro, vendas e estoque. O que você precisa?');
+  chatbotAdicionarMsg('bot', 'Oi! Eu sou o assistente da Eagles Labz. Escolha uma pergunta abaixo ou digite a sua dúvida.');
 }
 
 function chatbotAdicionarMsg(tipo, texto) {
@@ -1158,12 +11676,38 @@ function chatbotAdicionarMsg(tipo, texto) {
   body.scrollTop = body.scrollHeight;
 }
 
+function chatbotNormalizar(t) {
+  return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Casa por palavra inteira (sem acento): "cor" não casa mais com
+// "corrigir", "oi" não casa com "foi".
+function chatbotCasa(texto, padrao) {
+  const p = chatbotNormalizar(padrao);
+  if (!p) return false;
+  return (' ' + texto + ' ').includes(' ' + p + ' ');
+}
+
 function chatbotResponder(pergunta) {
-  const p = pergunta.toLowerCase();
+  const p = chatbotNormalizar(pergunta);
+  // 1) perguntas frequentes, começando pelas da tela atual
+  const ctx = chatbotContexto();
+  const cats = CHATBOT_FAQ.slice().sort((a, b) => (a.id === ctx ? -1 : b.id === ctx ? 1 : 0));
+  const irrelevantes = new Set(['como', 'que', 'uma', 'um', 'meu', 'minha', 'para', 'pra', 'com', 'dos', 'das', 'no', 'na', 'eu', 'faco', 'qual', 'o', 'a', 'de', 'do', 'da', 'e', 'os', 'as', 'se', 'ou']);
+  const palavras = p.split(' ').filter((w) => w.length > 2 && !irrelevantes.has(w));
+  let melhor = null, melhorPontos = 0;
+  cats.forEach((c, ci) => c.perguntas.forEach((q) => {
+    const alvo = ' ' + chatbotNormalizar(q.p) + ' ';
+    const pontos = palavras.filter((w) => alvo.includes(' ' + w) || alvo.includes(w + ' ')).length - ci * 0.01;
+    if (pontos > melhorPontos) { melhor = q; melhorPontos = pontos; }
+  }));
+  if (melhor && melhorPontos >= 2) return melhor.r;
+  // 2) base de respostas antiga (ERP e assuntos gerais)
   for (const item of CHATBOT_KB) {
-    if (item.padroes.some((padrao) => p.includes(padrao))) return item.resposta;
+    if (item.padroes.some((padrao) => chatbotCasa(p, padrao))) return item.resposta;
   }
-  return 'Não tenho certeza sobre isso ainda 🤔. Você pode consultar a Central de Ajuda (no ícone "?") ou falar com o Suporte pelo WhatsApp — é só clicar em "Suporte" no mesmo menu.';
+  if (melhor && melhorPontos >= 1) return melhor.r;
+  return 'Não tenho certeza sobre isso ainda. Dê uma olhada nas perguntas frequentes aqui embaixo, consulte a Central de Ajuda (no ícone "?") ou fale com o Suporte pelo WhatsApp — fica no mesmo menu.';
 }
 
 function chatbotEnviar() {
@@ -1335,10 +11879,11 @@ function excluirCadastroItem(moduloKey, id) {
   const item = (CADASTROS_DATA[moduloKey] || []).find((i) => i.id === id);
   if (!item) return;
   const nomeExibicao = item[def.campoNome] || 'este registro';
-  if (!window.confirm(`Excluir "${nomeExibicao}"? Essa ação não pode ser desfeita.`)) return;
-  CADASTROS_DATA[moduloKey] = CADASTROS_DATA[moduloKey].filter((i) => i.id !== id);
-  cloudSet(def.storageKey, CADASTROS_DATA[moduloKey]);
-  renderCadastroTabela(moduloKey);
+  confirmarAcao(`Excluir "${nomeExibicao}"? Essa ação não pode ser desfeita.`, () => {
+    CADASTROS_DATA[moduloKey] = CADASTROS_DATA[moduloKey].filter((i) => i.id !== id);
+    cloudSet(def.storageKey, CADASTROS_DATA[moduloKey]);
+    renderCadastroTabela(moduloKey);
+  });
 }
 
 // ---------- Definições dos módulos (seeds + campos + colunas) ----------
@@ -1715,6 +12260,7 @@ let CLIENTE_FORN_MODO_EDICAO = false;
 function initClientesFornPage() {
   cloudWatch(CLIENTES_FORN_KEY, clientesFornSeed(), (data) => {
     CLIENTES_FORN_DATA = data;
+    CLIENTES_FORN_DATA_CARREGADO = true;
     renderClientesFornTabela();
     filtrarClientesForn();
   });
@@ -2073,7 +12619,7 @@ function handleNovoClienteForn(e) {
   if (!documentoValidoParaSalvar(tipoPessoa, cnpj, cpf)) {
     checarDocumento('input-novo-cnpj', 'hint-novo-cnpj', 'cnpj');
     checarDocumento('input-novo-cpf', 'hint-novo-cpf', 'cpf');
-    alert('Não é possível salvar: informe um ' + (tipoPessoa === 'PF' ? 'CPF' : 'CNPJ') + ' válido (o dígito verificador não confere).');
+    avisar('Não é possível salvar: informe um ' + (tipoPessoa === 'PF' ? 'CPF' : 'CNPJ') + ' válido (o dígito verificador não confere).');
     return;
   }
 
@@ -2153,7 +12699,38 @@ function renderClienteFornDetalheModal() {
     CLIENTE_FORN_FIELDS.map((f) => renderCampoHtml(f, c[f.key], CLIENTE_FORN_MODO_EDICAO)).join('');
   document.getElementById('cliente-forn-detalhe-acoes').innerHTML = CLIENTE_FORN_MODO_EDICAO
     ? `<button type="button" class="btn" onclick="cancelarEdicaoClienteForn()">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarClienteFornDetalhe()">Salvar</button>`
-    : `<button type="button" class="btn" style="margin-right:auto; color:var(--danger); border-color:var(--danger);" onclick="excluirClienteForn('${c.id}')">Excluir</button><button type="button" class="btn" onclick="closeModal('modal-cliente-forn-detalhe')">Fechar</button><button type="button" class="btn btn-primary" onclick="entrarModoEdicaoClienteForn()">Editar</button>`;
+    : `<button type="button" class="btn" style="margin-right:auto; color:var(--danger); border-color:var(--danger);" onclick="excluirClienteForn('${c.id}')">Excluir</button><button type="button" class="btn" onclick="exportarDadosClienteLGPD('${c.id}')">Exportar dados (LGPD)</button><button type="button" class="btn" onclick="closeModal('modal-cliente-forn-detalhe')">Fechar</button><button type="button" class="btn btn-primary" onclick="entrarModoEdicaoClienteForn()">Editar</button>`;
+}
+
+// Portabilidade de dados (LGPD, Art. 18, inciso V) — baixa tudo que o
+// sistema guarda sobre um cliente/fornecedor específico, incluindo os
+// pedidos de venda vinculados a ele, num arquivo estruturado (JSON) que
+// a própria pessoa pode ler ou levar pra outro sistema.
+function exportarDadosClienteLGPD(id) {
+  const cliente = CLIENTES_FORN_DATA.find((x) => x.id === id);
+  if (!cliente) return;
+
+  const nomeCliente = cliente.fantasia || cliente.nome;
+  const pedidosVinculados = getPedidosVenda()
+    .filter((p) => p.cliente === nomeCliente)
+    .map((p) => ({ numero: p.numero, data: p.data, valor: p.valor, status: p.status, condicaoPagamento: p.condicaoPagamento }));
+
+  const pacote = {
+    finalidade: 'Exportação de dados pessoais a pedido do titular (LGPD, Art. 18)',
+    exportadoEm: new Date().toISOString(),
+    dadosCadastrais: cliente,
+    pedidosDeVendaVinculados: pedidosVinculados,
+  };
+
+  const blob = new Blob([JSON.stringify(pacote, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `dados-${nomeCliente.replace(/[^a-zA-Z0-9]+/g, '-')}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function entrarModoEdicaoClienteForn() { CLIENTE_FORN_MODO_EDICAO = true; renderClienteFornDetalheModal(); }
@@ -2165,7 +12742,7 @@ function salvarClienteFornDetalhe() {
   const dados = lerCamposModal('#cliente-forn-detalhe-campos');
 
   if (!documentoValidoParaSalvar(dados.tipoPessoa, dados.cnpj, dados.cpf)) {
-    alert('Não é possível salvar: informe um ' + (dados.tipoPessoa === 'PF' ? 'CPF' : 'CNPJ') + ' válido (o dígito verificador não confere).');
+    avisar('Não é possível salvar: informe um ' + (dados.tipoPessoa === 'PF' ? 'CPF' : 'CNPJ') + ' válido (o dígito verificador não confere).');
     return;
   }
 
@@ -2181,12 +12758,13 @@ function salvarClienteFornDetalhe() {
 function excluirClienteForn(id) {
   const c = CLIENTES_FORN_DATA.find((x) => x.id === id);
   if (!c) return;
-  if (!window.confirm(`Excluir "${c.fantasia || c.nome}"? Essa ação não pode ser desfeita.`)) return;
-  CLIENTES_FORN_DATA = CLIENTES_FORN_DATA.filter((x) => x.id !== id);
-  cloudSet(CLIENTES_FORN_KEY, CLIENTES_FORN_DATA);
-  renderClientesFornTabela();
-  filtrarClientesForn();
-  closeModal('modal-cliente-forn-detalhe');
+  confirmarAcao(`Excluir "${c.fantasia || c.nome}"? Essa ação não pode ser desfeita.`, () => {
+    CLIENTES_FORN_DATA = CLIENTES_FORN_DATA.filter((x) => x.id !== id);
+    cloudSet(CLIENTES_FORN_KEY, CLIENTES_FORN_DATA);
+    renderClientesFornTabela();
+    filtrarClientesForn();
+    closeModal('modal-cliente-forn-detalhe');
+  });
 }
 
 // =====================================================================
@@ -2211,8 +12789,6 @@ function financeTemplatePadrao() {
 }
 
 function loadFinanceTemplate() { return lsLoad(FINANCE_TEMPLATE_KEY, financeTemplatePadrao()); }
-function saveFinanceCiclos(c) { cloudSet(FINANCE_CICLOS_KEY, c); }
-
 function criarCicloDoMes(template) {
   return {
     receitas: template.receitas.map((r) => ({ ...r, status: 'pendente', dataPagamento: null })),
@@ -2225,17 +12801,107 @@ function criarCicloDoMes(template) {
 let FINANCE_TEMPLATE_CACHE = null;
 let FINANCE_CICLOS_CACHE = {};
 
+// IMPORTANTE: esta função é só de LEITURA — nunca deve gravar nada na
+// nuvem. Ela só monta um ciclo em branco NA MEMÓRIA quando o mês ainda
+// não existe, pra quem for exibir/calcular ter algo pra usar. Quem
+// decide gravar de verdade é sempre uma ação explícita da pessoa
+// (lançar algo, editar algo), nunca uma simples leitura — porque
+// salvarCicloDoMes/saveFinanceCiclos grava o objeto INTEIRO de todos os
+// meses de uma vez, e se essa função gravasse sozinha antes dos dados
+// reais chegarem da nuvem (o carregamento é assíncrono), ela apagaria
+// de verdade os outros meses que ainda não tinham sido carregados nessa
+// sessão. Foi exatamente isso que causou a perda de dados do Financeiro.
 function getCicloDoMes(mesKey) {
   if (!FINANCE_CICLOS_CACHE[mesKey]) {
-    FINANCE_CICLOS_CACHE[mesKey] = criarCicloDoMes(FINANCE_TEMPLATE_CACHE || financeTemplatePadrao());
-    saveFinanceCiclos(FINANCE_CICLOS_CACHE);
+    return criarCicloDoMes(FINANCE_TEMPLATE_CACHE || financeTemplatePadrao());
   }
   return FINANCE_CICLOS_CACHE[mesKey];
 }
 
+// ---------- Receitas de quem não vê o financeiro ----------
+// Um Administrativo que fecha um negócio (ou faz uma venda rápida, ou
+// fatura um pedido) não pode LER o caixa. Então a receita vai pra
+// tenants/{id}/receitas_pendentes — onde ele só consegue criar — e o
+// primeiro navegador com acesso ao financeiro (Diretor/Financeiro) que
+// abrir o sistema move ela pro mês certo. A "reivindicação" é feita numa
+// transação, então duas abas abertas não lançam a mesma receita duas vezes.
+let RECEITAS_PENDENTES_ESCUTANDO = false;
+let RECEITAS_PENDENTES_FILA = [];
+
+function receitasPendentesRef() { return firestoreDb.collection('tenants').doc(TENANT_ID).collection('receitas_pendentes'); }
+
+// Ponto ÚNICO pra lançar receita no Financeiro a partir de outras telas.
+function registrarReceitaFinanceiro(mesKey, receita) {
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelVeFinanceiro()) {
+    if (!nivelPodeOperar()) { avisarSemPermissaoNivel(); return false; }
+    receitasPendentesRef().add({ mes: mesKey, receita: JSON.parse(JSON.stringify(receita)), criadoEm: new Date().toISOString(), criadoPor: USUARIO_UID || '' })
+      .catch((err) => { console.error('Erro ao enviar receita pro Financeiro:', err); avisar('Não foi possível registrar a receita no Financeiro agora. Tente de novo.'); });
+    return true;
+  }
+  const ciclo = getCicloDoMes(mesKey);
+  ciclo.receitas = ciclo.receitas || [];
+  ciclo.receitas.push(receita);
+  return salvarCicloDoMes(mesKey, ciclo);
+}
+
+function iniciarReceitasPendentes() {
+  if (RECEITAS_PENDENTES_ESCUTANDO || !FIREBASE_PRONTO || !TENANT_ID || !nivelVeFinanceiro() || !firestoreDb) return;
+  RECEITAS_PENDENTES_ESCUTANDO = true;
+  // nunca deixa um problema aqui derrubar a tela que está abrindo
+  try {
+    receitasPendentesRef().onSnapshot((snap) => {
+      RECEITAS_PENDENTES_FILA = [];
+      snap.forEach((doc) => RECEITAS_PENDENTES_FILA.push({ ref: doc.ref, id: doc.id, ...doc.data() }));
+      processarReceitasPendentes();
+    }, (err) => console.error('Erro ao ler receitas pendentes:', err));
+  } catch (err) {
+    console.error('Não foi possível acompanhar as receitas pendentes:', err);
+  }
+}
+
+function processarReceitasPendentes() {
+  if (!RECEITAS_PENDENTES_FILA.length || !chaveCarregadaNaNuvem(FINANCE_CICLOS_KEY)) return; // roda de novo quando o caixa carregar
+  const fila = RECEITAS_PENDENTES_FILA.splice(0);
+  fila.forEach((item) => {
+    const reivindicar = typeof firestoreDb.runTransaction === 'function'
+      ? firestoreDb.runTransaction(async (tx) => { const d = await tx.get(item.ref); if (!d.exists) return false; tx.delete(item.ref); return true; })
+      : item.ref.delete().then(() => true);
+    reivindicar.then((ganhou) => {
+      if (!ganhou || !item.receita || !/^\d{4}-\d{2}$/.test(item.mes || '')) return;
+      const ciclo = getCicloDoMes(item.mes);
+      ciclo.receitas = ciclo.receitas || [];
+      if (ciclo.receitas.some((r) => r.origemPendenteId === item.id)) return;
+      ciclo.receitas.push(Object.assign({}, item.receita, { id: item.receita.id || genId('r'), origemPendenteId: item.id }));
+      salvarCicloDoMes(item.mes, ciclo);
+    }).catch((err) => console.error('Erro ao mover receita pendente:', err));
+  });
+}
+
+// Esta sim é a gravação de verdade — mas só grava o MÊS que mudou,
+// usando merge, em vez de reescrever o objeto inteiro de todos os
+// meses. Assim, mesmo que esta sessão ainda não tenha carregado outros
+// meses do Financeiro, salvar um lançamento aqui nunca apaga dados de
+// meses que ela não chegou a ver.
 function salvarCicloDoMes(mesKey, ciclo) {
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelVeFinanceiro()) { avisarSemPermissaoNivel('o financeiro'); return false; }
+  // Mesma trava do cloudSet — e mais rígida: aqui uma chave que nem foi
+  // carregada nesta página também bloqueia, porque gravar o mês sem ter
+  // lido o mês apaga os lançamentos dele.
+  if (FIREBASE_PRONTO && TENANT_ID && CLOUD_ESTADO_CHAVES[FINANCE_CICLOS_KEY] !== 'carregado') {
+    if (!CLOUD_ESTADO_CHAVES[FINANCE_CICLOS_KEY]) CLOUD_ESTADO_CHAVES[FINANCE_CICLOS_KEY] = 'aguardando';
+    chaveProntaParaGravar(FINANCE_CICLOS_KEY);
+    return false;
+  }
   FINANCE_CICLOS_CACHE[mesKey] = ciclo;
-  saveFinanceCiclos(FINANCE_CICLOS_CACHE);
+  lsSave(chaveLocalTenant(FINANCE_CICLOS_KEY), FINANCE_CICLOS_CACHE);
+  if (!FIREBASE_PRONTO || !TENANT_ID) return;
+  caminhoTenantDoc(FINANCE_CICLOS_KEY).set({ valor: { [mesKey]: ciclo } }, { merge: true }).then(() => {
+    atualizarIndicadorSincronizacao('ok');
+  }).catch((err) => {
+    console.error('Erro ao salvar ciclo financeiro de "' + mesKey + '":', err);
+    atualizarIndicadorSincronizacao('erro');
+  });
+  return true;
 }
 
 function isoHoje() { return FINANCE_HOJE.toISOString().slice(0, 10); }
@@ -2523,14 +13189,14 @@ function abrirFinanceModal(tipo, id) {
       <label>${c.label}</label>
       <input type="${c.type}" data-key="${c.key}" placeholder="${c.placeholder || ''}"${listaAttr}${oninputAttr}
         ${c.min !== undefined ? `min="${c.min}"` : ''} ${c.max !== undefined ? `max="${c.max}"` : ''}
-        value="${item ? (item[c.key] !== undefined ? item[c.key] : '') : ''}">
+        value="${item ? (item[c.key] !== undefined ? escapeHtml(item[c.key]) : '') : ''}">
     </div>
   `;
   }).join('');
 
   if (tipo === 'receitas') {
     const dlCli = document.getElementById('fin-lista-clientes');
-    if (dlCli) dlCli.innerHTML = CLIENTES_FORN_DATA.map((c) => `<option value="${c.fantasia || c.nome}">`).join('');
+    if (dlCli) dlCli.innerHTML = CLIENTES_FORN_DATA.map((c) => `<option value="${escapeHtml(c.fantasia || c.nome)}">`).join('');
     const dlProd = document.getElementById('fin-lista-produtos');
     if (dlProd) dlProd.innerHTML = (CADASTROS_DATA['produto'] || []).map((p) => `<option value="${escapeHtml(p.nome)}">`).join('');
   }
@@ -2670,7 +13336,7 @@ function renderCobrancasLista() {
   setText('cob-atrasado', formatMoney(atrasado));
   const avisoEl = document.getElementById('cob-aviso-proximos');
   if (avisoEl) {
-    if (proximos > 0) { avisoEl.style.display = ''; avisoEl.textContent = `⚠ ${proximos} cliente(s) com vencimento nos próximos 5 dias.`; }
+    if (proximos > 0) { avisoEl.style.display = ''; avisoEl.innerHTML = `${ic('alerta', 'ic-herda')} ${proximos} cliente(s) com vencimento nos próximos 5 dias.`; }
     else avisoEl.style.display = 'none';
   }
 
@@ -2744,7 +13410,7 @@ function duplicarLancamentosPainel() {
   const destinoLabel = formatMesLabel(mesDestino);
 
   if (!cicloTemLancamentos(FINANCE_CICLO)) {
-    alert(`Não há lançamentos em ${origemLabel} para duplicar.`);
+    avisar(`Não há lançamentos em ${origemLabel} para duplicar.`);
     return;
   }
 
@@ -2758,23 +13424,24 @@ function duplicarLancamentosPainel() {
   } else if (destinoTemDados) {
     mensagem = `${destinoLabel} já tem lançamentos cadastrados.\n\nDuplicar agora vai SUBSTITUIR tudo que já existe em ${destinoLabel} pelos lançamentos de ${origemLabel}. Deseja continuar mesmo assim?`;
   }
-  if (!window.confirm(mensagem)) return;
+  confirmarAcao(mensagem, () => {
+    const agora = new Date().toISOString();
+    const novoCiclo = {
+      receitas: FINANCE_CICLO.receitas.map((r) => ({ ...r, id: genId('r'), status: 'pendente', dataPagamento: null })),
+      pagamentos: FINANCE_CICLO.pagamentos.map((p) => ({ ...p, id: genId('p'), status: 'pendente', dataPagamento: null })),
+      adiantamentos: FINANCE_CICLO.adiantamentos.map((a) => ({ ...a, id: genId('a') })),
+      variaveis: FINANCE_CICLO.variaveis.map((v) => ({ ...v, id: genId('v') })),
+    };
 
-  const agora = new Date().toISOString();
-  const novoCiclo = {
-    receitas: FINANCE_CICLO.receitas.map((r) => ({ ...r, id: genId('r'), status: 'pendente', dataPagamento: null })),
-    pagamentos: FINANCE_CICLO.pagamentos.map((p) => ({ ...p, id: genId('p'), status: 'pendente', dataPagamento: null })),
-    adiantamentos: FINANCE_CICLO.adiantamentos.map((a) => ({ ...a, id: genId('a') })),
-    variaveis: FINANCE_CICLO.variaveis.map((v) => ({ ...v, id: genId('v') })),
-  };
+    FINANCE_CICLOS_CACHE[mesDestino] = novoCiclo;
+    FINANCE_CICLO.duplicadoParaProximoEm = agora;
+    FINANCE_CICLOS_CACHE[mesOrigem] = FINANCE_CICLO;
+    salvarCicloDoMes(mesOrigem, FINANCE_CICLO);
+    salvarCicloDoMes(mesDestino, novoCiclo);
 
-  FINANCE_CICLOS_CACHE[mesDestino] = novoCiclo;
-  FINANCE_CICLO.duplicadoParaProximoEm = agora;
-  FINANCE_CICLOS_CACHE[mesOrigem] = FINANCE_CICLO;
-  saveFinanceCiclos(FINANCE_CICLOS_CACHE);
-
-  alert(`Lançamentos de ${origemLabel} duplicados para ${destinoLabel} com sucesso.`);
-  renderFinanceiroTudo();
+    avisar(`Lançamentos de ${origemLabel} duplicados para ${destinoLabel} com sucesso.`);
+    renderFinanceiroTudo();
+  });
 }
 
 // ---------- Comparativo com o mês anterior ----------
@@ -2874,7 +13541,7 @@ function renderPendentesPainel() {
   setText('fin-pendentes-total', pendentes.length ? formatMoney(totalPendente) + ' em aberto' : '');
 
   if (!pendentes.length) {
-    container.innerHTML = '<p class="empty-state">Nenhuma pendência neste mês — tudo pago 🎉</p>';
+    container.innerHTML = '<p class="empty-state">Nenhuma pendência neste mês — tudo pago ' + ic('festa') + '</p>';
     return;
   }
   container.innerHTML = pendentes.map((r) => {
@@ -2979,9 +13646,9 @@ function renderRelatorioConteudo(dados, quantidade, containerId) {
   const bateuMeta = dados.lucroTotal >= metaLucroPeriodo;
 
   const alertasHtml = [];
-  if (dados.mesesNegativos.length) alertasHtml.push(`<div class="alerta-card alerta-danger">⚠ Lucro negativo em: ${dados.mesesNegativos.map((m) => m.label).join(', ')}</div>`);
-  if (dados.margemLucro < 15) alertasHtml.push(`<div class="alerta-card alerta-warning">⚠ Margem de lucro baixa (${dados.margemLucro.toFixed(1)}%)</div>`);
-  if (!bateuMeta && metaLucro > 0) alertasHtml.push(`<div class="alerta-card alerta-warning">⚠ Meta de lucro não atingida (${formatMoney(dados.lucroTotal)} de ${formatMoney(metaLucroPeriodo)})</div>`);
+  if (dados.mesesNegativos.length) alertasHtml.push(`<div class="alerta-card alerta-danger">${ic('alerta', 'ic-herda')} Lucro negativo em: ${dados.mesesNegativos.map((m) => m.label).join(', ')}</div>`);
+  if (dados.margemLucro < 15) alertasHtml.push(`<div class="alerta-card alerta-warning">${ic('alerta', 'ic-herda')} Margem de lucro baixa (${dados.margemLucro.toFixed(1)}%)</div>`);
+  if (!bateuMeta && metaLucro > 0) alertasHtml.push(`<div class="alerta-card alerta-warning">${ic('alerta', 'ic-herda')} Meta de lucro não atingida (${formatMoney(dados.lucroTotal)} de ${formatMoney(metaLucroPeriodo)})</div>`);
   if (!alertasHtml.length) alertasHtml.push('<div class="alerta-card alerta-success">✓ Nenhum alerta neste período</div>');
 
   const topClientes = dados.clientesNomes.map((nome) => ({ nome, valor: dados.clientesMap[nome] })).sort((a, b) => b.valor - a.valor).slice(0, 8);
@@ -3103,7 +13770,7 @@ async function baixarPrintAreaComoPdf(nomeArquivo) {
   const areaOriginal = document.getElementById('print-area');
   if (!areaOriginal || !areaOriginal.innerHTML.trim()) return;
   if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
-    alert('Não foi possível carregar o gerador de PDF (verifique sua internet) — tente de novo.');
+    avisar('Não foi possível carregar o gerador de PDF (verifique sua internet) — tente de novo.');
     return;
   }
 
@@ -3143,7 +13810,7 @@ async function baixarPrintAreaComoPdf(nomeArquivo) {
   } catch (err) {
     console.error('Erro ao gerar PDF:', err);
     const detalhe = (err && err.message) ? err.message : 'erro desconhecido';
-    alert('Não foi possível gerar o PDF agora (' + detalhe + '). Tente de novo — se persistir, me avise esse texto entre parênteses.');
+    avisar('Não foi possível gerar o PDF agora (' + detalhe + '). Tente de novo — se persistir, me avise esse texto entre parênteses.');
   } finally {
     document.body.removeChild(isolado);
   }
@@ -3348,8 +14015,10 @@ function renderMarcadoresCidades(uf, bbox) {
 
     const g = document.createElementNS(NS, 'g');
     g.setAttribute('class', 'mn-cidade-marcador-grupo');
-    g.setAttribute('onmousemove', `mnHoverCidade('${cidade.replace(/'/g, "\\'")}', ${valor}, event)`);
-    g.setAttribute('onmouseleave', 'mnHoverSai()');
+    // listener de verdade (closure), em vez de montar JS dentro de um
+    // atributo com o nome da cidade — o nome é digitado pelo usuário
+    g.addEventListener('mousemove', (evt) => mnHoverCidade(cidade, valor, evt));
+    g.addEventListener('mouseleave', () => mnHoverSai());
 
     const circle = document.createElementNS(NS, 'circle');
     circle.setAttribute('cx', pos.x);
@@ -3394,7 +14063,7 @@ function mnHoverCidade(cidade, valor, evt) {
   tooltip.style.display = 'block';
   tooltip.style.left = (evt.clientX - rect.left) + 'px';
   tooltip.style.top = (evt.clientY - rect.top) + 'px';
-  tooltip.innerHTML = `<strong>${cidade}</strong><br>${formatMoney(valor)}`;
+  tooltip.innerHTML = `<strong>${escapeHtml(cidade)}</strong><br>${formatMoney(valor)}`;
 }
 
 function mnHoverSai() {
@@ -3433,7 +14102,7 @@ function renderMnDetalheEstado() {
     html += '<p class="empty-state" style="padding:10px 0;">Nenhuma venda registrada neste estado ainda.</p>';
   } else {
     cidades.forEach((cidade) => {
-      html += `<div class="list-row"><div class="icon-dot">${initials(cidade)}</div><div class="list-row-main"><div class="list-row-title">${cidade}</div></div><div class="list-row-value">${formatMoney(porCidade[cidade])}</div></div>`;
+      html += `<div class="list-row"><div class="icon-dot">${escapeHtml(initials(cidade))}</div><div class="list-row-main"><div class="list-row-title">${escapeHtml(cidade)}</div></div><div class="list-row-value">${formatMoney(porCidade[cidade])}</div></div>`;
     });
   }
   painel.innerHTML = html;
@@ -3903,6 +14572,7 @@ function initMeuNegocio() {
   });
   cloudWatch(CLIENTES_FORN_KEY, clientesFornSeed(), (data) => {
     CLIENTES_FORN_DATA = data;
+    CLIENTES_FORN_DATA_CARREGADO = true;
     atualizarSecaoAtivaMeuNegocio();
   });
   cloudWatch('eagles_produtos_v1', produtosSeed(), (data) => {
@@ -3946,6 +14616,14 @@ function mostrarSecaoNegocio(secao, btn) {
   if (secao === 'clientes') renderClientesDashboard();
 }
 
+function toggleColapsarSidebarCrm() {
+  const painel = document.getElementById('crm-sidebar-painel');
+  if (!painel) return;
+  painel.classList.toggle('crm-recolhida');
+  const layout = painel.closest('.mn-layout');
+  if (layout) layout.classList.toggle('crm-layout-recolhido', painel.classList.contains('crm-recolhida'));
+}
+
 function toggleMnSubmenu(id) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -3964,8 +14642,9 @@ let FINANCE_SYNC_PRONTO_PV = false;
 function initPedidosVendaExtra() {
   cloudWatch(CLIENTES_FORN_KEY, clientesFornSeed(), (data) => {
     CLIENTES_FORN_DATA = data;
+    CLIENTES_FORN_DATA_CARREGADO = true;
     const dl = document.getElementById('pv-lista-clientes');
-    if (dl) dl.innerHTML = CLIENTES_FORN_DATA.map((c) => `<option value="${c.fantasia || c.nome}">`).join('');
+    if (dl) dl.innerHTML = CLIENTES_FORN_DATA.map((c) => `<option value="${escapeHtml(c.fantasia || c.nome)}">`).join('');
   });
   cloudWatch('eagles_vendedores_v1', vendedoresSeed(), (data) => {
     CADASTROS_DATA['vendedor'] = data;
@@ -4089,8 +14768,8 @@ function renderItensPedidoForm() {
     return `<tr>
       <td style="color:var(--text-soft); font-size:12px;">${idx + 1}</td>
       <td><input type="text" value="${escapeHtml(item.descricao)}" list="pv-lista-produtos" oninput="atualizarItemPedido(${idx},'descricao',this.value)" placeholder="Pesquise por código, descrição ou GTIN"></td>
-      <td style="width:90px;"><input type="text" value="${item.codigo}" oninput="atualizarItemPedido(${idx},'codigo',this.value)"></td>
-      <td style="width:60px;"><input type="text" value="${item.unidade}" oninput="atualizarItemPedido(${idx},'unidade',this.value)"></td>
+      <td style="width:90px;"><input type="text" value="${escapeHtml(item.codigo)}" oninput="atualizarItemPedido(${idx},'codigo',this.value)"></td>
+      <td style="width:60px;"><input type="text" value="${escapeHtml(item.unidade)}" oninput="atualizarItemPedido(${idx},'unidade',this.value)"></td>
       <td style="width:80px;"><input type="number" value="${item.quantidade}" min="0" oninput="atualizarItemPedido(${idx},'quantidade',this.value)"></td>
       <td style="width:100px;"><input type="number" value="${item.precoLista}" min="0" step="0.01" oninput="atualizarItemPedido(${idx},'precoLista',this.value)"></td>
       <td style="width:80px;"><input type="number" value="${item.descontoPct}" min="0" max="100" step="0.1" oninput="atualizarItemPedido(${idx},'descontoPct',this.value)"></td>
@@ -4136,7 +14815,7 @@ function adicionarItemPedido() {
 }
 
 function removerItemPedido(idx) {
-  if (PEDIDO_FORM_ITENS.length <= 1) { alert('O pedido precisa ter ao menos um item.'); return; }
+  if (PEDIDO_FORM_ITENS.length <= 1) { avisar('O pedido precisa ter ao menos um item.'); return; }
   PEDIDO_FORM_ITENS.splice(idx, 1);
   renderItensPedidoForm();
   recalcularTotaisPedido();
@@ -4262,7 +14941,7 @@ function verificarClientePedido() {
   if (!nome) { erroEl.style.display = 'none'; return true; }
   const existe = CLIENTES_FORN_DATA.some((c) => (c.fantasia || c.nome) === nome || c.nome === nome);
   if (!existe) {
-    erroEl.innerHTML = `⚠ O cliente "${nome}" não está cadastrado.
+    erroEl.innerHTML = `${ic('alerta', 'ic-herda')} O cliente "${escapeHtml(nome)}" não está cadastrado.
       <div style="margin-top:8px;"><button type="button" class="btn btn-small btn-primary" onclick="window.open('clientes-fornecedores.html','_blank')">Cadastrar agora</button></div>`;
     erroEl.style.display = '';
     return false;
@@ -4273,9 +14952,9 @@ function verificarClientePedido() {
 
 function salvarPedidoVenda() {
   const cliente = document.getElementById('pv-cliente').value.trim();
-  if (!cliente) { alert('Informe o cliente.'); return; }
+  if (!cliente) { avisar('Informe o cliente.'); return; }
   if (!verificarClientePedido()) { return; }
-  if (!PEDIDO_FORM_ITENS.some((i) => i.descricao.trim())) { alert('Adicione ao menos um item com descrição.'); return; }
+  if (!PEDIDO_FORM_ITENS.some((i) => i.descricao.trim())) { avisar('Adicione ao menos um item com descrição.'); return; }
 
   const vendedor = document.getElementById('pv-vendedor').value.trim();
   const numero = document.getElementById('pv-numero-pedido').value.trim() || calcularProximoNumeroPedido();
@@ -4444,45 +15123,47 @@ function calcularParcelasPedidoParaLancamento(pedido) {
 
 function lancarPedidoNoFinanceiro(id) {
   fecharTodosDropdowns();
-  if (!FINANCE_SYNC_PRONTO_PV) { alert('Ainda sincronizando os dados financeiros — aguarde um instante e tente de novo.'); return; }
+  if (!FINANCE_SYNC_PRONTO_PV) { avisar('Ainda sincronizando os dados financeiros — aguarde um instante e tente de novo.'); return; }
 
   const lista = CADASTROS_DATA['pedido-venda'] || [];
   const pedido = lista.find((p) => p.id === id);
   if (!pedido) return;
 
-  if (pedido.lancadoFinanceiro) {
-    if (!window.confirm('Este pedido já foi lançado no Financeiro antes. Lançar de novo cria lançamentos duplicados. Continuar?')) return;
-  }
+  const prosseguirLancamento = () => {
+    const parcelas = calcularParcelasPedidoParaLancamento(pedido);
+    const mesesAfetados = [];
 
-  const parcelas = calcularParcelasPedidoParaLancamento(pedido);
-  const mesesAfetados = [];
-
-  parcelas.forEach((parcela) => {
-    const mesKey = parcela.data.slice(0, 7);
-    const dia = Number(parcela.data.slice(8, 10)) || 1;
-    const ciclo = getCicloDoMes(mesKey);
-    ciclo.receitas.push({
-      id: genId('r'),
-      cliente: pedido.cliente,
-      plano: 'Pedido de venda nº ' + pedido.numero + (parcelas.length > 1 ? ` (parcela ${mesesAfetados.length + 1}/${parcelas.length})` : ''),
-      valor: parcela.valor,
-      diaAcerto: dia,
-      status: 'pendente',
-      dataPagamento: null,
-      origemPedidoId: pedido.id,
+    parcelas.forEach((parcela) => {
+      const mesKey = parcela.data.slice(0, 7);
+      const dia = Number(parcela.data.slice(8, 10)) || 1;
+      registrarReceitaFinanceiro(mesKey, {
+        id: genId('r'),
+        cliente: pedido.cliente,
+        plano: 'Pedido de venda nº ' + pedido.numero + (parcelas.length > 1 ? ` (parcela ${mesesAfetados.length + 1}/${parcelas.length})` : ''),
+        valor: parcela.valor,
+        diaAcerto: dia,
+        status: 'pendente',
+        dataPagamento: null,
+        origemPedidoId: pedido.id,
+      });
+      if (!mesesAfetados.includes(mesKey)) mesesAfetados.push(mesKey);
     });
-    salvarCicloDoMes(mesKey, ciclo);
-    if (!mesesAfetados.includes(mesKey)) mesesAfetados.push(mesKey);
-  });
 
-  pedido.lancadoFinanceiro = true;
-  pedido.status = 'faturado';
-  CADASTROS_DATA['pedido-venda'] = lista;
-  cloudSet('eagles_pedidos_venda_v1', lista);
-  renderCadastroTabela('pedido-venda');
+    pedido.lancadoFinanceiro = true;
+    pedido.status = 'faturado';
+    CADASTROS_DATA['pedido-venda'] = lista;
+    cloudSet('eagles_pedidos_venda_v1', lista);
+    renderCadastroTabela('pedido-venda');
 
-  const mesesTexto = mesesAfetados.map((m) => formatMesLabel(m)).join(', ');
-  alert(`Lançamento a receber criado no Financeiro!\n${parcelas.length} parcela(s) distribuída(s) em: ${mesesTexto}.`);
+    const mesesTexto = mesesAfetados.map((m) => formatMesLabel(m)).join(', ');
+    avisar(`Lançamento a receber criado no Financeiro!\n${parcelas.length} parcela(s) distribuída(s) em: ${mesesTexto}.`);
+  };
+
+  if (pedido.lancadoFinanceiro) {
+    confirmarAcao('Este pedido já foi lançado no Financeiro antes. Lançar de novo cria lançamentos duplicados. Continuar?', prosseguirLancamento);
+  } else {
+    prosseguirLancamento();
+  }
 }
 
 // ---------- Clonar venda ----------
@@ -4491,23 +15172,24 @@ function clonarPedidoVenda(id) {
   fecharTodosDropdowns();
   const pedido = buscarPedidoPorId(id);
   if (!pedido) return;
-  if (!window.confirm(`Clonar o pedido nº ${pedido.numero}? Isso cria um novo pedido com os mesmos itens e dados, pronto para editar.`)) return;
-  const lista = CADASTROS_DATA['pedido-venda'] || [];
-  const novoNumero = calcularProximoNumeroPedido();
-  const clone = {
-    ...pedido,
-    id: genId('pv'),
-    numero: novoNumero,
-    status: 'aberto',
-    lancadoFinanceiro: false,
-    data: isoHoje(),
-    itens: (pedido.itens || []).map((i) => ({ ...i })),
-  };
-  lista.push(clone);
-  CADASTROS_DATA['pedido-venda'] = lista;
-  cloudSet('eagles_pedidos_venda_v1', lista);
-  renderCadastroTabela('pedido-venda');
-  alert(`Pedido clonado como nº ${novoNumero}.`);
+  confirmarAcao(`Clonar o pedido nº ${pedido.numero}? Isso cria um novo pedido com os mesmos itens e dados, pronto para editar.`, () => {
+    const lista = CADASTROS_DATA['pedido-venda'] || [];
+    const novoNumero = calcularProximoNumeroPedido();
+    const clone = {
+      ...pedido,
+      id: genId('pv'),
+      numero: novoNumero,
+      status: 'aberto',
+      lancadoFinanceiro: false,
+      data: isoHoje(),
+      itens: (pedido.itens || []).map((i) => ({ ...i })),
+    };
+    lista.push(clone);
+    CADASTROS_DATA['pedido-venda'] = lista;
+    cloudSet('eagles_pedidos_venda_v1', lista);
+    renderCadastroTabela('pedido-venda');
+    avisar(`Pedido clonado como nº ${novoNumero}.`);
+  });
 }
 
 // ---------- Documentos para impressão ----------
@@ -4662,7 +15344,7 @@ function imprimirDocumentoPedido(id, tipo) {
   if (tipo === 'etiqueta') {
     document.getElementById('print-area').innerHTML = `
       <div style="padding:20px; font-family:Inter,sans-serif; width:320px; border:1px dashed #999;">
-        <div style="font-size:11px; color:#777;">Remetente: ${empresa}</div>
+        <div style="font-size:11px; color:#777;">Remetente: ${escapeHtml(empresa)}</div>
         <h2 style="margin:12px 0 4px; font-size:16px;">${escapeHtml(pedido.cliente)}</h2>
         <p style="margin:0; font-size:13px;">${escapeHtml(pedido.cidade || '')}${pedido.cidade && pedido.estado ? ' - ' : ''}${escapeHtml(pedido.estado || '')}</p>
         <p style="margin:12px 0 0; font-size:12px; color:#777;">Pedido nº ${escapeHtml(pedido.numero)}</p>
@@ -4706,7 +15388,7 @@ function imprimirDocumentoPedido(id, tipo) {
 
   document.getElementById('print-area').innerHTML = `
     <div style="padding:30px; font-family: Inter, sans-serif; color:#111;">
-      <h1 style="font-size:20px; margin-bottom:2px;">${empresa}</h1>
+      <h1 style="font-size:20px; margin-bottom:2px;">${escapeHtml(empresa)}</h1>
       <p style="color:#555; margin-top:0;">${titulo} — Pedido nº ${escapeHtml(pedido.numero)}</p>
       <p style="font-size:13px;">Cliente: <strong>${escapeHtml(pedido.cliente)}</strong>${pedido.vendedor ? ' · Vendedor: ' + escapeHtml(pedido.vendedor) : ''}</p>
       <p style="font-size:13px;">Data da venda: ${formatDatePt(pedido.data)} · Total: <strong>${formatMoney(pedido.valor)}</strong></p>
@@ -4759,7 +15441,7 @@ function enviarPedidoWhatsApp(id) {
 
 function emitirBoletosPedido(id) {
   fecharTodosDropdowns();
-  alert('Emitir boletos de verdade (com código de barras válido) exige conectar uma integração bancária ou gateway de pagamento, que este sistema ainda não tem. Por enquanto, use "Lançar" + "Gerar parcelas" e acompanhe o recebimento pela aba Financeiro.');
+  avisar('Emitir boletos de verdade (com código de barras válido) exige conectar uma integração bancária ou gateway de pagamento, que este sistema ainda não tem. Por enquanto, use "Lançar" + "Gerar parcelas" e acompanhe o recebimento pela aba Financeiro.');
 }
 // =====================================================================
 // ---------- Gestão de usuários (TenantAdmin) ----------
@@ -4774,8 +15456,11 @@ function emitirBoletosPedido(id) {
 const LIMITE_USUARIOS_POR_EMPRESA = 5;
 let USUARIOS_TENANT_DATA = [];
 
+let USUARIOS_TENANT_INFO = null; // { limiteUsuarios, titularUid } do documento da empresa
+let USUARIOS_VAGAS = [];          // [{ numero, uid }]
+
 function initUsuariosPage() {
-  if (!(USUARIO_ROLE === 'TenantAdmin' || USUARIO_ROLE === 'SuperAdmin')) {
+  if (!nivelEhDiretor()) {
     document.getElementById('usuarios-sem-permissao').style.display = '';
     document.getElementById('usuarios-conteudo').style.display = 'none';
     return;
@@ -4789,48 +15474,102 @@ function escutarUsuariosTenant() {
     USUARIOS_TENANT_DATA = [];
     snap.forEach((doc) => USUARIOS_TENANT_DATA.push({ uid: doc.id, ...doc.data() }));
     renderUsuariosTenant();
-  }, (err) => {
-    console.error('Erro ao listar usuários da empresa:', err);
-  });
+  }, (err) => console.error('Erro ao listar usuários da empresa:', err));
+  firestoreDb.collection('tenants').doc(TENANT_ID).onSnapshot((snap) => {
+    USUARIOS_TENANT_INFO = snap.exists ? snap.data() : {};
+    renderUsuariosTenant();
+  }, (err) => console.error('Erro ao ler a empresa:', err));
+  firestoreDb.collection('tenants').doc(TENANT_ID).collection('vagas').onSnapshot((snap) => {
+    USUARIOS_VAGAS = [];
+    snap.forEach((doc) => USUARIOS_VAGAS.push({ numero: Number(doc.id), ...(doc.data() || {}) }));
+    renderUsuariosTenant();
+  }, () => {});
+}
+
+// Limite contratado (definido pelo Super Admin). Empresa antiga, sem
+// limite definido, continua com o teto padrão.
+function limiteUsuariosEmpresa() {
+  const l = USUARIOS_TENANT_INFO && Number(USUARIOS_TENANT_INFO.limiteUsuarios);
+  return l >= 1 ? l : LIMITE_USUARIOS_POR_EMPRESA;
+}
+function empresaTemLimiteDefinido() { return !!(USUARIOS_TENANT_INFO && Number(USUARIOS_TENANT_INFO.limiteUsuarios) >= 1); }
+function proximaVagaLivre() {
+  const ocupadas = new Set(USUARIOS_VAGAS.map((v) => v.numero));
+  for (let n = 1; n <= limiteUsuariosEmpresa(); n++) if (!ocupadas.has(n)) return n;
+  return null;
 }
 
 function renderUsuariosTenant() {
   const tbody = document.getElementById('tabela-usuarios-body');
   const contadorEl = document.getElementById('usuarios-contador');
-  if (contadorEl) contadorEl.textContent = `${USUARIOS_TENANT_DATA.length} de ${LIMITE_USUARIOS_POR_EMPRESA} usuários`;
+  const limite = limiteUsuariosEmpresa();
+  const lotado = USUARIOS_TENANT_DATA.length >= limite;
+  if (contadorEl) contadorEl.innerHTML = `<strong>${USUARIOS_TENANT_DATA.length} de ${limite}</strong> usuário(s) do seu plano${lotado ? ' — <span style="color:var(--warning);">limite atingido. Para ampliar, fale com a Eagles Labz.</span>' : ''}`;
   const btnNovo = document.getElementById('btn-novo-usuario');
-  if (btnNovo) btnNovo.disabled = USUARIOS_TENANT_DATA.length >= LIMITE_USUARIOS_POR_EMPRESA;
+  if (btnNovo) { btnNovo.disabled = lotado; btnNovo.title = lotado ? `Seu plano permite ${limite} usuário(s). Fale com a Eagles Labz para ampliar.` : ''; }
 
   if (!tbody) return;
   if (!USUARIOS_TENANT_DATA.length) {
     tbody.innerHTML = emptyCadastroHtml("openModal('modal-novo-usuario')", 4);
     return;
   }
-  tbody.innerHTML = USUARIOS_TENANT_DATA.map((u) => `
+  const ordenados = USUARIOS_TENANT_DATA.slice().sort((a, b) => (b.titular ? 1 : 0) - (a.titular ? 1 : 0) || String(a.nome || '').localeCompare(String(b.nome || '')));
+  tbody.innerHTML = ordenados.map((u) => {
+    const nivel = nivelDoRole(u.role);
+    const fixo = u.titular || u.uid === USUARIO_UID || u.role === 'SuperAdmin';
+    const uid = escapeParaOnclick(u.uid);
+    return `
     <tr>
-      <td><div class="person-cell"><div class="avatar">${escapeHtml(initials(u.nome || u.email))}</div><div class="person-name">${escapeHtml(u.nome || '—')}</div></div></td>
+      <td><div class="person-cell"><div class="avatar">${escapeHtml(initials(u.nome || u.email))}</div><div class="person-name">${escapeHtml(u.nome || '—')}${u.titular ? '<span class="nivel-titular" title="Quem contratou o serviço. Só a Eagles Labz altera ou remove.">Titular</span>' : ''}</div></div></td>
       <td>${escapeHtml(u.email || '—')}</td>
-      <td><span class="badge badge-blue">${escapeHtml(traduzirRole(u.role))}</span></td>
+      <td>${fixo
+        ? `<span class="badge badge-blue">${escapeHtml(traduzirRole(u.role))}</span>`
+        : `<select class="nivel-select" aria-label="Nível de acesso" onchange="alterarNivelUsuario('${uid}', this.value, this)">${['Diretor', 'Administrativo', 'Financeiro'].map((r) => `<option value="${r}"${nivel === nivelDoRole(r) ? ' selected' : ''}>${r}</option>`).join('')}</select>`}</td>
       <td style="text-align:right;">
-        ${u.uid === USUARIO_UID ? '<span style="font-size:12px; color:var(--text-soft);">você</span>' : `<button class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerAcessoUsuario('${u.uid}')">Remover acesso</button>`}
+        ${u.uid === USUARIO_UID ? '<span style="font-size:12px; color:var(--text-soft);">você</span>'
+          : u.titular ? '<span style="font-size:12px; color:var(--text-soft);">titular da conta</span>'
+          : `<button class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerAcessoUsuario('${uid}')">Remover acesso</button>`}
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+}
+
+async function alterarNivelUsuario(uid, novoRole, select) {
+  const u = USUARIOS_TENANT_DATA.find((x) => x.uid === uid);
+  if (!u || !['Diretor', 'Administrativo', 'Financeiro'].includes(novoRole)) return;
+  if (u.titular || uid === USUARIO_UID) { renderUsuariosTenant(); return; }
+  try {
+    await firestoreDb.collection('usuarios').doc(uid).set({ role: novoRole }, { merge: true });
+    avisar(`${u.nome || u.email} agora é ${novoRole}. A mudança vale no próximo carregamento de página dessa pessoa.`);
+  } catch (err) {
+    console.error('Erro ao mudar nível:', err);
+    avisar('Não foi possível mudar o nível agora. Tente de novo.');
+    renderUsuariosTenant();
+  }
 }
 
 async function criarNovoUsuarioTenant(e) {
   e.preventDefault();
-  if (USUARIOS_TENANT_DATA.length >= LIMITE_USUARIOS_POR_EMPRESA) {
-    alert(`Limite de ${LIMITE_USUARIOS_POR_EMPRESA} usuários atingido para esta empresa.`);
+  if (!nivelEhDiretor()) { avisarSemPermissaoNivel('gerenciar usuários'); return; }
+  const limite = limiteUsuariosEmpresa();
+  if (USUARIOS_TENANT_DATA.length >= limite) {
+    avisar(`Seu plano permite ${limite} usuário(s). Para ampliar, fale com a Eagles Labz.`);
+    return;
+  }
+  const vaga = empresaTemLimiteDefinido() ? proximaVagaLivre() : null;
+  if (empresaTemLimiteDefinido() && !vaga) {
+    avisar(`Seu plano permite ${limite} usuário(s) e todas as vagas estão ocupadas. Para ampliar, fale com a Eagles Labz.`);
     return;
   }
   const nome = document.getElementById('novo-usuario-nome').value.trim();
   const email = document.getElementById('novo-usuario-email').value.trim();
   const senha = document.getElementById('novo-usuario-senha').value;
   const role = document.getElementById('novo-usuario-role').value;
-  if (!nome || !email || senha.length < 6) {
-    alert('Preencha nome, e-mail e uma senha com pelo menos 6 caracteres.');
+  if (!nome || !email || senha.length < 8) {
+    avisar('Preencha nome, e-mail e uma senha com pelo menos 8 caracteres.');
     return;
   }
+  if (!['Diretor', 'Administrativo', 'Financeiro'].includes(role)) return;
 
   const btn = document.getElementById('btn-salvar-novo-usuario');
   btn.disabled = true;
@@ -4844,14 +15583,13 @@ async function criarNovoUsuarioTenant(e) {
     const novoUid = cred.user.uid;
 
     try {
-      await firestoreDb.collection('usuarios').doc(novoUid).set({
-        tenantId: TENANT_ID,
-        role: role || 'TenantUser',
-        nome,
-        email,
-        criadoEm: new Date().toISOString(),
-        criadoPor: USUARIO_UID,
-      });
+      // usuário + vaga no MESMO lote: as regras só aceitam os dois juntos
+      const lote = firestoreDb.batch();
+      const dadosUsuario = { tenantId: TENANT_ID, role, nome, email, criadoEm: new Date().toISOString(), criadoPor: USUARIO_UID };
+      if (vaga) dadosUsuario.vaga = vaga;
+      lote.set(firestoreDb.collection('usuarios').doc(novoUid), dadosUsuario);
+      if (vaga) lote.set(firestoreDb.collection('tenants').doc(TENANT_ID).collection('vagas').doc(String(vaga)), { uid: novoUid, criadoEm: new Date().toISOString() });
+      await lote.commit();
     } catch (errVinculo) {
       await cred.user.delete().catch(() => {});
       throw errVinculo;
@@ -4862,10 +15600,11 @@ async function criarNovoUsuarioTenant(e) {
 
     document.getElementById('form-novo-usuario').reset();
     closeModal('modal-novo-usuario');
-    alert(`Usuário "${nome}" criado! Ele já pode entrar com o e-mail e senha cadastrados.`);
+    avisar(`Usuário "${nome}" criado como ${role}! Ele já pode entrar com o e-mail e senha cadastrados.`);
   } catch (err) {
     console.error('Erro ao criar usuário:', err);
-    alert('Não foi possível criar o usuário: ' + mensagemErroCriacaoConta(err.code));
+    const lotou = err && err.code === 'permission-denied' && empresaTemLimiteDefinido();
+    avisar('Não foi possível criar o usuário: ' + (lotou ? 'o limite de usuários do plano foi atingido (ou outra pessoa acabou de ocupar a última vaga).' : mensagemErroCriacaoConta(err.code)));
     if (appSecundario) { try { await appSecundario.delete(); } catch (e2) {} }
   } finally {
     btn.disabled = false;
@@ -4874,13 +15613,20 @@ async function criarNovoUsuarioTenant(e) {
 }
 
 async function removerAcessoUsuario(uid) {
-  if (!window.confirm('Remover o acesso deste usuário? Ele não vai conseguir mais entrar no sistema (a conta de login em si só é apagada de vez pelo Super Admin, mas o acesso a essa empresa é cortado imediatamente).')) return;
-  try {
-    await firestoreDb.collection('usuarios').doc(uid).delete();
-  } catch (err) {
-    console.error('Erro ao remover acesso:', err);
-    alert('Não foi possível remover o acesso agora. Tente de novo.');
-  }
+  const u = USUARIOS_TENANT_DATA.find((x) => x.uid === uid);
+  if (!u || u.titular) { avisar('O titular da conta só pode ser alterado pela Eagles Labz.'); return; }
+  confirmarAcao('Remover o acesso deste usuário? Ele não vai conseguir mais entrar no sistema e a vaga dele fica livre pra outra pessoa.', async () => {
+    try {
+      const lote = firestoreDb.batch();
+      lote.delete(firestoreDb.collection('usuarios').doc(uid));
+      const vaga = USUARIOS_VAGAS.find((v) => v.uid === uid);
+      if (vaga) lote.delete(firestoreDb.collection('tenants').doc(TENANT_ID).collection('vagas').doc(String(vaga.numero)));
+      await lote.commit();
+    } catch (err) {
+      console.error('Erro ao remover acesso:', err);
+      avisar('Não foi possível remover o acesso agora. Tente de novo.');
+    }
+  });
 }
 
 // =====================================================================
@@ -4920,7 +15666,7 @@ function renderMinhaEmpresaStatus() {
 async function criarMinhaEmpresa(e) {
   e.preventDefault();
   const nomeEmpresa = document.getElementById('minha-empresa-nome').value.trim();
-  if (!nomeEmpresa) { alert('Digite o nome da sua empresa.'); return; }
+  if (!nomeEmpresa) { avisar('Digite o nome da sua empresa.'); return; }
 
   const btn = document.getElementById('btn-salvar-minha-empresa');
   btn.disabled = true;
@@ -4937,11 +15683,11 @@ async function criarMinhaEmpresa(e) {
     await firestoreDb.collection('usuarios').doc(USUARIO_UID).set({ tenantId: novoTenantId }, { merge: true });
 
     closeModal('modal-minha-empresa');
-    alert(`Empresa "${nomeEmpresa}" criada e vinculada à sua conta! A página vai recarregar pra sincronizar tudo direitinho.`);
+    avisar(`Empresa "${nomeEmpresa}" criada e vinculada à sua conta! A página vai recarregar pra sincronizar tudo direitinho.`);
     window.location.reload();
   } catch (err) {
     console.error('Erro ao criar minha empresa:', err);
-    alert('Não foi possível criar agora: ' + mensagemErroCriacaoConta(err.code));
+    avisar('Não foi possível criar agora: ' + mensagemErroCriacaoConta(err.code));
   } finally {
     btn.disabled = false;
     btn.textContent = 'Criar empresa';
@@ -4949,19 +15695,26 @@ async function criarMinhaEmpresa(e) {
 }
 
 async function desvincularMinhaEmpresa() {
-  if (!window.confirm('Desvincular sua conta dessa empresa? Você volta a ficar só como Super Admin da plataforma. Os dados da empresa continuam guardados, só o vínculo com o seu login é removido.')) return;
-  try {
-    await firestoreDb.collection('usuarios').doc(USUARIO_UID).set({ tenantId: null }, { merge: true });
-    alert('Desvinculado! A página vai recarregar.');
-    window.location.reload();
-  } catch (err) {
-    console.error('Erro ao desvincular:', err);
-    alert('Não foi possível desvincular agora. Tente de novo.');
-  }
+  confirmarAcao('Desvincular sua conta dessa empresa? Você volta a ficar só como Super Admin da plataforma. Os dados da empresa continuam guardados, só o vínculo com o seu login é removido.', async () => {
+    try {
+      await firestoreDb.collection('usuarios').doc(USUARIO_UID).set({ tenantId: null }, { merge: true });
+      avisar('Desvinculado! A página vai recarregar.');
+      window.location.reload();
+    } catch (err) {
+      console.error('Erro ao desvincular:', err);
+      avisar('Não foi possível desvincular agora. Tente de novo.');
+    }
+  });
 }
 
+let USUARIOS_TODOS = [];
 function escutarTenants() {
   if (!FIREBASE_PRONTO) return;
+  firestoreDb.collection('usuarios').onSnapshot((snap) => {
+    USUARIOS_TODOS = [];
+    snap.forEach((doc) => USUARIOS_TODOS.push({ uid: doc.id, ...doc.data() }));
+    renderTenantsLista();
+  }, (err) => console.error('Erro ao listar usuários:', err));
   firestoreDb.collection('tenants').onSnapshot((snap) => {
     TENANTS_DATA = [];
     snap.forEach((doc) => TENANTS_DATA.push({ id: doc.id, ...doc.data() }));
@@ -4973,17 +15726,29 @@ function renderTenantsLista() {
   const tbody = document.getElementById('tabela-empresas-body');
   if (!tbody) return;
   if (!TENANTS_DATA.length) {
-    tbody.innerHTML = emptyCadastroHtml("openModal('modal-nova-empresa')", 5);
+    tbody.innerHTML = emptyCadastroHtml("openModal('modal-nova-empresa')", 7);
     renderMinhaEmpresaStatus();
     return;
   }
   tbody.innerHTML = TENANTS_DATA.map((t) => {
     const ativo = t.ativo !== false; // sem o campo = tratado como ativo (empresas criadas antes desse recurso)
+    const plano = t.plano || 'erp'; // empresas criadas antes desse recurso = ERP (o que já existia)
+    const planoLabels = { erp: 'ERP', crm: 'CRM', ambos: 'ERP + CRM' };
+    const planoCores = { erp: 'badge-blue', crm: 'badge-warning', ambos: 'badge-success' };
     return `
     <tr>
       <td>${escapeHtml(t.nomeEmpresa || t.id)}</td>
       <td style="font-size:12px; color:var(--text-soft);">${escapeHtml(t.id)}</td>
       <td>${t.criadoEm ? formatDatePt(t.criadoEm.slice(0, 10)) : '—'}</td>
+      <td><button type="button" class="btn btn-small btn-ghost" style="padding:0; border:none;" onclick="abrirModalTrocarPlano('${t.id}','${plano}','${escapeParaOnclick(t.nomeEmpresa || '')}')"><span class="badge ${planoCores[plano]}">${planoLabels[plano]} ✎</span></button></td>
+      <td>${(() => {
+        const qtd = USUARIOS_TODOS.filter((u) => u.tenantId === t.id).length;
+        const lim = Number(t.limiteUsuarios) || 0;
+        const titular = USUARIOS_TODOS.find((u) => u.tenantId === t.id && u.titular);
+        return `<button type="button" class="btn btn-small btn-ghost" style="padding:0; border:none; text-align:left;" onclick="abrirUsuariosEmpresaSA('${escapeParaOnclick(t.id)}')" title="Limite, titular e níveis">
+          <span class="badge ${lim && qtd > lim ? 'badge-danger' : lim && qtd === lim ? 'badge-warning' : 'badge-neutral'}">${qtd}/${lim || '—'}</span>
+          <span style="display:block; font-size:11px; color:var(--text-soft); margin-top:3px;">${titular ? escapeHtml(titular.email || titular.nome || '') : 'sem titular'}</span></button>`;
+      })()}</td>
       <td>${ativo ? '<span class="badge badge-success">Ativa</span>' : '<span class="badge badge-danger">Suspensa</span>'}</td>
       <td style="text-align:right; white-space:nowrap;">
         <button class="btn btn-small btn-ghost" style="color:var(--blue-text);" onclick="abrirModalNovoAcessoEmpresa('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">+ Criar acesso</button>
@@ -4997,27 +15762,57 @@ function renderTenantsLista() {
   renderMinhaEmpresaStatus();
 }
 
+let TROCAR_PLANO_TENANT_ID = null;
+
+function abrirModalTrocarPlano(tenantId, planoAtual, nomeEmpresa) {
+  TROCAR_PLANO_TENANT_ID = tenantId;
+  document.getElementById('trocar-plano-empresa-nome').textContent = nomeEmpresa || tenantId;
+  document.getElementById('trocar-plano-select').value = planoAtual;
+  openModal('modal-trocar-plano');
+}
+
+async function salvarTrocaPlano() {
+  const novoPlano = document.getElementById('trocar-plano-select').value;
+  const btn = document.getElementById('btn-salvar-trocar-plano');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  try {
+    await firestoreDb.collection('tenants').doc(TROCAR_PLANO_TENANT_ID).set({ plano: novoPlano }, { merge: true });
+    const t = TENANTS_DATA.find((x) => x.id === TROCAR_PLANO_TENANT_ID);
+    if (t) t.plano = novoPlano;
+    renderTenantsLista();
+    closeModal('modal-trocar-plano');
+  } catch (err) {
+    console.error('Erro ao trocar plano:', err);
+    avisar(mensagemErroFirestore(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+  }
+}
+
 // ---------- Suspender / reativar (por falta de pagamento, por exemplo) ----------
 // Não apaga nada — só impede login de todo mundo daquela empresa até você
 // reativar. Os dados continuam guardados no Firestore normalmente.
 
 async function suspenderEmpresa(tenantId, nomeEmpresa) {
-  if (!window.confirm(`Suspender o acesso de "${nomeEmpresa}"? Ninguém dessa empresa vai conseguir entrar até você reativar. Os dados NÃO são apagados.`)) return;
-  try {
-    await firestoreDb.collection('tenants').doc(tenantId).set({ ativo: false }, { merge: true });
-  } catch (err) {
-    console.error('Erro ao suspender empresa:', err);
-    alert('Não foi possível suspender agora. Tente de novo.');
-  }
+  confirmarAcao(`Suspender o acesso de "${nomeEmpresa}"? Ninguém dessa empresa vai conseguir entrar até você reativar. Os dados NÃO são apagados.`, async () => {
+    try {
+      await firestoreDb.collection('tenants').doc(tenantId).set({ ativo: false }, { merge: true });
+    } catch (err) {
+      console.error('Erro ao suspender empresa:', err);
+      avisar(mensagemErroFirestore(err));
+    }
+  });
 }
 
 async function reativarEmpresa(tenantId, nomeEmpresa) {
   try {
     await firestoreDb.collection('tenants').doc(tenantId).set({ ativo: true }, { merge: true });
-    alert(`Acesso de "${nomeEmpresa}" reativado.`);
+    avisar(`Acesso de "${nomeEmpresa}" reativado.`);
   } catch (err) {
     console.error('Erro ao reativar empresa:', err);
-    alert('Não foi possível reativar agora. Tente de novo.');
+    avisar(mensagemErroFirestore(err));
   }
 }
 
@@ -5026,7 +15821,7 @@ async function reativarEmpresa(tenantId, nomeEmpresa) {
 async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
   const confirmacao = window.prompt(`Isso apaga PERMANENTEMENTE todos os dados e acessos de "${nomeEmpresa}". Essa ação não pode ser desfeita.\n\nPara confirmar, digite o nome da empresa exatamente como está: ${nomeEmpresa}`);
   if (confirmacao !== nomeEmpresa) {
-    if (confirmacao !== null) alert('O nome digitado não bateu. Nada foi excluído.');
+    if (confirmacao !== null) avisar('O nome digitado não bateu. Nada foi excluído.');
     return;
   }
 
@@ -5036,17 +15831,24 @@ async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
     usuariosSnap.forEach((doc) => lote1.delete(doc.ref));
     await lote1.commit();
 
-    const dadosSnap = await firestoreDb.collection('tenants').doc(tenantId).collection('dados').get();
-    const lote2 = firestoreDb.batch();
-    dadosSnap.forEach((doc) => lote2.delete(doc.ref));
-    await lote2.commit();
+    // todas as subcoleções da empresa (antes só "dados" era apagada e as
+    // tarefas/projetos do Kanban ficavam órfãos no banco)
+    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes']) {
+      const snap = await firestoreDb.collection('tenants').doc(tenantId).collection(sub).get();
+      const docs = []; snap.forEach((d) => docs.push(d.ref));
+      for (let i = 0; i < docs.length; i += 400) { // limite de 500 operações por lote
+        const lote = firestoreDb.batch();
+        docs.slice(i, i + 400).forEach((ref) => lote.delete(ref));
+        await lote.commit();
+      }
+    }
 
     await firestoreDb.collection('tenants').doc(tenantId).delete();
 
-    alert(`Empresa "${nomeEmpresa}" e todos os seus dados foram excluídos.`);
+    avisar(`Empresa "${nomeEmpresa}" e todos os seus dados foram excluídos.`);
   } catch (err) {
     console.error('Erro ao excluir empresa:', err);
-    alert('Não foi possível concluir a exclusão. Alguma parte pode ter sido apagada — confira a lista.');
+    avisar('Não foi possível concluir a exclusão. Alguma parte pode ter sido apagada — confira a lista.');
   }
 }
 
@@ -5069,8 +15871,8 @@ async function criarAcessoParaEmpresaExistente(e) {
   const email = document.getElementById('novo-acesso-email').value.trim();
   const senha = document.getElementById('novo-acesso-senha').value;
   const role = document.getElementById('novo-acesso-role').value;
-  if (!tenantId || !nome || !email || senha.length < 6) {
-    alert('Preencha nome, e-mail e uma senha com pelo menos 6 caracteres.');
+  if (!tenantId || !nome || !email || senha.length < 8) {
+    avisar('Preencha nome, e-mail e uma senha com pelo menos 8 caracteres.');
     return;
   }
 
@@ -5086,14 +15888,19 @@ async function criarAcessoParaEmpresaExistente(e) {
     const novoUid = cred.user.uid;
 
     try {
-      await firestoreDb.collection('usuarios').doc(novoUid).set({
-        tenantId,
-        role: role || 'TenantAdmin',
-        nome,
-        email,
-        criadoEm: new Date().toISOString(),
-        criadoPor: USUARIO_UID,
-      });
+      const t = TENANTS_DATA.find((x) => x.id === tenantId) || {};
+      const lote = firestoreDb.batch();
+      const dadosUsuario = { tenantId, role: ['Diretor', 'Administrativo', 'Financeiro'].includes(role) ? role : 'Diretor', nome, email, criadoEm: new Date().toISOString(), criadoPor: USUARIO_UID };
+      if (Number(t.limiteUsuarios) >= 1) {
+        // próxima vaga livre (o Super Admin pode passar do limite, se precisar)
+        const vagasSnap = await firestoreDb.collection('tenants').doc(tenantId).collection('vagas').get();
+        const ocupadas = new Set(); vagasSnap.forEach((d) => ocupadas.add(Number(d.id)));
+        let n = 1; while (ocupadas.has(n)) n++;
+        dadosUsuario.vaga = n;
+        lote.set(firestoreDb.collection('tenants').doc(tenantId).collection('vagas').doc(String(n)), { uid: novoUid, criadoEm: new Date().toISOString() });
+      }
+      lote.set(firestoreDb.collection('usuarios').doc(novoUid), dadosUsuario);
+      await lote.commit();
     } catch (errVinculo) {
       await cred.user.delete().catch(() => {});
       throw errVinculo;
@@ -5103,10 +15910,10 @@ async function criarAcessoParaEmpresaExistente(e) {
     await appSecundario.delete();
 
     closeModal('modal-novo-acesso-empresa');
-    alert(`Acesso criado! ${nome} já pode entrar com o e-mail e senha cadastrados.`);
+    avisar(`Acesso criado! ${nome} já pode entrar com o e-mail e senha cadastrados.`);
   } catch (err) {
     console.error('Erro ao criar acesso:', err);
-    alert('Não foi possível criar o acesso: ' + mensagemErroCriacaoConta(err.code));
+    avisar('Não foi possível criar o acesso: ' + mensagemErroCriacaoConta(err.code));
     if (appSecundario) { try { await appSecundario.delete(); } catch (e2) {} }
   } finally {
     btn.disabled = false;
@@ -5114,16 +15921,24 @@ async function criarAcessoParaEmpresaExistente(e) {
   }
 }
 
+function senhaAleatoria() {
+  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+  const a = new Uint32Array(20);
+  (window.crypto || window.msCrypto).getRandomValues(a);
+  return Array.from(a, (n) => c[n % c.length]).join('');
+}
+
 async function criarNovaEmpresa(e) {
   e.preventDefault();
   const nomeEmpresa = document.getElementById('nova-empresa-nome').value.trim();
+  const plano = document.getElementById('nova-empresa-plano').value;
+  const limiteUsuarios = Math.max(1, Math.min(5, parseInt(document.getElementById('nova-empresa-limite').value, 10) || 1));
   const adminNome = document.getElementById('nova-empresa-admin-nome').value.trim();
   const adminEmail = document.getElementById('nova-empresa-admin-email').value.trim();
-  const adminSenha = document.getElementById('nova-empresa-admin-senha').value;
-  if (!nomeEmpresa || !adminNome || !adminEmail || adminSenha.length < 6) {
-    alert('Preencha o nome da empresa e os dados do administrador (senha com pelo menos 6 caracteres).');
-    return;
-  }
+  const senhaDigitada = document.getElementById('nova-empresa-admin-senha').value;
+  if (!nomeEmpresa || !adminNome || !adminEmail) { avisar('Preencha o nome da empresa e o nome e e-mail do titular.'); return; }
+  if (senhaDigitada && senhaDigitada.length < 8) { avisar('A senha inicial precisa ter pelo menos 8 caracteres (ou deixe em branco pra mandar o e-mail de criar senha).'); return; }
+  const adminSenha = senhaDigitada || senhaAleatoria();
 
   const btn = document.getElementById('btn-salvar-nova-empresa');
   btn.disabled = true;
@@ -5134,10 +15949,8 @@ async function criarNovaEmpresa(e) {
   let appSecundario;
   try {
     await firestoreDb.collection('tenants').doc(novoTenantId).set({
-      nomeEmpresa,
-      ativo: true,
-      criadoEm: new Date().toISOString(),
-      criadoPor: USUARIO_UID,
+      nomeEmpresa, plano, ativo: true, limiteUsuarios, titularEmail: adminEmail,
+      criadoEm: new Date().toISOString(), criadoPor: USUARIO_UID,
     });
 
     appSecundario = firebase.initializeApp(FIREBASE_CONFIG, nomeAppSecundario);
@@ -5145,18 +15958,17 @@ async function criarNovaEmpresa(e) {
     const novoUid = cred.user.uid;
 
     try {
-      await firestoreDb.collection('usuarios').doc(novoUid).set({
-        tenantId: novoTenantId,
-        role: 'TenantAdmin',
-        nome: adminNome,
-        email: adminEmail,
-        criadoEm: new Date().toISOString(),
-        criadoPor: USUARIO_UID,
+      const lote = firestoreDb.batch();
+      lote.set(firestoreDb.collection('usuarios').doc(novoUid), {
+        tenantId: novoTenantId, role: 'Diretor', titular: true, vaga: 1,
+        nome: adminNome, email: adminEmail, criadoEm: new Date().toISOString(), criadoPor: USUARIO_UID,
       });
+      lote.set(firestoreDb.collection('tenants').doc(novoTenantId).collection('vagas').doc('1'), { uid: novoUid, criadoEm: new Date().toISOString() });
+      lote.set(firestoreDb.collection('tenants').doc(novoTenantId), { titularUid: novoUid }, { merge: true });
+      await lote.commit();
     } catch (errVinculo) {
       // Se não conseguir vincular o login à empresa, desfaz o login criado
-      // agora mesmo — assim o e-mail fica livre pra tentar de novo, em vez
-      // de sobrar uma conta "fantasma" (existe, mas sem empresa nenhuma).
+      // agora mesmo — assim o e-mail fica livre pra tentar de novo.
       await cred.user.delete().catch(() => {});
       throw errVinculo;
     }
@@ -5164,16 +15976,109 @@ async function criarNovaEmpresa(e) {
     await appSecundario.auth().signOut();
     await appSecundario.delete();
 
+    let msg = `Empresa "${nomeEmpresa}" criada com ${limiteUsuarios} usuário(s)! ${adminNome} é o titular (Diretor).`;
+    if (!senhaDigitada) {
+      try { await firebase.auth().sendPasswordResetEmail(adminEmail); msg += ` Enviamos um e-mail para ${adminEmail} criar a senha.`; }
+      catch (errEmail) { console.error('Erro ao enviar e-mail de senha:', errEmail); msg += ` Não consegui enviar o e-mail de criar senha — peça pra ele usar "Esqueceu a senha?" na tela de login.`; }
+    } else msg += ' Ele já pode entrar com o e-mail e a senha cadastrados.';
     document.getElementById('form-nova-empresa').reset();
     closeModal('modal-nova-empresa');
-    alert(`Empresa "${nomeEmpresa}" criada! O administrador ${adminNome} já pode entrar com o e-mail e senha cadastrados.`);
+    avisar(msg);
   } catch (err) {
     console.error('Erro ao criar empresa:', err);
-    alert('Não foi possível criar a empresa: ' + mensagemErroCriacaoConta(err.code));
+    avisar('Não foi possível criar a empresa: ' + mensagemErroCriacaoConta(err.code));
     if (appSecundario) { try { await appSecundario.delete(); } catch (e2) {} }
   } finally {
     btn.disabled = false;
     btn.textContent = 'Criar empresa';
+  }
+}
+
+// Traduz o erro do Firestore em algo que dá pra resolver.
+function mensagemErroFirestore(err) {
+  const code = String((err && err.code) || '').replace('firestore/', '');
+  if (code === 'permission-denied') return 'O banco recusou a gravação por permissão. Quase sempre isso significa que o arquivo firestore.rules mais novo ainda não foi publicado no Firebase (Firestore → Regras → colar → Publicar). Publique e tente de novo.';
+  if (code === 'unavailable') return 'Sem conexão com o banco agora. Confira a internet e tente de novo.';
+  if (code === 'invalid-argument') return 'O banco recusou os dados enviados (erro interno: invalid-argument). Me mande um print do console (F12) que eu corrijo.';
+  return 'Não foi possível salvar agora (' + (code || 'erro desconhecido') + '). Tente de novo — se continuar, me mande um print do console (F12).';
+}
+
+// ---------- Usuários de uma empresa (Super Admin): limite, titular e níveis ----------
+let SA_EMPRESA_EDIT = null;
+function abrirUsuariosEmpresaSA(tenantId) {
+  const t = TENANTS_DATA.find((x) => x.id === tenantId);
+  if (!t) return;
+  const usuarios = USUARIOS_TODOS.filter((u) => u.tenantId === tenantId).sort((a, b) => (a.criadoEm || '').localeCompare(b.criadoEm || ''));
+  SA_EMPRESA_EDIT = { tenantId, limite: Number(t.limiteUsuarios) || Math.max(1, Math.min(5, usuarios.length || 1)), titularUid: (usuarios.find((u) => u.titular) || {}).uid || '', niveis: Object.fromEntries(usuarios.map((u) => [u.uid, ['Diretor', 'Administrativo', 'Financeiro'].includes(u.role) ? u.role : 'Diretor'])) };
+  let ov = document.getElementById('modal-usuarios-empresa-sa');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = 'modal-overlay'; ov.id = 'modal-usuarios-empresa-sa';
+    inserirModalNoBody(ov);
+  }
+  ov.innerHTML = `
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-header"><h2>Usuários — ${escapeHtml(t.nomeEmpresa || t.id)}</h2><button class="close-btn" onclick="closeModal('modal-usuarios-empresa-sa')">&times;</button></div>
+      <div class="field"><label>Usuários contratados</label>
+        <select id="sa-limite-usuarios" onchange="SA_EMPRESA_EDIT.limite = Number(this.value); document.getElementById('sa-limite-aviso').style.display = Number(this.value) < ${usuarios.length} ? '' : 'none';">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}"${n === SA_EMPRESA_EDIT.limite ? ' selected' : ''}>${n} usuário${n > 1 ? 's' : ''}</option>`).join('')}</select>
+        <p class="nivel-ajuda" id="sa-limite-aviso" style="color:var(--warning); ${SA_EMPRESA_EDIT.limite < usuarios.length ? '' : 'display:none;'}">A empresa já tem ${usuarios.length} usuários. Ninguém perde o acesso, mas o titular não consegue criar novos até ficar abaixo do limite.</p>
+      </div>
+      <div class="table-scroll" style="margin-top:6px;"><table>
+        <thead><tr><th>Titular</th><th>Nome / e-mail</th><th>Nível</th></tr></thead>
+        <tbody>${usuarios.map((u) => `<tr>
+          <td><input type="radio" name="sa-titular" value="${escapeHtml(u.uid)}" ${u.uid === SA_EMPRESA_EDIT.titularUid ? 'checked' : ''} onchange="SA_EMPRESA_EDIT.titularUid = this.value; document.querySelectorAll('.sa-nivel-sel').forEach((s) => { if (s.dataset.uid === this.value) { s.value = 'Diretor'; SA_EMPRESA_EDIT.niveis[this.value] = 'Diretor'; } s.disabled = s.dataset.uid === this.value; });" aria-label="Titular"></td>
+          <td><strong>${escapeHtml(u.nome || '—')}</strong><div style="font-size:12px; color:var(--text-soft);">${escapeHtml(u.email || '')}</div></td>
+          <td>${u.role === 'SuperAdmin' ? '<span class="badge badge-blue">Super Admin</span>' : `<select class="nivel-select sa-nivel-sel" data-uid="${escapeHtml(u.uid)}" ${u.uid === SA_EMPRESA_EDIT.titularUid ? 'disabled' : ''} onchange="SA_EMPRESA_EDIT.niveis[this.dataset.uid] = this.value">${['Diretor', 'Administrativo', 'Financeiro'].map((r) => `<option value="${r}"${SA_EMPRESA_EDIT.niveis[u.uid] === r ? ' selected' : ''}>${r}</option>`).join('')}</select>`}</td>
+        </tr>`).join('') || '<tr><td colspan="3" style="color:var(--text-soft);">Nenhum usuário ainda — use "+ Criar acesso".</td></tr>'}</tbody>
+      </table></div>
+      <p class="nivel-ajuda">O titular é quem contratou: sempre Diretor, e só você (Super Admin) consegue trocá-lo ou removê-lo. Ele conta no limite de usuários.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeModal('modal-usuarios-empresa-sa')">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btn-sa-salvar-usuarios" onclick="salvarUsuariosEmpresaSA()">Salvar</button>
+      </div>
+    </div>`;
+  openModal('modal-usuarios-empresa-sa');
+}
+
+// Salva limite/titular/níveis e reorganiza as vagas (titular na vaga 1).
+async function salvarUsuariosEmpresaSA() {
+  const ed = SA_EMPRESA_EDIT;
+  if (!ed) return;
+  const btn = document.getElementById('btn-sa-salvar-usuarios');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  let etapa = 'ler';
+  try {
+    const usuarios = USUARIOS_TODOS.filter((u) => u.tenantId === ed.tenantId).sort((a, b) => (a.uid === ed.titularUid ? -1 : b.uid === ed.titularUid ? 1 : 0) || (a.criadoEm || '').localeCompare(b.criadoEm || ''));
+    const vagasRef = firestoreDb.collection('tenants').doc(ed.tenantId).collection('vagas');
+    const vagasSnap = await vagasRef.get();
+    etapa = 'gravar';
+    // cada documento entra UMA vez no lote (o Firestore recusa o lote
+    // inteiro se o mesmo documento for apagado e gravado de novo nele)
+    const novas = new Set(usuarios.map((u, i) => String(i + 1)));
+    const lote = firestoreDb.batch();
+    vagasSnap.forEach((d) => { if (!novas.has(d.id)) lote.delete(d.ref); });
+    const titular = usuarios.find((u) => u.uid === ed.titularUid);
+    lote.set(firestoreDb.collection('tenants').doc(ed.tenantId), { limiteUsuarios: ed.limite, titularUid: ed.titularUid || '', titularEmail: titular ? (titular.email || '') : '' }, { merge: true });
+    usuarios.forEach((u, i) => {
+      const numero = i + 1; // quem passar do limite fica com vaga acima dele (não perde acesso)
+      lote.set(vagasRef.doc(String(numero)), { uid: u.uid, criadoEm: new Date().toISOString() });
+      // Super Admin continua Super Admin (mesmo editando a própria empresa)
+      const role = u.role === 'SuperAdmin' ? 'SuperAdmin' : (u.uid === ed.titularUid ? 'Diretor' : (ed.niveis[u.uid] || 'Diretor'));
+      lote.set(firestoreDb.collection('usuarios').doc(u.uid), { vaga: numero, titular: u.uid === ed.titularUid, role }, { merge: true });
+    });
+    await lote.commit();
+    closeModal('modal-usuarios-empresa-sa');
+    avisar('Usuários da empresa atualizados.');
+  } catch (err) {
+    console.error('Erro ao salvar usuários da empresa (etapa: ' + etapa + '):', err);
+    const negado = String((err && err.code) || '').includes('permission-denied');
+    if (negado && etapa === 'ler') {
+      avisar('As regras que estão publicadas no Firebase ainda são as ANTIGAS — elas não conhecem as "vagas" de usuários. Publique o firestore.rules deste zip (Firestore → Regras → colar → Publicar) e confira se, ao publicar, não apareceu nenhum erro em vermelho. Depois recarregue esta página.', 'Regras desatualizadas');
+    } else if (negado) {
+      avisar('As regras novas estão publicadas, mas recusaram esta gravação. Abra o console (F12 → aba Console), tire um print da mensagem em vermelho e me mande — eu corrijo.', 'Permissão negada');
+    } else avisar(mensagemErroFirestore(err));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar';
   }
 }
 
@@ -5186,27 +16091,27 @@ async function criarNovaEmpresa(e) {
 // do tenant atual — útil só durante a transição.
 
 async function migrarDadosAntigosParaTenant() {
-  if (!TENANT_ID) { alert('Entre no sistema antes de migrar os dados.'); return; }
-  if (!window.confirm('Isso copia os dados antigos (de antes das empresas separadas) para a empresa atual. Se já existirem dados aqui, eles serão SUBSTITUÍDOS. Continuar?')) return;
+  if (!TENANT_ID) { avisar('Entre no sistema antes de migrar os dados.'); return; }
+  confirmarAcao('Isso copia os dados antigos (de antes das empresas separadas) para a empresa atual. Se já existirem dados aqui, eles serão SUBSTITUÍDOS. Continuar?', async () => {
+    const chaves = [
+      'eagles_clientes_fornecedores_v1', 'eagles_produtos_v1', 'eagles_vendedores_v1', 'eagles_funcionarios_v1',
+      'eagles_pedidos_venda_v1', 'eagles_objetos_postagem_v1', 'eagles_contratos_v1',
+      'eagles_pedido_compras_v1', 'eagles_notas_fiscais_entrada_v1', 'eagles_lancamentos_estoque_v1', 'eagles_conferencia_estoque_v1',
+      'eagles_fin_modelo_v1', 'eagles_fin_ciclos_v1', 'eagles_fin_metas_v1', 'eagles_perfil_empresa_v1',
+    ];
 
-  const chaves = [
-    'eagles_clientes_fornecedores_v1', 'eagles_produtos_v1', 'eagles_vendedores_v1', 'eagles_funcionarios_v1',
-    'eagles_pedidos_venda_v1', 'eagles_objetos_postagem_v1', 'eagles_contratos_v1',
-    'eagles_pedido_compras_v1', 'eagles_notas_fiscais_entrada_v1', 'eagles_lancamentos_estoque_v1', 'eagles_conferencia_estoque_v1',
-    'eagles_fin_modelo_v1', 'eagles_fin_ciclos_v1', 'eagles_fin_metas_v1', 'eagles_perfil_empresa_v1',
-  ];
-
-  let copiados = 0;
-  for (const chave of chaves) {
-    try {
-      const snapAntigo = await firestoreDb.collection('eagles').doc(chave).get();
-      if (snapAntigo.exists) {
-        await caminhoTenantDoc(chave).set({ valor: snapAntigo.data().valor });
-        copiados++;
+    let copiados = 0;
+    for (const chave of chaves) {
+      try {
+        const snapAntigo = await firestoreDb.collection('eagles').doc(chave).get();
+        if (snapAntigo.exists) {
+          await caminhoTenantDoc(chave).set({ valor: snapAntigo.data().valor });
+          copiados++;
+        }
+      } catch (err) {
+        console.error('Erro ao migrar', chave, err);
       }
-    } catch (err) {
-      console.error('Erro ao migrar', chave, err);
     }
-  }
-  alert(`Migração concluída: ${copiados} conjunto(s) de dados copiados para esta empresa. Recarregue a página para ver tudo atualizado.`);
+    avisar(`Migração concluída: ${copiados} conjunto(s) de dados copiados para esta empresa. Recarregue a página para ver tudo atualizado.`);
+  });
 }

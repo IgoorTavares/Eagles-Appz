@@ -16,7 +16,7 @@
 <link rel="icon" href="assets/favicon-eagles.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 
-<script>(function(){try{var t=localStorage.getItem('eagles_tema')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>(function(){try{var r=document.documentElement,a=JSON.parse(localStorage.getItem('eagles_tema_aplicado_v1')||'null');if(a&&a.modo){r.setAttribute('data-theme',a.modo);if(a.custom&&a.vars){r.setAttribute('data-tema-custom','');for(var k in a.vars){if(k.indexOf('--')===0)r.style.setProperty(k,a.vars[k]);}}}else{r.setAttribute('data-theme',localStorage.getItem('eagles_tema')||'light');}}catch(e){}})();</script>
 </head>
 <body>
 <div id="auth-loading" class="auth-loading-screen"><img src="assets/logo-full.png" alt="Eagles Labz" class="auth-loading-logo"><div class="auth-loading-text">Carregando...</div></div>
@@ -34,6 +34,7 @@
     <div class="mega-menu" id="profile-menu">
       <div id="usuario-logado" style="padding:2px 12px 8px; font-size:12px; font-weight:600; color:var(--text);"></div>
       <a href="meu-perfil.html"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg> Dados da empresa</a>
+      <a href="configuracoes.html"><svg class="icone-menu" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Configurações</a>
       <a href="usuarios.html" data-somente-admin style="display:none;"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Usuários</a>
       <a href="empresas.html" data-somente-superadmin style="display:none;"><svg class="icone-menu" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="1"/><line x1="9" y1="6" x2="9.01" y2="6"/><line x1="15" y1="6" x2="15.01" y2="6"/><line x1="9" y1="10" x2="9.01" y2="10"/><line x1="15" y1="10" x2="15.01" y2="10"/><line x1="9" y1="14" x2="9.01" y2="14"/><line x1="15" y1="14" x2="15.01" y2="14"/><line x1="9" y1="18" x2="15" y2="18"/></svg> Empresas (Super Admin)</a>
       <div style="padding:10px 12px 2px; font-size:11px; color:var(--text-soft); text-transform:uppercase; letter-spacing:0.3px;">Tema</div>
@@ -55,6 +56,10 @@
     <svg class="topbar-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
     <input type="text" placeholder="Buscar clientes, produtos..." oninput="onBuscaGlobalInput(this.value)">
     <div class="topbar-search-results" id="topbar-search-results"></div>
+  </div>
+
+  <div class="topbar-item" id="config-topbar-item">
+    <a href="configuracoes.html#aparencia" class="topbar-help-btn topbar-config-btn" id="topbar-config-btn" title="Configurações de aparência" aria-label="Configurações de aparência" onclick="return irParaAparenciaConfig(event)"><svg class="icone-menu" viewBox="0 0 24 24" style="width:18px; height:18px; margin:0;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
   </div>
 
   <div class="topbar-item" id="help-item">
@@ -128,9 +133,21 @@
 <script>
 initPaginaComum('lancamentos-estoque');
 protegerPagina(function () {
+  if (!protegerPaginaPorPlano('erp')) return;
   initModuloCadastro('lancamento-estoque');
 
 });
 </script>
+<div class="modal-overlay" id="modal-aviso-sistema">
+  <div class="modal crm-modal-aviso">
+    <div class="modal-header"><h2 id="aviso-sistema-titulo">Confirmar</h2></div>
+    <p id="aviso-sistema-mensagem" style="color:var(--text-soft); white-space:pre-wrap;"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="aviso-sistema-btn-cancelar" onclick="fecharAvisoSistema(false)">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="aviso-sistema-btn-ok" onclick="fecharAvisoSistema(true)">OK</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

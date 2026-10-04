@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Empresas · Eagles Labz</title>
+<title>Funil de vendas (CRM) · Eagles Labz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -78,150 +78,59 @@
 <div class="app">
 <main class="main">
 
-<div id="empresas-sem-permissao" style="display:none;" class="panel">
-  <p style="margin:0;">Só o Super Admin (dono do sistema) pode gerenciar empresas.</p>
+<div class="page-header">
+  <div>
+    <h1>Funil de vendas</h1>
+    <p>Acompanhe seus negócios do primeiro contato até o fechamento</p>
+  </div>
+  <button type="button" class="btn btn-primary" onclick="abrirNovoNegocioCrm()">+ Novo negócio</button>
 </div>
 
-<div id="empresas-conteudo">
-  <div class="page-header">
-    <div>
-      <h1>Empresas</h1>
-      <p>Todas as empresas (contas) cadastradas no sistema</p>
-    </div>
-    <button type="button" class="btn btn-primary" onclick="openModal('modal-nova-empresa')">+ Nova empresa</button>
-  </div>
+<div class="funil-kanban" id="funil-kanban"></div>
 
-  <div class="panel">
-    <div class="table-scroll">
-      <table id="tabela-empresas">
-        <thead><tr><th>Empresa</th><th>ID interno</th><th>Criada em</th><th>Plano</th><th>Usuários</th><th>Status</th><th></th></tr></thead>
-        <tbody id="tabela-empresas-body"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-title"><h2>Minha própria empresa</h2><span>pra você usar o sistema pro seu próprio negócio, sincronizado na nuvem</span></div>
-    <div id="minha-empresa-conteudo"><p style="font-size:13px; color:var(--text-soft);">Carregando...</p></div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-title"><h2>Migração de dados antigos</h2><span>uso único, durante a transição</span></div>
-    <p style="font-size:13px; color:var(--text-soft);">Se você estava usando o sistema antes da separação por empresas, use o botão abaixo pra copiar aqueles dados pra dentro da empresa em que você está logado agora.</p>
-    <button type="button" class="btn" onclick="migrarDadosAntigosParaTenant()">Migrar dados antigos para esta empresa</button>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-nova-empresa">
+<div class="modal-overlay" id="modal-negocio-crm">
   <div class="modal">
-    <div class="modal-header"><h2>Nova empresa</h2><button class="close-btn" onclick="closeModal('modal-nova-empresa')">&times;</button></div>
-    <form id="form-nova-empresa" onsubmit="criarNovaEmpresa(event)">
+    <div class="modal-header"><h2 id="negocio-crm-titulo">Novo negócio</h2><button class="close-btn" onclick="closeModal('modal-negocio-crm')">&times;</button></div>
+    <form onsubmit="event.preventDefault(); salvarNegocioCrm();">
       <div class="form-grid">
-        <div class="field full"><label>Nome da empresa</label><input type="text" id="nova-empresa-nome" required></div>
-        <div class="field full">
-          <label>Plano contratado</label>
-          <select id="nova-empresa-plano" required>
-            <option value="erp">Somente ERP (Cadastros, Vendas, Estoque, Financeiro)</option>
-            <option value="crm">Somente CRM (Funil de vendas e relacionamento)</option>
-            <option value="ambos">ERP + CRM (os dois)</option>
+        <div class="field full"><label>Nome do negócio</label><input type="text" id="negocio-crm-nome" required placeholder="Ex: Consultoria de marketing - Loja X"></div>
+        <div class="field"><label>Cliente / contato</label><input type="text" id="negocio-crm-cliente" placeholder="Nome da pessoa ou empresa"></div>
+        <div class="field"><label>Valor estimado (R$)</label><input type="number" id="negocio-crm-valor" step="0.01" min="0"></div>
+        <div class="field"><label>Responsável</label><input type="text" id="negocio-crm-responsavel"></div>
+        <div class="field"><label>E-mail do lead</label><input type="email" id="negocio-crm-email"></div>
+        <div class="field"><label>Telefone / WhatsApp</label><input type="text" id="negocio-crm-telefone" placeholder="(00) 00000-0000"></div>
+        <div class="field">
+          <label>Origem</label>
+          <select id="negocio-crm-origem">
+            <option>Indicação</option>
+            <option>Site</option>
+            <option>Redes sociais</option>
+            <option>Outro</option>
           </select>
         </div>
-        <div class="field full">
-          <label>Usuários contratados</label>
-          <select id="nova-empresa-limite">
-            <option value="1">1 usuário</option><option value="2">2 usuários</option><option value="3">3 usuários</option><option value="4">4 usuários</option><option value="5">5 usuários</option>
-          </select>
-          <p class="nivel-ajuda">O titular conta no limite. Dá pra mudar depois na coluna "Usuários".</p>
-        </div>
-        <div class="field full" style="border-top:1px solid var(--border); padding-top:14px; margin-top:4px;"><label style="font-weight:700; color:var(--text);">Titular (quem contratou o serviço)</label></div>
-        <div class="field"><label>Nome</label><input type="text" id="nova-empresa-admin-nome" required></div>
-        <div class="field"><label>E-mail</label><input type="email" id="nova-empresa-admin-email" required></div>
-        <div class="field full"><label>Senha inicial (opcional)</label><input type="password" id="nova-empresa-admin-senha" placeholder="Em branco: o titular recebe um e-mail para criar a senha"></div>
+        <div class="field full"><label>Observações</label><textarea id="negocio-crm-observacoes" rows="3"></textarea></div>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn" onclick="closeModal('modal-nova-empresa')">Cancelar</button>
-        <button type="submit" class="btn btn-primary" id="btn-salvar-nova-empresa">Criar empresa</button>
+        <button type="button" class="btn" style="margin-right:auto; color:var(--danger); border-color:var(--danger); display:none;" id="btn-excluir-negocio-crm" onclick="excluirNegocioCrm()">Excluir</button>
+        <button type="button" class="btn" onclick="closeModal('modal-negocio-crm')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
       </div>
     </form>
   </div>
 </div>
-
-<div class="modal-overlay" id="modal-novo-acesso-empresa">
-  <div class="modal">
-    <div class="modal-header"><h2 id="novo-acesso-empresa-titulo">Criar acesso</h2><button class="close-btn" onclick="closeModal('modal-novo-acesso-empresa')">&times;</button></div>
-    <form id="form-novo-acesso-empresa" onsubmit="criarAcessoParaEmpresaExistente(event)">
-      <input type="hidden" id="novo-acesso-tenant-id">
-      <div class="form-grid">
-        <div class="field full"><label>Nome</label><input type="text" id="novo-acesso-nome" required></div>
-        <div class="field full"><label>E-mail</label><input type="email" id="novo-acesso-email" required></div>
-        <div class="field"><label>Senha inicial</label><input type="password" id="novo-acesso-senha" minlength="6" required placeholder="Mínimo 6 caracteres"></div>
-        <div class="field"><label>Papel</label>
-          <select id="novo-acesso-role">
-            <option value="Diretor">Diretor (acesso a tudo)</option>
-            <option value="Administrativo">Administrativo (tudo, menos o financeiro)</option>
-            <option value="Financeiro">Financeiro (financeiro + só visualiza o resto)</option>
-          </select>
-        </div>
-      </div>
-      <p style="font-size:12px; color:var(--text-soft);">A pessoa já pode entrar com esse e-mail e senha assim que você salvar.</p>
-      <div class="modal-actions">
-        <button type="button" class="btn" onclick="closeModal('modal-novo-acesso-empresa')">Cancelar</button>
-        <button type="submit" class="btn btn-primary" id="btn-salvar-novo-acesso-empresa">Criar acesso</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-trocar-plano">
-  <div class="modal">
-    <div class="modal-header"><h2>Trocar plano</h2><button class="close-btn" onclick="closeModal('modal-trocar-plano')">&times;</button></div>
-    <p style="font-size:13px; color:var(--text-soft);">Empresa: <strong id="trocar-plano-empresa-nome"></strong></p>
-    <div class="form-grid">
-      <div class="field full">
-        <label>Plano contratado</label>
-        <select id="trocar-plano-select">
-          <option value="erp">Somente ERP</option>
-          <option value="crm">Somente CRM</option>
-          <option value="ambos">ERP + CRM</option>
-        </select>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button type="button" class="btn" onclick="closeModal('modal-trocar-plano')">Cancelar</button>
-      <button type="button" class="btn btn-primary" id="btn-salvar-trocar-plano" onclick="salvarTrocaPlano()">Salvar</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-minha-empresa">
-  <div class="modal">
-    <div class="modal-header"><h2>Criar minha empresa</h2><button class="close-btn" onclick="closeModal('modal-minha-empresa')">&times;</button></div>
-    <form id="form-minha-empresa" onsubmit="criarMinhaEmpresa(event)">
-      <p style="font-size:13px; color:var(--text-soft);">Isso cria uma empresa nova e já vincula ao SEU login de Super Admin — você continua entrando com o mesmo e-mail e senha de sempre, só que agora o que você lançar no Painel, Financeiro, Produtos etc. vai ficar salvo aqui, sincronizado na nuvem.</p>
-      <div class="form-grid">
-        <div class="field full"><label>Nome da sua empresa</label><input type="text" id="minha-empresa-nome" required></div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn" onclick="closeModal('modal-minha-empresa')">Cancelar</button>
-        <button type="submit" class="btn btn-primary" id="btn-salvar-minha-empresa">Criar empresa</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 
 </main>
 </div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="script.js"></script>
 <script>
-initPaginaComum('');
+initPaginaComum('funil-vendas');
 protegerPagina(function () {
-  initEmpresasPage();
+  if (!protegerPaginaPorPlano('crm')) return;
+  initFunilVendasCrm();
 });
 </script>
 <div class="modal-overlay" id="modal-aviso-sistema">

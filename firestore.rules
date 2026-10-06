@@ -18,6 +18,10 @@
 //   consegue criar nem remover outros usuários.
 // - Um TenantAdmin só cria/gerencia usuários dentro da PRÓPRIA empresa.
 //
+// Página Pública: coleções paginas_publicas e leads_publicos.
+//
+// Financeiro novo: coleções fin_lancamentos, fin_recorrencias e fin_meta.
+//
 // 02/10/2026 (Serviços): nova coleção pública planos_publicos.
 //
 // 02/10/2026 (Níveis de acesso): cada empresa tem um limite de usuários
@@ -194,11 +198,11 @@ service cloud.firestore {
       // todos leem e só quem opera grava.
       match /dados/{docId} {
         allow read: if souSuperAdmin() || (souMembroAtivo(tenantId) &&
-          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1']) || veFinanceiro()));
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1']) || veFinanceiro()));
         allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && (
-          (docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1'] && veFinanceiro()) ||
-          (docId in ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1'] && souDiretor()) ||
-          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1']) && podeOperar())
+          (docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1'] && veFinanceiro()) ||
+          (docId in ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1'] && souDiretor()) ||
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1']) && podeOperar())
         ));
       }
 
@@ -218,6 +222,22 @@ service cloud.firestore {
           souDiretor() && meuTenantId() == tenantId &&
           !existsAfter(/databases/$(database)/documents/usuarios/$(resource.data.uid))
         );
+      }
+
+      // ---------- Financeiro (modelo novo) ----------
+      // Um documento por lançamento / recorrência. Quem opera (ex.:
+      // Administrativo fechando um negócio ou fazendo uma venda) pode
+      // CRIAR; ler, editar e excluir é só de quem vê o financeiro.
+      match /fin_lancamentos/{id} {
+        allow read, update, delete: if souSuperAdmin() || (souMembroAtivo(tenantId) && veFinanceiro());
+        allow create: if souSuperAdmin() || (souMembroAtivo(tenantId) && (veFinanceiro() || podeOperar()));
+      }
+      match /fin_recorrencias/{id} {
+        allow read, update, delete: if souSuperAdmin() || (souMembroAtivo(tenantId) && veFinanceiro());
+        allow create: if souSuperAdmin() || (souMembroAtivo(tenantId) && (veFinanceiro() || podeOperar()));
+      }
+      match /fin_meta/{id} {
+        allow read, write: if souSuperAdmin() || (souMembroAtivo(tenantId) && veFinanceiro());
       }
 
       // Receitas lançadas por quem NÃO vê o financeiro (ex.: Administrativo
@@ -274,6 +294,49 @@ service cloud.firestore {
         );
 
       allow delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+    }
+
+    // ---------- paginas_publicas/{endereco} ----------
+    // Site da empresa (Página Pública). Mesma lógica dos planos: o visitante
+    // lê UM documento pelo endereço (se ativo); o endereço é o id, então
+    // duas empresas nunca usam o mesmo.
+    match /paginas_publicas/{endereco} {
+      allow get: if resource.data.ativa == true ||
+        (estaLogado() && (souSuperAdmin() || resource.data.tenantId == meuTenantId()));
+      allow list: if estaLogado() && (souSuperAdmin() || resource.data.tenantId == meuTenantId());
+      allow create: if estaLogado() && request.resource.data.tenantId == meuTenantId() && empresaAtiva(meuTenantId()) && podeOperar();
+      allow update: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && (podeOperar() || souDiretor()))) &&
+        request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+    }
+
+    // ---------- leads_publicos/{id} ----------
+    // Formulário de contato do site: o VISITANTE (sem login) só consegue
+    // criar, com campos limitados, e só pra uma página publicada e ativa
+    // daquela empresa. Quem opera no CRM lê e apaga (vira cliente + negócio).
+    match /leads_publicos/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['tenantId', 'pagina', 'nome', 'email', 'telefone', 'mensagem', 'servicos', 'criadoEm']) &&
+        request.resource.data.nome is string && request.resource.data.nome.size() > 0 && request.resource.data.nome.size() <= 100 &&
+        request.resource.data.email is string && request.resource.data.email.size() <= 120 &&
+        request.resource.data.telefone is string && request.resource.data.telefone.size() <= 30 &&
+        request.resource.data.mensagem is string && request.resource.data.mensagem.size() <= 1000 &&
+        request.resource.data.servicos is list && request.resource.data.servicos.size() <= 20 &&
+        request.resource.data.pagina is string &&
+        exists(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)) &&
+        get(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)).data.ativa == true &&
+        get(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)).data.tenantId == request.resource.data.tenantId;
+      allow read, delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+      allow update: if false;
+    }
+
+    // ---------- pix_publico/{tenantId} ----------
+    // Dados do PIX que o cliente vê na página do orçamento aprovado (chave,
+    // nome e cidade — que vão de todo jeito no QR Code). Qualquer um lê
+    // UM documento pelo id; só quem vê o financeiro da empresa grava.
+    match /pix_publico/{tenantId} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if souSuperAdmin() || (estaLogado() && meuTenantId() == tenantId && empresaAtiva(tenantId) && veFinanceiro());
     }
 
     // ---------- planos_publicos/{endereco} ----------

@@ -1,5 +1,5 @@
 // ---------- Service Worker · Eagles Labz ----------
-const CACHE_NAME = 'eagles-cache-v70';
+const CACHE_NAME = 'eagles-cache-v77';
 
 const APP_SHELL = [
   './',
@@ -19,7 +19,9 @@ const APP_SHELL = [
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).catch((err) => {
+    // cache: 'reload' = busca no servidor, não na cópia que o navegador
+    // guarda sozinho (o GitHub Pages manda guardar por 10 min)
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL.map((u) => new Request(u, { cache: 'reload' })))).catch((err) => {
       console.error('Service Worker: falha ao pré-cachear o app shell.', err);
     })
   );
@@ -41,6 +43,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Páginas, scripts e estilos do próprio site: primeiro da internet (pra
+  // atualização chegar na hora), o guardado só quando estiver sem conexão.
+  const doSite = url.origin === self.location.origin;
+  const ehApp = doSite && (req.mode === 'navigate' || /\.(html|js|css|json)$/.test(url.pathname) || url.pathname.endsWith('/'));
+  if (ehApp) {
+    event.respondWith(
+      fetch(req, { cache: 'no-cache' })
+        .then((resp) => {
+          if (resp && resp.status === 200) { const copia = resp.clone(); caches.open(CACHE_NAME).then((c) => c.put(req, copia)); }
+          return resp;
+        })
+        .catch(() => caches.match(req).then((c) => c || caches.match('index.html')))
+    );
+    return;
+  }
+
+  // O resto (imagens, bibliotecas de fora): o guardado na hora e atualiza por trás
   event.respondWith(
     caches.match(req).then((cached) => {
       const fetchPromise = fetch(req)

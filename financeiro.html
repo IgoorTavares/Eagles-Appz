@@ -77,148 +77,7 @@
 </header>
 <div class="app">
 <main class="main">
-
-<div class="page-header">
-  <div>
-    <h1>Financeiro</h1>
-    <p>Lançamentos, cobranças e calendário — cada mês é independente dos outros</p>
-  </div>
-  <label style="font-size:13px; color:var(--text-soft); display:flex; align-items:center; gap:8px;">
-    Mês de referência
-    <input type="month" id="financas-mes" onchange="mudarMesFinancas()">
-  </label>
-</div>
-
-<div class="stat-grid" style="grid-template-columns: 1fr 1fr 1.2fr;">
-  <div class="stat-card"><div class="stat-label">Total de receita</div><div class="stat-value" id="fin-total-receita">R$ 0,00</div></div>
-  <div class="stat-card danger"><div class="stat-label">Total de despesas</div><div class="stat-value" id="fin-total-despesas">R$ 0,00</div></div>
-  <div class="fin-balao" id="fin-balao-lucro">
-    <div class="fin-balao-label">Resultado do mês (Lucro)</div>
-    <div class="fin-balao-valor" id="fin-lucro">R$ 0,00</div>
-    <div class="fin-balao-sub">Receitas totais − Despesas totais</div>
-  </div>
-</div>
-
-<div class="stat-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:24px;">
-  <div class="stat-card"><div class="stat-label">Pagamentos</div><div class="stat-value" id="fin-desp-pagamentos" style="font-size:19px;">R$ 0,00</div></div>
-  <div class="stat-card"><div class="stat-label">Adiantamentos</div><div class="stat-value" id="fin-desp-adiantamentos" style="font-size:19px;">R$ 0,00</div></div>
-  <div class="stat-card"><div class="stat-label">Saídas variáveis</div><div class="stat-value" id="fin-desp-variaveis" style="font-size:19px;">R$ 0,00</div></div>
-</div>
-
-<div class="section-tabs" id="tabs-financeiro">
-  <button type="button" class="active" onclick="mostrarSecaoFinanceiro('lancamentos', this)">Lançamentos</button>
-  <button type="button" onclick="mostrarSecaoFinanceiro('cobrancas', this)">Cobranças</button>
-</div>
-
-<div id="secao-lancamentos">
-
-<div class="grid-2" style="align-items:start;">
-  <div class="panel">
-    <div class="panel-title"><h2>Calendário financeiro</h2><span>acertos e pagamentos</span></div>
-    <div class="fin-cal-legenda">
-      <span><span class="fin-dot fin-dot-receita"></span> Acerto de cliente</span>
-      <span><span class="fin-dot fin-dot-pagamento"></span> Pagamento</span>
-    </div>
-    <div class="fin-cal-scroll"><div class="fin-cal-grid" id="fin-calendario-grid"></div></div>
-  </div>
-  <div class="panel">
-    <div class="panel-title"><h2>Detalhe do dia</h2><span>clique em um dia</span></div>
-    <div id="fin-dia-detalhe"></div>
-  </div>
-</div>
-
-<div class="panel">
-  <div class="panel-title"><h2>Receitas por cliente</h2><button class="btn btn-small btn-primary" onclick="abrirFinanceModal('receitas')">+ Novo lançamento</button></div>
-  <div class="table-scroll"><table><thead><tr><th>Cliente</th><th>Plano</th><th>Dia do acerto</th><th>Valor mensal</th><th>Status</th><th></th></tr></thead><tbody id="fin-tbody-receitas"></tbody></table></div>
-</div>
-
-<div class="panel">
-  <div class="panel-title"><h2>Pagamentos</h2><button class="btn btn-small btn-primary" onclick="abrirFinanceModal('pagamentos')">+ Novo lançamento</button></div>
-  <div class="table-scroll"><table><thead><tr><th>Funcionário/Prestador</th><th>Dia do pagamento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="fin-tbody-pagamentos"></tbody></table></div>
-</div>
-
-<div class="panel">
-  <div class="panel-title"><h2>Adiantamentos</h2><button class="btn btn-small btn-primary" onclick="abrirFinanceModal('adiantamentos')">+ Novo lançamento</button></div>
-  <div class="table-scroll"><table><thead><tr><th>Funcionário/Prestador</th><th>Data</th><th>Observação</th><th>Valor</th><th></th></tr></thead><tbody id="fin-tbody-adiantamentos"></tbody></table></div>
-</div>
-
-<div class="panel">
-  <div class="panel-title"><h2>Saídas variáveis</h2><button class="btn btn-small btn-primary" onclick="abrirFinanceModal('variaveis')">+ Novo lançamento</button></div>
-  <div class="table-scroll"><table><thead><tr><th>Descrição</th><th>Data</th><th>Valor</th><th></th></tr></thead><tbody id="fin-tbody-variaveis"></tbody></table></div>
-</div>
-
-<div style="text-align:center; margin: 8px 0 32px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-  <button type="button" class="btn" title="Copia todos os lançamentos do mês em exibição para o mês seguinte" onclick="duplicarLancamentosPainel()">Duplicar</button>
-  <button type="button" class="btn btn-primary" onclick="openModal('modal-relatorio-periodo')">Exportar em PDF</button>
-</div>
-
-</div>
-
-<div id="secao-cobrancas" style="display:none;">
-
-<p id="cob-aviso-proximos" class="badge badge-warning" style="display:none; margin-bottom:16px; padding:8px 14px; font-size:13px;"></p>
-
-<div class="stat-grid" style="grid-template-columns: repeat(3, 1fr);">
-  <div class="stat-card"><div class="stat-label">Recebido no mês</div><div class="stat-value" id="cob-recebido">R$ 0,00</div></div>
-  <div class="stat-card"><div class="stat-label">Pendente</div><div class="stat-value" id="cob-pendente">R$ 0,00</div></div>
-  <div class="stat-card danger"><div class="stat-label">Atrasado</div><div class="stat-value" id="cob-atrasado">R$ 0,00</div></div>
-</div>
-
-<div class="section-tabs" id="tabs-cobrancas">
-  <button type="button" class="active" data-filter="todas">Todas</button>
-  <button type="button" data-filter="pendente">Pendentes</button>
-  <button type="button" data-filter="atrasado">Atrasadas</button>
-  <button type="button" data-filter="pago">Pagas</button>
-</div>
-
-<div class="panel">
-  <div class="table-scroll"><table id="tabela-cobrancas"><thead><tr><th>Cliente</th><th>Plano</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
-</div>
-
-</div>
-
-<!-- Modal: editar lançamento financeiro -->
-<div class="modal-overlay" id="modal-financas-editar">
-  <div class="modal">
-    <div class="modal-header"><h2 id="fin-modal-titulo">Novo lançamento</h2><button class="close-btn" onclick="closeModal('modal-financas-editar')">&times;</button></div>
-    <p id="fin-modal-aviso-mes" style="font-size:12.5px; color:var(--text-soft); margin:-8px 0 16px;"></p>
-    <form onsubmit="event.preventDefault(); salvarFinanceModal();">
-      <div class="form-grid" id="fin-modal-campos"></div>
-      <div id="fin-modal-erro-cadastro" style="display:none; margin-top:14px; padding:12px 14px; border-radius:var(--radius); background:var(--warning-tint); color:var(--warning); font-size:13px;"></div>
-      <datalist id="fin-lista-clientes"></datalist>
-      <datalist id="fin-lista-produtos"></datalist>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('modal-financas-editar')">Cancelar</button><button type="submit" class="btn btn-primary">Salvar</button></div>
-    </form>
-  </div>
-</div>
-
-<!-- Modal: escolher período do relatório -->
-<div class="modal-overlay" id="modal-relatorio-periodo">
-  <div class="modal">
-    <div class="modal-header"><h2>Exportar relatório</h2><button class="close-btn" onclick="closeModal('modal-relatorio-periodo')">&times;</button></div>
-    <p style="color:var(--text-soft); font-size:13px; margin:-8px 0 4px;">Escolha o período que você quer analisar:</p>
-    <div style="display:flex; flex-direction:column; gap:8px; margin:16px 0;">
-      <button type="button" class="btn" style="justify-content:flex-start;" onclick="gerarRelatorioPeriodo(1)">Dados do mês atual</button>
-      <button type="button" class="btn" style="justify-content:flex-start;" onclick="gerarRelatorioPeriodo(3)">Últimos 3 meses</button>
-      <button type="button" class="btn" style="justify-content:flex-start;" onclick="gerarRelatorioPeriodo(6)">Últimos 6 meses</button>
-      <button type="button" class="btn" style="justify-content:flex-start;" onclick="gerarRelatorioPeriodo(12)">Últimos 12 meses</button>
-    </div>
-    <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('modal-relatorio-periodo')">Cancelar</button></div>
-  </div>
-</div>
-
-<!-- Modal: relatório completo (dashboard) -->
-<div class="modal-overlay" id="modal-relatorio">
-  <div class="modal" style="max-width:960px;">
-    <div class="modal-header"><h2 id="relatorio-titulo">Relatório financeiro</h2><button class="close-btn" onclick="closeModal('modal-relatorio')">&times;</button></div>
-    <div id="relatorio-conteudo"></div>
-    <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('modal-relatorio')">Fechar</button><button type="button" class="btn btn-primary" onclick="imprimirRelatorioPeriodo()">Baixar em PDF</button></div>
-  </div>
-</div>
-
-<div id="print-area"></div>
-
-
+  <div id="fin-host"></div>
 </main>
 </div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -228,6 +87,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="script.js"></script>
 <script>
 initPaginaComum('financeiro');

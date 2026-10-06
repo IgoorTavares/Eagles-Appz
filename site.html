@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="eagles-pagina-publica" content="1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Site</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="assets/favicon-eagles.png">
+<script>(function(){try{var t=localStorage.getItem('eagles_tema')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+</head>
+<body class="pp-body pp-body-site">
+<div id="pp-conteudo"><p style="text-align:center; padding:40vh 0; color:#888; font-family:system-ui;">Carregando...</p></div>
+<div class="modal-overlay" id="modal-aviso-sistema">
+  <div class="modal crm-modal-aviso">
+    <div class="modal-header"><h2 id="aviso-sistema-titulo">Confirmar</h2></div>
+    <p id="aviso-sistema-mensagem" style="color:var(--text-soft); white-space:pre-wrap;"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="aviso-sistema-btn-cancelar" onclick="fecharAvisoSistema(false)">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="aviso-sistema-btn-ok" onclick="fecharAvisoSistema(true)">OK</button>
+    </div>
+  </div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="script.js"></script>
+<script>carregarSitePublico();</script>
+</body>
+</html>

@@ -204,6 +204,20 @@ aplicarTemaSalvo();
 // em cada celular/sistema operacional.
 
 const ICONES_SISTEMA = {
+  quadro: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  prancheta: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>',
+  x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  mais: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  tag: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  configuracoes: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  copiar: '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  lista: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  mensagem: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  ajuda: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  colunas: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
+  computador: '<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+  tablet: '<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
+  celular: '<rect x="6" y="2" width="12" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
   tarefas: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
   maleta: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
   relogio: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -729,11 +743,9 @@ function cloudWatch(key, fallback, onChange) {
     onChange(fallback);
     return;
   }
-  if (key === FINANCE_CICLOS_KEY) iniciarReceitasPendentes();
   if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'aguardando';
   caminhoTenantDoc(key).onSnapshot((snap) => {
     CLOUD_ESTADO_CHAVES[key] = 'carregado';
-    if (key === FINANCE_CICLOS_KEY && RECEITAS_PENDENTES_FILA.length) setTimeout(processarReceitasPendentes, 0);
     if (snap.exists) {
       const valor = snap.data().valor;
       lsSave(chaveLocalTenant(key), valor);
@@ -888,8 +900,8 @@ const NIVEIS = {
   administrativo: { nome: 'Administrativo', desc: 'Tudo, menos o financeiro (Painel, Meu Negócio e Financeiro ficam bloqueados)' },
   financeiro: { nome: 'Financeiro', desc: 'Financeiro completo; o resto só visualiza (não cadastra nem edita)' },
 };
-const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1'];
-const CHAVES_CONFIG_EMPRESA = ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1'];
+const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1'];
+const CHAVES_CONFIG_EMPRESA = ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1'];
 
 function nivelDoRole(role) {
   if (role === 'SuperAdmin') return 'superadmin';
@@ -1000,6 +1012,7 @@ function mensagemErroLogin(code) {
     'auth/invalid-credential': 'E-mail ou senha incorretos.',
     'auth/missing-password': 'Digite a senha.',
     'auth/too-many-requests': 'Muitas tentativas. Aguarde um pouco e tente de novo.',
+    'auth/unauthorized-domain': 'Este endereço ainda não está autorizado no Firebase. No Console do Firebase: Authentication → Configurações → Domínios autorizados → adicione ' + location.hostname + '.',
     'auth/network-request-failed': 'Falha de conexão. Verifique a internet.',
   };
   return mapa[code] || 'Não foi possível entrar. Tente novamente.';
@@ -1014,6 +1027,7 @@ function mensagemErroCriacaoConta(code) {
     'auth/email-already-in-use': 'Já existe uma conta com esse e-mail no sistema (de outra empresa ou de um teste anterior). Use outro e-mail, ou primeiro remova/exclua a conta antiga.',
     'auth/invalid-email': 'Esse e-mail não é válido.',
     'auth/weak-password': 'Essa senha é fraca demais para o Firebase aceitar. Tente uma com letras e números, mínimo 8 caracteres.',
+    'auth/unauthorized-domain': 'Este endereço ainda não está autorizado no Firebase. No Console do Firebase: Authentication → Configurações → Domínios autorizados → adicione ' + location.hostname + '.',
     'auth/operation-not-allowed': 'O login por e-mail/senha não está habilitado no projeto do Firebase. Veja em Authentication → Sign-in method → Email/Password.',
     'auth/network-request-failed': 'Falha de conexão. Verifique a internet e tente de novo.',
     'auth/too-many-requests': 'Muitas tentativas seguidas. Aguarde um pouco e tente de novo.',
@@ -1417,6 +1431,7 @@ function renderPropostaPublica() {
       document.getElementById('prop-resposta-texto').textContent = 'Essa proposta foi marcada como recusada.';
     }
   }
+  if (p.status === 'aprovada') pixMostrarNaProposta(p);
 }
 
 // Campos que vieram de Configurações → Página de Aprovação / Checkout.
@@ -1826,34 +1841,7 @@ function salvarConfigAprovacao() {
 let VENDA_RAPIDA_MODO = 'avista';
 let VENDA_RAPIDA_STATUS = 'pendente';
 
-function abrirVendaRapida() {
-  if (!exigirPodeOperar('lançar vendas')) return;
-  VENDA_RAPIDA_MODO = 'avista';
-  VENDA_RAPIDA_STATUS = 'pendente';
-
-  const selectCliente = document.getElementById('venda-rapida-cliente');
-  const nomes = nomesClientesCrm();
-  selectCliente.innerHTML = '<option value="">Buscar cliente...</option>' + nomes.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
-
-  document.getElementById('venda-rapida-mover-pipeline').checked = true;
-  document.getElementById('venda-rapida-box-pipeline').classList.add('ativo');
-  document.getElementById('venda-rapida-servico').value = '';
-  document.getElementById('venda-rapida-descricao').value = '';
-  document.getElementById('venda-rapida-valor').value = '';
-  document.getElementById('venda-rapida-vencimento').value = isoHoje();
-  document.getElementById('venda-rapida-parcelas').value = 2;
-  document.getElementById('venda-rapida-gerar-tarefa').checked = false;
-  document.getElementById('venda-rapida-box-tarefa').classList.remove('ativo');
-  document.getElementById('venda-rapida-categoria').value = 'Sem categoria';
-  document.getElementById('venda-rapida-observacoes').value = '';
-  document.getElementById('venda-rapida-classificacao').style.display = 'none';
-  document.getElementById('venda-rapida-parcelas-campo').style.display = 'none';
-
-  document.querySelectorAll('#venda-rapida-modo-grid .crm-modo-btn').forEach((b) => b.classList.toggle('ativo', b.dataset.modo === 'avista'));
-  document.querySelectorAll('#venda-rapida-status-grid .crm-modo-btn').forEach((b) => b.classList.toggle('ativo', b.dataset.status === 'pendente'));
-
-  openModal('modal-venda-rapida');
-}
+function abrirVendaRapida() { finAbrirVendaRapida(); }
 
 function selecionarModoPagamentoVenda(modo) {
   VENDA_RAPIDA_MODO = modo;
@@ -2846,49 +2834,15 @@ function escutarPropostasCrm() {
 // negócio do funil fecha — mesmo padrão usado quando se lança um pedido
 // de venda, só que disparado pelo CRM.
 function lancarReceitaNegocioFechado(negocio) {
-  // Sem acesso ao caixa (Administrativo): a receita vai pra fila, sem ler nada.
-  if (FIREBASE_PRONTO && TENANT_ID && !nivelVeFinanceiro()) {
-    return Promise.resolve(registrarReceitaFinanceiro(isoHoje().slice(0, 7), {
-      id: genId('r'), cliente: negocio.cliente || negocio.nome, plano: 'Negócio fechado: ' + negocio.nome,
-      valor: Number(negocio.valor || 0), diaAcerto: Number(isoHoje().slice(8, 10)), status: 'pendente', dataPagamento: null, origemNegocioId: negocio.id,
-    }));
-  }
-  // Páginas como o funil-vendas.html não carregam o Financeiro. Sem os
-  // dados do mês na memória, o lançamento gravaria um mês "em branco"
-  // por cima do real (o merge do Firestore substitui o array inteiro de
-  // receitas). Então, se ainda não carregou, busca da nuvem primeiro.
-  const precisaBuscar = FIREBASE_PRONTO && TENANT_ID && !chaveCarregadaNaNuvem(FINANCE_CICLOS_KEY);
-  const carregar = precisaBuscar
-    ? Promise.all([
-        cloudGetForce(FINANCE_CICLOS_KEY, {}),
-        FINANCE_TEMPLATE_CACHE ? Promise.resolve(FINANCE_TEMPLATE_CACHE) : cloudGetForce(FINANCE_TEMPLATE_KEY, financeTemplatePadrao()),
-      ]).then(([ciclos, template]) => {
-        FINANCE_CICLOS_CACHE = ciclos || {};
-        FINANCE_TEMPLATE_CACHE = template || financeTemplatePadrao();
-      })
-    : Promise.resolve();
-  return carregar.then(() => {
-    const mesKey = isoHoje().slice(0, 7);
-    const ciclo = getCicloDoMes(mesKey);
-    ciclo.receitas = ciclo.receitas || [];
-    // não lança duas vezes se o negócio sair e voltar pra "Fechado"
-    if (ciclo.receitas.some((r) => r.origemNegocioId === negocio.id)) return false;
-    ciclo.receitas.push({
-      id: genId('r'),
-      cliente: negocio.cliente || negocio.nome,
-      plano: 'Negócio fechado: ' + negocio.nome,
-      valor: Number(negocio.valor || 0),
-      diaAcerto: Number(isoHoje().slice(8, 10)),
-      status: 'pendente',
-      dataPagamento: null,
-      origemNegocioId: negocio.id,
-    });
-    return salvarCicloDoMes(mesKey, ciclo);
-  }).catch((err) => {
-    console.error('Erro ao lançar a receita do negócio fechado:', err);
-    avisar('O negócio foi fechado, mas não consegui lançar a receita no Financeiro agora (sem conexão com o banco). Lance manualmente ou tente de novo.');
-    return false;
-  });
+  // a Venda Rápida que fechou esse negócio já lançou a receita
+  if (negocio.receitaLancadaPorVenda) return Promise.resolve(false);
+  // quem vê o financeiro confere se esse negócio já tem receita (ex.: saiu
+  // e voltou pra "Fechado"); quem não vê só cria
+  if (nivelVeFinanceiro() && FIN_CARREGADO && FIN_LANC_TODOS.some((l) => l.origemNegocioId === negocio.id && l.status !== 'cancelado')) return Promise.resolve(false);
+  return Promise.resolve(registrarReceitaFinanceiro(isoHoje().slice(0, 7), {
+    cliente: negocio.cliente || negocio.nome, plano: 'Negócio fechado: ' + negocio.nome, valor: Number(negocio.valor || 0),
+    diaAcerto: Number(isoHoje().slice(8, 10)), status: 'pendente', origemNegocioId: negocio.id,
+  }));
 }
 
 // "Conversão automática em contrato": como o sistema não tem um servidor
@@ -3533,7 +3487,7 @@ function salvarPropostaCrm() {
 }
 
 function linkPublicoProposta(id) {
-  return window.location.origin + window.location.pathname.replace('crm.html', '') + `proposta.html?id=${id}`;
+  return window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + `proposta.html?id=${id}`; // a pasta da página atual (funciona em qualquer página e em subpasta do GitHub Pages)
 }
 
 function abrirDetalhePropostaCrm(id) {
@@ -3913,34 +3867,7 @@ function faturamentoCrmDoMes(mesKey) {
 
 function renderCrmFinanceiroSecao() {
   const el = document.getElementById('crm-secao-financeiro');
-  if (!el) return;
-  if (!nivelVeFinanceiro()) {
-    el.classList.remove('nivel-bloqueado');
-    el.innerHTML = '<div style="min-height:340px;"></div>';
-    aplicarBloqueioFinanceiro(el);
-    return;
-  }
-
-  // O Financeiro completo (ciclos mensais, receitas, pagamentos,
-  // cobranças) já está liberado pros dois planos — financeiro.html
-  // aceita tanto 'erp' quanto 'crm'. Então aqui dentro do CRM a gente só
-  // mostra um resumo rápido (pra não duplicar a tela inteira) com um
-  // link pra abrir o módulo de verdade, igual pros dois planos.
-  const fat = faturamentoCrmDoMes();
-  el.innerHTML = `
-    <div class="panel" style="margin-bottom:16px;">
-      <div class="panel-title"><h2>Faturamento do CRM</h2><span>calculado a partir dos negócios fechados no funil</span></div>
-      <div class="stat-grid" style="margin-bottom:0;">
-        <div class="stat-card"><div class="stat-label">Faturado este mês</div><div class="stat-value">${formatMoney(fat)}</div></div>
-        <div class="stat-card"><div class="stat-label">Negócios fechados este mês</div><div class="stat-value">${CRM_NEGOCIOS_DATA.filter((n) => n.etapa === 'fechado' && (n.atualizadoEm || '').slice(0, 7) === isoHoje().slice(0, 7)).length}</div></div>
-      </div>
-    </div>
-    <div class="panel" style="text-align:center; padding:40px 24px;">
-      <div class="ic-circulo">${ic('carteira')}</div>
-      <h2 style="margin:0 0 8px;">Financeiro completo</h2>
-      <p style="color:var(--text-soft); max-width:420px; margin:0 auto 18px;">Ciclos mensais, receitas, pagamentos e cobranças — o mesmo módulo de Financeiro, liberado pro seu plano.</p>
-      <a href="financeiro.html" class="btn btn-primary">Abrir Financeiro</a>
-    </div>`;
+  if (el) finMontar(el, FIN_ABA || 'visao');
 }
 
 // ---------- CRM: Detalhe do negócio (modal com 5 abas) ----------
@@ -4857,7 +4784,7 @@ function toggleMenuAcoesBriefing(id, botao) {
 }
 
 function linkPublicoBriefing(id) {
-  return window.location.origin + window.location.pathname.replace('crm.html', '') + `briefing.html?id=${id}`;
+  return window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + `briefing.html?id=${id}`; // a pasta da página atual (funciona em qualquer página e em subpasta do GitHub Pages)
 }
 
 function excluirBriefingCrm(id) {
@@ -5108,6 +5035,8 @@ function initConfiguracoesPage() {
       if (document.getElementById('cfg-categorias-corpo') && !CFG_CATEGORIA_EDITANDO) renderCfgCategorias();
     });
   }
+  cloudWatch(PAG_PIXELS_KEY, PAG_PIXELS, (d) => { PAG_PIXELS = Object.assign({ meta: {}, ga: {} }, d || {}); });
+  if (/^#integracoes-pixels/.test(window.location.hash || '')) { mostrarAbaConfig('integracoes'); setTimeout(() => cfgAbrirPixels('meta'), 0); return; }
   const abaInicial = (window.location.hash || '').replace('#', '');
   mostrarAbaConfig(['perfil', 'aparencia', 'atualizacoes', 'notificacoes', 'automacoes', 'integracoes', 'email', 'conteudos'].includes(abaInicial) ? abaInicial : 'perfil');
 }
@@ -6422,6 +6351,38 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '06/10/2026 · Auditoria', itens: [
+    { titulo: 'Atualizações chegam na hora', badges: ['corrigido'], texto: 'Depois de publicar uma versão nova, o app abria a versão antiga guardada no aparelho até a segunda abertura. Agora páginas e scripts vêm sempre do servidor primeiro (a cópia guardada fica só pra quando estiver sem internet).' },
+    { titulo: 'Links de proposta e briefing', badges: ['corrigido'], texto: 'Gerados a partir de outras telas (como o Funil de Vendas), os links saíam quebrados. Agora funcionam de qualquer página.' },
+    { titulo: 'Menos leituras no banco', badges: ['melhoria'], texto: 'O Financeiro consultava uma informação no banco a cada alteração; agora consulta uma vez ao abrir — economiza a cota do Firebase.' },
+  ]},
+  { data: '06/10/2026 · Celular e tablet', itens: [
+    { titulo: 'CRM pensado pro celular', badges: ['melhoria'], texto: 'No celular, o CRM ganhou uma tela inicial com saudação e grade de atalhos, uma barra fixa embaixo (Início, Pipelines, Nova venda, Financeiro e Orçamentos) e o menu completo numa gaveta lateral — antes o menu ficava por cima do conteúdo.' },
+    { titulo: 'Financeiro, Serviços e Páginas encaixados no celular', badges: ['melhoria'], texto: 'As abas viram só ícones e os botões se ajustam à largura da tela.' },
+    { titulo: 'Barra de cima compacta no tablet', badges: ['corrigido'], texto: 'A busca vira um ícone que abre por cima ao tocar e os menus ficam mais justos — antes a busca tapava parte da navegação.' },
+  ]},
+  { data: '06/10/2026 · Financeiro', itens: [
+    { titulo: 'Financeiro separado por plano', badges: ['melhoria'], texto: 'Cada lançamento guarda se veio do ERP ou do CRM. Com um plano só, cada lado vê apenas o que é seu; com ERP + CRM, o Financeiro é compartilhado. Vale pra tela do Financeiro, o Painel, o Meu Negócio, o Dashboard do CRM e a busca de clientes da Venda Rápida. Os lançamentos antigos foram marcados sozinhos.' },
+  ]},
+  { data: '06/10/2026 · Página Pública', itens: [
+    { titulo: 'Site da empresa com Editor Visual', badges: ['novo'], texto: 'Monte sua página pública com 11 tipos de bloco (menu, hero, serviços do catálogo, sobre, depoimentos, galeria, FAQ, CTA, contato, texto e rodapé), 8 paletas de cores, 2 layouts, 4 estilos e 4 templates prontos — com visualização de computador, tablet e celular.' },
+    { titulo: 'Captura de leads direto pro Pipeline', badges: ['novo'], texto: 'O formulário da página (simples ou em passos, com escolha de serviços) cria o cliente e o negócio na etapa que você escolher, com as tags automáticas. Meta Pixel e Google Analytics em Configurações → Integrações.' },
+    { titulo: 'Ícones corrigidos', badges: ['corrigido'], texto: 'Alguns botões (o "+" e outros) mostravam um ícone genérico de documento. Agora mostram o ícone certo.' },
+  ]},
+  { data: '06/10/2026 · Financeiro (Entrega 3)', itens: [
+    { titulo: 'PIX no orçamento aprovado', badges: ['novo'], texto: 'Configure sua chave PIX e, quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o código "copia e cola" já com o valor. Dá pra exibir só em pagamentos únicos ou também no 1º pagamento dos recorrentes.' },
+    { titulo: 'Recibos em lote e tutorial', badges: ['novo'], texto: 'Gere de uma vez os recibos dos recebimentos do mês (com o valor por extenso), prontos pra imprimir ou salvar em PDF. E o Financeiro ganhou o tutorial guiado.' },
+  ]},
+  { data: '06/10/2026 · Financeiro (Entrega 2)', itens: [
+    { titulo: 'Caixas e regras de roteamento', badges: ['novo'], texto: 'Cadastre onde o dinheiro fica (banco, maquininha, espécie) e veja o saldo de cada um. Regras definem em qual caixa cada recebimento ou pagamento entra (por categoria, cliente/fornecedor ou tipo).' },
+    { titulo: 'Clientes, Fornecedores e Recorrentes', badges: ['novo'], texto: 'Fechamento por cliente (receber várias contas de uma vez e copiar o extrato pra mandar), visão por fornecedor e as assinaturas com MRR e LTV.' },
+    { titulo: 'Relatórios', badges: ['novo'], texto: 'Competência × caixa, inadimplência, DRE com tributos configuráveis (e em % sobre a receita), gráficos de receita × despesa, evolução do saldo e categorias, receita por serviço e top clientes. Exporta em CSV.' },
+  ]},
+  { data: '06/10/2026 · Financeiro novo (Entrega 1)', itens: [
+    { titulo: 'Contas a receber e a pagar', badges: ['novo'], texto: 'O Financeiro agora trabalha com lançamentos: cada conta tem vencimento, status (pendente, parcial, pago, cancelado), categoria e cliente ou fornecedor. Visão Geral com receber, pagar, lucro, vencidos e transações; abas Receber e Pagar com recebimento parcial, pagamento em lote e despesas recorrentes.' },
+    { titulo: 'Venda Rápida e Lançar Despesa', badges: ['novo'], texto: 'À vista, parcelado ou recorrente. Na venda: puxa serviços e produtos do catálogo, move o lead no Pipeline e pode gerar uma tarefa ou projeto no Kanban. Categorias financeiras com cores.' },
+    { titulo: 'Seus dados foram migrados', badges: ['melhoria'], texto: 'Todas as receitas, pagamentos, adiantamentos e saídas dos meses anteriores viraram lançamentos, e o modelo mensal virou contas recorrentes. Os dados antigos continuam guardados como cópia de segurança. O mesmo Financeiro aparece no ERP e no CRM.' },
+  ]},
   { data: '02/10/2026 · Auditoria', itens: [
     { titulo: 'Correções e textos atualizados', badges: ['corrigido'], texto: 'Título do Kanban acima da barra; projeto antigo ligado como recorrente agora renova todo mês; a página pública de planos se atualiza quando um serviço dela é renomeado ou excluído; Central de Ajuda, tutorial e robozinho atualizados com os níveis de acesso, o menu Criar, Projetos e Serviços.' },
   ]},
@@ -6601,6 +6562,8 @@ const CFG_INTEGRACOES = [
     { nome: 'IA (Claude/ChatGPT)', icone: 'brilho' },
   ]},
   { categoria: 'Marketing e criação', desc: 'Rastreio de anúncios e redes sociais.', itens: [
+    { nome: 'Meta Pixel', icone: 'grafico' },
+    { nome: 'Google Analytics', icone: 'grafico' },
     { nome: 'Meta Ads', icone: 'megafone' },
   ]},
 ];
@@ -6627,6 +6590,7 @@ function renderAbaIntegracoesConfig() {
 }
 
 function abrirIntegracaoConfig(nome) {
+  if (nome === 'Meta Pixel' || nome === 'Google Analytics') { cfgAbrirPixels(nome === 'Meta Pixel' ? 'meta' : 'ga'); return; }
   avisar(`A integração com ${nome} ainda não está conectada de verdade — vamos construir isso junto quando chegarmos nessa parte do Operacional.`, nome);
 }
 
@@ -6725,21 +6689,11 @@ const CRM_EM_CONSTRUCAO_INFO = {
   atendentes: { icone: 'pessoas', titulo: 'Atendentes', texto: 'Vários atendentes usando o mesmo número de WhatsApp — precisa de WhatsApp Business API.' },
   automacoes: { icone: 'engrenagem', titulo: 'Automações de mensagem', texto: 'Disparos automáticos por evento (novo lead, proposta aprovada, cobrança) — precisa de WhatsApp Business API.' },
   'monitor-grupos': { icone: 'megafone', titulo: 'Monitor de grupos', texto: 'Acompanhar interações em grupos e comunidades do WhatsApp — precisa de WhatsApp Business API.' },
-  'fin-receber': { icone: 'tendencia', titulo: 'Contas a receber', texto: 'Painel dedicado de tudo que está por receber, com pendentes e vencidas.' },
-  'fin-pagar': { icone: 'documento', titulo: 'Contas a pagar', texto: 'Painel dedicado de tudo que está por pagar, com pendentes e vencidas.' },
-  'fin-recorrencias': { icone: 'recorrente', titulo: 'Recorrências', texto: 'Gestão de mensalidades e contratos de prestação de serviços continuados.' },
-  'fin-relatorios': { icone: 'grafico', titulo: 'Relatórios financeiros', texto: 'DRE completo, fluxo de caixa detalhado e comparativos entre períodos.' },
-  'fin-caixa': { icone: 'banco', titulo: 'Caixa', texto: 'Controle de caixa físico/digital do dia a dia.' },
-  'fin-integracoes': { icone: 'tomada', titulo: 'Integrações financeiras', texto: 'Baixa automática por gateway de pagamento (Asaas, Mercado Pago, PIX) — precisa de conta no gateway escolhido.' },
-  'paginas-landing': { icone: 'globo', titulo: 'Landing pages', texto: 'Construtor de páginas de captura, publicadas com link próprio.' },
-  'paginas-link-bio': { icone: 'link', titulo: 'Link da bio', texto: 'Uma página com vários links, pro Instagram/TikTok da sua empresa.' },
-  'paginas-formularios': { icone: 'tarefas', titulo: 'Formulários', texto: 'Formulários de captura que alimentam o funil de vendas automaticamente.' },
-  'paginas-agendamento': { icone: 'calendarioCheck', titulo: 'Página de agendamento', texto: 'Uma página pública onde o lead escolhe um horário livre na sua agenda.' },
-  'paginas-portfolio': { icone: 'imagem', titulo: 'Portfólio', texto: 'Uma página pública mostrando seus melhores trabalhos.' },
   'paginas-captura': { icone: 'globo', titulo: 'Páginas de captura', texto: 'Páginas focadas 100% em converter visitante em lead.' },
 };
 
 function initCrmHub() {
+  crmMontarMobile();
   aplicarPreferenciasMenuCrm();
   cloudWatch(CRM_NEGOCIOS_KEY, [], (data) => {
     CRM_NEGOCIOS_DATA = data;
@@ -6777,12 +6731,12 @@ function initCrmHub() {
   });
   cloudWatch('eagles_contratos_v1', contratosSeed(), (data) => { CADASTROS_DATA['contrato'] = data; atualizarSecaoAtivaCrm(); converterPropostasAprovadasEmContrato(); });
   FINANCE_MES_ATUAL = mesKeyDoHoje();
-  cloudWatch(FINANCE_TEMPLATE_KEY, financeTemplatePadrao(), (data) => { FINANCE_TEMPLATE_CACHE = data; });
-  cloudWatch(FINANCE_CICLOS_KEY, {}, (data) => {
-    FINANCE_CICLOS_CACHE = data;
+  finEscutar(() => {
     FINANCE_CICLO = getCicloDoMes(FINANCE_MES_ATUAL);
     atualizarSecaoAtivaCrm();
   });
+  // leads que chegam pelo formulário da Página Pública
+  if (nivelPodeOperar()) { pagIniciarDados(); pagIniciarLeads(); }
   cloudWatch(CRM_MODELOS_CONTRATO_KEY, modelosContratoSeed(), (data) => { CRM_MODELOS_CONTRATO_DATA = data; });
   cloudWatch(CRM_APROVACAO_KEY, aprovacaoConfigPadrao(), (data) => {
     const primeiraCarga = !CRM_APROVACAO_CARREGADO;
@@ -6830,9 +6784,13 @@ function atualizarSecaoAtivaCrm() {
   if (secao === 'briefings') renderCrmBriefings();
   if (secao === 'kanban') renderKanbanConteudo(); // só o conteúdo: não apaga a busca digitada
   if (secao.startsWith('servicos-')) srvRender();
+  if (secao.startsWith('paginas-')) pagRender();
+  if (typeof PAG_LEADS_FILA !== 'undefined' && PAG_LEADS_FILA.length) pagProcessarLeads();
+  if (secao.startsWith('fin-')) finRender();
 }
 
 function mostrarSecaoCrm(secao, btn) {
+  if (typeof crmFecharGaveta === 'function') { crmFecharGaveta(); crmAtualizarTabbar(secao); }
   if (KB_TUTORIAL_PASSO >= 0) kbFecharTutorial();
   document.querySelectorAll('.crm-secao').forEach((el) => { el.style.display = 'none'; });
   const alvo = document.getElementById('crm-secao-' + secao);
@@ -6848,6 +6806,9 @@ function mostrarSecaoCrm(secao, btn) {
   if (secao === 'financeiro') renderCrmFinanceiroSecao();
   if (secao === 'briefings') renderCrmBriefings();
   if (secao.startsWith('servicos-')) renderServicosModulo(secao.slice(9));
+  const abaPag = { 'paginas-landing': 'pagina', 'paginas-link-bio': 'linkbio', 'paginas-formularios': 'formularios', 'paginas-agendamento': 'agendamento', 'paginas-portfolio': 'portfolio' }[secao];
+  if (abaPag) pagMontar(document.getElementById('crm-secao-' + secao), abaPag);
+  if (secao.startsWith('fin-')) finMontar(document.getElementById('crm-secao-' + secao), { 'fin-receber': 'receber', 'fin-pagar': 'pagar', 'fin-recorrencias': 'recorrentes', 'fin-relatorios': 'relatorios', 'fin-caixa': 'caixa', 'fin-integracoes': 'pix' }[secao]);
   if (secao === 'kanban') renderKanbanSecao();
   else {
     kbFecharPopovers();
@@ -7534,6 +7495,13 @@ document.addEventListener('click', (e) => {
 });
 
 function toggleMobileNav() {
+  if (document.body.classList.contains('pagina-crm') && crmEhCelular()) {
+    // a gaveta abre sempre completa (desfaz o "recolhido" de quando a tela era maior)
+    const painel = document.getElementById('crm-sidebar-painel');
+    if (painel && painel.classList.contains('crm-recolhida')) toggleColapsarSidebarCrm();
+    document.body.classList.toggle('crm-gaveta-aberta');
+    return;
+  }
   const topbar = document.getElementById('app-topbar');
   if (topbar) topbar.classList.toggle('nav-open');
 }
@@ -10860,7 +10828,7 @@ function srvRender() {
       <div class="page-header" style="margin-bottom:14px;">
         <div><h1 style="font-size:22px;">Meus Serviços</h1><p style="color:var(--text-soft); margin:0;">Gerencie seu catálogo de serviços e preços</p></div>
       </div>
-      <div class="kb-segmento srv-abas">${abas.map(([a, n, icone]) => `<button type="button" class="${SRV_ABA === a ? 'ativo' : ''}" onclick="srvIrAba('${a}')">${ic(icone, 'ic-herda')} ${n}</button>`).join('')}</div>
+      <div class="kb-segmento srv-abas aba-icones">${abas.map(([a, n, icone]) => `<button type="button" class="${SRV_ABA === a ? 'ativo' : ''}" title="${n}" aria-label="${n}" onclick="srvIrAba('${a}')">${ic(icone, 'ic-herda')} <span class="aba-txt">${n}</span></button>`).join('')}</div>
       ${corpo}
     </div>`;
   if (buscaId) { const i = document.getElementById(buscaId); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} } }
@@ -11491,6 +11459,2596 @@ function srvSincronizarConteudosDoServico(servicoId, selecionado) {
   if (!c.blocos.length) c.ativo = false;
 }
 
+
+// =====================================================================
+// ---------- Financeiro (modelo novo: lançamentos individuais) ----------
+// =====================================================================
+// Cada conta a receber/pagar é UM documento (tenants/{id}/fin_lancamentos),
+// com vencimento, status (pendente/parcial/pago/cancelado), categoria,
+// cliente ou fornecedor e de onde veio. Recorrências (assinaturas, contas
+// fixas) ficam em fin_recorrencias e geram um lançamento por mês, com id
+// determinístico (rec_<recorrência>_<mês>) — gerar duas vezes não duplica.
+//
+// As telas que liam o modelo antigo (Painel, Meu Negócio, Dashboard do
+// CRM, comparativos) continuam funcionando: getCicloDoMes() agora MONTA o
+// mês a partir dos lançamentos, no mesmo formato de antes.
+
+const FIN_COLECAO = 'fin_lancamentos';
+const FIN_REC_COLECAO = 'fin_recorrencias';
+const FIN_CATEGORIAS_KEY = 'eagles_fin_categorias_v1';
+let FIN_LANC = [];       // o que ESTA tela mostra (respeita o isolamento ERP × CRM)
+let FIN_REC = [];
+let FIN_LANC_TODOS = []; // tudo da empresa (pra conferir se algo já existe e não gravar por cima)
+let FIN_REC_TODOS = [];
+
+// ---------- isolamento ERP × CRM ----------
+// Cada lançamento guarda de qual lado veio (modulo: 'erp' | 'crm'). Só
+// quem tem os DOIS planos vê um Financeiro compartilhado; com um plano
+// só, cada lado vê apenas o que é dele. Lançamentos antigos sem marcação
+// são marcados sozinhos (finMarcarLegado).
+function finModuloPagina() {
+  const pg = (location.pathname.split('/').pop() || '').toLowerCase();
+  return ['crm.html', 'funil-vendas.html'].includes(pg) ? 'crm' : 'erp';
+}
+function finCompartilhado() {
+  if (!FIREBASE_PRONTO || !TENANT_ID) return true; // modo local (desenvolvimento)
+  return TENANT_PLANO === 'ambos';
+}
+function finVisivel(x) {
+  if (finCompartilhado()) return true;
+  return !x.modulo || x.modulo === 'ambos' || x.modulo === finModuloPagina();
+}
+function finAplicarVisao() {
+  FIN_LANC = FIN_LANC_TODOS.filter(finVisivel);
+  FIN_REC = FIN_REC_TODOS.filter(finVisivel);
+}
+// De qual lado é um lançamento, pela origem (quando ela diz)
+function finModuloPorOrigem(dados) {
+  if (dados.origemPedidoId || (dados.origem && dados.origem.tipo === 'pedido')) return 'erp';
+  if (dados.origemNegocioId || (dados.origem && ['negocio', 'venda-rapida', 'contrato'].includes(dados.origem.tipo) && finModuloPagina() === 'crm')) return 'crm';
+  if (dados.origemNegocioId) return 'crm';
+  return '';
+}
+function finModuloLegado(x) {
+  const pela = x.origemPedidoId || (x.origem && x.origem.tipo === 'pedido') ? 'erp' : (x.origemNegocioId || (x.origem && x.origem.tipo === 'negocio')) ? 'crm' : '';
+  if (pela) return pela;
+  if (TENANT_PLANO === 'erp' || TENANT_PLANO === 'crm') return TENANT_PLANO;
+  return 'ambos'; // empresa com os dois planos: o que não tem origem clara fica compartilhado
+}
+// Marca (uma vez) os lançamentos e recorrências criados antes do isolamento
+let FIN_MARCANDO = false;
+function finMarcarLegado() {
+  if (FIN_MARCANDO || !finNuvem() || !nivelVeFinanceiro() || !TENANT_PLANO) return;
+  FIN_MARCANDO = true;
+  try {
+    FIN_LANC_TODOS.filter((l) => !l.modulo).forEach((l) => { l.modulo = finModuloLegado(l); finRef(FIN_COLECAO).doc(l.id).set({ modulo: l.modulo }, { merge: true }).catch(() => {}); });
+    FIN_REC_TODOS.filter((r) => !r.modulo).forEach((r) => { r.modulo = finModuloLegado(r); finRef(FIN_REC_COLECAO).doc(r.id).set({ modulo: r.modulo }, { merge: true }).catch(() => {}); });
+    finAplicarVisao();
+  } finally { FIN_MARCANDO = false; }
+}
+let FIN_CARREGADO = false;
+let FIN_REC_CARREGADO = false;
+let FIN_ESCUTANDO = false;
+let FIN_OUVINTES = [];
+let FIN_CATEGORIAS = null;
+let FIN_MIGRANDO = false;
+let FIN_GERANDO = false;
+
+const FIN_CATEGORIAS_PADRAO = {
+  receber: [
+    { id: 'servicos', nome: 'Serviços', cor: '#3b82f6' }, { id: 'produtos', nome: 'Produtos', cor: '#22c55e' },
+    { id: 'consultoria', nome: 'Consultoria', cor: '#8b5cf6' }, { id: 'projetos', nome: 'Projetos', cor: '#f97316' },
+    { id: 'assinaturas', nome: 'Assinaturas', cor: '#06b6d4' }, { id: 'outros-r', nome: 'Outros', cor: '#64748b' },
+  ],
+  pagar: [
+    { id: 'pessoal', nome: 'Pessoal / Salários', cor: '#ef4444' }, { id: 'fornecedores', nome: 'Fornecedores', cor: '#f97316' },
+    { id: 'impostos', nome: 'Impostos', cor: '#eab308' }, { id: 'aluguel', nome: 'Aluguel e contas', cor: '#8b5cf6' },
+    { id: 'marketing', nome: 'Marketing', cor: '#ec4899' }, { id: 'software', nome: 'Software e ferramentas', cor: '#06b6d4' },
+    { id: 'outros-p', nome: 'Outros', cor: '#64748b' },
+  ],
+};
+
+function finNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
+function finRef(colecao) { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(colecao); }
+function finChaveLocal(qual) { return chaveLocalTenant('eagles_fin_' + qual + '_local_v1'); }
+function finCategorias(tipo) {
+  const c = FIN_CATEGORIAS && Array.isArray(FIN_CATEGORIAS[tipo]) ? FIN_CATEGORIAS[tipo] : FIN_CATEGORIAS_PADRAO[tipo];
+  return c && c.length ? c : FIN_CATEGORIAS_PADRAO[tipo];
+}
+function finCategoria(tipo, id) {
+  return finCategorias(tipo).find((c) => c.id === id) || { id: '', nome: 'Sem categoria', cor: '#64748b' };
+}
+
+// ---------- datas ----------
+function finHoje() { return typeof kbHoje === 'function' ? kbHoje() : isoHoje(); }
+function finMesAtual() { return finHoje().slice(0, 7); }
+function finSomarMeses(mes, n) {
+  const [a, m] = mes.split('-').map(Number);
+  const d = new Date(a, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function finDataDoMes(mes, dia) {
+  const [a, m] = mes.split('-').map(Number);
+  const ultimo = new Date(a, m, 0).getDate();
+  const d = Math.max(1, Math.min(ultimo, Math.round(Number(dia) || 1)));
+  return `${mes}-${String(d).padStart(2, '0')}`;
+}
+function finNomeMes(mes) {
+  const nomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const [a, m] = mes.split('-').map(Number);
+  return `${nomes[m - 1]} de ${a}`;
+}
+
+// ---------- carga ----------
+// Quem não vê o financeiro (Administrativo) NÃO lê os lançamentos — só
+// consegue criar (as regras do banco garantem isso).
+function finEscutar(cb) {
+  if (cb) FIN_OUVINTES.push(cb);
+  if (FIN_ESCUTANDO) { if (cb && FIN_CARREGADO) cb({}); return; }
+  FIN_ESCUTANDO = true;
+  cloudWatch(FIN_CATEGORIAS_KEY, FIN_CATEGORIAS_PADRAO, (data) => { FIN_CATEGORIAS = data && typeof data === 'object' ? data : FIN_CATEGORIAS_PADRAO; finNotificar(); });
+  if (finNuvem() && !nivelVeFinanceiro()) { FIN_CARREGADO = true; FIN_REC_CARREGADO = true; setTimeout(finNotificar, 0); return; }
+  if (finNuvem()) {
+    // nunca deixa um problema no financeiro derrubar a tela que está abrindo
+    try { iniciarReceitasPendentes(); } catch (e) { console.error(e); } // esvazia a fila antiga do Administrativo
+    try {
+    finRef(FIN_COLECAO).onSnapshot((snap) => {
+      const l = []; snap.forEach((d) => l.push(Object.assign({}, d.data(), { id: d.id })));
+      FIN_LANC_TODOS = l; finAplicarVisao(); FIN_CARREGADO = true;
+      if (RECEITAS_PENDENTES_FILA.length) setTimeout(processarReceitasPendentes, 0);
+      finAposCarregar(); finNotificar();
+    }, (err) => console.error('Erro ao carregar o financeiro:', err));
+    finRef(FIN_REC_COLECAO).onSnapshot((snap) => {
+      const l = []; snap.forEach((d) => l.push(Object.assign({}, d.data(), { id: d.id })));
+      FIN_REC_TODOS = l; finAplicarVisao(); FIN_REC_CARREGADO = true;
+      finAposCarregar(); finNotificar();
+    }, (err) => console.error('Erro ao carregar recorrências:', err));
+    } catch (err) { console.error('Não foi possível carregar o financeiro:', err); }
+  } else {
+    FIN_LANC_TODOS = lsLoad(finChaveLocal('lancamentos'), []);
+    FIN_REC_TODOS = lsLoad(finChaveLocal('recorrencias'), []);
+    finAplicarVisao();
+    FIN_CARREGADO = FIN_REC_CARREGADO = true;
+    setTimeout(() => { finAposCarregar(); finNotificar(); }, 0);
+  }
+}
+function finNotificar() {
+  FIN_OUVINTES.forEach((f) => { try { f({}); } catch (e) { console.error(e); } });
+  if (typeof finRender === 'function') finRender();
+}
+function finAposCarregar() {
+  if (!FIN_CARREGADO || !FIN_REC_CARREGADO || !nivelVeFinanceiro()) return;
+  finMarcarLegado();
+  finMigrarSeNecessario();
+  finGerarRecorrencias();
+}
+
+// ---------- gravação ----------
+function finLimpar(o) { return JSON.parse(JSON.stringify(o)); }
+function finGravarLocal() { lsSave(finChaveLocal('lancamentos'), FIN_LANC_TODOS); lsSave(finChaveLocal('recorrencias'), FIN_REC_TODOS); }
+function finPodeCriar() {
+  if (!finNuvem()) return true;
+  if (nivelVeFinanceiro() || nivelPodeOperar()) return true;
+  avisarSemPermissaoNivel('lançar no financeiro');
+  return false;
+}
+function finErro(err) { console.error('Erro no financeiro:', err); avisar(typeof mensagemErroFirestore === 'function' ? mensagemErroFirestore(err) : 'Não foi possível salvar no financeiro agora.'); }
+
+function finNovoLancamento(dados) {
+  const agora = new Date().toISOString();
+  const l = Object.assign({
+    id: genId('fl'), tipo: 'receber', descricao: '', valor: 0, valorPago: 0, status: 'pendente', vencimento: finHoje(), dataPagamento: null,
+    categoriaId: '', cliente: '', fornecedor: '', subtipo: '', moeda: 'BRL', observacoes: '', origem: { tipo: 'manual' },
+    criadoEm: agora, atualizadoEm: agora, criadoPor: (typeof USUARIO_UID !== 'undefined' && USUARIO_UID) || 'local',
+  }, dados || {});
+  l.valor = Math.round(Math.max(0, Number(l.valor) || 0) * 100) / 100;
+  l.valorPago = Math.round(Math.max(0, Number(l.valorPago) || 0) * 100) / 100;
+  if (l.status === 'pago') { l.valorPago = l.valor; l.dataPagamento = l.dataPagamento || finHoje(); }
+  l.competencia = (l.competencia || l.vencimento || finHoje()).slice(0, 7);
+  if (!l.modulo) l.modulo = finModuloPorOrigem(l) || finModuloPagina();
+  if (l.valorPago > 0 && !l.caixaId && typeof FIN_CAIXAS !== 'undefined' && FIN_CAIXAS.caixas.length) l.caixaId = finCaixaPorRegra(l);
+  return l;
+}
+// Cria (ou regrava, com o mesmo id) um lançamento.
+function finCriar(dados) {
+  if (!finPodeCriar()) return null;
+  const l = finNovoLancamento(dados);
+  if (finNuvem()) {
+    finRef(FIN_COLECAO).doc(l.id).set(finLimpar(l)).catch(finErro);
+    if (nivelVeFinanceiro()) { FIN_LANC_TODOS = FIN_LANC_TODOS.filter((x) => x.id !== l.id).concat([l]); finAplicarVisao(); }
+  } else { FIN_LANC_TODOS = FIN_LANC_TODOS.filter((x) => x.id !== l.id).concat([l]); finAplicarVisao(); finGravarLocal(); }
+  finNotificar();
+  return l;
+}
+function finAtualizar(id, campos) {
+  if (finNuvem() && !nivelVeFinanceiro()) { avisarSemPermissaoNivel('editar o financeiro'); return false; }
+  const l = FIN_LANC.find((x) => x.id === id);
+  if (!l) return false;
+  const m = Object.assign({}, campos, { atualizadoEm: new Date().toISOString() });
+  if (m.vencimento && !m.competencia) m.competencia = m.vencimento.slice(0, 7);
+  if (Number(m.valorPago) > 0 && !l.caixaId && !('caixaId' in m) && FIN_CAIXAS.caixas.length) m.caixaId = finCaixaPorRegra(Object.assign({}, l, m));
+  Object.assign(l, m);
+  if (finNuvem()) finRef(FIN_COLECAO).doc(id).set(finLimpar(m), { merge: true }).catch(finErro);
+  else finGravarLocal();
+  finNotificar();
+  return true;
+}
+function finExcluir(id) {
+  if (finNuvem() && !nivelVeFinanceiro()) { avisarSemPermissaoNivel('excluir lançamentos'); return; }
+  FIN_LANC_TODOS = FIN_LANC_TODOS.filter((x) => x.id !== id); finAplicarVisao();
+  if (finNuvem()) finRef(FIN_COLECAO).doc(id).delete().catch(finErro);
+  else finGravarLocal();
+  finNotificar();
+}
+function finGravarRecorrencia(rec, campos) {
+  if (!finPodeCriar()) return false;
+  const existe = FIN_REC_TODOS.find((x) => x.id === rec.id);
+  if (existe && finNuvem() && !nivelVeFinanceiro()) { avisarSemPermissaoNivel('editar recorrências'); return false; }
+  const m = Object.assign({}, campos || rec, { atualizadoEm: new Date().toISOString() });
+  if (!existe && !rec.modulo && !(campos && campos.modulo)) m.modulo = finModuloPorOrigem(rec) || finModuloPagina();
+  if (existe) Object.assign(existe, m); else if (!finNuvem() || nivelVeFinanceiro()) FIN_REC_TODOS.push(Object.assign(rec, m)); else Object.assign(rec, m);
+  finAplicarVisao();
+  if (finNuvem()) { const ref = finRef(FIN_REC_COLECAO).doc(rec.id); (existe ? ref.set(finLimpar(m), { merge: true }) : ref.set(finLimpar(rec))).catch(finErro); }
+  else finGravarLocal();
+  finNotificar();
+  return true;
+}
+function finExcluirRecorrencia(id) {
+  if (finNuvem() && !nivelVeFinanceiro()) { avisarSemPermissaoNivel('excluir recorrências'); return; }
+  FIN_REC_TODOS = FIN_REC_TODOS.filter((x) => x.id !== id); finAplicarVisao();
+  if (finNuvem()) finRef(FIN_REC_COLECAO).doc(id).delete().catch(finErro);
+  else finGravarLocal();
+  finNotificar();
+}
+
+// ---------- recorrências ----------
+// Gera os lançamentos do mês de início até o mês que vem (pra conta
+// futura já aparecer como pendente). Id determinístico = sem duplicar.
+function finLancamentoDaRecorrencia(rec, mes) {
+  return {
+    id: 'rec_' + rec.id + '_' + mes, tipo: rec.tipo, descricao: rec.descricao, valor: rec.valor, status: 'pendente',
+    vencimento: finDataDoMes(mes, rec.dia), categoriaId: rec.categoriaId || '', cliente: rec.cliente || '', fornecedor: rec.fornecedor || '',
+    subtipo: rec.subtipo || (rec.tipo === 'pagar' ? 'pagamento' : ''), moeda: rec.moeda || 'BRL', recorrenciaId: rec.id, itens: rec.itens || [],
+    origem: Object.assign({ tipo: 'recorrencia' }, rec.origem || {}), modulo: rec.modulo || '',
+  };
+}
+function finMesesParaGerar(rec, ate) {
+  const meses = [];
+  let m = rec.ultimaGeracao ? finSomarMeses(rec.ultimaGeracao, 1) : rec.inicio;
+  while (m && m <= ate && (!rec.fim || m <= rec.fim) && meses.length < 60) { meses.push(m); m = finSomarMeses(m, 1); }
+  return meses;
+}
+function finGerarParaRecorrencia(rec) {
+  const ate = finSomarMeses(finMesAtual(), 1);
+  const meses = finMesesParaGerar(rec, ate);
+  meses.forEach((mes) => {
+    const id = 'rec_' + rec.id + '_' + mes;
+    if (FIN_LANC_TODOS.some((x) => x.id === id)) return;
+    finCriar(finLancamentoDaRecorrencia(rec, mes));
+  });
+  if (meses.length) finGravarRecorrencia(rec, { ultimaGeracao: meses[meses.length - 1] });
+}
+function finGerarRecorrencias() {
+  if (FIN_GERANDO) return;
+  FIN_GERANDO = true;
+  try { FIN_REC_TODOS.filter((r) => r.ativa !== false && finVisivel(r)).forEach(finGerarParaRecorrencia); }
+  finally { FIN_GERANDO = false; }
+}
+// Cria uma recorrência e já gera os lançamentos de agora (funciona até
+// pra quem só pode criar, como o Administrativo numa venda recorrente)
+function finCriarRecorrencia(dados) {
+  if (!finPodeCriar()) return null;
+  const rec = Object.assign({ modulo: finModuloPorOrigem(dados || {}) || finModuloPagina(), id: genId('frec'), tipo: 'receber', descricao: '', valor: 0, dia: 10, inicio: finMesAtual(), fim: '', ativa: true, categoriaId: '', cliente: '', fornecedor: '', subtipo: '', moeda: 'BRL', criadoEm: new Date().toISOString() }, dados);
+  const meses = finMesesParaGerar(rec, finSomarMeses(finMesAtual(), 1));
+  meses.forEach((mes) => finCriar(finLancamentoDaRecorrencia(rec, mes)));
+  if (meses.length) rec.ultimaGeracao = meses[meses.length - 1];
+  finGravarRecorrencia(rec);
+  return rec;
+}
+
+// ---------- migração do modelo antigo (ciclos mensais) ----------
+// Roda uma vez, no navegador de quem vê o financeiro. Ids
+// determinísticos (mig_...): se rodar em duas abas ao mesmo tempo, as
+// duas gravam os MESMOS documentos — nada duplica. O modelo antigo não é
+// apagado (fica como cópia de segurança).
+let FIN_MIGRACAO_CONFERIDA = false; // uma consulta por sessão (antes era uma a cada mudança no financeiro)
+async function finMigrarSeNecessario() {
+  if (FIN_MIGRANDO || FIN_MIGRACAO_CONFERIDA) return;
+  FIN_MIGRANDO = true;
+  try {
+    let jaFeita = false;
+    if (finNuvem()) { const d = await finRef('fin_meta').doc('migracao').get(); jaFeita = d.exists && d.data().status === 'feita'; }
+    else jaFeita = !!lsLoad(finChaveLocal('migracao'), null);
+    if (jaFeita) { FIN_MIGRACAO_CONFERIDA = true; return; }
+    const ciclos = finNuvem() ? await cloudGetForce(FINANCE_CICLOS_KEY, {}) : lsLoad(chaveLocalTenant(FINANCE_CICLOS_KEY), {});
+    const modelo = finNuvem() ? await cloudGetForce(FINANCE_TEMPLATE_KEY, financeTemplatePadrao()) : lsLoad(chaveLocalTenant(FINANCE_TEMPLATE_KEY), financeTemplatePadrao());
+    const r = finConverterModeloAntigo(ciclos || {}, modelo || {});
+    r.lancamentos.forEach((l) => { if (!FIN_LANC_TODOS.some((x) => x.id === l.id)) finCriar(Object.assign({ modulo: finModuloLegado(l) }, l)); });
+    r.recorrencias.forEach((rec) => { if (!FIN_REC_TODOS.some((x) => x.id === rec.id)) finGravarRecorrencia(Object.assign({ modulo: finModuloLegado(rec) }, rec)); });
+    const marca = { status: 'feita', em: new Date().toISOString(), lancamentos: r.lancamentos.length, recorrencias: r.recorrencias.length };
+    if (finNuvem()) await finRef('fin_meta').doc('migracao').set(marca);
+    else lsSave(finChaveLocal('migracao'), marca);
+    FIN_MIGRACAO_CONFERIDA = true;
+    if (r.lancamentos.length || r.recorrencias.length) finGerarRecorrencias();
+  } catch (err) {
+    console.error('Erro na migração do financeiro:', err);
+  } finally {
+    FIN_MIGRANDO = false;
+  }
+}
+function finConverterModeloAntigo(ciclos, modelo) {
+  const lancamentos = [];
+  const meses = Object.keys(ciclos || {}).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort();
+  const origemDe = (it) => (it.origemPedidoId ? { tipo: 'pedido', id: it.origemPedidoId } : it.origemNegocioId ? { tipo: 'negocio', id: it.origemNegocioId } : it.origemVendaRapida ? { tipo: 'venda-rapida' } : { tipo: 'migracao' });
+  meses.forEach((mes) => {
+    const c = ciclos[mes] || {};
+    (c.receitas || []).forEach((it, i) => {
+      const pago = it.status === 'pago';
+      lancamentos.push({ id: `mig_${mes}_r_${it.id || i}`, tipo: 'receber', descricao: it.plano || it.produto || 'Receita', cliente: it.cliente || '', valor: Number(it.valor) || 0,
+        vencimento: finDataDoMes(mes, it.diaAcerto || 10), status: pago ? 'pago' : 'pendente', valorPago: pago ? Number(it.valor) || 0 : 0, dataPagamento: pago ? (it.dataPagamento || finDataDoMes(mes, it.diaAcerto || 10)) : null,
+        categoriaId: 'servicos', origem: origemDe(it), origemNegocioId: it.origemNegocioId || '', origemPedidoId: it.origemPedidoId || '' });
+    });
+    (c.pagamentos || []).forEach((it, i) => {
+      const pago = it.status === 'pago';
+      lancamentos.push({ id: `mig_${mes}_p_${it.id || i}`, tipo: 'pagar', descricao: 'Pagamento' + (it.cuidador ? ' — ' + it.cuidador : ''), fornecedor: it.cuidador || '', valor: Number(it.valor) || 0,
+        vencimento: finDataDoMes(mes, it.diaPagamento || 30), status: pago ? 'pago' : 'pendente', valorPago: pago ? Number(it.valor) || 0 : 0, dataPagamento: pago ? (it.dataPagamento || finDataDoMes(mes, it.diaPagamento || 30)) : null,
+        categoriaId: 'pessoal', subtipo: 'pagamento', origem: { tipo: 'migracao' } });
+    });
+    (c.adiantamentos || []).forEach((it, i) => {
+      const data = /^\d{4}-\d{2}-\d{2}$/.test(it.data || '') ? it.data : finDataDoMes(mes, 1);
+      lancamentos.push({ id: `mig_${mes}_a_${it.id || i}`, tipo: 'pagar', descricao: 'Adiantamento' + (it.cuidador ? ' — ' + it.cuidador : ''), fornecedor: it.cuidador || '', valor: Number(it.valor) || 0,
+        vencimento: data, competencia: mes, status: 'pago', valorPago: Number(it.valor) || 0, dataPagamento: data, observacoes: it.obs || '', categoriaId: 'pessoal', subtipo: 'adiantamento', origem: { tipo: 'migracao' } });
+    });
+    (c.variaveis || []).forEach((it, i) => {
+      const data = /^\d{4}-\d{2}-\d{2}$/.test(it.data || '') ? it.data : finDataDoMes(mes, 1);
+      lancamentos.push({ id: `mig_${mes}_v_${it.id || i}`, tipo: 'pagar', descricao: it.descricao || 'Saída variável', valor: Number(it.valor) || 0,
+        vencimento: data, competencia: mes, status: 'pago', valorPago: Number(it.valor) || 0, dataPagamento: data, categoriaId: 'outros-p', subtipo: 'variavel', origem: { tipo: 'migracao' } });
+    });
+  });
+  // o modelo mensal vira recorrências, começando no mês seguinte ao último já existente
+  const ultimo = meses.length ? meses[meses.length - 1] : finSomarMeses(finMesAtual(), -1);
+  const recorrencias = [];
+  (modelo.receitas || []).forEach((it, i) => recorrencias.push({ id: 'migrec_r_' + (it.id || i), tipo: 'receber', descricao: it.plano || it.produto || 'Receita mensal', cliente: it.cliente || '', valor: Number(it.valor) || 0, dia: it.diaAcerto || 10, inicio: finSomarMeses(ultimo, 1), ultimaGeracao: ultimo, fim: '', ativa: true, categoriaId: 'assinaturas', moeda: 'BRL', origem: { tipo: 'migracao' }, criadoEm: new Date().toISOString() }));
+  (modelo.pagamentos || []).forEach((it, i) => recorrencias.push({ id: 'migrec_p_' + (it.id || i), tipo: 'pagar', descricao: 'Pagamento' + (it.cuidador ? ' — ' + it.cuidador : ''), fornecedor: it.cuidador || '', valor: Number(it.valor) || 0, dia: it.diaPagamento || 30, inicio: finSomarMeses(ultimo, 1), ultimaGeracao: ultimo, fim: '', ativa: true, categoriaId: 'pessoal', subtipo: 'pagamento', moeda: 'BRL', origem: { tipo: 'migracao' }, criadoEm: new Date().toISOString() }));
+  return { lancamentos, recorrencias };
+}
+
+// ---------- ponte para as telas que liam o modelo antigo ----------
+function finDia(data) { return Number(String(data || '').slice(8, 10)) || 1; }
+function getCicloDoMes(mesKey) {
+  const doMes = FIN_LANC.filter((l) => l.status !== 'cancelado' && (l.competencia || String(l.vencimento || '').slice(0, 7)) === mesKey);
+  const st = (l) => (l.status === 'pago' ? 'pago' : 'pendente');
+  return {
+    receitas: doMes.filter((l) => l.tipo === 'receber').map((l) => ({ id: l.id, cliente: l.cliente || l.descricao, plano: l.descricao, valor: Number(l.valor) || 0, diaAcerto: finDia(l.vencimento), status: st(l), dataPagamento: l.dataPagamento || null, categoriaId: l.categoriaId })),
+    pagamentos: doMes.filter((l) => l.tipo === 'pagar' && l.subtipo !== 'adiantamento' && l.subtipo !== 'variavel').map((l) => ({ id: l.id, cuidador: l.fornecedor || l.descricao, nome: l.descricao, valor: Number(l.valor) || 0, diaPagamento: finDia(l.vencimento), status: st(l), dataPagamento: l.dataPagamento || null, categoriaId: l.categoriaId })),
+    adiantamentos: doMes.filter((l) => l.tipo === 'pagar' && l.subtipo === 'adiantamento').map((l) => ({ id: l.id, cuidador: l.fornecedor || l.descricao, valor: Number(l.valor) || 0, data: l.vencimento, obs: l.observacoes || '' })),
+    variaveis: doMes.filter((l) => l.tipo === 'pagar' && l.subtipo === 'variavel').map((l) => ({ id: l.id, descricao: l.descricao, valor: Number(l.valor) || 0, data: l.vencimento })),
+  };
+}
+
+// Ponto ÚNICO pra lançar receita a partir de outras telas (Pipeline,
+// pedidos, contratos). Quem não vê o financeiro só CRIA o lançamento.
+function registrarReceitaFinanceiro(mesKey, receita) {
+  const origem = receita.origemPedidoId ? { tipo: 'pedido', id: receita.origemPedidoId } : receita.origemNegocioId ? { tipo: 'negocio', id: receita.origemNegocioId } : receita.origemVendaRapida ? { tipo: 'venda-rapida' } : { tipo: 'sistema' };
+  const pago = receita.status === 'pago';
+  return !!finCriar({
+    tipo: 'receber', descricao: receita.plano || receita.produto || 'Receita', cliente: receita.cliente || '', valor: Number(receita.valor) || 0,
+    vencimento: finDataDoMes(mesKey, receita.diaAcerto || 10), status: pago ? 'pago' : 'pendente', dataPagamento: pago ? (receita.dataPagamento || finHoje()) : null,
+    categoriaId: receita.origemPedidoId ? 'produtos' : 'servicos', origem, origemNegocioId: receita.origemNegocioId || '', origemPedidoId: receita.origemPedidoId || '',
+  });
+}
+
+// ---------- tela do Financeiro (ERP e CRM usam a mesma) ----------
+let FIN_HOST = null;
+let FIN_ABA = 'visao';
+let FIN_MES = null;
+let FIN_FILTRO = { tipo: '', status: '', categoria: '', de: '', ate: '', busca: '', visao: 'grade', abertoReceber: false, abertoPagar: false };
+let FIN_SELECAO = new Set();
+const FIN_ABAS = [
+  ['visao', 'Visão Geral', 'grafico'], ['receber', 'Receber', 'tendencia'], ['pagar', 'Pagar', 'carteira'], ['clientes', 'Clientes', 'pessoas'],
+  ['fornecedores', 'Fornecedores', 'pacote'], ['pix', 'PIX', 'dinheiro'], ['recorrentes', 'Recorrentes', 'recorrente'], ['caixa', 'Caixa', 'banco'], ['relatorios', 'Relatórios', 'grafico'],
+];
+const FIN_ABAS_DEPOIS = {};
+
+function finMontar(host, aba) {
+  FIN_HOST = host;
+  if (aba) FIN_ABA = aba;
+  if (!FIN_MES) FIN_MES = finMesAtual();
+  if (!nivelVeFinanceiro()) {
+    host.classList.remove('nivel-bloqueado');
+    host.innerHTML = '<div style="min-height:340px;"></div>';
+    aplicarBloqueioFinanceiro(host);
+    return;
+  }
+  finEscutar();
+  finGarantirCadastros();
+  finIniciarEntrega2();
+  finIniciarPix();
+  finRender();
+}
+function finIrAba(aba) { FIN_ABA = aba; FIN_SELECAO = new Set(); FIN_DETALHE = null; FIN_FILTRO.busca = ''; FIN_PIX_EDIT = null; finRender(); }
+function finMudarMes(passo) { FIN_MES = finSomarMeses(FIN_MES, passo); finRender(); }
+function finOcultoAtivo() { try { return localStorage.getItem('eagles_fin_ocultar') === '1'; } catch (e) { return false; } }
+function finAlternarOcultar() { try { localStorage.setItem('eagles_fin_ocultar', finOcultoAtivo() ? '0' : '1'); } catch (e) {} finRender(); }
+function finV(valor, moeda) { return `<span class="fin-v">${srvMoeda ? srvMoeda(valor, moeda || 'BRL') : formatMoney(valor)}</span>`; }
+
+function finRender() {
+  const host = FIN_HOST;
+  if (!host || !host.isConnected || !nivelVeFinanceiro()) return;
+  if (host.closest('.crm-secao') && host.closest('.crm-secao').style.display === 'none') return;
+  const ativo = document.activeElement;
+  const foco = ativo && host.contains(ativo) && ativo.id ? ativo.id : null;
+  const pos = foco && ativo.selectionStart;
+  const corpo = FIN_ABAS_DEPOIS[FIN_ABA] ? finHtmlEmBreve(FIN_ABA) : ({ visao: finHtmlVisao, receber: () => finHtmlContas('receber'), pagar: () => finHtmlContas('pagar'),
+    clientes: () => finHtmlPessoas('receber'), fornecedores: () => finHtmlPessoas('pagar'), recorrentes: finHtmlRecorrentes, caixa: finHtmlCaixa, relatorios: finHtmlRelatorios, pix: finHtmlPix }[FIN_ABA] || finHtmlVisao)();
+  host.innerHTML = `
+    <div class="fin${finOcultoAtivo() ? ' fin-oculto' : ''}">
+      <div class="fin-cab">
+        <div><h1>Financeiro</h1><p>Controle suas receitas, despesas e contas · <span class="fin-escopo">${finCompartilhado() ? 'compartilhado entre ERP e CRM' : finModuloPagina() === 'crm' ? 'só do CRM' : 'só do ERP'}</span></p></div>
+        <span class="kb-espaco"></span>
+        <button type="button" class="kb-btn kb-btn-tutorial" title="Tutorial" aria-label="Tutorial" onclick="iniciarTourCrm('financeiro')">${kbIc('chapeu')} <span class="aba-txt">Tutorial</span></button>
+        <button type="button" class="kb-btn-ic kb-btn-borda" title="${finOcultoAtivo() ? 'Mostrar valores' : 'Ocultar valores'}" aria-label="Ocultar valores" onclick="finAlternarOcultar()">${ic(finOcultoAtivo() ? 'olho' : 'olho', 'ic-herda')}</button>
+      </div>
+      <div class="fin-acoes">
+        <button type="button" class="btn fin-btn-venda" onclick="finAbrirVendaRapida()">${ic('tendencia', 'ic-herda')} Venda Rápida</button>
+        <button type="button" class="btn fin-btn-despesa" onclick="finAbrirDespesa()">${ic('carteira', 'ic-herda')} Lançar Despesa</button>
+        <button type="button" class="btn" onclick="finAbrirCategorias('receber')">${ic('tag', 'ic-herda')} Categorias</button>
+      </div>
+      <div class="kb-segmento fin-abas aba-icones">${FIN_ABAS.map(([a, n, i]) => `<button type="button" class="${FIN_ABA === a ? 'ativo' : ''}" title="${n}" aria-label="${n}" onclick="finIrAba('${a}')">${ic(i, 'ic-herda')} <span class="aba-txt">${n}</span></button>`).join('')}</div>
+      ${!FIN_CARREGADO ? '<p class="kb-vazio">Carregando o financeiro...</p>' : corpo}
+    </div>`;
+  if (foco) { const i = document.getElementById(foco); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} } }
+  if (FIN_ABA === 'relatorios') setTimeout(finDesenharGraficos, 0);
+}
+
+function finHtmlEmBreve(aba) {
+  const nomes = { clientes: 'Fechamento por Cliente', fornecedores: 'Fornecedores', recorrentes: 'Recorrentes (assinaturas, MRR e LTV)', caixa: 'Caixas e regras de roteamento', relatorios: 'Relatórios (DRE, competência × caixa, gráficos)', pix: 'Configurações de recebimento PIX' };
+  return `<div class="kb-vazio-grande"><div class="ic-circulo">${ic('relogio')}</div><h3>${nomes[aba]}</h3><p>Essa aba chega na Entrega ${FIN_ABAS_DEPOIS[aba]} do novo Financeiro.${aba === 'recorrentes' ? ' As recorrências já funcionam: crie em Venda Rápida ou Lançar Despesa, no modo "Recorrente".' : ''}</p></div>`;
+}
+
+function finPeriodoHtml() {
+  return `<div class="fin-periodo">
+    ${ic('calendario', 'ic-herda')} <span class="kb-vazio-mini">Período:</span>
+    <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Mês anterior" onclick="finMudarMes(-1)">${kbIc('setaEsq')}</button>
+    <input type="month" value="${FIN_MES}" aria-label="Mês" onchange="if (this.value) { FIN_MES = this.value; finRender(); }">
+    <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Próximo mês" onclick="finMudarMes(1)">${kbIc('seta')}</button>
+    <span class="kb-espaco"></span><strong>${finNomeMes(FIN_MES)}</strong>
+  </div>`;
+}
+
+// ---------- números ----------
+function finRestante(l) { return Math.max(0, (Number(l.valor) || 0) - (Number(l.valorPago) || 0)); }
+function finVencido(l) { return l.status !== 'pago' && l.status !== 'cancelado' && (l.vencimento || '') < finHoje(); }
+function finCompetencia(l) { return l.competencia || String(l.vencimento || '').slice(0, 7); }
+function finTotaisMes(mes) {
+  const ativos = FIN_LANC.filter((l) => l.status !== 'cancelado');
+  const t = { receita: 0, recPendente: 0, recVencido: 0, recebido: 0, despesa: 0, pagPendente: 0, pagVencido: 0, pago: 0 };
+  ativos.forEach((l) => {
+    const doMes = finCompetencia(l) === mes;
+    const pagoNoMes = l.dataPagamento && l.dataPagamento.slice(0, 7) === mes ? Number(l.valorPago) || 0 : 0;
+    if (l.tipo === 'receber') {
+      if (doMes) { t.receita += Number(l.valor) || 0; if (l.status !== 'pago') { if (finVencido(l)) t.recVencido += finRestante(l); else t.recPendente += finRestante(l); } }
+      t.recebido += pagoNoMes;
+    } else {
+      if (doMes) { t.despesa += Number(l.valor) || 0; if (l.status !== 'pago') { if (finVencido(l)) t.pagVencido += finRestante(l); else t.pagPendente += finRestante(l); } }
+      t.pago += pagoNoMes;
+    }
+  });
+  return t;
+}
+
+// ---------- Visão Geral ----------
+function finHtmlVisao() {
+  const t = finTotaisMes(FIN_MES);
+  const nome = finNomeMes(FIN_MES);
+  const vencR = FIN_LANC.filter((l) => l.tipo === 'receber' && finVencido(l)).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  const vencP = FIN_LANC.filter((l) => l.tipo === 'pagar' && finVencido(l)).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  const linhaVencido = (l) => `<div class="fin-venc-linha"><span>${escapeHtml(l.tipo === 'receber' ? (l.cliente || l.descricao) : (l.fornecedor || l.descricao))}<small>${escapeHtml(l.descricao)} · venceu ${kbDataCurta(l.vencimento)}</small></span>${finV(finRestante(l), l.moeda)}<button type="button" class="btn btn-small" onclick="finAbrirBaixa('${escapeParaOnclick(l.id)}')">${l.tipo === 'receber' ? 'Receber' : 'Pagar'}</button></div>`;
+  const caixaVenc = (tipo, lista, aberto) => `
+    <div class="fin-venc fin-venc-${tipo}">
+      <button type="button" class="fin-venc-cab" onclick="FIN_FILTRO.${tipo === 'receber' ? 'abertoReceber' : 'abertoPagar'} = !FIN_FILTRO.${tipo === 'receber' ? 'abertoReceber' : 'abertoPagar'}; finRender();">
+        <span class="fin-ic-q fin-ic-${tipo}">${ic(tipo === 'receber' ? 'tendencia' : 'carteira', 'ic-herda')}</span>
+        <strong>${tipo === 'receber' ? 'Recebimentos vencidos' : 'Pagamentos vencidos'}</strong><span class="kb-espaco"></span>
+        <span class="fin-badge-n">${lista.length}</span>${kbIc(aberto ? 'setaCima' : 'setaBaixo')}
+      </button>
+      ${lista.length ? (aberto ? lista.map(linhaVencido).join('') : `<p class="fin-venc-resumo">${finV(lista.reduce((a, l) => a + finRestante(l), 0))} em ${lista.length} conta(s) — clique pra ver</p>`) : `<p class="fin-venc-resumo">${tipo === 'receber' ? 'Nenhum recebimento vencido.' : 'Nenhum pagamento vencido.'}</p>`}
+    </div>`;
+  return `
+    ${finPeriodoHtml()}
+    <div class="fin-cards">
+      <div class="fin-card"><div class="fin-card-tit"><span class="fin-ic-q fin-ic-receber">${ic('tendencia', 'ic-herda')}</span> Contas a Receber</div>
+        <div class="fin-linha fin-linha-forte"><span>Receita do mês</span>${finV(t.receita)}</div>
+        <div class="fin-linha"><span>Pendente</span><span class="fin-azul">${finV(t.recPendente)}</span></div>
+        <div class="fin-linha"><span>Vencido</span><span class="fin-vermelho">${finV(t.recVencido)}</span></div>
+        <div class="fin-linha fin-linha-sep"><span>Recebido em ${nome}</span><span class="fin-verde">${finV(t.recebido)}</span></div></div>
+      <div class="fin-card"><div class="fin-card-tit"><span class="fin-ic-q fin-ic-pagar">${ic('carteira', 'ic-herda')}</span> Contas a Pagar</div>
+        <div class="fin-linha"><span>Pago em ${nome}</span><span class="fin-verde">${finV(t.pago)}</span></div>
+        <div class="fin-linha"><span>Pendente</span><span class="fin-azul">${finV(t.pagPendente)}</span></div>
+        <div class="fin-linha"><span>Vencido</span><span class="fin-vermelho">${finV(t.pagVencido)}</span></div>
+        <div class="fin-linha fin-linha-sep fin-linha-forte"><span>Total de despesas</span>${finV(t.despesa)}</div></div>
+      <div class="fin-card"><div class="fin-card-tit"><span class="fin-ic-q fin-ic-lucro">${ic('dinheiro', 'ic-herda')}</span> Lucro do Período</div>
+        <div class="fin-linha"><span>Receitas do mês</span><span class="fin-verde">${finV(t.receita)}</span></div>
+        <div class="fin-linha"><span>Despesas do mês</span><span class="fin-vermelho">-${finV(t.despesa)}</span></div>
+        <div class="fin-linha fin-linha-sep fin-linha-forte"><span>Lucro líquido em ${nome}</span><span class="${t.receita - t.despesa >= 0 ? 'fin-verde' : 'fin-vermelho'}">${finV(t.receita - t.despesa)}</span></div></div>
+    </div>
+    <div class="fin-vencidos">${caixaVenc('receber', vencR, FIN_FILTRO.abertoReceber)}${caixaVenc('pagar', vencP, FIN_FILTRO.abertoPagar)}</div>
+    ${finHtmlTransacoes()}`;
+}
+
+function finTransacoesFiltradas() {
+  const f = FIN_FILTRO;
+  return FIN_LANC.filter((l) => {
+    if (f.de || f.ate) { if (f.de && l.vencimento < f.de) return false; if (f.ate && l.vencimento > f.ate) return false; }
+    else if (finCompetencia(l) !== FIN_MES) return false;
+    if (f.tipo && l.tipo !== f.tipo) return false;
+    if (f.status === 'vencido') { if (!finVencido(l)) return false; } else if (f.status && l.status !== f.status) return false;
+    if (f.categoria && l.categoriaId !== f.categoria) return false;
+    return true;
+  }).sort((a, b) => (a.vencimento || '').localeCompare(b.vencimento || ''));
+}
+function finHtmlTransacoes() {
+  const lista = finTransacoesFiltradas();
+  const cats = finCategorias('receber').concat(finCategorias('pagar'));
+  const sel = (campo, opcoes) => `<select class="srv-select" onchange="FIN_FILTRO.${campo} = this.value; finRender();">${opcoes.map(([v, t]) => `<option value="${escapeHtml(v)}"${FIN_FILTRO[campo] === v ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+  return `<div class="fin-painel">
+    <div class="fin-painel-cab"><strong>Transações</strong><span class="kb-espaco"></span><button type="button" class="btn btn-small" onclick="finExportarCsv()">${ic('baixar', 'ic-herda')} Exportar CSV</button></div>
+    <div class="fin-filtros">
+      ${sel('tipo', [['', 'Todas'], ['receber', 'Receitas'], ['pagar', 'Despesas']])}
+      ${sel('status', [['', 'Todos os status'], ['pendente', 'Pendente'], ['parcial', 'Parcial'], ['pago', 'Pago'], ['vencido', 'Vencido'], ['cancelado', 'Cancelado']])}
+      ${sel('categoria', [['', 'Todas as categorias']].concat(cats.map((c) => [c.id, c.nome])))}
+      <input type="date" value="${escapeHtml(FIN_FILTRO.de)}" aria-label="De" onchange="FIN_FILTRO.de = this.value; finRender();"> <span>-</span>
+      <input type="date" value="${escapeHtml(FIN_FILTRO.ate)}" aria-label="Até" onchange="FIN_FILTRO.ate = this.value; finRender();">
+      ${FIN_FILTRO.de || FIN_FILTRO.ate ? '<button type="button" class="kb-link" onclick="FIN_FILTRO.de = \'\'; FIN_FILTRO.ate = \'\'; finRender();">Limpar datas</button>' : ''}
+    </div>
+    <div class="fin-info">${ic('alerta', 'ic-herda')} As transações são geradas automaticamente. Para editar ou excluir, acesse as abas Receber ou Pagar.</div>
+    ${lista.length ? `<div class="kb-tabela-wrap"><table class="kb-tabela" style="min-width:680px;"><thead><tr><th>Vencimento</th><th>Descrição</th><th>Cliente / fornecedor</th><th>Categoria</th><th>Status</th><th style="text-align:right;">Valor</th></tr></thead><tbody>
+      ${lista.map((l) => { const c = finCategoria(l.tipo, l.categoriaId); return `<tr>
+        <td>${kbDataCurta(l.vencimento)}</td><td>${escapeHtml(l.descricao)}${finSeloParcela(l)}</td><td>${escapeHtml(l.tipo === 'receber' ? l.cliente : l.fornecedor) || '—'}</td>
+        <td><span class="srv-cat" style="--srv-cor:${corHexValida(c.cor) || '#64748b'};">${escapeHtml(c.nome)}</span></td><td>${finStatusHtml(l)}</td>
+        <td style="text-align:right;" class="${l.tipo === 'receber' ? 'fin-verde' : 'fin-vermelho'}">${l.tipo === 'pagar' ? '-' : ''}${finV(l.valor, l.moeda)}</td></tr>`; }).join('')}
+    </tbody></table></div>` : '<p class="kb-vazio" style="padding:22px;">Nenhuma transação nesse período.</p>'}
+  </div>`;
+}
+function finStatusHtml(l) {
+  if (l.status === 'cancelado') return '<span class="fin-status cancelado">Cancelado</span>';
+  if (l.status === 'pago') return `<span class="fin-status pago">${l.tipo === 'receber' ? 'Recebido' : 'Pago'}</span>`;
+  if (finVencido(l)) return '<span class="fin-status vencido">Vencido</span>';
+  if (l.status === 'parcial') return '<span class="fin-status parcial">Parcial</span>';
+  return '<span class="fin-status pendente">Pendente</span>';
+}
+function finSeloParcela(l) {
+  if (l.totalParcelas > 1) return ` <span class="srv-tag">${l.parcela}/${l.totalParcelas}</span>`;
+  if (l.recorrenciaId) return ` <span class="srv-tag" title="Recorrente">${ic('recorrente', 'ic-herda')}</span>`;
+  return '';
+}
+function finExportarCsv() {
+  const lista = finTransacoesFiltradas();
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const linhas = [['Tipo', 'Vencimento', 'Descrição', 'Cliente/Fornecedor', 'Categoria', 'Status', 'Valor', 'Pago', 'Data pagamento'].map(esc).join(';')]
+    .concat(lista.map((l) => [l.tipo === 'receber' ? 'Receita' : 'Despesa', l.vencimento, l.descricao, l.tipo === 'receber' ? l.cliente : l.fornecedor, finCategoria(l.tipo, l.categoriaId).nome, l.status, String(l.valor).replace('.', ','), String(l.valorPago || 0).replace('.', ','), l.dataPagamento || ''].map(esc).join(';')));
+  try {
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + linhas.join('\n')], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = `financeiro-${FIN_MES}.csv`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) { avisar('Não foi possível gerar o arquivo neste navegador.'); }
+}
+
+// ---------- abas Receber e Pagar ----------
+function finContasDoMes(tipo) {
+  const f = FIN_FILTRO;
+  const b = kbNomeNorm(f.busca);
+  return FIN_LANC.filter((l) => l.tipo === tipo && finCompetencia(l) === FIN_MES).filter((l) => {
+    if (f.status === 'vencido') { if (!finVencido(l)) return false; } else if (f.status && l.status !== f.status) return false;
+    if (f.categoria && l.categoriaId !== f.categoria) return false;
+    if (b && !kbNomeNorm(`${l.descricao} ${l.cliente || ''} ${l.fornecedor || ''}`).includes(b)) return false;
+    return true;
+  }).sort((a, b2) => (a.vencimento || '').localeCompare(b2.vencimento || ''));
+}
+function finHtmlContas(tipo) {
+  const rec = tipo === 'receber';
+  const todos = FIN_LANC.filter((l) => l.tipo === tipo && finCompetencia(l) === FIN_MES && l.status !== 'cancelado');
+  const total = todos.reduce((a, l) => a + (Number(l.valor) || 0), 0);
+  const pendente = todos.filter((l) => l.status !== 'pago').reduce((a, l) => a + finRestante(l), 0);
+  const lista = finContasDoMes(tipo);
+  const selecionadas = FIN_LANC.filter((l) => FIN_SELECAO.has(l.id));
+  const cats = finCategorias(tipo);
+  const card = (l) => {
+    const id = escapeParaOnclick(l.id);
+    const quem = rec ? l.cliente : l.fornecedor;
+    return `<div class="fin-conta${l.status === 'pago' ? ' paga' : ''}${l.status === 'cancelado' ? ' cancelada' : ''}">
+      <div class="fin-conta-cab">
+        ${!rec && l.status !== 'pago' && l.status !== 'cancelado' ? `<input type="checkbox" class="kb-sel" aria-label="Selecionar" ${FIN_SELECAO.has(l.id) ? 'checked' : ''} onchange="if (this.checked) FIN_SELECAO.add('${id}'); else FIN_SELECAO.delete('${id}'); finRender();">` : ''}
+        <div style="flex:1; min-width:0;"><strong>${escapeHtml(quem || l.descricao)}</strong>${quem ? `<small>${escapeHtml(l.descricao)}</small>` : ''}</div>
+        ${finStatusHtml(l)}
+      </div>
+      <div class="fin-conta-linha"><span>${ic('calendario', 'ic-herda')} Vence ${kbDataCurta(l.vencimento)}${finSeloParcela(l)}</span><strong class="${rec ? 'fin-verde' : 'fin-vermelho'}">${finV(l.valor, l.moeda)}</strong></div>
+      ${l.status === 'parcial' ? `<div class="fin-conta-linha"><span>Já ${rec ? 'recebido' : 'pago'}</span><span>${finV(l.valorPago, l.moeda)} · falta ${finV(finRestante(l), l.moeda)}</span></div>` : ''}
+      <div class="fin-conta-linha"><span class="srv-cat" style="--srv-cor:${corHexValida(finCategoria(tipo, l.categoriaId).cor) || '#64748b'};">${escapeHtml(finCategoria(tipo, l.categoriaId).nome)}</span>${l.origem && l.origem.tipo && !['manual', 'migracao'].includes(l.origem.tipo) ? `<span class="kb-vazio-mini">${escapeHtml({ 'venda-rapida': 'Venda rápida', negocio: 'Negócio fechado', pedido: 'Pedido', recorrencia: 'Recorrente', sistema: 'Automático', contrato: 'Contrato' }[l.origem.tipo] || '')}</span>` : ''}</div>
+      <div class="srv-card-acoes">
+        ${l.status !== 'pago' && l.status !== 'cancelado' ? `<button type="button" class="btn btn-primary" onclick="finAbrirBaixa('${id}')">${ic('aprovado', 'ic-herda')} ${rec ? 'Receber' : 'Pagar'}</button>` : ''}
+        <button type="button" class="btn" onclick="finAbrirEditar('${id}')">${ic('lapis', 'ic-herda')} Editar</button>
+        <button type="button" class="kb-btn-ic" aria-label="Mais ações" onclick="finMenuConta('${id}', this)">${kbIc('pontos')}</button>
+      </div>
+    </div>`;
+  };
+  const tabela = `<div class="kb-tabela-wrap"><table class="kb-tabela" style="min-width:640px;"><thead><tr>${rec ? '' : '<th></th>'}<th>Vencimento</th><th>${rec ? 'Cliente' : 'Fornecedor'}</th><th>Descrição</th><th>Status</th><th style="text-align:right;">Valor</th><th></th></tr></thead><tbody>
+    ${lista.map((l) => { const id = escapeParaOnclick(l.id); return `<tr>${rec ? '' : `<td>${l.status !== 'pago' && l.status !== 'cancelado' ? `<input type="checkbox" class="kb-sel" aria-label="Selecionar" ${FIN_SELECAO.has(l.id) ? 'checked' : ''} onchange="if (this.checked) FIN_SELECAO.add('${id}'); else FIN_SELECAO.delete('${id}'); finRender();">` : ''}</td>`}
+      <td>${kbDataCurta(l.vencimento)}</td><td>${escapeHtml((rec ? l.cliente : l.fornecedor) || '—')}</td><td>${escapeHtml(l.descricao)}${finSeloParcela(l)}</td><td>${finStatusHtml(l)}</td>
+      <td style="text-align:right;">${finV(l.valor, l.moeda)}</td>
+      <td style="text-align:right; white-space:nowrap;">${l.status !== 'pago' && l.status !== 'cancelado' ? `<button type="button" class="btn btn-small" onclick="finAbrirBaixa('${id}')">${rec ? 'Receber' : 'Pagar'}</button> ` : ''}<button type="button" class="kb-btn-ic" aria-label="Mais ações" onclick="finMenuConta('${id}', this)">${kbIc('pontos')}</button></td></tr>`; }).join('')}
+  </tbody></table></div>`;
+  return `
+    <div class="fin-periodo fin-periodo-contas">
+      <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Mês anterior" onclick="finMudarMes(-1)">${kbIc('setaEsq')}</button>
+      <span class="fin-filtro-mes">${ic('calendario', 'ic-herda')} Filtro definido: <strong>${finNomeMes(FIN_MES)}</strong></span>
+      <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Próximo mês" onclick="finMudarMes(1)">${kbIc('seta')}</button>
+      <span class="fin-chip ${rec ? 'verde' : 'vermelho'}">Total: ${finV(total)}</span>
+      <span class="fin-chip laranja">Pendente: ${finV(pendente)}</span>
+      ${rec ? '' : `<span class="fin-chip verde">Selecionado: <strong>${selecionadas.length} conta${selecionadas.length === 1 ? '' : 's'}</strong></span>${selecionadas.length ? `<button type="button" class="btn btn-small btn-primary" onclick="finPagarSelecionadas()">${ic('aprovado', 'ic-herda')} Pagar selecionadas (${finV(selecionadas.reduce((a, l) => a + finRestante(l), 0))})</button>` : ''}`}
+      <span class="kb-espaco"></span>
+      <button type="button" class="kb-btn-modo${FIN_FILTRO.visao === 'grade' ? ' ativo' : ''}" aria-label="Cartões" onclick="FIN_FILTRO.visao = 'grade'; finRender();">${kbIc('quadro')}</button>
+      <button type="button" class="kb-btn-modo${FIN_FILTRO.visao === 'lista' ? ' ativo' : ''}" aria-label="Lista" onclick="FIN_FILTRO.visao = 'lista'; finRender();">${kbIc('lista')}</button>
+      ${rec ? `<button type="button" class="btn" onclick="finAbrirRecibos()">${ic('documento', 'ic-herda')} Recibos em lote</button><button type="button" class="btn fin-btn-venda" onclick="finAbrirVendaRapida()">${ic('tendencia', 'ic-herda')} Novo recebimento</button>`
+        : `<button type="button" class="btn fin-btn-despesa" onclick="finAbrirDespesa()">${ic('carteira', 'ic-herda')} Lançar Despesa</button>`}
+    </div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong><span class="fin-quadradinho ${rec ? 'verde' : 'vermelho'}"></span> ${rec ? 'Contas a Receber' : 'Contas a Pagar'}</strong></div>
+      <div class="fin-filtros">
+        <label class="kb-busca" style="flex:1; max-width:none;">${kbIc('busca')}<input type="search" id="fin-busca-${tipo}" placeholder="${rec ? 'Buscar por cliente ou título...' : 'Buscar fornecedor, descrição...'}" value="${escapeHtml(FIN_FILTRO.busca)}" oninput="FIN_FILTRO.busca = this.value; finRender();"></label>
+        <select class="srv-select" onchange="FIN_FILTRO.status = this.value; finRender();">${[['', 'Todos'], ['pendente', 'Pendente'], ['parcial', 'Parcial'], ['pago', rec ? 'Recebido' : 'Pago'], ['vencido', 'Vencido'], ['cancelado', 'Cancelado']].map(([v, t]) => `<option value="${v}"${FIN_FILTRO.status === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+        <select class="srv-select" onchange="FIN_FILTRO.categoria = this.value; finRender();"><option value="">Todas as categorias</option>${cats.map((c) => `<option value="${escapeHtml(c.id)}"${FIN_FILTRO.categoria === c.id ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select>
+      </div>
+      ${lista.length ? (FIN_FILTRO.visao === 'lista' ? tabela : `<div class="fin-contas-grade">${lista.map(card).join('')}</div>`) : `<p class="kb-vazio" style="padding:22px;">Nenhuma conta a ${rec ? 'receber' : 'pagar'} encontrada</p>`}
+    </div>
+    ${rec ? '' : finHtmlRecorrentesPagar()}`;
+}
+function finHtmlRecorrentesPagar() {
+  const recs = FIN_REC.filter((r) => r.tipo === 'pagar');
+  const ativas = recs.filter((r) => r.ativa !== false);
+  return `
+    <div class="fin-painel-cab" style="margin-top:20px;"><strong style="font-size:17px;">Despesas Recorrentes</strong><span class="kb-espaco"></span><button type="button" class="btn srv-btn-contorno" onclick="finAbrirDespesa('recorrente')">${ic('mais', 'ic-herda')} Nova Despesa Recorrente</button></div>
+    <div class="fin-cards">
+      <div class="fin-card"><div class="fin-card-tit">${ic('recorrente', 'ic-herda')} Despesas Ativas</div><div class="fin-num">${ativas.length}</div></div>
+      <div class="fin-card"><div class="fin-card-tit">${ic('dinheiro', 'ic-herda')} Custo Mensal Fixo</div><div class="fin-num fin-vermelho">${finV(ativas.reduce((a, r) => a + (Number(r.valor) || 0), 0))}</div></div>
+      <div class="fin-card"><div class="fin-card-tit">${ic('recusado', 'ic-herda')} Total</div><div class="fin-num">${recs.length}</div></div>
+    </div>
+    ${recs.length ? `<div class="fin-painel">${recs.map((r) => { const id = escapeParaOnclick(r.id); return `<div class="srv-cat-linha">
+      <span class="kb-bolinha" style="background:${corHexValida(finCategoria('pagar', r.categoriaId).cor) || '#64748b'};"></span>
+      <span style="flex:1;"><strong>${escapeHtml(r.descricao)}</strong><small style="display:block; color:var(--text-soft);">${escapeHtml(r.fornecedor || 'Sem fornecedor')} · todo dia ${Number(r.dia) || 1}${r.fim ? ` · até ${escapeHtml(r.fim)}` : ' · até cancelar'}</small></span>
+      <strong class="fin-vermelho">${finV(r.valor, r.moeda)}</strong>
+      <label class="switch" title="${r.ativa !== false ? 'Ativa' : 'Pausada'}"><input type="checkbox" ${r.ativa !== false ? 'checked' : ''} onchange="finGravarRecorrencia(FIN_REC.find((x) => x.id === '${id}'), { ativa: this.checked })"><span class="switch-slider"></span></label>
+      <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir recorrência" onclick="finConfirmarExcluirRecorrencia('${id}')">${ic('lixeira', 'ic-herda')}</button>
+    </div>`; }).join('')}</div>` : `<div class="kb-vazio-grande" style="padding:30px;"><div class="ic-circulo">${ic('recorrente')}</div><p style="margin:0;">Nenhuma despesa recorrente encontrada</p><p class="kb-vazio-mini">Crie uma despesa recorrente para começar a controlar</p></div>`}`;
+}
+function finConfirmarExcluirRecorrencia(id) {
+  const r = FIN_REC.find((x) => x.id === id);
+  if (!r) return;
+  const futuras = FIN_LANC.filter((l) => l.recorrenciaId === id && l.status !== 'pago' && (l.vencimento || '') >= finHoje());
+  confirmarAcao(`Excluir a recorrência "${r.descricao}"? Ela para de gerar lançamentos.${futuras.length ? ` As ${futuras.length} conta(s) futura(s) ainda não pagas também são canceladas.` : ''} As já pagas continuam no histórico.`, () => {
+    futuras.forEach((l) => finAtualizar(l.id, { status: 'cancelado' }));
+    finExcluirRecorrencia(id);
+  }, 'Excluir recorrência');
+}
+
+// ---------- ações numa conta ----------
+function finMenuConta(id, ancora) {
+  const l = FIN_LANC.find((x) => x.id === id);
+  if (!l) return;
+  ancora.id = ancora.id || 'fin-menu-' + id.replace(/[^\w-]/g, '');
+  const sid = escapeParaOnclick(id);
+  kbMostrarPopover(`
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); finAbrirEditar('${sid}')">${kbIc('lapis')}<span>Editar</span></button>
+    ${l.status === 'pago' || l.status === 'parcial' ? `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); finAtualizar('${sid}', { status: 'pendente', valorPago: 0, dataPagamento: null })">${kbIc('atualizar')}<span>Desfazer ${l.tipo === 'receber' ? 'recebimento' : 'pagamento'}</span></button>` : ''}
+    ${l.status !== 'cancelado' ? `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); finAtualizar('${sid}', { status: 'cancelado' })">${kbIc('x')}<span>Cancelar conta</span></button>` : `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); finAtualizar('${sid}', { status: (FIN_LANC.find((x) => x.id === '${sid}').valorPago || 0) > 0 ? 'parcial' : 'pendente' })">${kbIc('atualizar')}<span>Reativar conta</span></button>`}
+    <button type="button" class="kb-pop-item kb-pop-perigo" onclick="kbFecharPopovers(); finConfirmarExcluir('${sid}')">${kbIc('lixeira')}<span>Excluir</span></button>`, ancora);
+}
+function finConfirmarExcluir(id) {
+  const l = FIN_LANC.find((x) => x.id === id);
+  if (!l) return;
+  const irmas = l.grupoId ? FIN_LANC.filter((x) => x.grupoId === l.grupoId && x.id !== id) : [];
+  if (irmas.length) {
+    confirmarAcao(`"${l.descricao}" faz parte de um parcelamento com ${irmas.length + 1} parcelas. Excluir TODAS as parcelas não pagas? (Pra excluir só esta, use "Cancelar conta".)`, () => {
+      [l].concat(irmas).filter((x) => x.status !== 'pago').forEach((x) => finExcluir(x.id));
+    }, 'Excluir parcelamento');
+    return;
+  }
+  confirmarAcao(`Excluir "${l.descricao}"? Isso não pode ser desfeito.${l.recorrenciaId ? ' (A recorrência continua gerando os próximos meses — pra parar, exclua a recorrência.)' : ''}`, () => finExcluir(id), 'Excluir lançamento');
+}
+function finPagarSelecionadas() {
+  const lista = FIN_LANC.filter((l) => FIN_SELECAO.has(l.id) && l.status !== 'pago');
+  if (!lista.length) return;
+  confirmarAcao(`Marcar ${lista.length} conta(s) como paga(s) hoje (${formatMoney(lista.reduce((a, l) => a + finRestante(l), 0))})?`, () => {
+    lista.forEach((l) => finAtualizar(l.id, { status: 'pago', valorPago: Number(l.valor) || 0, dataPagamento: finHoje() }));
+    FIN_SELECAO = new Set();
+    finRender();
+  }, 'Pagar selecionadas');
+}
+
+// Registrar recebimento/pagamento (total ou parcial)
+function finAbrirBaixa(id) {
+  const l = FIN_LANC.find((x) => x.id === id);
+  if (!l) return;
+  const rec = l.tipo === 'receber';
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:440px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${rec ? 'Registrar recebimento' : 'Registrar pagamento'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub"><strong>${escapeHtml(l.descricao)}</strong>${(rec ? l.cliente : l.fornecedor) ? ' · ' + escapeHtml(rec ? l.cliente : l.fornecedor) : ''}<br>Valor: ${formatMoney(Number(l.valor) || 0)}${l.valorPago ? ` · já ${rec ? 'recebido' : 'pago'}: ${formatMoney(Number(l.valorPago))}` : ''}</p>
+      <div class="field full"><label>Valor ${rec ? 'recebido' : 'pago'} agora</label><input type="number" id="fin-b-valor" min="0.01" step="0.01" value="${finRestante(l)}"></div>
+      <div class="field full"><label>Data</label><input type="date" id="fin-b-data" value="${finHoje()}"></div>
+      ${FIN_CAIXAS.caixas.length ? `<div class="field full"><label>Caixa</label><select id="fin-b-caixa">${FIN_CAIXAS.caixas.map((c) => `<option value="${escapeHtml(c.id)}"${c.id === (l.caixaId || finCaixaPorRegra(l)) ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select></div>` : ''}
+      <p class="kb-vazio-mini">Se for menos que o que falta, a conta fica como "Parcial".</p>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="finSalvarBaixa('${escapeParaOnclick(id)}')">Confirmar</button></div>
+    </div>`;
+  openModal('modal-srv');
+}
+function finSalvarBaixa(id) {
+  const l = FIN_LANC.find((x) => x.id === id);
+  if (!l) return;
+  const v = Math.round((Number(document.getElementById('fin-b-valor').value) || 0) * 100) / 100;
+  const data = document.getElementById('fin-b-data').value || finHoje();
+  if (v <= 0) { avisar('Informe o valor.'); return; }
+  const novoPago = Math.round(((Number(l.valorPago) || 0) + v) * 100) / 100;
+  const quitou = novoPago >= (Number(l.valor) || 0) - 0.005;
+  const cx = document.getElementById('fin-b-caixa');
+  finAtualizar(id, Object.assign({ valorPago: quitou ? Number(l.valor) || 0 : novoPago, status: quitou ? 'pago' : 'parcial', dataPagamento: data }, cx ? { caixaId: cx.value } : {}));
+  srvFecharModal();
+}
+function finAbrirEditar(id) {
+  const l = FIN_LANC.find((x) => x.id === id);
+  if (!l) return;
+  const rec = l.tipo === 'receber';
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:520px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Editar ${rec ? 'conta a receber' : 'conta a pagar'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="field full"><label>Descrição</label><input type="text" id="fin-e-desc" maxlength="140" value="${escapeHtml(l.descricao)}"></div>
+      <div class="field full"><label>${rec ? 'Cliente' : 'Fornecedor'}</label><input type="text" id="fin-e-quem" maxlength="100" list="fin-lista-${rec ? 'clientes' : 'fornecedores'}" value="${escapeHtml(rec ? l.cliente : l.fornecedor)}">${finDatalistHtml(rec)}</div>
+      <div class="kb-campos-2">
+        <div class="field"><label>Valor</label><input type="number" id="fin-e-valor" min="0" step="0.01" value="${Number(l.valor) || 0}"></div>
+        <div class="field"><label>Vencimento</label><input type="date" id="fin-e-venc" value="${escapeHtml(l.vencimento || '')}"></div>
+      </div>
+      <div class="field full"><label>Categoria</label><select id="fin-e-cat"><option value="">Sem categoria</option>${finCategorias(l.tipo).map((c) => `<option value="${escapeHtml(c.id)}"${c.id === l.categoriaId ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select></div>
+      <div class="field full"><label>Observações</label><textarea id="fin-e-obs" rows="2" maxlength="500">${escapeHtml(l.observacoes || '')}</textarea></div>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="finSalvarEdicao('${escapeParaOnclick(id)}')">Salvar</button></div>
+    </div>`;
+  openModal('modal-srv');
+}
+function finSalvarEdicao(id) {
+  const l = FIN_LANC.find((x) => x.id === id);
+  if (!l) return;
+  const desc = document.getElementById('fin-e-desc').value.trim();
+  const valor = Math.round((Number(document.getElementById('fin-e-valor').value) || 0) * 100) / 100;
+  const venc = document.getElementById('fin-e-venc').value;
+  if (!desc || valor <= 0 || !venc) { avisar('Preencha descrição, valor e vencimento.'); return; }
+  const quem = document.getElementById('fin-e-quem').value.trim().slice(0, 100);
+  const campos = { descricao: desc.slice(0, 140), valor, vencimento: venc, competencia: venc.slice(0, 7), categoriaId: document.getElementById('fin-e-cat').value, observacoes: document.getElementById('fin-e-obs').value.slice(0, 500) };
+  campos[l.tipo === 'receber' ? 'cliente' : 'fornecedor'] = quem;
+  if (l.status === 'pago' && valor > (Number(l.valorPago) || 0)) Object.assign(campos, { status: 'parcial' });
+  if ((l.status === 'parcial' || l.status === 'pago') && valor <= (Number(l.valorPago) || 0)) Object.assign(campos, { status: 'pago', valorPago: valor });
+  finAtualizar(id, campos);
+  srvFecharModal();
+}
+
+// ---------- quem: clientes (CRM + ERP) e fornecedores ----------
+function finClientesDisponiveis() {
+  const s = new Map();
+  const veCrm = finCompartilhado() || finModuloPagina() === 'crm', veErp = finCompartilhado() || finModuloPagina() === 'erp';
+  if (veCrm) (typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []).forEach((n) => n && s.set(n, finCompartilhado() ? 'CRM' : ''));
+  if (veErp) (CLIENTES_FORN_DATA || []).filter((c) => c.tipoCadastro === 'cliente' || c.tipoCadastro === 'ambos').forEach((c) => { const n = c.fantasia || c.nome; if (n && !s.has(n)) s.set(n, finCompartilhado() ? 'ERP' : ''); });
+  FIN_LANC.filter((l) => l.tipo === 'receber' && l.cliente).forEach((l) => { if (!s.has(l.cliente)) s.set(l.cliente, ''); });
+  return Array.from(s.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+}
+function finFornecedoresDisponiveis() {
+  const s = new Set();
+  if (finCompartilhado() || finModuloPagina() === 'erp') (CLIENTES_FORN_DATA || []).filter((c) => c.tipoCadastro === 'fornecedor' || c.tipoCadastro === 'ambos').forEach((c) => s.add(c.fantasia || c.nome));
+  FIN_LANC.filter((l) => l.tipo === 'pagar' && l.fornecedor).forEach((l) => s.add(l.fornecedor));
+  return Array.from(s).filter(Boolean).sort((a, b) => a.localeCompare(b));
+}
+function finDatalistHtml(rec) {
+  return rec ? `<datalist id="fin-lista-clientes">${finClientesDisponiveis().map(([n, b]) => `<option value="${escapeHtml(n)}">${b ? escapeHtml(b) : ''}</option>`).join('')}</datalist>`
+    : `<datalist id="fin-lista-fornecedores">${finFornecedoresDisponiveis().map((n) => `<option value="${escapeHtml(n)}">`).join('')}</datalist>`;
+}
+
+// ---------- Categorias Financeiras ----------
+const FIN_CORES = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#64748b'];
+let FIN_CAT_COR = '#3b82f6';
+function finAbrirCategorias(tipo) {
+  finEscutar();
+  const ov = srvGarantirModal();
+  const lista = finCategorias(tipo);
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:480px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Categorias Financeiras</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="kb-segmento" style="width:100%; margin-bottom:14px;"><button type="button" style="flex:1;" class="${tipo === 'receber' ? 'ativo' : ''}" onclick="finAbrirCategorias('receber')">Contas a Receber</button><button type="button" style="flex:1;" class="${tipo === 'pagar' ? 'ativo' : ''}" onclick="finAbrirCategorias('pagar')">Contas a Pagar</button></div>
+      <label style="font-size:12px; font-weight:600;">Nova categoria</label>
+      <div class="kb-m-check-add" style="margin:6px 0 8px;"><input type="text" id="fin-cat-nome" maxlength="30" placeholder="Ex: Hospedagem, Marketing..." onkeydown="if(event.key==='Enter') finAdicionarCategoria('${tipo}');"><input type="color" id="fin-cat-cor" value="${FIN_CAT_COR}" style="width:42px; min-height:0; height:38px; padding:2px;" oninput="FIN_CAT_COR = this.value"><button type="button" class="btn btn-primary" aria-label="Adicionar" onclick="finAdicionarCategoria('${tipo}')">${ic('mais', 'ic-herda')}</button></div>
+      <div class="srv-paleta">${FIN_CORES.map((c) => `<button type="button" class="srv-cor${FIN_CAT_COR === c ? ' ativo' : ''}" style="background:${c};" aria-label="Cor ${c}" onclick="FIN_CAT_COR = '${c}'; document.getElementById('fin-cat-cor').value = '${c}'; document.querySelectorAll('#modal-srv .srv-cor').forEach((b) => b.classList.toggle('ativo', b === this));"></button>`).join('')}</div>
+      <div style="max-height:320px; overflow-y:auto;">${lista.map((c) => { const usados = FIN_LANC.filter((l) => l.tipo === tipo && l.categoriaId === c.id).length; const cid = escapeParaOnclick(c.id); return `<div class="srv-cat-linha">
+        <span class="kb-bolinha" style="background:${corHexValida(c.cor) || '#64748b'};"></span><span style="flex:1;">${escapeHtml(c.nome)}</span><span class="kb-vazio-mini">${usados}</span>
+        <button type="button" class="kb-btn-ic" aria-label="Renomear" onclick="finRenomearCategoria('${tipo}', '${cid}')">${ic('lapis', 'ic-herda')}</button>
+        <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir" onclick="finExcluirCategoria('${tipo}', '${cid}')" ${lista.length <= 1 ? 'disabled' : ''}>${ic('lixeira', 'ic-herda')}</button>
+      </div>`; }).join('')}</div>
+    </div>`;
+  openModal('modal-srv');
+}
+function finSalvarCategorias(tipo, lista) {
+  const todas = Object.assign({}, FIN_CATEGORIAS || FIN_CATEGORIAS_PADRAO, { [tipo]: lista });
+  if (cloudSet(FIN_CATEGORIAS_KEY, todas) === false) return false;
+  FIN_CATEGORIAS = todas;
+  finRender();
+  return true;
+}
+function finAdicionarCategoria(tipo) {
+  const nome = (document.getElementById('fin-cat-nome').value || '').trim();
+  if (!nome) { avisar('Escreva o nome da categoria.'); return; }
+  if (finCategorias(tipo).some((c) => kbNomeNorm(c.nome) === kbNomeNorm(nome))) { avisar('Já existe uma categoria com esse nome.'); return; }
+  if (finSalvarCategorias(tipo, finCategorias(tipo).concat([{ id: genId('fcat'), nome: nome.slice(0, 30), cor: corHexValida(document.getElementById('fin-cat-cor').value) || '#3b82f6' }]))) finAbrirCategorias(tipo);
+}
+function finRenomearCategoria(tipo, id) {
+  const c = finCategorias(tipo).find((x) => x.id === id);
+  if (!c) return;
+  const linha = Array.from(document.querySelectorAll('#modal-srv .srv-cat-linha')).find((el) => el.innerHTML.includes(`'${id}'`));
+  if (!linha) return;
+  linha.innerHTML = `<input type="text" maxlength="30" value="${escapeHtml(c.nome)}" style="flex:1;" onkeydown="if(event.key==='Enter') this.nextElementSibling.click();"><button type="button" class="btn btn-small btn-primary" onclick="const v = this.previousElementSibling.value.trim(); if (v) { finSalvarCategorias('${tipo}', finCategorias('${tipo}').map((x) => x.id === '${escapeParaOnclick(id)}' ? Object.assign({}, x, { nome: v.slice(0, 30) }) : x)); } finAbrirCategorias('${tipo}');">Salvar</button>`;
+  linha.querySelector('input').focus();
+}
+function finExcluirCategoria(tipo, id) {
+  const c = finCategorias(tipo).find((x) => x.id === id);
+  if (!c) return;
+  const usados = FIN_LANC.filter((l) => l.tipo === tipo && l.categoriaId === id);
+  confirmarAcao(`Excluir a categoria "${c.nome}"?${usados.length ? ` Os ${usados.length} lançamento(s) dela ficam "Sem categoria".` : ''}`, () => {
+    if (!finSalvarCategorias(tipo, finCategorias(tipo).filter((x) => x.id !== id))) return;
+    usados.forEach((l) => finAtualizar(l.id, { categoriaId: '' }));
+    finAbrirCategorias(tipo);
+  }, 'Excluir categoria');
+}
+
+// ---------- Venda Rápida e Lançar Despesa (um formulário, dois tipos) ----------
+let FIN_FORM = null;
+
+function finEstaNoCrm() { return !!document.getElementById('crm-sidebar-painel'); }
+
+function finAbrirVendaRapida() { finAbrirForm('receber'); }
+function finAbrirDespesa(modo) { finAbrirForm('pagar', modo); }
+
+// Carrega os cadastros que a busca de clientes/fornecedores usa nesta tela
+// (no Financeiro do ERP o cadastro do ERP não vinha carregado).
+let FIN_CADASTROS_INICIADO = false;
+function finGarantirCadastros() {
+  if (FIN_CADASTROS_INICIADO) return;
+  FIN_CADASTROS_INICIADO = true;
+  const veErp = finCompartilhado() || finModuloPagina() === 'erp';
+  const veCrm = finCompartilhado() || finModuloPagina() === 'crm';
+  if (veErp && !CLIENTES_FORN_DATA_CARREGADO && typeof CLIENTES_FORN_KEY !== 'undefined') cloudWatch(CLIENTES_FORN_KEY, clientesFornSeed(), (d) => { if (!CLIENTES_FORN_DATA_CARREGADO) CLIENTES_FORN_DATA = Array.isArray(d) ? d : []; if (FIN_FORM) finRenderForm(); });
+  if (veCrm && finModuloPagina() !== 'crm' && !CRM_CLIENTES_INDEP_DATA.length) cloudWatch('eagles_crm_clientes_v1', [], (d) => { CRM_CLIENTES_INDEP_DATA = Array.isArray(d) ? d : []; if (FIN_FORM) finRenderForm(); });
+}
+function finAbrirForm(tipo, modo) {
+  if (!finPodeCriar()) return;
+  finEscutar();
+  finGarantirCadastros();
+  if (finEstaNoCrm()) { if (typeof kbIniciarDados === 'function') kbIniciarDados(); if (typeof srvIniciarDados === 'function') srvIniciarDados(); }
+  FIN_FORM = {
+    tipo, quem: '', descricao: '', valor: '', modo: modo || 'avista', vencimento: finHoje(), status: 'pendente', valorPago: '', moeda: 'BRL',
+    parcelas: 2, recDuracao: 'sempre', recMeses: 12, categoriaId: tipo === 'receber' ? 'servicos' : '', observacoes: '',
+    moverLead: '', gerarKanban: false, kanbanTipo: 'tarefa', itens: [], buscaItem: '',
+  };
+  finRenderForm();
+  openModal('modal-srv');
+}
+
+function finRenderForm() {
+  const f = FIN_FORM;
+  if (!f) return;
+  const rec = f.tipo === 'receber';
+  const ov = srvGarantirModal();
+  const modos = [['avista', 'À Vista', 'dinheiro'], ['parcelado', 'Parcelado', 'pacote'], ['recorrente', 'Recorrente', 'recorrente']];
+  const statusOps = rec ? [['pendente', 'Pendente', 'relogio'], ['parcial', 'Parcial', 'dinheiro'], ['pago', 'Pago', 'aprovado']] : [['pendente', 'Pendente', 'relogio'], ['pago', 'Pago', 'aprovado']];
+  const seg = (campo, ops, cls) => `<div class="fin-seg ${cls || ''}">${ops.map(([v, t, i]) => `<button type="button" class="${f[campo] === v ? 'ativo' : ''}" onclick="FIN_FORM.${campo} = '${v}'; finRenderForm();">${ic(i, 'ic-herda')} ${t}</button>`).join('')}</div>`;
+  const quemExiste = rec ? finClientesDisponiveis().some(([n]) => n === f.quem.trim()) : finFornecedoresDisponiveis().includes(f.quem.trim());
+  // serviços/produtos do catálogo (só onde o catálogo está carregado)
+  const catalogo = (typeof KB_SERVICOS !== 'undefined' ? KB_SERVICOS.filter((s) => s.ativo !== false).map((s) => ({ id: 's:' + s.id, nome: s.nome, valor: Number(s.valor) || 0, tipo: 'Serviço' })) : [])
+    .concat(typeof SRV_PRODUTOS !== 'undefined' ? SRV_PRODUTOS.map((p) => ({ id: 'p:' + p.id, nome: p.nome, valor: Number(p.precoVenda) || 0, tipo: 'Produto' })) : []);
+  const b = kbNomeNorm(f.buscaItem || '');
+  const sugestoes = b ? catalogo.filter((c) => kbNomeNorm(c.nome).includes(b) && !f.itens.some((i) => i.id === c.id)).slice(0, 6) : [];
+  const valorNum = Number(f.valor) || 0;
+  const resumoParcelas = f.modo === 'parcelado' && valorNum ? `${f.parcelas}x de ${formatMoney(Math.round((valorNum / f.parcelas) * 100) / 100)}` : '';
+  ov.innerHTML = `
+    <div class="modal kb-modal fin-form" style="max-width:600px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${ic(rec ? 'tendencia' : 'carteira')} ${rec ? 'Nova Venda Rápida' : 'Lançar Despesa'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal(); FIN_FORM = null;">✕</button></div>
+      <p class="cfg-modal-sub">${rec ? 'Registre uma venda de forma rápida e prática' : 'Registre uma despesa avulsa ou recorrente'}</p>
+      <div class="kb-wiz-corpo">
+        <div class="field full"><label>${ic(rec ? 'usuario' : 'pacote')} ${rec ? 'Cliente' : 'Fornecedor'}</label>
+          <input type="text" id="fin-f-quem" list="fin-lista-${rec ? 'clientes' : 'fornecedores'}" maxlength="100" value="${escapeHtml(f.quem)}" placeholder="${rec ? 'Buscar cliente...' : 'Buscar fornecedor...'}" oninput="FIN_FORM.quem = this.value" onchange="finRenderForm()">${finDatalistHtml(rec)}
+          ${f.quem.trim() && !quemExiste ? `<p class="nivel-ajuda">"${escapeHtml(f.quem.trim())}" não está cadastrado — vai como ${rec ? 'cliente' : 'fornecedor'} avulso.</p>` : ''}</div>
+        ${rec && finEstaNoCrm() && typeof CRM_NEGOCIOS_DATA !== 'undefined' ? (() => {
+          const negocios = CRM_NEGOCIOS_DATA.filter((n) => f.quem.trim() && n.cliente === f.quem.trim() && n.etapa !== 'fechado' && n.etapa !== 'perdido');
+          return `<div class="field full"><label>${ic('kanban')} Mover lead no pipeline</label>
+            <select ${negocios.length ? '' : 'disabled'} onchange="FIN_FORM.moverLead = this.value"><option value="">${negocios.length ? 'Não mover' : (f.quem.trim() ? 'Esse cliente não tem negócio aberto no Pipeline' : 'Escolha o cliente primeiro')}</option>${negocios.length ? CRM_ETAPAS.filter((e) => e.key !== 'perdido').map((e) => `<option value="${e.key}"${f.moverLead === e.key ? ' selected' : ''}>Mover ${negocios.length > 1 ? `os ${negocios.length} negócios` : '"' + escapeHtml(negocios[0].nome) + '"'} para: ${escapeHtml(e.label)}</option>`).join('') : ''}</select></div>`;
+        })() : ''}
+        ${rec && catalogo.length ? `<div class="field full"><label>${ic('pacote')} Serviços e Produtos</label>
+          <input type="search" id="fin-f-busca-item" placeholder="Buscar serviço ou produto..." value="${escapeHtml(f.buscaItem)}" oninput="FIN_FORM.buscaItem = this.value; finRenderForm(); const i = document.getElementById('fin-f-busca-item'); i.focus(); i.setSelectionRange(i.value.length, i.value.length);">
+          ${sugestoes.length ? `<div class="fin-sugestoes">${sugestoes.map((c) => `<button type="button" onclick="finAdicionarItemVenda('${escapeParaOnclick(c.id)}')"><span>${escapeHtml(c.nome)} <small>${c.tipo}</small></span><b>${formatMoney(c.valor)}</b></button>`).join('')}</div>` : ''}
+          ${f.itens.length ? `<div class="fin-itens">${f.itens.map((i, idx) => `<span class="srv-tag">${escapeHtml(i.nome)} · ${formatMoney(i.valor)} <button type="button" aria-label="Remover" onclick="finRemoverItemVenda(${idx})">✕</button></span>`).join('')}</div>` : ''}</div>` : ''}
+        <div class="field full"><label>Descrição *</label><input type="text" id="fin-f-desc" maxlength="140" value="${escapeHtml(f.descricao)}" placeholder="${rec ? 'Ex: Projeto de logo' : 'Ex: Licença de software'}" oninput="FIN_FORM.descricao = this.value"></div>
+        <div class="field full"><label>Valor *</label><input type="number" id="fin-f-valor" min="0.01" step="0.01" value="${escapeHtml(String(f.valor))}" placeholder="0.00" oninput="FIN_FORM.valor = this.value" onchange="finRenderForm()"></div>
+        <div class="fin-caixa">
+          <label class="fin-caixa-tit">${rec ? 'Modo de Pagamento' : 'Tipo de Despesa'}</label>
+          ${seg('modo', rec ? modos : [['avista', 'Avulsa', 'dinheiro'], modos[1], modos[2]], 'fin-seg-grande')}
+          <div class="fin-form-grade">
+            <div class="field"><label>${f.modo === 'avista' ? 'Vencimento' : (f.modo === 'parcelado' ? '1º vencimento' : '1º vencimento (todo mês nesse dia)')} *</label><input type="date" value="${escapeHtml(f.vencimento)}" onchange="FIN_FORM.vencimento = this.value"></div>
+            ${f.modo === 'avista' ? `<div class="field"><label>Status</label>${seg('status', statusOps)}</div>` : ''}
+            ${f.modo === 'parcelado' ? `<div class="field"><label>Parcelas</label><select onchange="FIN_FORM.parcelas = Number(this.value); finRenderForm();">${Array.from({ length: 47 }, (_, i) => i + 2).map((n) => `<option value="${n}"${f.parcelas === n ? ' selected' : ''}>${n}x</option>`).join('')}</select></div>` : ''}
+            ${f.modo === 'recorrente' ? `<div class="field"><label>Duração</label><select onchange="FIN_FORM.recDuracao = this.value; finRenderForm();"><option value="sempre"${f.recDuracao === 'sempre' ? ' selected' : ''}>Até cancelar</option><option value="meses"${f.recDuracao === 'meses' ? ' selected' : ''}>Por um número de meses</option></select></div>` : ''}
+            <div class="field"><label>Moeda</label><select onchange="FIN_FORM.moeda = this.value">${Object.entries(SRV_MOEDAS).map(([k, t]) => `<option value="${k}"${f.moeda === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+          </div>
+          ${f.modo === 'avista' && f.status === 'parcial' ? `<div class="field full"><label>Valor já recebido</label><input type="number" min="0.01" step="0.01" value="${escapeHtml(String(f.valorPago))}" placeholder="0.00" oninput="FIN_FORM.valorPago = this.value"></div>` : ''}
+          ${f.modo === 'recorrente' && f.recDuracao === 'meses' ? `<div class="field full"><label>Quantos meses</label><input type="number" min="2" max="60" value="${f.recMeses}" oninput="FIN_FORM.recMeses = Math.max(2, Math.min(60, Number(this.value) || 2))"></div>` : ''}
+          ${resumoParcelas ? `<p class="kb-vazio-mini" style="margin:0;">${resumoParcelas}, uma por mês a partir do 1º vencimento.</p>` : ''}
+          ${f.modo === 'recorrente' ? `<p class="kb-vazio-mini" style="margin:0;">Gera uma conta por mês automaticamente${f.recDuracao === 'sempre' ? ', até você cancelar' : ''}. ${rec ? 'Aparece também em Recorrentes (assinaturas).' : 'Aparece em Pagar → Despesas Recorrentes.'}</p>` : ''}
+        </div>
+        ${rec && finEstaNoCrm() ? `<div class="fin-caixa kb-linha-switch"><div><strong>Gerar Tarefa ou Projeto</strong><span>Cria uma tarefa ou projeto no Kanban para essa venda.</span></div><label class="switch"><input type="checkbox" ${f.gerarKanban ? 'checked' : ''} onchange="FIN_FORM.gerarKanban = this.checked; finRenderForm();"><span class="switch-slider"></span></label></div>
+          ${f.gerarKanban ? `<div class="fin-seg" style="margin:-4px 0 10px;"><button type="button" class="${f.kanbanTipo === 'tarefa' ? 'ativo' : ''}" onclick="FIN_FORM.kanbanTipo = 'tarefa'; finRenderForm();">${ic('tarefas', 'ic-herda')} Tarefa</button><button type="button" class="${f.kanbanTipo === 'projeto' ? 'ativo' : ''}" onclick="FIN_FORM.kanbanTipo = 'projeto'; finRenderForm();">${ic('maleta', 'ic-herda')} Projeto</button></div>` : ''}` : ''}
+        <div class="field full"><label>${ic('tag')} Classificação — categoria financeira</label><select onchange="FIN_FORM.categoriaId = this.value"><option value="">Sem categoria</option>${finCategorias(f.tipo).map((c) => `<option value="${escapeHtml(c.id)}"${c.id === f.categoriaId ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select></div>
+        <div class="field full"><label>${ic('documento')} Observações (opcional)</label><textarea rows="2" maxlength="500" placeholder="Adicione observações..." oninput="FIN_FORM.observacoes = this.value">${escapeHtml(f.observacoes)}</textarea></div>
+      </div>
+      <div class="cfg-modal-rodape"><button type="button" class="btn" style="flex:1; justify-content:center;" onclick="srvFecharModal(); FIN_FORM = null;">Cancelar</button><button type="button" class="btn ${rec ? 'fin-btn-venda' : 'fin-btn-despesa'}" style="flex:1; justify-content:center;" onclick="finSalvarForm()">${rec ? 'Lançar venda' : 'Lançar'}</button></div>
+    </div>`;
+}
+function finAdicionarItemVenda(id) {
+  const f = FIN_FORM;
+  const [tipo, rid] = id.split(':');
+  const s = tipo === 's' ? KB_SERVICOS.find((x) => x.id === rid) : SRV_PRODUTOS.find((x) => x.id === rid);
+  if (!s) return;
+  f.itens.push({ id, nome: s.nome, valor: Number(tipo === 's' ? s.valor : s.precoVenda) || 0 });
+  f.buscaItem = '';
+  f.valor = String(Math.round(f.itens.reduce((a, i) => a + i.valor, 0) * 100) / 100);
+  if (!f.descricao.trim()) f.descricao = f.itens.map((i) => i.nome).join(' + ');
+  finRenderForm();
+}
+function finRemoverItemVenda(idx) {
+  const f = FIN_FORM;
+  f.itens.splice(idx, 1);
+  f.valor = f.itens.length ? String(Math.round(f.itens.reduce((a, i) => a + i.valor, 0) * 100) / 100) : f.valor;
+  finRenderForm();
+}
+
+function finSalvarForm() {
+  const f = FIN_FORM;
+  if (!f) return;
+  const rec = f.tipo === 'receber';
+  const descricao = String(f.descricao || '').trim();
+  const valor = Math.round((Number(f.valor) || 0) * 100) / 100;
+  if (!descricao) { avisar('Preencha a descrição.'); return; }
+  if (valor <= 0) { avisar('Informe o valor.'); return; }
+  if (!f.vencimento) { avisar('Preencha o vencimento.'); return; }
+  if (f.gerarKanban && (!KB_CARREGADO || (f.kanbanTipo === 'projeto' && !KB_PROJETOS_CARREGADO))) { avisar('O Kanban ainda está carregando — aguarde um instante e tente de novo.'); return; }
+  const quem = String(f.quem || '').trim().slice(0, 100);
+  const base = { tipo: f.tipo, descricao: descricao.slice(0, 140), categoriaId: f.categoriaId, moeda: f.moeda, observacoes: String(f.observacoes || '').slice(0, 500), origem: { tipo: rec ? 'venda-rapida' : 'manual' } };
+  base[rec ? 'cliente' : 'fornecedor'] = quem;
+  if (rec && f.itens.length) base.itens = f.itens.map((i) => ({ id: i.id, nome: i.nome, valor: i.valor }));
+  if (!rec) base.subtipo = f.modo === 'recorrente' ? 'pagamento' : 'variavel';
+  let criados = 0;
+  if (f.modo === 'avista') {
+    const pagoParcial = Math.round((Number(f.valorPago) || 0) * 100) / 100;
+    if (f.status === 'parcial' && (pagoParcial <= 0 || pagoParcial >= valor)) { avisar('No status "Parcial", o valor já recebido precisa ser maior que zero e menor que o total.'); return; }
+    if (finCriar(Object.assign({}, base, { valor, vencimento: f.vencimento, status: f.status, valorPago: f.status === 'parcial' ? pagoParcial : 0, dataPagamento: f.status === 'pendente' ? null : finHoje() }))) criados = 1;
+  } else if (f.modo === 'parcelado') {
+    const n = Math.max(2, Math.min(48, f.parcelas));
+    const parcela = Math.floor((valor / n) * 100) / 100;
+    const grupoId = genId('grp');
+    const mes0 = f.vencimento.slice(0, 7), dia = Number(f.vencimento.slice(8, 10));
+    for (let i = 0; i < n; i++) {
+      const v = i === n - 1 ? Math.round((valor - parcela * (n - 1)) * 100) / 100 : parcela;
+      if (finCriar(Object.assign({}, base, { descricao: `${base.descricao} (${i + 1}/${n})`, valor: v, vencimento: finDataDoMes(finSomarMeses(mes0, i), dia), grupoId, parcela: i + 1, totalParcelas: n }))) criados++;
+    }
+  } else {
+    const mes0 = f.vencimento.slice(0, 7);
+    const recor = finCriarRecorrencia(Object.assign({ itens: base.itens || [], tipo: f.tipo, descricao: base.descricao, valor, dia: Number(f.vencimento.slice(8, 10)), inicio: mes0, fim: f.recDuracao === 'meses' ? finSomarMeses(mes0, f.recMeses - 1) : '', categoriaId: f.categoriaId, moeda: f.moeda, subtipo: rec ? '' : 'pagamento', origem: { tipo: rec ? 'venda-rapida' : 'manual' } }, rec ? { cliente: quem } : { fornecedor: quem }));
+    if (recor) criados = 1;
+  }
+  if (!criados) return;
+  // CRM: mover o lead no pipeline (sem lançar receita de novo — a venda já lançou)
+  if (rec && f.moverLead && typeof CRM_NEGOCIOS_DATA !== 'undefined' && CRM_ETAPAS.some((e) => e.key === f.moverLead)) {
+    const alvos = CRM_NEGOCIOS_DATA.filter((n) => n.cliente === quem && n.etapa !== 'fechado' && n.etapa !== 'perdido');
+    if (alvos.length) {
+      const lista = CRM_NEGOCIOS_DATA.map((n) => (alvos.includes(n) ? Object.assign({}, n, { etapa: f.moverLead, atualizadoEm: new Date().toISOString(), receitaLancadaPorVenda: f.moverLead === 'fechado' ? true : n.receitaLancadaPorVenda }) : n));
+      if (cloudSet(CRM_NEGOCIOS_KEY, lista) !== false) CRM_NEGOCIOS_DATA = lista;
+    }
+  }
+  if (rec && f.gerarKanban) {
+    if (f.kanbanTipo === 'projeto') kbGravarProjeto({ id: genId('pj'), nome: base.descricao, cliente: quem, valor, status: (kbColunasGlobais().find((c) => kbNomeNorm(c.nome) === 'a fazer') || kbColunasGlobais()[0]).id, situacao: 'ativo', arquivado: false, cor: '#8b5cf6', ordem: Date.now(), criadoEm: new Date().toISOString(), criadoPor: kbMeuUid(), ultimaRenovacao: finMesAtual() });
+    else kbCriarTarefa({ titulo: base.descricao, cliente: quem, prazo: f.vencimento, etiquetas: ['venda'] });
+  }
+  srvFecharModal();
+  FIN_FORM = null;
+  avisar(rec ? `Venda lançada${f.modo === 'parcelado' ? ` em ${criados} parcelas` : f.modo === 'recorrente' ? ' como recorrente' : ''}!` : `Despesa lançada${f.modo === 'parcelado' ? ` em ${criados} parcelas` : f.modo === 'recorrente' ? ' como recorrente' : ''}!`, rec ? 'Venda Rápida' : 'Lançar Despesa');
+}
+
+
+// =====================================================================
+// ---------- Financeiro · Entrega 2 ----------
+// Clientes (fechamento), Fornecedores, Recorrentes, Caixa e Relatórios.
+// =====================================================================
+
+const FIN_CAIXAS_KEY = 'eagles_fin_caixas_v1';
+const FIN_TRIBUTOS_KEY = 'eagles_fin_tributos_v1';
+let FIN_CAIXAS = { caixas: [], regras: [] };
+let FIN_TRIBUTOS = { deducoes: 0, irpj: 0 };
+let FIN_E2_INICIADO = false;
+let FIN_DETALHE = null; // { tipo: 'cliente'|'fornecedor', nome }
+let FIN_REL = { periodo: 'mes', cliente: '', pctReceita: false, servicoFiltro: 'todos' };
+let FIN_GRAFICOS = [];
+
+function finIniciarEntrega2() {
+  if (FIN_E2_INICIADO) return;
+  FIN_E2_INICIADO = true;
+  cloudWatch(FIN_CAIXAS_KEY, { caixas: [], regras: [] }, (d) => { FIN_CAIXAS = d && Array.isArray(d.caixas) ? Object.assign({ regras: [] }, d) : { caixas: [], regras: [] }; finRender(); });
+  cloudWatch(FIN_TRIBUTOS_KEY, { deducoes: 0, irpj: 0 }, (d) => { FIN_TRIBUTOS = Object.assign({ deducoes: 0, irpj: 0 }, d || {}); finRender(); });
+}
+
+// ---------- caixas e regras de roteamento ----------
+const FIN_TIPOS_CAIXA = { banco: 'Conta bancária', digital: 'Conta digital / maquininha', carteira: 'Dinheiro em espécie', outro: 'Outro' };
+function finCaixa(id) { return FIN_CAIXAS.caixas.find((c) => c.id === id) || null; }
+function finCaixaPadrao() { return FIN_CAIXAS.caixas.find((c) => c.padrao) || FIN_CAIXAS.caixas[0] || null; }
+// Qual caixa recebe/paga essa conta: a primeira regra que bate, senão o padrão.
+function finCaixaPorRegra(l) {
+  const r = (FIN_CAIXAS.regras || []).find((x) => {
+    if (x.tipo && x.tipo !== l.tipo) return false;
+    if (x.campo === 'categoria') return l.categoriaId === x.valor;
+    if (x.campo === 'cliente') return kbNomeNorm(l.tipo === 'receber' ? l.cliente : l.fornecedor) === kbNomeNorm(x.valor);
+    if (x.campo === 'tipo') return true;
+    return false;
+  });
+  const c = r && finCaixa(r.caixaId);
+  return (c || finCaixaPadrao() || {}).id || '';
+}
+function finSaldoCaixa(caixaId) {
+  const c = finCaixa(caixaId);
+  let s = Number((c || {}).saldoInicial) || 0;
+  FIN_LANC.forEach((l) => {
+    if (l.caixaId !== caixaId || !(Number(l.valorPago) > 0) || l.status === 'cancelado') return;
+    s += (l.tipo === 'receber' ? 1 : -1) * (Number(l.valorPago) || 0);
+  });
+  return Math.round(s * 100) / 100;
+}
+function finSalvarCaixas(dados) {
+  if (cloudSet(FIN_CAIXAS_KEY, dados) === false) return false;
+  FIN_CAIXAS = dados;
+  finRender();
+  return true;
+}
+function finHtmlCaixa() {
+  const caixas = FIN_CAIXAS.caixas;
+  const semCaixa = FIN_LANC.filter((l) => !l.caixaId && Number(l.valorPago) > 0 && l.status !== 'cancelado');
+  const mes = FIN_MES;
+  const movMes = (cid, tipo) => FIN_LANC.filter((l) => l.caixaId === cid && l.tipo === tipo && (l.dataPagamento || '').slice(0, 7) === mes && l.status !== 'cancelado').reduce((a, l) => a + (Number(l.valorPago) || 0), 0);
+  return `
+    <div class="fin-painel-cab"><strong style="font-size:17px;">Caixas</strong><span class="kb-espaco"></span>
+      <button type="button" class="btn" onclick="finAbrirRegras()" ${caixas.length ? '' : 'disabled title="Crie um caixa primeiro"'}>${ic('configuracoes', 'ic-herda')} Regras de roteamento</button>
+      <button type="button" class="btn btn-primary" onclick="finAbrirCaixa(null)">${ic('mais', 'ic-herda')} Novo Caixa</button></div>
+    ${caixas.length ? `<div class="fin-cards">${caixas.map((c) => { const id = escapeParaOnclick(c.id); return `<div class="fin-card" style="border-top:3px solid ${corHexValida(c.cor) || '#22c55e'};">
+      <div class="fin-card-tit">${ic(c.tipo === 'carteira' ? 'dinheiro' : 'banco', 'ic-herda')} ${escapeHtml(c.nome)}${c.padrao ? ' <span class="srv-tag">Padrão</span>' : ''}<span class="kb-espaco"></span>
+        <button type="button" class="kb-btn-ic" aria-label="Editar caixa" onclick="finAbrirCaixa('${id}')">${ic('lapis', 'ic-herda')}</button></div>
+      <div class="fin-linha"><span>${escapeHtml(FIN_TIPOS_CAIXA[c.tipo] || '')}</span></div>
+      <div class="fin-linha fin-linha-forte"><span>Saldo atual</span><span class="${finSaldoCaixa(c.id) >= 0 ? 'fin-verde' : 'fin-vermelho'}">${finV(finSaldoCaixa(c.id))}</span></div>
+      <div class="fin-linha"><span>Entradas em ${finNomeMes(mes)}</span><span class="fin-verde">${finV(movMes(c.id, 'receber'))}</span></div>
+      <div class="fin-linha"><span>Saídas em ${finNomeMes(mes)}</span><span class="fin-vermelho">${finV(movMes(c.id, 'pagar'))}</span></div>
+    </div>`; }).join('')}</div>
+    ${semCaixa.length ? `<div class="fin-info">${ic('alerta', 'ic-herda')} ${semCaixa.length} recebimento(s)/pagamento(s) foram registrados sem caixa (antes de existir um). <button type="button" class="kb-link" onclick="finAtribuirSemCaixa()">Distribuir pelas regras agora</button></div>` : ''}`
+      : `<div class="kb-wiz-caixa" style="text-align:center; padding:30px;"><p style="margin:0 0 12px;">Nenhum caixa criado ainda.</p><button type="button" class="btn" onclick="finAbrirCaixa(null)">${ic('mais', 'ic-herda')} Criar primeiro caixa</button>
+        <p class="kb-vazio-mini" style="margin-top:10px;">Caixas são onde o dinheiro fica (conta do banco, maquininha, dinheiro em espécie). Cada recebimento e pagamento entra em um deles, e o saldo é calculado sozinho.</p></div>`}`;
+}
+function finAbrirCaixa(id) {
+  const c = id ? finCaixa(id) : null;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:460px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${c ? 'Editar caixa' : 'Novo caixa'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="field full"><label>Nome *</label><input type="text" id="fin-cx-nome" maxlength="40" value="${escapeHtml(c ? c.nome : '')}" placeholder="Ex: Conta Itaú, Mercado Pago, Dinheiro"></div>
+      <div class="kb-campos-2">
+        <div class="field"><label>Tipo</label><select id="fin-cx-tipo">${Object.entries(FIN_TIPOS_CAIXA).map(([k, v]) => `<option value="${k}"${(c ? c.tipo : 'banco') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+        <div class="field"><label>Saldo inicial</label><input type="number" id="fin-cx-saldo" step="0.01" value="${c ? Number(c.saldoInicial) || 0 : 0}"></div>
+      </div>
+      <div class="field full"><label>Cor</label><input type="color" id="fin-cx-cor" value="${expandirHex(c ? c.cor : '#22c55e') || '#22c55e'}" style="height:42px; padding:3px;"></div>
+      <label class="kb-imp-opcao"><input type="checkbox" id="fin-cx-padrao" ${!FIN_CAIXAS.caixas.length || (c && c.padrao) ? 'checked' : ''}> Caixa padrão (recebe o que nenhuma regra direcionar)</label>
+      <div class="cfg-modal-rodape">${c ? `<button type="button" class="btn btn-ghost kb-btn-perigo" onclick="finExcluirCaixa('${escapeParaOnclick(c.id)}')">${ic('lixeira', 'ic-herda')} Excluir</button>` : ''}<span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="finSalvarCaixa(${c ? `'${escapeParaOnclick(c.id)}'` : 'null'})">Salvar</button></div>
+    </div>`;
+  openModal('modal-srv');
+}
+function finSalvarCaixa(id) {
+  const nome = document.getElementById('fin-cx-nome').value.trim();
+  if (!nome) { avisar('Dê um nome pro caixa.'); return; }
+  const padrao = document.getElementById('fin-cx-padrao').checked;
+  const dados = { nome: nome.slice(0, 40), tipo: document.getElementById('fin-cx-tipo').value, saldoInicial: Math.round((Number(document.getElementById('fin-cx-saldo').value) || 0) * 100) / 100, cor: corHexValida(document.getElementById('fin-cx-cor').value) || '#22c55e', padrao };
+  let caixas = id ? FIN_CAIXAS.caixas.map((c) => (c.id === id ? Object.assign({}, c, dados) : c)) : FIN_CAIXAS.caixas.concat([Object.assign({ id: genId('cx') }, dados)]);
+  const alvo = id || caixas[caixas.length - 1].id;
+  if (padrao) caixas = caixas.map((c) => Object.assign({}, c, { padrao: c.id === alvo }));
+  if (!caixas.some((c) => c.padrao)) caixas[0].padrao = true;
+  if (finSalvarCaixas(Object.assign({}, FIN_CAIXAS, { caixas }))) srvFecharModal();
+}
+function finExcluirCaixa(id) {
+  const c = finCaixa(id);
+  const usados = FIN_LANC.filter((l) => l.caixaId === id).length;
+  confirmarAcao(`Excluir o caixa "${c.nome}"?${usados ? ` Os ${usados} recebimento(s)/pagamento(s) dele ficam "sem caixa" (dá pra redistribuir depois).` : ''} As regras que apontam pra ele também saem.`, () => {
+    let caixas = FIN_CAIXAS.caixas.filter((x) => x.id !== id);
+    if (caixas.length && !caixas.some((x) => x.padrao)) caixas = caixas.map((x, i) => Object.assign({}, x, { padrao: i === 0 }));
+    if (!finSalvarCaixas({ caixas, regras: (FIN_CAIXAS.regras || []).filter((r) => r.caixaId !== id) })) return;
+    FIN_LANC.filter((l) => l.caixaId === id).forEach((l) => finAtualizar(l.id, { caixaId: '' }));
+    srvFecharModal();
+  }, 'Excluir caixa');
+}
+function finAtribuirSemCaixa() {
+  FIN_LANC.filter((l) => !l.caixaId && Number(l.valorPago) > 0 && l.status !== 'cancelado').forEach((l) => { const cx = finCaixaPorRegra(l); if (cx) finAtualizar(l.id, { caixaId: cx }); });
+}
+let FIN_REGRA_NOVA = { tipo: 'receber', campo: 'categoria', valor: '', caixaId: '' };
+function finAbrirRegras() {
+  const ov = srvGarantirModal();
+  const n = FIN_REGRA_NOVA;
+  if (!n.caixaId) n.caixaId = (finCaixaPadrao() || {}).id || '';
+  const nomeCampo = (r) => (r.campo === 'categoria' ? 'categoria "' + finCategoria(r.tipo || 'receber', r.valor).nome + '"' : r.campo === 'cliente' ? (r.tipo === 'pagar' ? 'fornecedor' : 'cliente') + ' "' + r.valor + '"' : 'qualquer conta');
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Regras de roteamento</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub">Definem em qual caixa cada recebimento ou pagamento entra. Vale a primeira regra que bater; se nenhuma bater, vai pro caixa padrão.</p>
+      ${(FIN_CAIXAS.regras || []).map((r, i) => `<div class="srv-cat-linha"><span style="flex:1;">${r.tipo === 'pagar' ? 'Pagamento' : 'Recebimento'} de ${escapeHtml(nomeCampo(r))} → <strong>${escapeHtml((finCaixa(r.caixaId) || {}).nome || '?')}</strong></span><button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir regra" onclick="finSalvarCaixas(Object.assign({}, FIN_CAIXAS, { regras: FIN_CAIXAS.regras.filter((x, j) => j !== ${i}) })); finAbrirRegras();">${ic('lixeira', 'ic-herda')}</button></div>`).join('') || '<p class="kb-vazio-mini">Nenhuma regra ainda: tudo vai pro caixa padrão.</p>'}
+      <div class="cfg-secao-rotulo">Nova regra</div>
+      <div class="kb-auto-form">
+        <label>Quando for <select onchange="FIN_REGRA_NOVA.tipo = this.value; FIN_REGRA_NOVA.valor = ''; finAbrirRegras();"><option value="receber"${n.tipo === 'receber' ? ' selected' : ''}>Recebimento</option><option value="pagar"${n.tipo === 'pagar' ? ' selected' : ''}>Pagamento</option></select></label>
+        <label>De <select onchange="FIN_REGRA_NOVA.campo = this.value; FIN_REGRA_NOVA.valor = ''; finAbrirRegras();"><option value="categoria"${n.campo === 'categoria' ? ' selected' : ''}>Uma categoria</option><option value="cliente"${n.campo === 'cliente' ? ' selected' : ''}>${n.tipo === 'pagar' ? 'Um fornecedor' : 'Um cliente'}</option><option value="tipo"${n.campo === 'tipo' ? ' selected' : ''}>Qualquer ${n.tipo === 'pagar' ? 'pagamento' : 'recebimento'}</option></select></label>
+        ${n.campo === 'categoria' ? `<label>Categoria <select onchange="FIN_REGRA_NOVA.valor = this.value">${finCategorias(n.tipo).map((c) => `<option value="${escapeHtml(c.id)}"${n.valor === c.id ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select></label>` : ''}
+        ${n.campo === 'cliente' ? `<label>Nome <input type="text" list="fin-lista-${n.tipo === 'pagar' ? 'fornecedores' : 'clientes'}" value="${escapeHtml(n.valor)}" oninput="FIN_REGRA_NOVA.valor = this.value">${finDatalistHtml(n.tipo !== 'pagar')}</label>` : ''}
+        <label>Vai pro caixa <select onchange="FIN_REGRA_NOVA.caixaId = this.value">${FIN_CAIXAS.caixas.map((c) => `<option value="${escapeHtml(c.id)}"${n.caixaId === c.id ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select></label>
+        <button type="button" class="btn btn-primary" onclick="finAdicionarRegra()">${ic('mais', 'ic-herda')} Adicionar regra</button>
+      </div>
+    </div>`;
+  openModal('modal-srv');
+}
+function finAdicionarRegra() {
+  const n = Object.assign({}, FIN_REGRA_NOVA);
+  if (n.campo === 'categoria' && !n.valor) n.valor = (finCategorias(n.tipo)[0] || {}).id || '';
+  if (n.campo === 'cliente' && !String(n.valor).trim()) { avisar('Escreva o nome.'); return; }
+  if (!finCaixa(n.caixaId)) { avisar('Escolha o caixa.'); return; }
+  if (finSalvarCaixas(Object.assign({}, FIN_CAIXAS, { regras: (FIN_CAIXAS.regras || []).concat([{ id: genId('rg'), tipo: n.tipo, campo: n.campo, valor: String(n.valor).trim().slice(0, 100), caixaId: n.caixaId }]) }))) {
+    FIN_REGRA_NOVA = { tipo: n.tipo, campo: 'categoria', valor: '', caixaId: n.caixaId };
+    finAbrirRegras();
+  }
+}
+
+// ---------- Clientes (fechamento) e Fornecedores ----------
+function finResumoPorPessoa(tipo) {
+  const campo = tipo === 'receber' ? 'cliente' : 'fornecedor';
+  const mapa = new Map();
+  FIN_LANC.filter((l) => l.tipo === tipo && l.status !== 'cancelado' && l[campo]).forEach((l) => {
+    const k = l[campo];
+    const r = mapa.get(k) || { nome: k, pendente: 0, vencido: 0, contasAbertas: 0, pagoNoMes: 0, total: 0 };
+    if (l.status !== 'pago') { r.contasAbertas++; if (finVencido(l)) r.vencido += finRestante(l); else r.pendente += finRestante(l); }
+    if ((l.dataPagamento || '').slice(0, 7) === FIN_MES) r.pagoNoMes += Number(l.valorPago) || 0;
+    r.total += Number(l.valorPago) || 0;
+    mapa.set(k, r);
+  });
+  return Array.from(mapa.values());
+}
+function finHtmlPessoas(tipo) {
+  const rec = tipo === 'receber';
+  if (FIN_DETALHE && FIN_DETALHE.tipo === tipo) return finHtmlDetalhePessoa(tipo, FIN_DETALHE.nome);
+  const b = kbNomeNorm(FIN_FILTRO.busca);
+  const lista = finResumoPorPessoa(tipo).filter((p) => (rec ? p.contasAbertas > 0 : true) && (!b || kbNomeNorm(p.nome).includes(b))).sort((a, b2) => (b2.vencido + b2.pendente) - (a.vencido + a.pendente) || a.nome.localeCompare(b2.nome));
+  return `
+    <div class="fin-periodo fin-periodo-contas">
+      <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Mês anterior" onclick="finMudarMes(-1)">${kbIc('setaEsq')}</button>
+      <span class="fin-filtro-mes">${ic('calendario', 'ic-herda')} Filtro definido: <strong>${finNomeMes(FIN_MES)}</strong></span>
+      <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Próximo mês" onclick="finMudarMes(1)">${kbIc('seta')}</button>
+    </div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong>${ic(rec ? 'pessoas' : 'pacote')} ${rec ? 'Fechamento por Cliente' : 'Fornecedores'}</strong><span class="kb-espaco"></span>
+        <label class="kb-busca" style="max-width:240px;">${kbIc('busca')}<input type="search" id="fin-busca-pessoas-${tipo}" placeholder="${rec ? 'Buscar cliente...' : 'Buscar fornecedor...'}" value="${escapeHtml(FIN_FILTRO.busca)}" oninput="FIN_FILTRO.busca = this.value; finRender();"></label></div>
+      <p class="cfg-secao-nota">${rec ? 'Selecione um cliente para visualizar todas as contas pendentes e realizar o fechamento mensal.' : 'Quanto você deve e já pagou a cada fornecedor. Clique para ver as contas e pagar.'}</p>
+      ${lista.length ? `<div class="fin-contas-grade">${lista.map((p) => `<button type="button" class="fin-conta fin-pessoa" onclick="FIN_DETALHE = { tipo: '${tipo}', nome: ${escapeHtml(JSON.stringify(p.nome))} }; FIN_SELECAO = new Set(); finRender();">
+        <div class="fin-conta-cab"><span class="kb-avatar">${escapeHtml(initials(p.nome))}</span><div style="flex:1; min-width:0; text-align:left;"><strong>${escapeHtml(p.nome)}</strong><small>${p.contasAbertas} conta(s) em aberto</small></div></div>
+        <div class="fin-conta-linha"><span>Em aberto</span><strong class="fin-azul">${finV(p.pendente)}</strong></div>
+        ${p.vencido ? `<div class="fin-conta-linha"><span>Vencido</span><strong class="fin-vermelho">${finV(p.vencido)}</strong></div>` : ''}
+        <div class="fin-conta-linha"><span>${rec ? 'Recebido' : 'Pago'} em ${finNomeMes(FIN_MES)}</span><span class="fin-verde">${finV(p.pagoNoMes)}</span></div>
+      </button>`).join('')}</div>` : `<div class="kb-vazio-grande" style="padding:30px;"><div class="ic-circulo">${ic(rec ? 'pessoas' : 'pacote')}</div><p style="margin:0;">${rec ? 'Nenhum cliente com contas a receber encontrado.' : 'Nenhum fornecedor com contas encontrado.'}</p></div>`}
+    </div>`;
+}
+function finHtmlDetalhePessoa(tipo, nome) {
+  const rec = tipo === 'receber';
+  const campo = rec ? 'cliente' : 'fornecedor';
+  const ate = finDataDoMes(FIN_MES, 31);
+  const abertas = FIN_LANC.filter((l) => l.tipo === tipo && l[campo] === nome && l.status !== 'pago' && l.status !== 'cancelado' && (l.vencimento || '') <= ate).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  const pagas = FIN_LANC.filter((l) => l.tipo === tipo && l[campo] === nome && (l.dataPagamento || '').slice(0, 7) === FIN_MES);
+  const sel = abertas.filter((l) => FIN_SELECAO.has(l.id));
+  const totalAberto = abertas.reduce((a, l) => a + finRestante(l), 0);
+  return `
+    <div class="fin-periodo fin-periodo-contas">
+      <button type="button" class="btn btn-small" onclick="FIN_DETALHE = null; FIN_SELECAO = new Set(); finRender();">← Voltar</button>
+      <strong style="font-size:16px;">${escapeHtml(nome)}</strong>
+      <span class="fin-chip laranja">Em aberto até ${finNomeMes(FIN_MES)}: ${finV(totalAberto)}</span>
+      <span class="kb-espaco"></span>
+      ${rec ? `<button type="button" class="btn" onclick="finCopiarExtrato(${escapeHtml(JSON.stringify(nome))})">${ic('copiar', 'ic-herda')} Copiar extrato</button>` : ''}
+    </div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong>Contas em aberto</strong><span class="kb-espaco"></span>
+        <button type="button" class="kb-link" onclick="FIN_SELECAO = new Set(${escapeHtml(JSON.stringify(abertas.map((l) => l.id)))}); finRender();">Selecionar todas</button>
+        ${sel.length ? `<button type="button" class="btn btn-small btn-primary" onclick="finBaixarSelecionadas('${tipo}')">${ic('aprovado', 'ic-herda')} ${rec ? 'Receber' : 'Pagar'} ${sel.length} (${finV(sel.reduce((a, l) => a + finRestante(l), 0))})</button>` : ''}</div>
+      ${abertas.length ? `<div class="kb-tabela-wrap"><table class="kb-tabela" style="min-width:560px;"><thead><tr><th></th><th>Vencimento</th><th>Descrição</th><th>Status</th><th style="text-align:right;">Falta</th></tr></thead><tbody>
+        ${abertas.map((l) => { const id = escapeParaOnclick(l.id); return `<tr><td><input type="checkbox" class="kb-sel" aria-label="Selecionar" ${FIN_SELECAO.has(l.id) ? 'checked' : ''} onchange="if (this.checked) FIN_SELECAO.add('${id}'); else FIN_SELECAO.delete('${id}'); finRender();"></td>
+          <td>${kbDataCurta(l.vencimento)}</td><td>${escapeHtml(l.descricao)}${finSeloParcela(l)}</td><td>${finStatusHtml(l)}</td><td style="text-align:right;">${finV(finRestante(l), l.moeda)}</td></tr>`; }).join('')}
+      </tbody></table></div>` : '<p class="kb-vazio" style="padding:18px;">Nada em aberto até esse mês. 🎉</p>'}
+    </div>
+    ${pagas.length ? `<div class="fin-painel"><div class="fin-painel-cab"><strong>${rec ? 'Recebido' : 'Pago'} em ${finNomeMes(FIN_MES)}</strong><span class="kb-espaco"></span><span class="fin-verde">${finV(pagas.reduce((a, l) => a + (Number(l.valorPago) || 0), 0))}</span></div>
+      ${pagas.map((l) => `<div class="srv-cat-linha"><span style="flex:1;">${escapeHtml(l.descricao)} <small style="color:var(--text-soft);">· ${kbDataCurta(l.dataPagamento)}</small></span>${finV(l.valorPago, l.moeda)}</div>`).join('')}</div>` : ''}`;
+}
+function finBaixarSelecionadas(tipo) {
+  const lista = FIN_LANC.filter((l) => FIN_SELECAO.has(l.id) && l.status !== 'pago' && l.status !== 'cancelado');
+  if (!lista.length) return;
+  const total = lista.reduce((a, l) => a + finRestante(l), 0);
+  confirmarAcao(`Marcar ${lista.length} conta(s) como ${tipo === 'receber' ? 'recebida(s)' : 'paga(s)'} hoje (${formatMoney(total)})?`, () => {
+    lista.forEach((l) => finAtualizar(l.id, { status: 'pago', valorPago: Number(l.valor) || 0, dataPagamento: finHoje(), caixaId: l.caixaId || finCaixaPorRegra(l) }));
+    FIN_SELECAO = new Set();
+    finRender();
+  }, tipo === 'receber' ? 'Fechamento' : 'Pagar selecionadas');
+}
+function finCopiarExtrato(nome) {
+  const ate = finDataDoMes(FIN_MES, 31);
+  const abertas = FIN_LANC.filter((l) => l.tipo === 'receber' && l.cliente === nome && l.status !== 'pago' && l.status !== 'cancelado' && (l.vencimento || '') <= ate).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  const linhas = [`Olá, ${nome}! Segue o resumo do que está em aberto até ${finNomeMes(FIN_MES)}:`, ''].concat(abertas.map((l) => `• ${l.descricao} — vence ${kbDataCurta(l.vencimento)} — ${formatMoney(finRestante(l))}`), ['', `Total: ${formatMoney(abertas.reduce((a, l) => a + finRestante(l), 0))}`]);
+  const texto = linhas.join('\n');
+  try { navigator.clipboard.writeText(texto).then(() => avisar('Extrato copiado — é só colar no WhatsApp ou e-mail.', 'Copiado'), () => avisar(texto, 'Extrato')); }
+  catch (e) { avisar(texto, 'Extrato'); }
+}
+
+// ---------- Recorrentes (assinaturas) ----------
+function finAssinaturas() {
+  return FIN_REC.filter((r) => r.tipo === 'receber').map((r) => {
+    const lancs = FIN_LANC.filter((l) => l.recorrenciaId === r.id && l.status !== 'cancelado');
+    const recebido = lancs.reduce((a, l) => a + (Number(l.valorPago) || 0), 0);
+    const meses = lancs.filter((l) => l.status === 'pago').length;
+    return Object.assign({}, r, { recebido, mesesPagos: meses, emAberto: lancs.filter((l) => l.status !== 'pago').reduce((a, l) => a + finRestante(l), 0) });
+  });
+}
+function finHtmlRecorrentes() {
+  const lista = finAssinaturas();
+  const ativas = lista.filter((r) => r.ativa !== false && (!r.fim || r.fim >= finMesAtual()));
+  const mrr = ativas.reduce((a, r) => a + (Number(r.valor) || 0), 0);
+  const comHistorico = lista.filter((r) => r.recebido > 0);
+  const ltv = comHistorico.length ? comHistorico.reduce((a, r) => a + r.recebido, 0) / comHistorico.length : 0;
+  return `
+    <div class="fin-cards fin-cards-4">
+      <div class="fin-card"><div class="fin-card-tit">${ic('recorrente', 'ic-herda')} Assinaturas Ativas</div><div class="fin-num">${ativas.length}</div></div>
+      <div class="fin-card"><div class="fin-card-tit">${ic('dinheiro', 'ic-herda')} MRR Interno</div><div class="fin-num fin-verde">${finV(mrr)}</div><span class="kb-vazio-mini">receita recorrente por mês</span></div>
+      <div class="fin-card"><div class="fin-card-tit">${ic('tendencia', 'ic-herda')} LTV Médio</div><div class="fin-num fin-azul">${finV(ltv)}</div><span class="kb-vazio-mini">quanto cada assinatura já rendeu, em média</span></div>
+      <div class="fin-card"><div class="fin-card-tit">${ic('pessoas', 'ic-herda')} Total de Assinaturas</div><div class="fin-num">${lista.length}</div></div>
+    </div>
+    ${lista.length ? `<div class="fin-painel"><div class="kb-tabela-wrap"><table class="kb-tabela" style="min-width:700px;"><thead><tr><th>Cliente</th><th>Assinatura</th><th>Valor/mês</th><th>Desde</th><th>Meses pagos</th><th>Já rendeu</th><th>Status</th><th></th></tr></thead><tbody>
+      ${lista.map((r) => { const id = escapeParaOnclick(r.id); const ativa = r.ativa !== false && (!r.fim || r.fim >= finMesAtual()); return `<tr>
+        <td><strong>${escapeHtml(r.cliente || '—')}</strong></td><td>${escapeHtml(r.descricao)}</td><td>${finV(r.valor, r.moeda)}</td><td>${escapeHtml(finNomeMes(r.inicio))}</td><td>${r.mesesPagos}</td><td class="fin-verde">${finV(r.recebido)}</td>
+        <td>${ativa ? '<span class="fin-status pago">Ativa</span>' : (r.ativa === false ? '<span class="fin-status parcial">Pausada</span>' : '<span class="fin-status cancelado">Encerrada</span>')}</td>
+        <td style="white-space:nowrap; text-align:right;"><label class="switch" title="${r.ativa !== false ? 'Pausar' : 'Reativar'}"><input type="checkbox" ${r.ativa !== false ? 'checked' : ''} onchange="finGravarRecorrencia(FIN_REC.find((x) => x.id === '${id}'), { ativa: this.checked })"><span class="switch-slider"></span></label>
+          <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Encerrar assinatura" title="Encerrar (cancelar)" onclick="finConfirmarExcluirRecorrencia('${id}')">${ic('lixeira', 'ic-herda')}</button></td></tr>`; }).join('')}
+    </tbody></table></div></div>`
+      : `<div class="kb-vazio-grande" style="padding:30px;"><div class="ic-circulo">${ic('recorrente')}</div><p style="margin:0;">Nenhuma assinatura interna encontrada</p><p class="kb-vazio-mini">Crie uma Venda Rápida no modo "Recorrente" (até cancelar) para começar.</p><button type="button" class="btn btn-primary" onclick="finAbrirVendaRapida(); FIN_FORM.modo = 'recorrente'; finRenderForm();">${ic('mais', 'ic-herda')} Nova assinatura</button></div>`}`;
+}
+
+// ---------- Relatórios ----------
+function finPeriodoRelatorio() {
+  const atual = finMesAtual();
+  const p = FIN_REL.periodo;
+  if (p === 'mes') return { de: atual, ate: atual, nome: 'Este mês' };
+  if (p === 'passado') { const m = finSomarMeses(atual, -1); return { de: m, ate: m, nome: 'Mês passado' }; }
+  if (p === '3m') return { de: finSomarMeses(atual, -2), ate: atual, nome: 'Últimos 3 meses' };
+  if (p === '6m') return { de: finSomarMeses(atual, -5), ate: atual, nome: 'Últimos 6 meses' };
+  if (p === 'ano') return { de: atual.slice(0, 4) + '-01', ate: atual, nome: 'Este ano' };
+  return { de: atual, ate: atual, nome: 'Este mês' };
+}
+// Classificação automática da categoria na DRE, pelo nome
+function finClasseDre(l) {
+  if (l.tipo === 'receber') return 'receita';
+  const n = kbNomeNorm(finCategoria('pagar', l.categoriaId).nome + ' ' + (l.categoriaId || ''));
+  if (/imposto|tribut|simples|das\b|iss|icms/.test(n)) return 'deducao';
+  if (/fornecedor|produto|insumo|materia|custo|mercadoria|cmv/.test(n)) return 'custo';
+  if (/juro|tarifa|banc|financeir|emprestimo/.test(n)) return 'financeira';
+  return 'operacional';
+}
+function finDadosRelatorio() {
+  const per = finPeriodoRelatorio();
+  const naComp = (l) => { const c = finCompetencia(l); return c >= per.de && c <= per.ate; };
+  const noCaixa = (l) => { const c = (l.dataPagamento || '').slice(0, 7); return c && c >= per.de && c <= per.ate; };
+  const filtroCli = (l) => !FIN_REL.cliente || (l.tipo === 'receber' && l.cliente === FIN_REL.cliente) || (l.tipo === 'pagar' && !FIN_REL.cliente);
+  const ativos = FIN_LANC.filter((l) => l.status !== 'cancelado' && filtroCli(l));
+  const soma = (arr, f) => arr.reduce((a, l) => a + f(l), 0);
+  const comp = ativos.filter(naComp), caixa = ativos.filter(noCaixa);
+  const dre = (lista, val) => {
+    const por = (classe) => soma(lista.filter((l) => finClasseDre(l) === classe), val);
+    const bruta = por('receita');
+    const deducoes = por('deducao') + bruta * (Number(FIN_TRIBUTOS.deducoes) || 0) / 100;
+    const liquida = bruta - deducoes;
+    const custos = por('custo');
+    const lucroBruto = liquida - custos;
+    const operacional = por('operacional');
+    const ebitda = lucroBruto - operacional;
+    const financeiras = por('financeira');
+    const lair = ebitda - financeiras;
+    const ir = lair > 0 ? lair * (Number(FIN_TRIBUTOS.irpj) || 0) / 100 : 0;
+    return { bruta, deducoes, liquida, custos, lucroBruto, operacional, ebitda, financeiras, lair, ir, liquido: lair - ir };
+  };
+  const vencidos = ativos.filter((l) => l.tipo === 'receber' && finVencido(l) && naComp(l));
+  return {
+    per, comp, caixa,
+    receitaComp: soma(comp.filter((l) => l.tipo === 'receber'), (l) => Number(l.valor) || 0),
+    despesaComp: soma(comp.filter((l) => l.tipo === 'pagar'), (l) => Number(l.valor) || 0),
+    receitaCaixa: soma(caixa.filter((l) => l.tipo === 'receber'), (l) => Number(l.valorPago) || 0),
+    despesaCaixa: soma(caixa.filter((l) => l.tipo === 'pagar'), (l) => Number(l.valorPago) || 0),
+    inad: soma(vencidos, finRestante), inadContas: vencidos.length, inadClientes: new Set(vencidos.map((l) => l.cliente)).size,
+    dreComp: dre(comp, (l) => Number(l.valor) || 0), dreCaixa: dre(caixa, (l) => Number(l.valorPago) || 0),
+  };
+}
+function finHtmlRelatorios() {
+  const d = finDadosRelatorio();
+  const pct = (v, base) => (base ? Math.round((v / base) * 1000) / 10 : 0);
+  const recebidoPct = pct(d.receitaCaixa, d.receitaComp);
+  const linhaDre = (rot, chave, sinal, forte) => {
+    const c = d.dreComp[chave], k = d.dreCaixa[chave];
+    const cel = (v, base) => (sinal === '-' && !v ? '<span class="kb-vazio-mini">—</span>' : `<span class="${sinal === '-' ? 'fin-vermelho' : (v >= 0 ? 'fin-verde' : 'fin-vermelho')}">${FIN_REL.pctReceita ? pct(v, base) + '%' : finV(v)}</span>`);
+    return `<tr class="${forte ? 'fin-dre-forte' : ''}"><td>${rot}</td><td style="text-align:right;">${cel(c, d.dreComp.bruta)}</td><td style="text-align:right;">${cel(k, d.dreCaixa.bruta)}</td></tr>`;
+  };
+  const clientes = Array.from(new Set(FIN_LANC.filter((l) => l.tipo === 'receber' && l.cliente).map((l) => l.cliente))).sort((a, b) => a.localeCompare(b));
+  // receita por serviço (itens da Venda Rápida) e top clientes
+  const recComp = d.comp.filter((l) => l.tipo === 'receber' && (FIN_REL.servicoFiltro === 'todos' || (FIN_REL.servicoFiltro === 'recorrente' ? !!l.recorrenciaId : !l.recorrenciaId)));
+  const porServico = new Map();
+  recComp.forEach((l) => {
+    const itens = Array.isArray(l.itens) && l.itens.length ? l.itens : [{ nome: 'Sem serviço vinculado', valor: Number(l.valor) || 0 }];
+    const totalItens = itens.reduce((a, i) => a + (Number(i.valor) || 0), 0) || 1;
+    itens.forEach((i) => {
+      const parte = (Number(i.valor) || 0) / totalItens;
+      const r = porServico.get(i.nome) || { nome: i.nome, total: 0, recebido: 0, previsto: 0 };
+      r.total += (Number(l.valor) || 0) * parte; r.recebido += (Number(l.valorPago) || 0) * parte; r.previsto += finRestante(l) * parte;
+      porServico.set(i.nome, r);
+    });
+  });
+  const servicos = Array.from(porServico.values()).sort((a, b) => b.total - a.total);
+  const topClientes = Array.from(d.comp.filter((l) => l.tipo === 'receber' && l.cliente).reduce((m, l) => m.set(l.cliente, (m.get(l.cliente) || 0) + (Number(l.valor) || 0)), new Map()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const maxTop = topClientes.length ? topClientes[0][1] : 1;
+  return `
+    <div class="fin-painel-cab"><div><strong style="font-size:18px;">Relatórios Financeiros</strong><div class="kb-vazio-mini">${escapeHtml(d.per.nome)}</div></div><span class="kb-espaco"></span>
+      <button type="button" class="btn" onclick="finExportarRelatorio()">${ic('baixar', 'ic-herda')} Exportar</button>
+      <select class="srv-select" onchange="FIN_REL.cliente = this.value; finRender();"><option value="">Todos os clientes</option>${clientes.map((c) => `<option value="${escapeHtml(c)}"${FIN_REL.cliente === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>
+      <select class="srv-select" onchange="FIN_REL.periodo = this.value; finRender();">${[['mes', 'Este mês'], ['passado', 'Mês passado'], ['3m', 'Últimos 3 meses'], ['6m', 'Últimos 6 meses'], ['ano', 'Este ano']].map(([v, t]) => `<option value="${v}"${FIN_REL.periodo === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+    </div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong>Resumo do Período</strong></div>
+      <div class="kb-tabela-wrap"><table class="kb-tabela"><thead><tr><th>Indicador</th><th style="text-align:right;">Competência</th><th style="text-align:right;">Caixa</th></tr></thead><tbody>
+        <tr><td><span class="kb-bolinha" style="background:#3b82f6;"></span> Receita</td><td style="text-align:right;" class="fin-azul">${finV(d.receitaComp)}</td><td style="text-align:right;" class="fin-azul">${finV(d.receitaCaixa)}</td></tr>
+        <tr><td><span class="kb-bolinha" style="background:#f97316;"></span> Despesa</td><td style="text-align:right;" class="fin-vermelho">${finV(d.despesaComp)}</td><td style="text-align:right;" class="fin-vermelho">${finV(d.despesaCaixa)}</td></tr>
+        <tr class="fin-dre-forte"><td>Resultado</td><td style="text-align:right;" class="${d.receitaComp - d.despesaComp >= 0 ? 'fin-verde' : 'fin-vermelho'}">${finV(d.receitaComp - d.despesaComp)}</td><td style="text-align:right;" class="${d.receitaCaixa - d.despesaCaixa >= 0 ? 'fin-verde' : 'fin-vermelho'}">${finV(d.receitaCaixa - d.despesaCaixa)}</td></tr>
+        <tr><td>${ic('alerta', 'ic-herda')} Inadimplência</td><td style="text-align:right;" class="${d.inad ? 'fin-vermelho' : 'fin-verde'}">${finV(d.inad)} <small>(${pct(d.inad, d.receitaComp)}%)</small></td><td style="text-align:right;" class="kb-vazio-mini">${d.inadContas} conta(s) · ${d.inadClientes} cliente(s)</td></tr>
+      </tbody></table></div>
+      <div class="fin-linha" style="margin-top:8px;"><span>Recebido vs faturamento</span><span>${recebidoPct}%</span></div>
+      <span class="kb-barra-prog kb-barra-grossa" style="display:block;"><i style="width:${Math.min(100, recebidoPct)}%; background:var(--success);"></i></span>
+      <p class="kb-vazio-mini" style="margin:8px 0 0;"><strong>Competência</strong> = pelo mês da conta (vencimento). <strong>Caixa</strong> = pelo dia em que o dinheiro entrou ou saiu.</p>
+    </div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong>DRE — Demonstração do Resultado</strong><span class="kb-espaco"></span>
+        <label class="kb-linha-switch" style="gap:8px;"><label class="switch"><input type="checkbox" ${FIN_REL.pctReceita ? 'checked' : ''} onchange="FIN_REL.pctReceita = this.checked; finRender();"><span class="switch-slider"></span></label><span class="kb-vazio-mini">% sobre receita</span></label>
+        <button type="button" class="btn btn-small" onclick="finAbrirTributos()">${ic('configuracoes', 'ic-herda')} Tributos</button></div>
+      <div class="kb-tabela-wrap"><table class="kb-tabela fin-dre"><thead><tr><th>Linha</th><th style="text-align:right;">Competência</th><th style="text-align:right;">Caixa</th></tr></thead><tbody>
+        ${linhaDre('(+) Receita bruta', 'bruta', '+', true)}
+        ${linhaDre(`(−) Deduções (impostos s/ vendas)${Number(FIN_TRIBUTOS.deducoes) ? ` <small class="kb-vazio-mini">${Number(FIN_TRIBUTOS.deducoes)}% + categorias de impostos</small>` : ''}`, 'deducoes', '-')}
+        ${linhaDre('= Receita líquida', 'liquida', '+', true)}
+        ${linhaDre('(−) Custos (fornecedores, produtos)', 'custos', '-')}
+        ${linhaDre('= Lucro bruto', 'lucroBruto', '+', true)}
+        ${linhaDre('(−) Despesas operacionais', 'operacional', '-')}
+        ${linhaDre('= EBITDA / Resultado operacional', 'ebitda', '+', true)}
+        ${linhaDre('(−) Despesas financeiras (juros, tarifas)', 'financeiras', '-')}
+        ${linhaDre('= Lucro antes do IR (LAIR)', 'lair', '+', true)}
+        ${linhaDre(`(−) IRPJ / CSLL${Number(FIN_TRIBUTOS.irpj) ? ` <small class="kb-vazio-mini">${Number(FIN_TRIBUTOS.irpj)}%</small>` : ''}`, 'ir', '-')}
+        ${linhaDre('= Lucro líquido', 'liquido', '+', true)}
+        <tr><td class="kb-vazio-mini">Margem líquida</td><td style="text-align:right;" class="kb-vazio-mini">${pct(d.dreComp.liquido, d.dreComp.bruta)}%</td><td style="text-align:right;" class="kb-vazio-mini">${pct(d.dreCaixa.liquido, d.dreCaixa.bruta)}%</td></tr>
+      </tbody></table></div>
+      <p class="kb-vazio-mini" style="margin:6px 0 0;">Classificação automática pelo nome da categoria (impostos → deduções; fornecedores/produtos → custos; juros/tarifas → financeiras; o resto → operacionais). Revise as categorias para melhor precisão.</p>
+    </div>
+    <div class="fin-graficos">
+      <div class="fin-painel"><strong>Receita vs Despesa</strong><div class="fin-grafico"><canvas id="fin-g-recdesp"></canvas></div></div>
+      <div class="fin-painel"><strong>Evolução do Saldo</strong><div class="fin-grafico"><canvas id="fin-g-saldo"></canvas></div></div>
+      <div class="fin-painel"><strong>Receita por Categoria</strong><div class="fin-grafico"><canvas id="fin-g-catrec"></canvas></div></div>
+      <div class="fin-painel"><strong>Despesas por Categoria</strong><div class="fin-grafico"><canvas id="fin-g-catdesp"></canvas></div></div>
+    </div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><div><strong>Receita por serviço</strong><div class="kb-vazio-mini">${escapeHtml(d.per.nome)}</div></div><span class="kb-espaco"></span>
+        <div class="kb-segmento kb-segmento-p">${[['todos', 'Todos'], ['recorrente', 'Recorrente'], ['avulso', 'Avulso']].map(([v, t]) => `<button type="button" class="${FIN_REL.servicoFiltro === v ? 'ativo' : ''}" onclick="FIN_REL.servicoFiltro = '${v}'; finRender();">${t}</button>`).join('')}</div>
+        <button type="button" class="btn btn-small" onclick="finExportarServicosCsv()">${ic('baixar', 'ic-herda')} CSV</button></div>
+      <div class="fin-cards">
+        <div class="fin-card"><div class="kb-vazio-mini">Total</div><div class="fin-num">${finV(servicos.reduce((a, s) => a + s.total, 0))}</div></div>
+        <div class="fin-card"><div class="kb-vazio-mini">Recebido</div><div class="fin-num fin-verde">${finV(servicos.reduce((a, s) => a + s.recebido, 0))}</div></div>
+        <div class="fin-card"><div class="kb-vazio-mini">Previsto</div><div class="fin-num fin-azul">${finV(servicos.reduce((a, s) => a + s.previsto, 0))}</div></div>
+      </div>
+      ${servicos.length ? servicos.map((s) => `<div class="srv-cat-linha"><span style="flex:1;">${escapeHtml(s.nome)}</span><span class="fin-verde">${finV(s.recebido)}</span><span class="kb-vazio-mini">de</span><strong>${finV(s.total)}</strong></div>`).join('') : '<p class="kb-vazio" style="padding:16px;">Nenhum dado no período selecionado.</p>'}
+      <p class="kb-vazio-mini" style="margin:6px 0 0;">Vem dos serviços e produtos escolhidos na Venda Rápida.</p>
+    </div>
+    <div class="fin-graficos">
+      <div class="fin-painel"><strong>${ic('pessoas', 'ic-herda')} Top Clientes por Faturamento</strong>
+        ${topClientes.length ? topClientes.map(([n, v]) => `<div class="fin-top"><span>${escapeHtml(n)}</span><span class="kb-barra-prog"><i style="width:${Math.round((v / maxTop) * 100)}%; background:#3b82f6;"></i></span><strong>${finV(v)}</strong></div>`).join('') : '<p class="kb-vazio" style="padding:16px;">Sem dados no período</p>'}</div>
+      <div class="fin-painel"><strong>${ic('tarefas', 'ic-herda')} Status das Contas a Receber</strong><div class="fin-grafico"><canvas id="fin-g-status"></canvas></div></div>
+    </div>`;
+}
+function finDesenharGraficos() {
+  FIN_GRAFICOS.forEach((g) => { try { g.destroy(); } catch (e) {} });
+  FIN_GRAFICOS = [];
+  if (FIN_ABA !== 'relatorios' || typeof Chart === 'undefined' || !document.getElementById('fin-g-recdesp')) return;
+  const d = finDadosRelatorio();
+  const meses = [];
+  for (let m = d.per.de; m <= d.per.ate; m = finSomarMeses(m, 1)) meses.push(m);
+  if (meses.length === 1) { meses.unshift(finSomarMeses(meses[0], -2), finSomarMeses(meses[0], -1)); }
+  const doMes = (m, tipo) => FIN_LANC.filter((l) => l.tipo === tipo && l.status !== 'cancelado' && finCompetencia(l) === m).reduce((a, l) => a + (Number(l.valor) || 0), 0);
+  const rot = meses.map((m) => finNomeMes(m).slice(0, 3) + '/' + m.slice(2, 4));
+  const estilo = getComputedStyle(document.documentElement);
+  const cTexto = (estilo.getPropertyValue('--text-soft') || '#888').trim() || '#888';
+  const opc = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: cTexto, boxWidth: 12 } } }, scales: { x: { ticks: { color: cTexto } }, y: { ticks: { color: cTexto } } } };
+  const novo = (id, cfg) => { const el = document.getElementById(id); if (el) try { FIN_GRAFICOS.push(new Chart(el, cfg)); } catch (e) { console.error(e); } };
+  novo('fin-g-recdesp', { type: 'bar', data: { labels: rot, datasets: [{ label: 'Faturamento', data: meses.map((m) => doMes(m, 'receber')), backgroundColor: '#3b82f6' }, { label: 'Despesas', data: meses.map((m) => doMes(m, 'pagar')), backgroundColor: '#f97316' }] }, options: opc });
+  let saldo = 0;
+  const pagosAte = (m, tipo) => FIN_LANC.filter((l) => l.tipo === tipo && l.status !== 'cancelado' && (l.dataPagamento || '').slice(0, 7) === m).reduce((a, l) => a + (Number(l.valorPago) || 0), 0);
+  const antes = FIN_LANC.filter((l) => l.status !== 'cancelado' && l.dataPagamento && l.dataPagamento.slice(0, 7) < meses[0]).reduce((a, l) => a + (l.tipo === 'receber' ? 1 : -1) * (Number(l.valorPago) || 0), 0);
+  saldo = antes + (FIN_CAIXAS.caixas || []).reduce((a, c) => a + (Number(c.saldoInicial) || 0), 0);
+  novo('fin-g-saldo', { type: 'line', data: { labels: rot, datasets: [{ label: 'Saldo', data: meses.map((m) => (saldo += pagosAte(m, 'receber') - pagosAte(m, 'pagar'))), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,.15)', fill: true, tension: .3 }] }, options: opc });
+  const porCat = (tipo) => { const mp = new Map(); d.comp.filter((l) => l.tipo === tipo).forEach((l) => { const c = finCategoria(tipo, l.categoriaId); const r = mp.get(c.nome) || { v: 0, cor: c.cor }; r.v += Number(l.valor) || 0; mp.set(c.nome, r); }); return mp; };
+  const pizza = (id, mp) => { if (!mp.size) { const el = document.getElementById(id); if (el) el.parentElement.innerHTML = '<p class="kb-vazio" style="padding:30px 0;">Sem dados no período</p>'; return; } novo(id, { type: 'doughnut', data: { labels: Array.from(mp.keys()), datasets: [{ data: Array.from(mp.values()).map((x) => x.v), backgroundColor: Array.from(mp.values()).map((x) => corHexValida(x.cor) || '#64748b'), borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: cTexto, boxWidth: 12 } } } } }); };
+  pizza('fin-g-catrec', porCat('receber'));
+  pizza('fin-g-catdesp', porCat('pagar'));
+  const rec = d.comp.filter((l) => l.tipo === 'receber');
+  const st = new Map([['Recebido', { v: rec.filter((l) => l.status === 'pago').length, cor: '#22c55e' }], ['Pendente', { v: rec.filter((l) => l.status === 'pendente' && !finVencido(l)).length, cor: '#3b82f6' }], ['Parcial', { v: rec.filter((l) => l.status === 'parcial' && !finVencido(l)).length, cor: '#f59e0b' }], ['Vencido', { v: rec.filter(finVencido).length, cor: '#ef4444' }]].filter(([, x]) => x.v > 0));
+  pizza('fin-g-status', st);
+}
+function finAbrirTributos() {
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:440px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Tributos da DRE</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub">Percentuais estimados, usados só no relatório. Deixe 0 se você já lança os impostos como despesa (categoria "Impostos").</p>
+      <div class="field full"><label>Deduções sobre a receita (%) — ex.: Simples, ISS</label><input type="number" id="fin-t-ded" min="0" max="100" step="0.01" value="${Number(FIN_TRIBUTOS.deducoes) || 0}"></div>
+      <div class="field full"><label>IRPJ / CSLL sobre o lucro (%)</label><input type="number" id="fin-t-ir" min="0" max="100" step="0.01" value="${Number(FIN_TRIBUTOS.irpj) || 0}"></div>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="finSalvarTributos()">Salvar</button></div>
+    </div>`;
+  openModal('modal-srv');
+}
+function finSalvarTributos() {
+  const v = (id) => Math.max(0, Math.min(100, Number(document.getElementById(id).value) || 0));
+  const dados = { deducoes: v('fin-t-ded'), irpj: v('fin-t-ir') };
+  if (cloudSet(FIN_TRIBUTOS_KEY, dados) === false) return;
+  FIN_TRIBUTOS = dados;
+  srvFecharModal();
+  finRender();
+}
+function finBaixarCsv(nome, linhas) {
+  try {
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + linhas.join('\n')], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) { avisar('Não foi possível gerar o arquivo neste navegador.'); }
+}
+function finExportarRelatorio() {
+  const d = finDadosRelatorio();
+  const n = (v) => String(Math.round(v * 100) / 100).replace('.', ',');
+  const l = [`Relatório financeiro;${d.per.nome}`, '', 'Indicador;Competência;Caixa', `Receita;${n(d.receitaComp)};${n(d.receitaCaixa)}`, `Despesa;${n(d.despesaComp)};${n(d.despesaCaixa)}`, `Resultado;${n(d.receitaComp - d.despesaComp)};${n(d.receitaCaixa - d.despesaCaixa)}`, `Inadimplência;${n(d.inad)};`, '', 'DRE;Competência;Caixa'];
+  [['Receita bruta', 'bruta'], ['Deduções', 'deducoes'], ['Receita líquida', 'liquida'], ['Custos', 'custos'], ['Lucro bruto', 'lucroBruto'], ['Despesas operacionais', 'operacional'], ['EBITDA', 'ebitda'], ['Despesas financeiras', 'financeiras'], ['LAIR', 'lair'], ['IRPJ/CSLL', 'ir'], ['Lucro líquido', 'liquido']].forEach(([r, k]) => l.push(`${r};${n(d.dreComp[k])};${n(d.dreCaixa[k])}`));
+  finBaixarCsv('relatorio-financeiro.csv', l);
+}
+function finExportarServicosCsv() {
+  const d = finDadosRelatorio();
+  const linhas = ['Serviço;Valor;Recebido;Previsto'];
+  const mp = new Map();
+  d.comp.filter((l) => l.tipo === 'receber').forEach((l) => (Array.isArray(l.itens) && l.itens.length ? l.itens : [{ nome: 'Sem serviço vinculado', valor: l.valor }]).forEach((i) => { const r = mp.get(i.nome) || 0; mp.set(i.nome, r + (Number(i.valor) || 0)); }));
+  mp.forEach((v, k) => linhas.push(`"${String(k).replace(/"/g, '""')}";${String(v).replace('.', ',')};;`));
+  finBaixarCsv('receita-por-servico.csv', linhas);
+}
+
+
+// =====================================================================
+// ---------- Financeiro · Entrega 3 ----------
+// PIX (QR Code no orçamento aprovado), recibos em lote e tutorial.
+// =====================================================================
+
+const FIN_PIX_KEY = 'eagles_fin_pix_v1';
+const PIX_COLECAO_PUBLICA = 'pix_publico';
+let FIN_PIX = null;
+let FIN_PIX_EDIT = null;
+const PIX_TIPOS_CHAVE = { cpf: 'CPF', cnpj: 'CNPJ', email: 'E-mail', telefone: 'Telefone', aleatoria: 'Chave aleatória' };
+const PIX_QUANDO = { avista: 'Apenas para pagamentos únicos (à vista)', sempre: 'Sempre (também no 1º pagamento de orçamentos recorrentes)' };
+
+// ---------- BR Code (PIX "copia e cola") — padrão EMV do Banco Central ----------
+function pixSemAcento(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9 .\-]/g, '').toUpperCase().trim(); }
+function pixCampo(id, valor) { const v = String(valor); return id + String(v.length).padStart(2, '0') + v; }
+function pixCrc16(payload) {
+  let crc = 0xFFFF;
+  for (let i = 0; i < payload.length; i++) {
+    crc ^= payload.charCodeAt(i) << 8;
+    for (let b = 0; b < 8; b++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF;
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+function pixNormalizarChave(tipo, chave) {
+  const c = String(chave || '').trim();
+  if (tipo === 'cpf' || tipo === 'cnpj') return c.replace(/\D/g, '');
+  if (tipo === 'telefone') { const d = c.replace(/\D/g, ''); return d.startsWith('55') && d.length >= 12 ? '+' + d : '+55' + d; }
+  if (tipo === 'email') return c.toLowerCase();
+  return c;
+}
+function pixValidarChave(tipo, chave) {
+  const c = pixNormalizarChave(tipo, chave);
+  if (tipo === 'cpf') return /^\d{11}$/.test(c);
+  if (tipo === 'cnpj') return /^\d{14}$/.test(c);
+  if (tipo === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c) && c.length <= 77;
+  if (tipo === 'telefone') return /^\+55\d{10,11}$/.test(c);
+  if (tipo === 'aleatoria') return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(c);
+  return false;
+}
+function pixGerarPayload({ tipoChave, chave, nome, cidade, valor, txid, descricao }) {
+  const k = pixNormalizarChave(tipoChave, chave);
+  let desc = pixSemAcento(descricao || '').slice(0, 40);
+  // o bloco 26 tem no máximo 99 caracteres
+  const base = pixCampo('00', 'br.gov.bcb.pix') + pixCampo('01', k);
+  const sobra = 99 - base.length - 4;
+  if (desc.length > sobra) desc = sobra > 0 ? desc.slice(0, sobra) : '';
+  const conta = base + (desc ? pixCampo('02', desc) : '');
+  const v = Number(valor) > 0 ? (Math.round(Number(valor) * 100) / 100).toFixed(2) : '';
+  const id = (String(txid || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 25)) || '***';
+  const semCrc = pixCampo('00', '01') + pixCampo('26', conta) + pixCampo('52', '0000') + pixCampo('53', '986') + (v ? pixCampo('54', v) : '') +
+    pixCampo('58', 'BR') + pixCampo('59', (pixSemAcento(nome) || 'RECEBEDOR').slice(0, 25)) + pixCampo('60', (pixSemAcento(cidade) || 'BRASIL').slice(0, 15)) +
+    pixCampo('62', pixCampo('05', id)) + '6304';
+  return semCrc + pixCrc16(semCrc);
+}
+// QR Code como imagem (biblioteca qrcode-generator, carregada pela página).
+// Sem a biblioteca, mostra só o "copia e cola", que funciona igual.
+function pixQrImg(payload, px) {
+  if (typeof qrcode !== 'function') return '';
+  try {
+    const q = qrcode(0, 'M'); q.addData(payload); q.make();
+    return `<img class="pix-qr" src="${q.createDataURL(Math.max(2, Math.round((px || 220) / (q.getModuleCount() + 8))), 4)}" alt="QR Code PIX" width="${px || 220}" height="${px || 220}">`;
+  } catch (e) { return ''; }
+}
+function pixBlocoHtml(cfg, valor, txid, comCopiar) {
+  const payload = pixGerarPayload({ tipoChave: cfg.tipoChave, chave: cfg.chave, nome: cfg.nome, cidade: cfg.cidade, valor, txid });
+  const img = pixQrImg(payload, 220);
+  return `<div class="pix-bloco">
+    ${img || '<p class="pix-sem-qr">Use o código "copia e cola" abaixo no app do seu banco.</p>'}
+    ${Number(valor) > 0 ? `<div class="pix-valor">${formatMoney(Number(valor))}</div>` : ''}
+    <div class="pix-dados">${escapeHtml(cfg.nome)} · ${escapeHtml(PIX_TIPOS_CHAVE[cfg.tipoChave] || '')}: ${escapeHtml(cfg.chave)}</div>
+    <textarea class="pix-copia" readonly rows="3" aria-label="PIX copia e cola">${escapeHtml(payload)}</textarea>
+    ${comCopiar ? `<button type="button" class="btn btn-primary pix-btn-copiar" onclick="pixCopiar(this)">Copiar código PIX</button>` : ''}
+    ${cfg.mensagem ? `<p class="pix-msg">${escapeHtml(cfg.mensagem)}</p>` : ''}
+  </div>`;
+}
+function pixCopiar(btn) {
+  const t = btn.parentElement.querySelector('.pix-copia');
+  const ok = () => { btn.textContent = 'Código copiado ✓'; setTimeout(() => { btn.textContent = 'Copiar código PIX'; }, 2500); };
+  try { navigator.clipboard.writeText(t.value).then(ok, () => { t.select(); document.execCommand('copy'); ok(); }); }
+  catch (e) { t.select(); try { document.execCommand('copy'); ok(); } catch (e2) {} }
+}
+
+// ---------- aba PIX ----------
+function finIniciarPix() {
+  if (FIN_PIX !== null) return;
+  FIN_PIX = {};
+  cloudWatch(FIN_PIX_KEY, {}, (d) => { FIN_PIX = d || {}; if (FIN_ABA === 'pix' && !FIN_PIX_EDIT) finRender(); });
+}
+function finPixPadrao() {
+  return Object.assign({ metodo: 'proprio', tipoChave: 'cpf', chave: '', nome: (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '', cidade: '', quando: 'avista', mensagem: '', ativo: false }, FIN_PIX || {});
+}
+function finHtmlPix() {
+  if (!FIN_PIX_EDIT) FIN_PIX_EDIT = finPixPadrao();
+  const e = FIN_PIX_EDIT;
+  const valida = e.chave && pixValidarChave(e.tipoChave, e.chave);
+  const ph = { cpf: '000.000.000-00', cnpj: '00.000.000/0000-00', email: 'voce@empresa.com', telefone: '(11) 99999-9999', aleatoria: '123e4567-e89b-12d3-a456-426614174000' }[e.tipoChave];
+  return `<div class="fin-painel fin-pix">
+    <div class="fin-painel-cab"><strong style="font-size:17px;">${ic('dinheiro')} Configurações de Recebimento PIX</strong></div>
+    <p class="cfg-secao-nota" style="margin-top:-4px;">Configure como seus clientes visualizam e pagam via PIX após a aprovação de orçamentos.</p>
+    <div class="fin-pix-grade">
+      <div>
+        <div class="field full"><label>Método de recebimento PIX</label><select disabled><option>PIX Próprio (QR Code manual)</option></select><p class="nivel-ajuda">O QR Code é gerado com a sua chave PIX. O pagamento cai direto na sua conta e é conferido por você (não é confirmado automaticamente).</p></div>
+        <div class="kb-campos-2">
+          <div class="field"><label>Tipo de Chave</label><select onchange="FIN_PIX_EDIT.tipoChave = this.value; finRender();">${Object.entries(PIX_TIPOS_CHAVE).map(([k, v]) => `<option value="${k}"${e.tipoChave === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+          <div class="field"><label>Chave PIX</label><input type="text" id="fin-pix-chave" maxlength="77" value="${escapeHtml(e.chave)}" placeholder="${ph}" oninput="FIN_PIX_EDIT.chave = this.value" onchange="finRender()">${e.chave && !valida ? '<p class="nivel-ajuda" style="color:var(--danger);">Essa chave não parece um(a) ' + escapeHtml(PIX_TIPOS_CHAVE[e.tipoChave]) + ' válido(a).</p>' : ''}</div>
+          <div class="field"><label>Nome do Beneficiário</label><input type="text" id="fin-pix-nome" maxlength="25" value="${escapeHtml(e.nome)}" oninput="FIN_PIX_EDIT.nome = this.value" onchange="finRender()"><p class="nivel-ajuda">Nome exibido no QR Code (até 25 letras).</p></div>
+          <div class="field"><label>Cidade</label><input type="text" id="fin-pix-cidade" maxlength="15" value="${escapeHtml(e.cidade)}" placeholder="SÃO PAULO" oninput="FIN_PIX_EDIT.cidade = this.value" onchange="finRender()"><p class="nivel-ajuda">Cidade do beneficiário (aparece no QR Code).</p></div>
+        </div>
+        <div class="field full"><label>Quando exibir PIX após orçamento</label><select onchange="FIN_PIX_EDIT.quando = this.value">${Object.entries(PIX_QUANDO).map(([k, v]) => `<option value="${k}"${e.quando === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+        <div class="field full"><label>Mensagem personalizada (opcional)</label><textarea maxlength="200" rows="3" placeholder="Ex: Realize o pagamento em até 24h para garantir o início do projeto." oninput="FIN_PIX_EDIT.mensagem = this.value; this.nextElementSibling.textContent = this.value.length + '/200 — Mensagem exibida junto ao QR Code para o cliente.';">${escapeHtml(e.mensagem)}</textarea><p class="nivel-ajuda">${String(e.mensagem || '').length}/200 — Mensagem exibida junto ao QR Code para o cliente.</p></div>
+        <div class="kb-wiz-caixa kb-linha-switch"><div><strong>Ativar PIX pós-orçamento</strong><span>Habilita a exibição do PIX na página de aprovação do orçamento.</span></div><label class="switch"><input type="checkbox" ${e.ativo ? 'checked' : ''} onchange="FIN_PIX_EDIT.ativo = this.checked"><span class="switch-slider"></span></label></div>
+        <button type="button" class="btn btn-primary" onclick="finSalvarPix()">${ic('aprovado', 'ic-herda')} Salvar Configurações</button>
+      </div>
+      <div class="fin-pix-preview"><div class="kb-vazio-mini" style="text-transform:uppercase; letter-spacing:.1em; margin-bottom:8px;">Pré-visualização (exemplo de R$ 100,00)</div>
+        ${valida && String(e.nome).trim() ? pixBlocoHtml(e, 100, 'TESTE', false) : '<p class="kb-vazio">Preencha a chave e o nome pra ver o QR Code.</p>'}</div>
+    </div>
+  </div>`;
+}
+async function finSalvarPix() {
+  const e = FIN_PIX_EDIT;
+  if (!e) return;
+  ['chave', 'nome', 'cidade'].forEach((k) => { const el = document.getElementById('fin-pix-' + k); if (el) e[k] = el.value; });
+  if (e.ativo || e.chave) {
+    if (!pixValidarChave(e.tipoChave, e.chave)) { avisar(`A chave não é um(a) ${PIX_TIPOS_CHAVE[e.tipoChave]} válido(a). Confira o tipo e a chave.`); return; }
+    if (!String(e.nome).trim()) { avisar('Preencha o nome do beneficiário.'); return; }
+    if (!String(e.cidade).trim()) { avisar('Preencha a cidade (o QR Code exige).'); return; }
+  }
+  const dados = { metodo: 'proprio', tipoChave: e.tipoChave, chave: String(e.chave).trim().slice(0, 77), nome: String(e.nome).trim().slice(0, 25), cidade: String(e.cidade).trim().slice(0, 15), quando: PIX_QUANDO[e.quando] ? e.quando : 'avista', mensagem: String(e.mensagem || '').slice(0, 200), ativo: !!e.ativo };
+  if (cloudSet(FIN_PIX_KEY, dados) === false) return;
+  FIN_PIX = dados;
+  // a página do orçamento é pública: ela lê uma cópia só com o que o cliente precisa ver
+  if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
+    try { await firestoreDb.collection(PIX_COLECAO_PUBLICA).doc(TENANT_ID).set({ ativo: dados.ativo, tipoChave: dados.tipoChave, chave: dados.chave, nome: dados.nome, cidade: dados.cidade, quando: dados.quando, mensagem: dados.mensagem, atualizadoEm: new Date().toISOString() }); }
+    catch (err) { console.error('Erro ao publicar o PIX:', err); avisar(typeof mensagemErroFirestore === 'function' ? mensagemErroFirestore(err) : 'Não foi possível publicar o PIX agora.'); return; }
+  }
+  FIN_PIX_EDIT = null;
+  finRender();
+  avisar(dados.ativo ? 'PIX ativado: aparece na página do orçamento assim que o cliente aprovar.' : 'Configurações salvas. O PIX está desativado.', 'PIX');
+}
+
+// ---------- PIX na página pública do orçamento ----------
+async function pixMostrarNaProposta(p) {
+  const alvo = document.getElementById('prop-ja-respondida');
+  if (!alvo || !p || p.status !== 'aprovada' || !p.tenantId || !firestoreDb || document.getElementById('prop-pix')) return;
+  try {
+    const snap = await firestoreDb.collection(PIX_COLECAO_PUBLICA).doc(p.tenantId).get();
+    if (!snap.exists) return;
+    const cfg = snap.data();
+    if (!cfg.ativo || !pixValidarChave(cfg.tipoChave, cfg.chave)) return;
+    const recorrente = /^Recorrente/i.test(p.condicaoPagamento || '');
+    if (recorrente && cfg.quando !== 'sempre') return;
+    const total = (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0);
+    if (!(total > 0) || document.getElementById('prop-pix')) return;
+    alvo.insertAdjacentHTML('beforeend', `<div id="prop-pix" class="prop-pix"><h3>Pague com PIX</h3><p class="pix-sub">${recorrente ? 'Valor do 1º pagamento. ' : ''}Aponte a câmera do app do seu banco para o QR Code ou use o "copia e cola".</p>${pixBlocoHtml(cfg, total, String(PROPOSTA_PUBLICA_ID || '').slice(0, 25), true)}</div>`);
+  } catch (e) { /* sem PIX: a página segue normal */ }
+}
+
+// ---------- Recibos em lote ----------
+function finExtenso(valor) {
+  const u = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze', 'doze', 'treze', 'catorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+  const d = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+  const c = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+  const ate999 = (n) => {
+    if (n === 0) return '';
+    if (n === 100) return 'cem';
+    const partes = [];
+    if (n >= 100) partes.push(c[Math.floor(n / 100)]);
+    const r = n % 100;
+    if (r >= 20) { partes.push(d[Math.floor(r / 10)] + (r % 10 ? ' e ' + u[r % 10] : '')); } else if (r) partes.push(u[r]);
+    return partes.join(' e ');
+  };
+  const inteiro = Math.floor(Math.round(valor * 100) / 100);
+  const cent = Math.round((valor - inteiro) * 100);
+  const grupos = [];
+  const escalas = [['', ''], ['mil', 'mil'], ['milhão', 'milhões'], ['bilhão', 'bilhões']];
+  let n = inteiro, i = 0;
+  while (n > 0 && i < escalas.length) {
+    const g = n % 1000;
+    if (g) grupos.unshift({ g, txt: (i === 1 && g === 1 ? '' : ate999(g)) + (i ? ' ' + (g === 1 ? escalas[i][0] : escalas[i][1]) : ''), i });
+    n = Math.floor(n / 1000); i++;
+  }
+  let reais = '';
+  grupos.forEach((x, k) => {
+    const txt = x.txt.trim();
+    if (!k) reais = txt;
+    else reais += (x.g < 100 || x.g % 100 === 0 ? ' e ' : ' ') + txt; // "mil e quinhentos", "mil duzentos e trinta"
+  });
+  if (inteiro >= 1000000 && inteiro % 1000000 === 0) reais += ' de';
+  const parteReais = inteiro ? `${reais} ${inteiro === 1 ? 'real' : 'reais'}` : '';
+  const parteCent = cent ? `${ate999(cent)} ${cent === 1 ? 'centavo' : 'centavos'}` : '';
+  return [parteReais, parteCent].filter(Boolean).join(' e ') || 'zero reais';
+}
+function finAbrirRecibos() {
+  const pagas = FIN_LANC.filter((l) => l.tipo === 'receber' && Number(l.valorPago) > 0 && (l.dataPagamento || '').slice(0, 7) === FIN_MES && l.status !== 'cancelado').sort((a, b) => (a.dataPagamento || '').localeCompare(b.dataPagamento || ''));
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Recibos em lote</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub">Recebimentos de ${finNomeMes(FIN_MES)}. Escolha quais recibos gerar — abre uma página pronta pra imprimir ou salvar em PDF (um recibo por página).</p>
+      ${pagas.length ? `<label class="kb-imp-opcao" style="margin:0 0 8px;"><input type="checkbox" checked onchange="document.querySelectorAll('.fin-rec-sel').forEach((c) => { c.checked = this.checked; })"> <strong>Todos (${pagas.length})</strong></label>
+        <div style="max-height:320px; overflow-y:auto;">${pagas.map((l) => `<label class="srv-cat-linha" style="cursor:pointer;"><input type="checkbox" class="fin-rec-sel kb-sel" value="${escapeHtml(l.id)}" checked><span style="flex:1;">${escapeHtml(l.cliente || 'Cliente avulso')} <small style="color:var(--text-soft);">· ${escapeHtml(l.descricao)} · ${kbDataCurta(l.dataPagamento)}</small></span>${finV(l.valorPago, l.moeda)}</label>`).join('')}</div>
+        <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="finGerarRecibos()">${ic('documento', 'ic-herda')} Gerar recibos</button></div>`
+        : '<p class="kb-vazio" style="padding:20px;">Nenhum recebimento nesse mês.</p>'}
+    </div>`;
+  openModal('modal-srv');
+}
+function finHtmlRecibos(lista) {
+  const pf = PERFIL_DATA || {};
+  const empresa = pf.nomeEmpresa || pf.nomeFantasia || 'Empresa';
+  const doc = pf.tipoPessoa === 'PF' ? (pf.cpf ? 'CPF ' + pf.cpf : '') : (pf.cnpj ? 'CNPJ ' + pf.cnpj : '');
+  const logo = typeof urlImagemSegura === 'function' ? urlImagemSegura(pf.logoUrl) : '';
+  const recibo = (l, i) => `<section class="recibo">
+    <header>${logo ? `<img src="${escapeHtml(logo)}" alt="">` : ''}<div><strong>${escapeHtml(empresa)}</strong>${doc ? `<br><small>${escapeHtml(doc)}</small>` : ''}</div><div class="num">RECIBO Nº ${String(i + 1).padStart(3, '0')}<br><b>${escapeHtml(formatMoney(Number(l.valorPago)))}</b></div></header>
+    <p>Recebi(emos) de <strong>${escapeHtml(l.cliente || '________________________')}</strong> a importância de <strong>${escapeHtml(formatMoney(Number(l.valorPago)))}</strong> (${escapeHtml(finExtenso(Number(l.valorPago)))}), referente a <strong>${escapeHtml(l.descricao)}</strong>${l.status === 'parcial' ? ' (pagamento parcial)' : ''}.</p>
+    <p>Para clareza, firmo(amos) o presente recibo.</p>
+    <p class="data">${escapeHtml(formatDatePt(l.dataPagamento))}</p>
+    <div class="assin">____________________________________<br>${escapeHtml(empresa)}</div>
+  </section>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Recibos</title><style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;background:#f3f3f3}
+    .recibo{background:#fff;max-width:720px;margin:24px auto;padding:36px 40px;border:1px solid #ddd;page-break-after:always;line-height:1.7;font-size:15px}
+    header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #111;padding-bottom:14px;margin-bottom:22px}
+    header img{max-height:54px;max-width:140px;object-fit:contain}
+    header .num{margin-left:auto;text-align:right;font-size:13px} header .num b{font-size:20px}
+    .data{text-align:right;margin-top:26px} .assin{text-align:center;margin-top:60px}
+    .barra{max-width:720px;margin:20px auto 0;text-align:right} .barra button{padding:10px 18px;font-size:14px;cursor:pointer}
+    @media print{body{background:#fff}.barra{display:none}.recibo{border:none;margin:0 auto}}
+  </style></head><body><div class="barra"><button onclick="window.print()">Imprimir / salvar PDF</button></div>${lista.map(recibo).join('')}</body></html>`;
+}
+function finGerarRecibos() {
+  const ids = Array.from(document.querySelectorAll('.fin-rec-sel:checked')).map((c) => c.value);
+  const lista = ids.map((id) => FIN_LANC.find((l) => l.id === id)).filter(Boolean);
+  if (!lista.length) { avisar('Escolha pelo menos um recebimento.'); return; }
+  const html = finHtmlRecibos(lista);
+  const janela = typeof window.open === 'function' ? window.open('', '_blank') : null;
+  if (!janela) { avisar('O navegador bloqueou a nova aba. Libere pop-ups para este site e tente de novo.'); return; }
+  janela.document.open(); janela.document.write(html); janela.document.close();
+  srvFecharModal();
+}
+
+// ---------- Tutorial do Financeiro ----------
+TOURS_CRM.financeiro = [
+  { alvo: '.fin-cab h1', titulo: 'Financeiro', texto: 'Aqui ficam todas as contas a receber e a pagar da empresa — o mesmo caixa no ERP e no CRM.', preparar: () => { if (FIN_ABA !== 'visao') finIrAba('visao'); } },
+  { alvo: '.fin-btn-venda', titulo: 'Venda Rápida', texto: 'Lance uma receita em segundos: à vista, parcelada ou recorrente (assinatura). Dá pra puxar serviços do catálogo, mover o lead no Pipeline e criar uma tarefa no Kanban.' },
+  { alvo: '.fin-btn-despesa', titulo: 'Lançar Despesa', texto: 'Contas a pagar avulsas, parceladas ou fixas (recorrentes, que geram a conta todo mês sozinhas).' },
+  { alvo: '.fin-abas', titulo: 'As abas', texto: 'Receber e Pagar (as contas), Clientes (fechamento), Fornecedores, PIX, Recorrentes (MRR), Caixa (saldos) e Relatórios (DRE e gráficos).' },
+  { alvo: '.fin-periodo', titulo: 'Período', texto: 'Troque o mês pra ver os números de qualquer período.' },
+  { alvo: '.fin-cards', titulo: 'Resumo do mês', texto: 'Quanto entra, quanto sai e o lucro do mês — separando pendente, vencido e o que já foi pago.' },
+  { alvo: '.fin-vencidos', titulo: 'Vencidos', texto: 'Tudo o que passou do vencimento sem ser pago. Clique pra abrir e receber ou pagar direto daqui.' },
+  { alvo: '.fin-cab .kb-btn-borda', titulo: 'Ocultar valores', texto: 'Esconde os números da tela — útil quando tem alguém olhando.' },
+];
+
+
+// =====================================================================
+// ---------- CRM → Páginas → Página Pública (site da empresa) ----------
+// =====================================================================
+// A configuração fica em dados (eagles_pagina_publica_v1). O visitante
+// abre site.html?u=<endereço>, que lê uma CÓPIA pública
+// (paginas_publicas/<endereço>) com só o que aparece na tela. O formulário
+// de contato cria um documento em leads_publicos (o visitante só consegue
+// CRIAR), e o CRM transforma cada um em cliente + negócio no Pipeline.
+
+const PAG_KEY = 'eagles_pagina_publica_v1';
+const PAG_PIXELS_KEY = 'eagles_integracao_pixels_v1';
+const PAG_COLECAO = 'paginas_publicas';
+const PAG_LEADS_COLECAO = 'leads_publicos';
+let PAG = null;
+let PAG_PIXELS = { meta: { ativo: false, pixelId: '', token: '' }, ga: { ativo: false, medicaoId: '' } };
+let PAG_INICIADO = false;
+
+const PAG_PALETAS = [
+  { id: 'sunset', nome: 'Sunset Glow', desc: 'Vibrante e energético', primaria: '#ff6b6b', secundaria: '#ffd166' },
+  { id: 'ocean', nome: 'Ocean Breeze', desc: 'Fresco e profissional', primaria: '#4ecdc4', secundaria: '#556270' },
+  { id: 'purple', nome: 'Purple Haze', desc: 'Moderno e ousado', primaria: '#a8dadc', secundaria: '#e63946' },
+  { id: 'cyber', nome: 'Cyber Night', desc: 'Tech e futurista', primaria: '#7209b7', secundaria: '#f72585' },
+  { id: 'forest', nome: 'Forest Dream', desc: 'Natural e confiável', primaria: '#52b788', secundaria: '#2d6a4f' },
+  { id: 'rose', nome: 'Rose Gold', desc: 'Elegante e premium', primaria: '#f472b6', secundaria: '#f59e0b' },
+  { id: 'electric', nome: 'Electric Blue', desc: 'Inovador e dinâmico', primaria: '#3b82f6', secundaria: '#8b5cf6' },
+  { id: 'fire', nome: 'Fire & Ice', desc: 'Contraste impactante', primaria: '#ef4444', secundaria: '#06b6d4' },
+];
+const PAG_ESTILOS = {
+  moderno: { nome: 'Moderno', desc: 'Sem serifa, cantos suaves', fonte: "'Inter', system-ui, sans-serif", raio: 14 },
+  classico: { nome: 'Clássico', desc: 'Títulos com serifa, sóbrio', fonte: "Georgia, 'Times New Roman', serif", raio: 6 },
+  minimalista: { nome: 'Minimalista', desc: 'Linhas retas, muito respiro', fonte: "'Helvetica Neue', Arial, sans-serif", raio: 0 },
+  arredondado: { nome: 'Arredondado', desc: 'Cantos bem redondos, amigável', fonte: "'Nunito', 'Inter', system-ui, sans-serif", raio: 26 },
+};
+const PAG_BLOCOS = {
+  menu: { nome: 'Menu', icone: 'lista', unico: true },
+  hero: { nome: 'Hero (topo)', icone: 'brilho', unico: true },
+  servicos: { nome: 'Serviços', icone: 'pacote', unico: true },
+  sobre: { nome: 'Sobre', icone: 'usuario' },
+  depoimentos: { nome: 'Depoimentos', icone: 'mensagem' },
+  galeria: { nome: 'Galeria / Portfólio', icone: 'imagem' },
+  faq: { nome: 'Perguntas frequentes', icone: 'ajuda' },
+  cta: { nome: 'CTA Final', icone: 'raio' },
+  contato: { nome: 'Contato (captura de leads)', icone: 'email', unico: true },
+  texto: { nome: 'Texto livre', icone: 'documento' },
+  rodape: { nome: 'Rodapé', icone: 'colunas', unico: true },
+};
+
+function pagNovaSecao(tipo, dados) {
+  const padrao = {
+    menu: { logoUrl: '', nome: '', itens: [{ texto: 'Serviços', link: '#servicos' }, { texto: 'Sobre', link: '#sobre' }, { texto: 'Contato', link: '#contato' }] },
+    hero: { etiqueta: '', titulo: 'Sua empresa', subtitulo: 'Transformando ideias em realidade', ctaTexto: 'Iniciar Projeto', ctaLink: '#contato', imagemUrl: '', provaTexto: '', provaNota: 5 },
+    servicos: { titulo: 'Serviços', subtitulo: 'Soluções completas para transformar sua marca', mostrarPreco: true },
+    sobre: { titulo: 'Sobre nós', texto: 'Conte aqui a história da sua empresa, o que vocês fazem e por que são diferentes.', imagemUrl: '' },
+    depoimentos: { titulo: 'O que nossos clientes dizem', itens: [{ nome: 'Cliente satisfeito', cargo: 'CEO', texto: 'Trabalho excelente, entregue no prazo.' }] },
+    galeria: { titulo: 'Nossos trabalhos', itens: [] },
+    faq: { titulo: 'Perguntas frequentes', itens: [{ pergunta: 'Quanto tempo leva?', resposta: 'Depende do projeto — conversamos e definimos juntos.' }] },
+    cta: { titulo: 'Vamos começar seu projeto?', texto: 'Fale com a gente e receba uma proposta.', botao: 'Quero uma proposta', link: '#contato' },
+    contato: { titulo: '', descricao: '' },
+    texto: { titulo: 'Título', texto: 'Escreva aqui.' },
+    rodape: { texto: '', instagram: '', whatsapp: '', email: '' },
+  }[tipo] || {};
+  return { id: genId('sec'), tipo, visivel: true, dados: Object.assign({}, finLimpar(padrao), dados || {}) };
+}
+function pagPadrao() {
+  const nome = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || 'Minha empresa';
+  return {
+    slug: '', ativa: true, publicadoEm: '',
+    tema: { paleta: 'electric', primaria: '#3b82f6', secundaria: '#8b5cf6', fundo: '#0b0f14', texto: '#f3f4f6', escuro: true },
+    layout: 'classico', estilo: 'moderno',
+    secoes: [pagNovaSecao('menu', { nome }), pagNovaSecao('hero', { titulo: nome }), pagNovaSecao('servicos'), pagNovaSecao('sobre'), pagNovaSecao('cta'), pagNovaSecao('contato'), pagNovaSecao('rodape', { texto: '© ' + new Date().getFullYear() + ' ' + nome })],
+    captura: { configurada: false, tipo: 'padrao', formulario: 'simples', selecaoServicos: true, servicosIds: [], etapa: 'lead', titulo: 'Vamos conversar sobre seu projeto?', botao: 'Enviar Mensagem', descricao: 'Preencha e retornaremos em 24h', tags: [], linkUrl: '', corBotao: '', corFundo: '', corTexto: '', arredondamento: 'padrao' },
+    branding: { ocultarSelo: false },
+    seo: { titulo: '', descricao: '' },
+  };
+}
+
+function pagIniciarDados() {
+  if (PAG_INICIADO) return;
+  PAG_INICIADO = true;
+  cloudWatch(PAG_KEY, null, (d) => { PAG = d && Array.isArray(d.secoes) ? Object.assign(pagPadrao(), d) : (PAG || null); if (typeof pagRender === 'function') pagRender(); });
+  cloudWatch(PAG_PIXELS_KEY, PAG_PIXELS, (d) => { PAG_PIXELS = Object.assign({ meta: {}, ga: {} }, d || {}); });
+  if (typeof srvIniciarDados === 'function') srvIniciarDados();
+}
+function pagDados() { if (!PAG) PAG = pagPadrao(); return PAG; }
+function pagSlug(t) { return kbNomeNorm(t).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40); }
+function pagLink(slug) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'site.html?u=' + encodeURIComponent(slug || ''); }
+
+// ---------- links e imagens seguros ----------
+function pagUrlLink(u) {
+  const s = String(u || '').trim();
+  if (/^#[\w-]*$/.test(s)) return s;
+  if (/^(https?:\/\/|mailto:|tel:)/i.test(s)) return s;
+  if (/^(www\.)/i.test(s)) return 'https://' + s;
+  return '';
+}
+function pagWhats(n) { const d = String(n || '').replace(/\D/g, ''); return d ? 'https://wa.me/' + (d.length <= 11 ? '55' + d : d) : ''; }
+
+// ---------- renderização do site (editor, prévia e página pública) ----------
+// modo: 'publico' | 'editor' | 'previa'
+function pagHtmlSite(cfg, servicos, modo) {
+  const ed = modo === 'editor';
+  const t = cfg.tema || {};
+  const est = PAG_ESTILOS[cfg.estilo] || PAG_ESTILOS.moderno;
+  const cor1 = corHexValida(t.primaria) || '#3b82f6', cor2 = corHexValida(t.secundaria) || '#8b5cf6';
+  const fundo = corHexValida(t.fundo) || '#0b0f14', texto = corHexValida(t.texto) || '#f3f4f6';
+  const esc = escapeHtml;
+  const vazio = (txt, cls) => (ed ? `<span class="pp-vazio ${cls || ''}">${esc(txt)}</span>` : '');
+  const img = (url, alt, cls, ph) => { const u = urlImagemSegura(url); return u ? `<img class="${cls || ''}" src="${esc(u)}" alt="${esc(alt || '')}" loading="lazy">` : vazio(ph || 'Clique para adicionar imagem', 'pp-vazio-img ' + (cls || '')); };
+  const botao = (txt, link, cls) => (txt ? `<a class="pp-btn ${cls || ''}" href="${esc(pagUrlLink(link) || '#contato')}">${esc(txt)} →</a>` : vazio('Clique para adicionar botão'));
+  const secs = (cfg.secoes || []).filter((s) => s.visivel !== false || ed);
+  const corpo = secs.map((s) => {
+    const d = s.dados || {};
+    let h = '';
+    if (s.tipo === 'menu') h = `<nav class="pp-menu"><div class="pp-marca">${urlImagemSegura(d.logoUrl) ? img(d.logoUrl, d.nome, 'pp-logo') : (d.nome ? `<strong>${esc(d.nome)}</strong>` : vazio('Clique para adicionar logo'))}</div><div class="pp-menu-itens">${(d.itens || []).map((i) => `<a href="${esc(pagUrlLink(i.link) || '#')}">${esc(i.texto)}</a>`).join('')}</div></nav>`;
+    else if (s.tipo === 'hero') h = `<section class="pp-hero"><div class="pp-hero-texto">
+        ${d.etiqueta ? `<span class="pp-etiqueta">${esc(d.etiqueta)}</span>` : vazio('Clique para adicionar etiqueta/selo')}
+        <h1>${esc(d.titulo) || vazio('Clique para adicionar título')}</h1>
+        ${d.subtitulo ? `<p class="pp-sub">${esc(d.subtitulo)}</p>` : vazio('Clique para adicionar subtítulo')}
+        ${botao(d.ctaTexto, d.ctaLink)}
+        ${d.provaTexto ? `<div class="pp-prova"><span>${'★'.repeat(Math.max(1, Math.min(5, Number(d.provaNota) || 5)))}</span> ${esc(d.provaTexto)}</div>` : vazio('Clique para adicionar prova social')}
+      </div><div class="pp-hero-img">${img(d.imagemUrl, d.titulo, 'pp-img-hero')}</div></section>`;
+    else if (s.tipo === 'servicos') h = `<section class="pp-secao" id="servicos"><h2>${esc(d.titulo) || vazio('Clique para adicionar título')}</h2>${d.subtitulo ? `<p class="pp-sub">${esc(d.subtitulo)}</p>` : ''}
+        <div class="pp-grade">${(servicos.length ? servicos : (ed || modo === 'previa' ? [1, 2, 3].map((n) => ({ nome: 'Serviço ' + n, descricao: 'Seu serviço aparece aqui', valor: null })) : [])).map((x) => `<div class="pp-card"><span class="pp-card-ic"></span><strong>${esc(x.nome)}</strong><p>${esc(x.descricao || '')}</p>${d.mostrarPreco !== false ? `<b>${x.valor === null || x.valor === undefined ? 'R$ —' : esc(srvMoeda(x.valor, x.moeda)) + (x.recorrente ? '<small>/mês</small>' : '')}</b>` : ''}</div>`).join('')}</div>
+        ${ed && !servicos.length ? '<p class="pp-dica">Os serviços vêm de Operacional → Serviços (os marcados "Exibir na Página Pública").</p>' : ''}</section>`;
+    else if (s.tipo === 'sobre') h = `<section class="pp-secao pp-sobre" id="sobre"><div><h2>${esc(d.titulo)}</h2><p>${esc(d.texto).replace(/\n/g, '<br>')}</p></div>${urlImagemSegura(d.imagemUrl) || ed ? `<div>${img(d.imagemUrl, d.titulo, 'pp-img-sobre')}</div>` : ''}</section>`;
+    else if (s.tipo === 'depoimentos') h = `<section class="pp-secao"><h2>${esc(d.titulo)}</h2><div class="pp-grade">${(d.itens || []).map((i) => `<blockquote class="pp-card"><p>“${esc(i.texto)}”</p><footer><strong>${esc(i.nome)}</strong>${i.cargo ? ` · ${esc(i.cargo)}` : ''}</footer></blockquote>`).join('') || vazio('Adicione depoimentos no painel ao lado')}</div></section>`;
+    else if (s.tipo === 'galeria') h = `<section class="pp-secao"><h2>${esc(d.titulo)}</h2><div class="pp-galeria">${(d.itens || []).filter((i) => urlImagemSegura(i.url)).map((i) => `<figure>${img(i.url, i.legenda)}${i.legenda ? `<figcaption>${esc(i.legenda)}</figcaption>` : ''}</figure>`).join('') || vazio('Adicione imagens no painel ao lado')}</div></section>`;
+    else if (s.tipo === 'faq') h = `<section class="pp-secao pp-faq"><h2>${esc(d.titulo)}</h2>${(d.itens || []).map((i) => `<details><summary>${esc(i.pergunta)}</summary><p>${esc(i.resposta)}</p></details>`).join('')}</section>`;
+    else if (s.tipo === 'cta') h = `<section class="pp-secao pp-cta"><h2>${esc(d.titulo)}</h2>${d.texto ? `<p>${esc(d.texto)}</p>` : ''}${botao(d.botao, d.link)}</section>`;
+    else if (s.tipo === 'contato') h = `<section class="pp-secao pp-contato" id="contato">${pagHtmlFormulario(cfg, servicos, modo)}</section>`;
+    else if (s.tipo === 'texto') h = `<section class="pp-secao"><h2>${esc(d.titulo)}</h2><p>${esc(d.texto).replace(/\n/g, '<br>')}</p></section>`;
+    else if (s.tipo === 'rodape') h = `<footer class="pp-rodape"><span>${esc(d.texto)}</span><span class="pp-redes">${d.instagram ? `<a href="${esc('https://instagram.com/' + String(d.instagram).replace(/^@/, '').replace(/[^\w.]/g, ''))}" target="_blank" rel="noopener">Instagram</a>` : ''}${pagWhats(d.whatsapp) ? `<a href="${esc(pagWhats(d.whatsapp))}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${d.email ? `<a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : ''}</span>
+        ${cfg.branding && cfg.branding.ocultarSelo ? '' : '<span class="pp-selo">Feito com Eagles Labz</span>'}</footer>`;
+    return ed ? `<div class="pp-bloco${s.visivel === false ? ' pp-oculto' : ''}" data-sec="${esc(s.id)}" onclick="pagEditorSelecionar('${escapeParaOnclick(s.id)}')"><span class="pp-bloco-dica">${ic('lapis', 'ic-herda')} Clique para editar · ${esc((PAG_BLOCOS[s.tipo] || {}).nome || '')}</span>${h}</div>` : h;
+  }).join('');
+  return `<div class="pp-site pp-layout-${cfg.layout === 'hoverton' ? 'hoverton' : 'classico'}${t.escuro === false ? ' pp-claro' : ''}" style="--pp-1:${cor1}; --pp-2:${cor2}; --pp-fundo:${fundo}; --pp-texto:${texto}; --pp-raio:${est.raio}px; --pp-fonte:${est.fonte};">${corpo}</div>`;
+}
+
+// Formulário de contato (captura de leads)
+function pagHtmlFormulario(cfg, servicos, modo) {
+  const c = cfg.captura || {};
+  const esc = escapeHtml;
+  const raio = { quadrado: '0', arredondado: '14px', pilula: '999px' }[c.arredondamento] || 'var(--pp-raio)';
+  const estilo = `--pp-form-botao:${corHexValida(c.corBotao) || 'var(--pp-1)'}; --pp-form-fundo:${corHexValida(c.corFundo) || 'rgba(255,255,255,.04)'}; --pp-form-texto:${corHexValida(c.corTexto) || 'var(--pp-texto)'}; --pp-form-raio:${raio};`;
+  if (c.tipo === 'link') {
+    return `<div class="pp-form" style="${estilo}"><h2>${esc(c.titulo || 'Fale com a gente')}</h2>${c.descricao ? `<p>${esc(c.descricao)}</p>` : ''}<a class="pp-btn" href="${esc(pagUrlLink(c.linkUrl) || pagWhats(c.linkUrl) || '#')}" target="_blank" rel="noopener">${esc(c.botao || 'Falar agora')} →</a></div>`;
+  }
+  const lista = c.selecaoServicos ? servicos.filter((s) => !(c.servicosIds || []).length || (c.servicosIds || []).includes(s.id)) : [];
+  const servHtml = lista.length ? `<fieldset class="pp-form-servicos"><legend>Tenho interesse em:</legend>${lista.map((s) => `<label><input type="checkbox" name="servico" value="${esc(s.nome)}"> ${esc(s.nome)}</label>`).join('')}</fieldset>` : '';
+  const passo1 = `<input name="nome" required maxlength="100" placeholder="Seu nome"><input name="email" type="email" required maxlength="120" placeholder="Seu e-mail"><input name="telefone" maxlength="30" placeholder="WhatsApp / telefone">`;
+  const passo3 = `<textarea name="mensagem" maxlength="1000" rows="3" placeholder="Conte um pouco sobre o que você precisa (opcional)"></textarea>`;
+  const dinamico = c.formulario === 'dinamico';
+  return `<form class="pp-form${dinamico ? ' pp-form-dinamico' : ''}" style="${estilo}" onsubmit="return pagEnviarLead(event)" novalidate>
+    <h2>${esc(c.titulo || 'Vamos conversar sobre seu projeto?')}</h2>${c.descricao ? `<p>${esc(c.descricao)}</p>` : ''}
+    <input name="site" class="pp-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+    ${dinamico ? `<div class="pp-passo" data-passo="1">${passo1}<button type="button" class="pp-btn" onclick="pagPassoForm(this, 2)">Continuar →</button></div>
+      <div class="pp-passo" data-passo="2" hidden>${servHtml || '<p>Quase lá!</p>'}${passo3}<button type="submit" class="pp-btn">${esc(c.botao || 'Enviar Mensagem')}</button></div>`
+      : `${passo1}${servHtml}${passo3}<button type="submit" class="pp-btn">${esc(c.botao || 'Enviar Mensagem')}</button>`}
+    <p class="pp-form-msg" role="status"></p>
+  </form>`;
+}
+function pagPassoForm(btn, n) {
+  const form = btn.closest('form');
+  const nome = form.elements.nome.value.trim(), email = form.elements.email.value.trim();
+  const msg = form.querySelector('.pp-form-msg');
+  if (!nome || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = 'Preencha seu nome e um e-mail válido.'; return; }
+  msg.textContent = '';
+  form.querySelectorAll('.pp-passo').forEach((p) => { p.hidden = Number(p.dataset.passo) !== n; });
+}
+
+// ---------- página pública (site.html) ----------
+let PAG_PUBLICA = null;
+async function carregarSitePublico() {
+  initFirebase();
+  const slug = pagSlug(new URLSearchParams(location.search).get('u') || '');
+  const el = document.getElementById('pp-conteudo');
+  const erro = (t) => { el.innerHTML = `<div class="pp-site" style="--pp-1:#64748b;--pp-2:#64748b;--pp-fundo:#0b0f14;--pp-texto:#f3f4f6;--pp-raio:12px;--pp-fonte:system-ui;"><section class="pp-secao" style="min-height:80vh;display:flex;flex-direction:column;justify-content:center;"><h1>Página indisponível</h1><p class="pp-sub">${escapeHtml(t)}</p></section></div>`; };
+  if (!slug || !firestoreDb) { erro('O link pode estar incorreto.'); return; }
+  try {
+    const snap = await firestoreDb.collection(PAG_COLECAO).doc(slug).get();
+    if (!snap.exists || !snap.data().ativa) { erro('Essa página não existe ou foi desativada.'); return; }
+    PAG_PUBLICA = Object.assign({ slug }, snap.data());
+    document.title = (PAG_PUBLICA.seo && PAG_PUBLICA.seo.titulo) || PAG_PUBLICA.empresaNome || 'Site';
+    if (PAG_PUBLICA.seo && PAG_PUBLICA.seo.descricao) { const m = document.createElement('meta'); m.name = 'description'; m.content = PAG_PUBLICA.seo.descricao; document.head.appendChild(m); }
+    el.innerHTML = pagHtmlSite(PAG_PUBLICA, PAG_PUBLICA.servicos || [], 'publico');
+    pagInstalarPixels(PAG_PUBLICA.pixels || {});
+  } catch (err) { erro('Essa página não existe ou foi desativada.'); }
+}
+// Meta Pixel e Google Analytics: só ids validados entram no script
+function pagInstalarPixels(px) {
+  const meta = String((px.meta && px.meta.pixelId) || '').replace(/\D/g, '');
+  if (px.meta && px.meta.ativo && meta.length >= 8 && meta.length <= 20 && !window.fbq) {
+    /* eslint-disable */
+    !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s); }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+    /* eslint-enable */
+    window.fbq('init', meta); window.fbq('track', 'PageView');
+  }
+  const ga = String((px.ga && px.ga.medicaoId) || '').trim().toUpperCase();
+  if (px.ga && px.ga.ativo && /^G-[A-Z0-9]{4,15}$/.test(ga) && !window.gtag) {
+    const s = document.createElement('script'); s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(ga); document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || []; window.gtag = function () { window.dataLayer.push(arguments); }; window.gtag('js', new Date()); window.gtag('config', ga);
+  }
+}
+async function pagEnviarLead(e) {
+  e.preventDefault();
+  const form = e.target;
+  const msg = form.querySelector('.pp-form-msg');
+  const v = (n) => String((form.elements[n] && form.elements[n].value) || '').trim();
+  if (v('site')) return false; // armadilha pra robôs
+  if (!PAG_PUBLICA) { msg.textContent = 'Esta é só a pré-visualização — o formulário funciona na página publicada.'; return false; }
+  if (!v('nome') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v('email'))) { msg.textContent = 'Preencha seu nome e um e-mail válido.'; return false; }
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn) btn.disabled = true;
+  try {
+    await firestoreDb.collection(PAG_LEADS_COLECAO).add({
+      tenantId: PAG_PUBLICA.tenantId, pagina: PAG_PUBLICA.slug, nome: v('nome').slice(0, 100), email: v('email').slice(0, 120), telefone: v('telefone').slice(0, 30),
+      mensagem: v('mensagem').slice(0, 1000), servicos: Array.from(form.querySelectorAll('input[name="servico"]:checked')).map((c) => c.value.slice(0, 80)).slice(0, 20),
+      criadoEm: new Date().toISOString(),
+    });
+    if (window.fbq) window.fbq('track', 'Lead');
+    if (window.gtag) window.gtag('event', 'generate_lead');
+    form.innerHTML = `<h2>Mensagem enviada! ✓</h2><p>${escapeHtml((PAG_PUBLICA.captura && PAG_PUBLICA.captura.descricao) || 'Em breve entraremos em contato.')}</p>`;
+  } catch (err) {
+    msg.textContent = 'Não foi possível enviar agora. Tente de novo em instantes.';
+    if (btn) btn.disabled = false;
+  }
+  return false;
+}
+
+// ---------- leads do site → cliente + negócio no Pipeline ----------
+// Roda no CRM de quem opera. Cada lead é "reivindicado" numa transação
+// (apagado da fila), então duas abas abertas não criam o mesmo lead duas vezes.
+let PAG_LEADS_ESCUTANDO = false;
+let PAG_LEADS_FILA = [];
+function pagIniciarLeads() {
+  if (PAG_LEADS_ESCUTANDO || !FIREBASE_PRONTO || !TENANT_ID || !firestoreDb || !nivelPodeOperar()) return;
+  PAG_LEADS_ESCUTANDO = true;
+  try {
+    firestoreDb.collection(PAG_LEADS_COLECAO).where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
+      PAG_LEADS_FILA = [];
+      snap.forEach((d) => PAG_LEADS_FILA.push(Object.assign({ ref: d.ref, id: d.id }, d.data())));
+      pagProcessarLeads();
+    }, (err) => console.error('Erro ao ler leads do site:', err));
+  } catch (err) { console.error('Não foi possível acompanhar os leads do site:', err); }
+}
+function pagProcessarLeads() {
+  if (!PAG_LEADS_FILA.length || !chaveCarregadaNaNuvem(CRM_NEGOCIOS_KEY) || !chaveCarregadaNaNuvem('eagles_crm_clientes_v1') || !chaveCarregadaNaNuvem(PAG_KEY)) return;
+  const fila = PAG_LEADS_FILA.splice(0);
+  const cap = (PAG && PAG.captura) || {};
+  fila.forEach((lead) => {
+    const reivindicar = typeof firestoreDb.runTransaction === 'function'
+      ? firestoreDb.runTransaction(async (tx) => { const d = await tx.get(lead.ref); if (!d.exists) return false; tx.delete(lead.ref); return true; })
+      : lead.ref.delete().then(() => true);
+    reivindicar.then((ganhou) => {
+      if (!ganhou) return;
+      const nome = String(lead.nome || 'Lead do site').slice(0, 100), email = String(lead.email || '').slice(0, 120);
+      const existe = CRM_CLIENTES_INDEP_DATA.find((c) => (email && kbNomeNorm(c.email) === kbNomeNorm(email)) || kbNomeNorm(c.nome) === kbNomeNorm(nome));
+      if (!existe) {
+        const lista = CRM_CLIENTES_INDEP_DATA.concat([{ id: genId('ci'), nome, email, telefone: String(lead.telefone || '').slice(0, 30), ultimaReuniao: null, nps: null, origem: 'Página pública', tags: (cap.tags || []).slice(0, 10), criadoEm: new Date().toISOString() }]);
+        if (cloudSet('eagles_crm_clientes_v1', lista) !== false) CRM_CLIENTES_INDEP_DATA = lista;
+      }
+      const etapa = CRM_ETAPAS.some((e) => e.key === cap.etapa) ? cap.etapa : 'lead';
+      const obs = [lead.servicos && lead.servicos.length ? 'Interesse: ' + lead.servicos.join(', ') : '', lead.mensagem ? 'Mensagem: ' + lead.mensagem : ''].filter(Boolean).join('\n');
+      CRM_NEGOCIOS_DATA.push({ id: genId('cr'), nome: 'Site: ' + nome, cliente: (existe && existe.nome) || nome, valor: 0, etapa, email, telefone: String(lead.telefone || '').slice(0, 30), origem: 'Página pública', observacoes: obs, tags: (cap.tags || []).slice(0, 10), criadoEm: lead.criadoEm || new Date().toISOString(), atualizadoEm: new Date().toISOString() });
+      cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+      if (typeof atualizarSecaoAtivaCrm === 'function') atualizarSecaoAtivaCrm();
+    }).catch((err) => console.error('Erro ao processar lead do site:', err));
+  });
+}
+
+// ---------- tela do módulo (CRM → Páginas) ----------
+let PAG_HOST = null;
+let PAG_ABA = 'pagina';
+const PAG_ABAS = [['portfolio', 'Portfólio', 'imagem'], ['pagina', 'Página Pública', 'globo'], ['linkbio', 'Link da Bio', 'link'], ['formularios', 'Formulários', 'tarefas'], ['agendamento', 'Agendamento', 'calendario'], ['estatisticas', 'Estatísticas', 'grafico'], ['configuracoes', 'Configurações', 'configuracoes']];
+const PAG_SECAO_DA_ABA = { portfolio: 'paginas-portfolio', pagina: 'paginas-landing', linkbio: 'paginas-link-bio', formularios: 'paginas-formularios', agendamento: 'paginas-agendamento' };
+
+function pagMontar(host, aba) {
+  PAG_HOST = host;
+  if (aba) PAG_ABA = aba;
+  pagIniciarDados();
+  pagRender();
+}
+function pagIrAba(aba) {
+  const secao = PAG_SECAO_DA_ABA[aba];
+  PAG_ABA = aba;
+  if (secao && (!PAG_HOST || PAG_HOST.id !== 'crm-secao-' + secao)) { mostrarSecaoCrm(secao, document.querySelector(`[data-menu-id="${secao}"]`)); return; }
+  pagRender();
+}
+function pagServicosPublicos() {
+  return (typeof KB_SERVICOS !== 'undefined' ? KB_SERVICOS : []).filter((s) => s.ativo !== false && s.exibirPublico !== false)
+    .map((s) => ({ id: s.id, nome: s.nome, descricao: s.descricao || '', valor: Number(s.valor) || 0, moeda: s.moeda || 'BRL', recorrente: !!s.recorrente }));
+}
+function pagRender() {
+  const host = PAG_HOST;
+  if (!host || !host.isConnected || (host.style && host.style.display === 'none')) return;
+  const titulos = { portfolio: 'Portfólio', pagina: 'Página Pública', linkbio: 'Link da Bio', formularios: 'Formulários', agendamento: 'Agendamento', estatisticas: 'Estatísticas', configuracoes: 'Configurações' };
+  const corpo = PAG_ABA === 'pagina' ? pagHtmlAbaPagina() : PAG_ABA === 'configuracoes' ? pagHtmlAbaConfig() : pagHtmlEmBreve(PAG_ABA);
+  host.innerHTML = `<div class="pag">
+    <h1 class="pag-titulo">${titulos[PAG_ABA]}</h1>
+    <div class="kb-segmento pag-abas aba-icones">${PAG_ABAS.map(([a, n, i]) => `<button type="button" class="${PAG_ABA === a ? 'ativo' : ''}" title="${n}" aria-label="${n}" onclick="pagIrAba('${a}')">${ic(i, 'ic-herda')} <span class="aba-txt">${n}</span></button>`).join('')}</div>
+    ${corpo}</div>`;
+}
+function pagHtmlEmBreve(aba) {
+  const t = { portfolio: 'Mostre seus melhores trabalhos numa página própria.', linkbio: 'Uma página com vários links, pro Instagram e TikTok.', formularios: 'Formulários de captura personalizados, que alimentam o Pipeline.', agendamento: 'Uma página onde o lead escolhe um horário livre na sua agenda.', estatisticas: 'Visitas, cliques e leads de cada página.' }[aba];
+  return `<div class="kb-vazio-grande"><div class="ic-circulo">${ic('relogio')}</div><h3>Em breve</h3><p>${t} Chega numa próxima entrega — a Página Pública já está pronta na aba ao lado.</p></div>`;
+}
+
+// ---------- aba Página Pública ----------
+function pagHtmlAbaPagina() {
+  if (!chaveCarregadaNaNuvem(PAG_KEY) && FIREBASE_PRONTO && TENANT_ID) return '<p class="kb-vazio">Carregando...</p>';
+  const p = pagDados();
+  const pal = PAG_PALETAS.find((x) => x.id === p.tema.paleta);
+  const publicada = !!(p.slug && p.publicadoEm);
+  const card = (icone, titulo, desc, acao, extra) => `<button type="button" class="pag-card" onclick="${acao}">${extra || `<span class="pag-card-ic">${ic(icone, 'ic-herda')}</span>`}<span><strong>${titulo}</strong><small>${desc}</small></span></button>`;
+  return `
+    <div class="pag-link">
+      ${ic('link', 'ic-herda')} ${p.slug ? `<span class="pag-url">${escapeHtml(pagLink(p.slug).replace(/^https?:\/\//, ''))}</span>
+        <button type="button" class="kb-btn-ic" title="Copiar link" aria-label="Copiar link" onclick="navigator.clipboard && navigator.clipboard.writeText(pagLink(pagDados().slug)); this.innerHTML = '✓';">${ic('copiar', 'ic-herda')}</button>
+        <button type="button" class="kb-btn-ic" title="Abrir" aria-label="Abrir" onclick="window.open(pagLink(pagDados().slug), '_blank')">${ic('abrir', 'ic-herda')}</button>` : '<span class="kb-vazio-mini">Ainda sem endereço — defina em Configurações → Links Padrão ou publique pelo editor.</span>'}
+      <span class="pag-status ${publicada && p.ativa ? 'ok' : ''}">● ${!publicada ? 'Não publicada' : p.ativa ? 'Publicado' : 'Desativada'}</span>
+    </div>
+    ${p.captura.configurada ? '' : `<div class="pag-alerta">${ic('alerta', 'ic-herda')}<div><strong>Captura de leads não configurada</strong><span>Seu formulário de contato não está conectado a um destino. Configure para receber leads automaticamente.</span></div><button type="button" class="btn btn-small" onclick="pagAbrirCaptura()">Configurar</button></div>`}
+    <div class="pag-cards">
+      ${card('', 'Cores', pal ? pal.nome : 'Tema visual', 'pagAbrirCores()', `<span class="pag-card-cores"><i style="background:${corHexValida(p.tema.primaria)}"></i><i style="background:${corHexValida(p.tema.secundaria)}"></i></span>`)}
+      ${card('colunas', 'Layout', p.layout === 'hoverton' ? 'Hoverton PRO' : 'Clássico', 'pagAbrirLayout()')}
+      ${card('globo', 'Domínio', 'Personalizado', "pagIrAba('configuracoes')")}
+      ${card('usuario', 'Captura de Leads', 'Formulário de contato', 'pagAbrirCaptura()')}
+    </div>
+    <div class="pag-navegador">
+      <div class="pag-nav-barra"><span class="pag-bolinhas"><i></i><i></i><i></i></span><span class="pag-nav-url">${ic('globo', 'ic-herda')} ${escapeHtml(p.slug ? pagLink(p.slug).replace(/^https?:\/\//, '') : 'sua-pagina')}</span></div>
+      <div class="pag-previa" onclick="pagAbrirEditor()" title="Clique para editar"><div class="pag-previa-escala">${pagHtmlSite(p, pagServicosPublicos(), 'previa')}</div><span class="pag-previa-dica">${ic('lapis', 'ic-herda')} Clique para editar</span></div>
+      <div class="pag-nav-rodape">
+        <label class="kb-linha-switch" style="gap:8px;"><label class="switch"><input type="checkbox" ${p.ativa ? 'checked' : ''} onchange="pagAlterarAtiva(this.checked)"><span class="switch-slider"></span></label><span>Página pública ${p.ativa ? 'ativa' : 'desativada'}</span></label>
+        <span class="kb-espaco"></span>
+        <button type="button" class="btn btn-primary" onclick="pagAbrirEditor()">${ic('lapis', 'ic-herda')} Personalizar Página</button>
+      </div>
+    </div>`;
+}
+
+// grava a configuração e, se já tem endereço, republica a cópia pública
+async function pagSalvar(campos, publicar) {
+  if (!exigirPodeOperar('editar a página pública')) return false;
+  const nova = Object.assign({}, pagDados(), campos);
+  if (cloudSet(PAG_KEY, nova) === false) return false;
+  PAG = nova;
+  if (publicar !== false && nova.slug && nova.publicadoEm) await pagPublicar(true);
+  pagRender();
+  return true;
+}
+function pagAlterarAtiva(ativa) { pagSalvar({ ativa }); }
+
+async function pagPublicar(silencioso) {
+  const p = pagDados();
+  const slug = pagSlug(p.slug);
+  if (slug.length < 3) { if (!silencioso) avisar('Defina o endereço da página (pelo menos 3 letras ou números) em Configurações → Links Padrão.'); return false; }
+  const doc = {
+    tenantId: TENANT_ID || 'local', ativa: !!p.ativa, empresaNome: (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '',
+    tema: p.tema, layout: p.layout, estilo: p.estilo, branding: p.branding, seo: p.seo,
+    secoes: p.secoes.filter((s) => s.visivel !== false).map((s) => ({ id: s.id, tipo: s.tipo, visivel: true, dados: s.dados })),
+    servicos: pagServicosPublicos(),
+    captura: { tipo: p.captura.tipo, formulario: p.captura.formulario, selecaoServicos: !!p.captura.selecaoServicos, servicosIds: p.captura.servicosIds || [], titulo: p.captura.titulo, botao: p.captura.botao, descricao: p.captura.descricao, linkUrl: p.captura.linkUrl, corBotao: p.captura.corBotao, corFundo: p.captura.corFundo, corTexto: p.captura.corTexto, arredondamento: p.captura.arredondamento },
+    pixels: { meta: { ativo: !!(PAG_PIXELS.meta && PAG_PIXELS.meta.ativo), pixelId: (PAG_PIXELS.meta && PAG_PIXELS.meta.pixelId) || '' }, ga: { ativo: !!(PAG_PIXELS.ga && PAG_PIXELS.ga.ativo), medicaoId: (PAG_PIXELS.ga && PAG_PIXELS.ga.medicaoId) || '' } },
+    atualizadoEm: new Date().toISOString(),
+  };
+  const anterior = p.slugPublicado;
+  if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
+    try {
+      await firestoreDb.collection(PAG_COLECAO).doc(slug).set(finLimpar(doc));
+      if (anterior && anterior !== slug) await firestoreDb.collection(PAG_COLECAO).doc(anterior).delete().catch(() => {});
+    } catch (err) {
+      console.error('Erro ao publicar a página:', err);
+      avisar(String(err && err.code).includes('permission-denied') ? 'Não foi possível publicar: esse endereço já é usado por outra empresa (escolha outro em Links Padrão) — ou as regras novas do Firebase ainda não foram publicadas.' : mensagemErroFirestore(err));
+      return false;
+    }
+  }
+  const marca = { slug, slugPublicado: slug, publicadoEm: new Date().toISOString() };
+  if (cloudSet(PAG_KEY, Object.assign({}, p, marca)) === false) return false;
+  PAG = Object.assign({}, p, marca);
+  if (!silencioso) avisar(`Página publicada! Link: ${pagLink(slug)}`, 'Página Pública');
+  return true;
+}
+
+// ---------- modais: Cores, Layout ----------
+let PAG_PALETA_SEL = null;
+function pagAbrirCores() {
+  const p = pagDados();
+  PAG_PALETA_SEL = p.tema.paleta;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:520px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Cores do Tema</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="cfg-secao-rotulo" style="margin-top:0;">Paletas Sugeridas</div>
+    <div class="pag-paletas">${PAG_PALETAS.map((x) => `<button type="button" class="pag-paleta${PAG_PALETA_SEL === x.id ? ' ativo' : ''}" onclick="PAG_PALETA_SEL = '${x.id}'; document.querySelectorAll('.pag-paleta').forEach((b) => b.classList.toggle('ativo', b === this));"><span class="pag-paleta-cores"><i style="background:${x.primaria}"></i><i style="background:${x.secundaria}"></i></span><strong>${x.nome}</strong><small>${x.desc}</small></button>`).join('')}</div>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="pagAplicarPaleta(PAG_PALETA_SEL); srvFecharModal();">Salvar Cores</button></div>
+  </div>`;
+  openModal('modal-srv');
+}
+function pagAplicarPaleta(id, semSalvar) {
+  const x = PAG_PALETAS.find((y) => y.id === id);
+  if (!x) return;
+  const tema = Object.assign({}, pagDados().tema, { paleta: x.id, primaria: x.primaria, secundaria: x.secundaria });
+  if (semSalvar) { PAG.tema = tema; return; }
+  pagSalvar({ tema });
+}
+let PAG_LAYOUT_SEL = null;
+function pagAbrirLayout() {
+  PAG_LAYOUT_SEL = pagDados().layout;
+  const ov = srvGarantirModal();
+  const op = (id, nome, desc, pro) => `<button type="button" class="pag-layout-op${PAG_LAYOUT_SEL === id ? ' ativo' : ''}" onclick="PAG_LAYOUT_SEL = '${id}'; document.querySelectorAll('.pag-layout-op').forEach((b) => b.classList.toggle('ativo', b === this));">${pro ? '<span class="pag-pro">PRO</span>' : ''}<span class="pag-layout-desenho pag-desenho-${id}"><i></i><i></i></span><strong>${nome}</strong><small>${desc}</small></button>`;
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Escolher Layout</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="pag-layouts">${op('classico', 'Clássico', 'Layout com duas colunas e hero clássico', false)}${op('hoverton', 'Hoverton PRO', 'Layout premium com design moderno: hero centralizado e cartões com movimento', true)}</div>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="pagSalvar({ layout: PAG_LAYOUT_SEL }); srvFecharModal();">Aplicar Layout</button></div>
+  </div>`;
+  openModal('modal-srv');
+}
+
+// ---------- Captura de Leads ----------
+let PAG_CAP = null;
+function pagAbrirCaptura() {
+  PAG_CAP = finLimpar(pagDados().captura);
+  pagRenderCaptura();
+  openModal('modal-srv');
+}
+function pagRenderCaptura() {
+  const c = PAG_CAP;
+  const servs = (typeof KB_SERVICOS !== 'undefined' ? KB_SERVICOS : []).filter((s) => s.ativo !== false);
+  const sel = (id) => !(c.servicosIds || []).length || c.servicosIds.includes(id);
+  const op = (campo, v, icone, t, d) => `<button type="button" class="pag-op${c[campo] === v ? ' ativo' : ''}" onclick="PAG_CAP.${campo} = '${v}'; pagRenderCaptura();">${ic(icone, 'ic-herda')}<strong>${t}</strong><small>${d}</small></button>`;
+  const cor = (campo, rot) => `<div class="field full"><label>${rot}</label><div class="cfg-cor-linha"><input type="color" value="${expandirHex(c[campo]) || '#22c55e'}" oninput="PAG_CAP.${campo} = this.value; this.nextElementSibling.value = this.value;"><input type="text" maxlength="7" value="${escapeHtml(c[campo] || '')}" placeholder="padrão do tema" oninput="PAG_CAP.${campo} = corHexValida(this.value) || '';"></div></div>`;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Captura de Leads</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub" style="margin-top:-8px;">Configure o formulário</p>
+    <div class="kb-wiz-corpo">
+      <div class="kb-wiz-caixa"><strong class="pag-cap-tit">Tipo de Captura</strong><span class="kb-vazio-mini">Escolha como seus visitantes entram em contato</span>
+        <div class="pag-ops">${op('tipo', 'padrao', 'documento', 'Padrão', 'Rápido e fácil')}${op('tipo', 'personalizado', 'tarefas', 'Personalizado', 'Campos livres')}${op('tipo', 'link', 'abrir', 'Link', 'Redireciona')}</div>
+        <div class="fin-info" style="margin:10px 0 0;">${ic('aprovado', 'ic-herda')} ${c.tipo === 'link' ? 'Link: o botão leva o visitante pra um endereço (ex.: seu WhatsApp ou outro formulário). Não cria lead automaticamente.' : c.tipo === 'personalizado' ? 'Personalizado: os campos livres chegam com o módulo Formulários. Até lá, funciona como o Padrão.' : 'Padrão: formulário pronto com Nome, E-mail, Telefone e Serviços. Leads vão direto para o Pipeline. Ideal para a maioria dos casos.'}</div>
+        ${c.tipo === 'link' ? `<div class="field full" style="margin-top:10px;"><label>Endereço (link ou número de WhatsApp)</label><input type="text" maxlength="300" value="${escapeHtml(c.linkUrl || '')}" placeholder="https://wa.me/5511999999999" oninput="PAG_CAP.linkUrl = this.value"></div>` : ''}
+      </div>
+      ${c.tipo !== 'link' ? `<div class="kb-wiz-caixa"><strong class="pag-cap-tit">Tipo de Formulário</strong>
+        <div class="pag-ops pag-ops-2">${op('formulario', 'simples', 'lista', 'Simples', 'Tudo em 1 passo')}${op('formulario', 'dinamico', 'camadas', 'Dinâmico', 'Múltiplos passos')}</div></div>
+      <div class="kb-wiz-caixa"><div class="kb-linha-switch"><div><strong>${ic('pacote')} Seleção de Serviços</strong><span>Exibir no formulário</span></div><label class="switch"><input type="checkbox" ${c.selecaoServicos ? 'checked' : ''} onchange="PAG_CAP.selecaoServicos = this.checked; pagRenderCaptura();"><span class="switch-slider"></span></label></div>
+        ${c.selecaoServicos ? `<div class="kb-bloco-tipos-cab" style="margin-top:10px;"><span class="kb-vazio-mini">${servs.filter((s) => sel(s.id)).length} de ${servs.length} selecionados</span><span class="kb-espaco"></span><button type="button" class="kb-link" onclick="PAG_CAP.servicosIds = []; pagRenderCaptura();">Todos</button><button type="button" class="kb-link" onclick="PAG_CAP.servicosIds = ['__nenhum']; pagRenderCaptura();">Nenhum</button></div>
+          ${servs.map((s) => `<button type="button" class="kb-wiz-opcao${sel(s.id) ? ' ativo' : ''}" style="padding:8px 12px; margin-bottom:6px;" onclick="pagAlternarServicoCaptura('${escapeParaOnclick(s.id)}')"><span class="kb-wiz-opcao-txt"><strong>${escapeHtml(s.nome)}</strong></span>${sel(s.id) ? ic('aprovado', 'ic-herda') : ''}</button>`).join('') || '<p class="kb-vazio-mini">Nenhum serviço cadastrado.</p>'}
+          <button type="button" class="kb-link" onclick="srvFecharModal(); mostrarSecaoCrm('servicos-servicos', document.querySelector('[data-menu-id=&quot;servicos-servicos&quot;]'));">${ic('mais', 'ic-herda')} Adicionar mais serviços</button>` : ''}</div>
+      <div class="kb-wiz-caixa"><strong class="pag-cap-tit">Destino do Lead</strong><div class="field full" style="margin:6px 0 0;"><label>Pipeline</label><select onchange="PAG_CAP.etapa = this.value">${CRM_ETAPAS.filter((e) => e.key !== 'perdido' && e.key !== 'fechado').map((e) => `<option value="${e.key}"${c.etapa === e.key ? ' selected' : ''}>${escapeHtml(e.label)}</option>`).join('')}</select></div></div>` : ''}
+      <div class="kb-wiz-caixa"><strong class="pag-cap-tit">Textos</strong>
+        <div class="kb-campos-2"><div class="field"><label>Título</label><input type="text" maxlength="80" value="${escapeHtml(c.titulo || '')}" oninput="PAG_CAP.titulo = this.value"></div><div class="field"><label>Botão</label><input type="text" maxlength="30" value="${escapeHtml(c.botao || '')}" oninput="PAG_CAP.botao = this.value"></div></div>
+        <div class="field full"><label>Descrição (opcional)</label><textarea rows="2" maxlength="200" oninput="PAG_CAP.descricao = this.value">${escapeHtml(c.descricao || '')}</textarea></div></div>
+      ${c.tipo !== 'link' ? `<div class="kb-wiz-caixa"><strong class="pag-cap-tit">Tags Automáticas</strong>
+        <div class="kb-m-check-add" style="margin-top:6px;"><input type="text" id="pag-cap-tag" maxlength="30" placeholder="Ex: portfolio-site" onkeydown="if(event.key==='Enter') pagAddTagCaptura();"><button type="button" class="btn btn-small" aria-label="Adicionar tag" onclick="pagAddTagCaptura()">${ic('mais', 'ic-herda')}</button></div>
+        <div class="fin-itens">${(c.tags || []).map((t, i) => `<span class="srv-tag">${escapeHtml(t)} <button type="button" aria-label="Remover" onclick="PAG_CAP.tags.splice(${i}, 1); pagRenderCaptura();">✕</button></span>`).join('')}</div></div>` : ''}
+      <div class="kb-wiz-caixa"><strong class="pag-cap-tit">Aparência do formulário</strong><span class="kb-vazio-mini">Personalize as cores do formulário. Deixe em branco para usar as cores do tema.</span>
+        ${cor('corBotao', 'Cor do botão / destaque')}${cor('corFundo', 'Cor de fundo')}${cor('corTexto', 'Cor do texto')}
+        <div class="field full"><label>Arredondamento das bordas</label><select onchange="PAG_CAP.arredondamento = this.value">${[['padrao', 'Padrão'], ['quadrado', 'Quadrado'], ['arredondado', 'Arredondado'], ['pilula', 'Pílula']].map(([v, t]) => `<option value="${v}"${c.arredondamento === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div></div>
+    </div>
+    <button type="button" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:12px;" onclick="pagSalvarCaptura()">Salvar Configuração</button>
+  </div>`;
+}
+function pagAlternarServicoCaptura(id) {
+  const todos = (KB_SERVICOS || []).filter((s) => s.ativo !== false).map((s) => s.id);
+  let atual = (PAG_CAP.servicosIds || []).filter((x) => x !== '__nenhum');
+  if (!PAG_CAP.servicosIds.length) atual = todos.slice();
+  atual = atual.includes(id) ? atual.filter((x) => x !== id) : atual.concat([id]);
+  PAG_CAP.servicosIds = atual.length === todos.length ? [] : (atual.length ? atual : ['__nenhum']);
+  pagRenderCaptura();
+}
+function pagAddTagCaptura() {
+  const v = (document.getElementById('pag-cap-tag').value || '').trim().slice(0, 30);
+  if (!v) return;
+  PAG_CAP.tags = Array.from(new Set((PAG_CAP.tags || []).concat([v]))).slice(0, 10);
+  pagRenderCaptura();
+}
+async function pagSalvarCaptura() {
+  const c = PAG_CAP;
+  if (c.tipo === 'link' && !pagUrlLink(c.linkUrl) && !pagWhats(c.linkUrl)) { avisar('Informe um link (https://...) ou um número de WhatsApp.'); return; }
+  if (await pagSalvar({ captura: Object.assign({}, c, { configurada: true, titulo: String(c.titulo || '').slice(0, 80), botao: String(c.botao || '').slice(0, 30), descricao: String(c.descricao || '').slice(0, 200) }) })) srvFecharModal();
+}
+
+// ---------- aba Configurações ----------
+function pagHtmlAbaConfig() {
+  const card = (icone, t, d, acao, extra) => `<button type="button" class="pag-cfg-card" onclick="${acao}"><span class="pag-card-ic">${ic(icone, 'ic-herda')}</span><strong>${t}</strong><small>${d}</small>${extra || ''}</button>`;
+  return `<div class="pag-cfg-grade">
+    ${card('link', 'Links Padrão', 'Gerencie seus slugs e URLs públicas', 'pagAbrirLinks()')}
+    ${card('globo', 'Domínio Próprio', 'Conecte seu domínio personalizado', 'pagAbrirDominio()')}
+    ${card('grafico', 'Pixels e Rastreamento', 'Meta Pixel, Google Analytics', "location.href = 'configuracoes.html#integracoes-pixels'", `<span class="pag-cfg-link">${ic('abrir', 'ic-herda')} Ver em Integrações</span>`)}
+    ${card('paleta', 'Marca / Branding', 'Ocultar badge e personalizar marca', 'pagAbrirBranding()')}
+  </div>`;
+}
+function pagAbrirLinks() {
+  const p = pagDados();
+  const sugestao = p.slug || pagSlug((PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || 'minha-empresa');
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:520px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${ic('link')} Links Padrão</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="kb-wiz-caixa"><div class="kb-linha-switch"><span class="pag-card-ic" style="background:var(--success); color:#fff;">${ic('link', 'ic-herda')}</span><div><strong>Meus Links</strong><span>Altere os slugs das suas páginas públicas</span></div></div>
+      <div class="kb-wiz-caixa" style="margin-bottom:0;"><div class="kb-linha-switch" style="margin-bottom:8px;"><strong style="flex:1;">Página Pública <span class="srv-tag">/site</span></strong>
+        <button type="button" class="kb-btn-ic" aria-label="Copiar" onclick="navigator.clipboard && navigator.clipboard.writeText(pagLink(document.getElementById('pag-slug').value)); this.innerHTML = '✓';">${ic('copiar', 'ic-herda')}</button>
+        <button type="button" class="kb-btn-ic" aria-label="Abrir" onclick="window.open(pagLink(document.getElementById('pag-slug').value), '_blank')">${ic('abrir', 'ic-herda')}</button></div>
+        <div class="srv-endereco"><span>…site.html?u=</span><input type="text" id="pag-slug" maxlength="40" value="${escapeHtml(sugestao)}" oninput="this.value = pagSlug(this.value)"></div>
+        <p class="nivel-ajuda">Só letras minúsculas, números e hífen. Mudar o endereço desativa o link antigo.</p></div>
+    </div>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="pagSalvarSlug()">Salvar e publicar</button></div>
+  </div>`;
+  openModal('modal-srv');
+}
+async function pagSalvarSlug() {
+  const slug = pagSlug(document.getElementById('pag-slug').value);
+  if (slug.length < 3) { avisar('O endereço precisa ter pelo menos 3 letras ou números.'); return; }
+  if (!exigirPodeOperar('editar a página pública')) return;
+  if (cloudSet(PAG_KEY, Object.assign({}, pagDados(), { slug })) === false) return;
+  PAG = Object.assign({}, pagDados(), { slug });
+  if (await pagPublicar()) { srvFecharModal(); pagRender(); }
+}
+function pagAbrirDominio() {
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:520px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${ic('globo')} Domínio Próprio</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="pag-premium"><span class="pag-premium-ic">👑</span><div><strong>Domínio Personalizado</strong><p>Conecte seu próprio domínio (ex: seusite.com) para uma presença profissional. Recurso exclusivo para assinantes ativos.</p>
+      <button type="button" class="btn btn-small pag-btn-premium">👑 Assinar Agora</button></div></div>
+  </div>`;
+  openModal('modal-srv');
+}
+function pagAbrirBranding() {
+  const b = pagDados().branding || {};
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:480px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${ic('paleta')} Marca / Branding</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="kb-wiz-caixa kb-linha-switch"><div><strong>Ocultar selo "Feito com Eagles Labz"</strong><span>Remove o selo do rodapé da sua página pública.</span></div><label class="switch"><input type="checkbox" id="pag-br-selo" ${b.ocultarSelo ? 'checked' : ''}><span class="switch-slider"></span></label></div>
+    <div class="field full"><label>Título da aba do navegador (SEO)</label><input type="text" id="pag-seo-titulo" maxlength="70" value="${escapeHtml((pagDados().seo || {}).titulo || '')}" placeholder="Ex: ACME — Marketing digital em São Paulo"></div>
+    <div class="field full"><label>Descrição para o Google (SEO)</label><textarea id="pag-seo-desc" rows="2" maxlength="160">${escapeHtml((pagDados().seo || {}).descricao || '')}</textarea></div>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="pagSalvar({ branding: { ocultarSelo: document.getElementById('pag-br-selo').checked }, seo: { titulo: document.getElementById('pag-seo-titulo').value.slice(0, 70), descricao: document.getElementById('pag-seo-desc').value.slice(0, 160) } }).then((ok) => ok && srvFecharModal());">Salvar</button></div>
+  </div>`;
+  openModal('modal-srv');
+}
+
+// ---------- Editor Visual ----------
+let PAG_ED = null; // { cfg (cópia em edição), sel, dispositivo, aba, alterado }
+const PAG_TEMPLATES = {
+  agencia: { nome: 'Agência de Marketing', secoes: () => [pagNovaSecao('menu'), pagNovaSecao('hero', { etiqueta: 'Agência de marketing digital', titulo: 'Marketing que gera clientes de verdade', subtitulo: 'Tráfego pago, social media e sites que convertem.', ctaTexto: 'Quero crescer', provaTexto: '+120 empresas atendidas' }), pagNovaSecao('servicos', { titulo: 'O que fazemos' }), pagNovaSecao('depoimentos'), pagNovaSecao('faq'), pagNovaSecao('cta', { titulo: 'Pronto pra escalar suas vendas?' }), pagNovaSecao('contato'), pagNovaSecao('rodape')] },
+  freelancer: { nome: 'Freelancer / Designer', secoes: () => [pagNovaSecao('menu'), pagNovaSecao('hero', { etiqueta: 'Designer independente', titulo: 'Design que conta a sua história', subtitulo: 'Identidade visual, sites e peças para redes sociais.', ctaTexto: 'Ver orçamento' }), pagNovaSecao('galeria', { titulo: 'Portfólio' }), pagNovaSecao('servicos'), pagNovaSecao('sobre', { titulo: 'Quem sou eu' }), pagNovaSecao('contato'), pagNovaSecao('rodape')] },
+  consultoria: { nome: 'Consultoria', secoes: () => [pagNovaSecao('menu'), pagNovaSecao('hero', { etiqueta: 'Consultoria estratégica', titulo: 'Decisões melhores, resultados maiores', subtitulo: 'Diagnóstico, plano de ação e acompanhamento.', ctaTexto: 'Agendar diagnóstico', provaTexto: '98% de clientes satisfeitos', provaNota: 5 }), pagNovaSecao('sobre'), pagNovaSecao('servicos', { titulo: 'Como podemos ajudar' }), pagNovaSecao('depoimentos'), pagNovaSecao('cta'), pagNovaSecao('contato'), pagNovaSecao('rodape')] },
+  estudio: { nome: 'Estúdio Criativo', secoes: () => [pagNovaSecao('menu'), pagNovaSecao('hero', { etiqueta: 'Estúdio criativo', titulo: 'Ideias que viram marcas', subtitulo: 'Branding, vídeo e conteúdo para marcas que querem se destacar.', ctaTexto: 'Iniciar projeto' }), pagNovaSecao('galeria'), pagNovaSecao('servicos'), pagNovaSecao('faq'), pagNovaSecao('contato'), pagNovaSecao('rodape')] },
+};
+function pagAbrirEditor() {
+  if (!exigirPodeOperar('editar a página pública')) return;
+  PAG_ED = { cfg: finLimpar(pagDados()), sel: null, dispositivo: 'desktop', aba: 'elementos', alterado: false, menuBloco: false };
+  let el = document.getElementById('pag-editor');
+  if (!el) { el = document.createElement('div'); el.id = 'pag-editor'; el.className = 'pag-editor'; document.body.appendChild(el); }
+  document.body.classList.add('pag-editor-aberto');
+  pagRenderEditor();
+}
+function pagFecharEditor(forcar) {
+  if (PAG_ED && PAG_ED.alterado && !forcar) { confirmarAcao('Sair sem salvar? As alterações feitas no editor serão perdidas.', () => pagFecharEditor(true), 'Sair do editor'); return; }
+  const el = document.getElementById('pag-editor');
+  if (el) el.remove();
+  document.body.classList.remove('pag-editor-aberto');
+  PAG_ED = null;
+  pagRender();
+}
+function pagEdMudou() { PAG_ED.alterado = true; pagRenderCanvas(); pagRenderPropriedades(); }
+function pagEdSecao(id) { return PAG_ED.cfg.secoes.find((s) => s.id === id); }
+function pagEdSecaoPorTipo(tipo) { return PAG_ED.cfg.secoes.find((s) => s.tipo === tipo); }
+function pagEditorSelecionar(id) { if (!PAG_ED) return; PAG_ED.sel = id; pagRenderCanvas(); pagRenderPropriedades(); }
+function pagEdIrPara(tipo, campo) {
+  let s = pagEdSecaoPorTipo(tipo);
+  if (!s) { s = pagNovaSecao(tipo); pagEdInserir(s); }
+  PAG_ED.sel = s.id;
+  pagRenderCanvas(); pagRenderPropriedades();
+  if (campo) setTimeout(() => { const i = document.querySelector(`#pag-ed-props [data-campo="${campo}"]`); if (i) { i.focus(); i.scrollIntoView && i.scrollIntoView({ block: 'center' }); } }, 30);
+  const bloco = document.querySelector(`#pag-ed-canvas [data-sec="${s.id}"]`);
+  if (bloco && bloco.scrollIntoView) bloco.scrollIntoView({ block: 'nearest' });
+}
+function pagEdInserir(s) {
+  const l = PAG_ED.cfg.secoes;
+  const ordem = ['menu', 'hero'];
+  if (s.tipo === 'menu') l.unshift(s);
+  else if (s.tipo === 'hero') { const i = l.findIndex((x) => x.tipo === 'menu'); l.splice(i + 1, 0, s); }
+  else if (s.tipo === 'rodape') l.push(s);
+  else { const r = l.findIndex((x) => x.tipo === 'rodape'); if (r >= 0) l.splice(r, 0, s); else l.push(s); }
+  PAG_ED.alterado = true;
+  void ordem;
+}
+function pagEdAdicionarBloco(tipo) {
+  const info = PAG_BLOCOS[tipo];
+  if (info.unico && pagEdSecaoPorTipo(tipo)) { avisar(`A página já tem o bloco "${info.nome}" — só pode ter um.`); return; }
+  const s = pagNovaSecao(tipo);
+  pagEdInserir(s);
+  PAG_ED.sel = s.id; PAG_ED.menuBloco = false;
+  pagRenderEditor();
+}
+function pagEdMover(id, passo) {
+  const l = PAG_ED.cfg.secoes, i = l.findIndex((s) => s.id === id), j = i + passo;
+  if (j < 0 || j >= l.length) return;
+  [l[i], l[j]] = [l[j], l[i]];
+  pagEdMudou();
+}
+function pagEdExcluir(id) {
+  PAG_ED.cfg.secoes = PAG_ED.cfg.secoes.filter((s) => s.id !== id);
+  PAG_ED.sel = null;
+  pagEdMudou();
+}
+async function pagEdSalvar() {
+  if (!PAG_ED) return;
+  const cfg = PAG_ED.cfg;
+  if (!(await pagSalvar({ secoes: cfg.secoes, tema: cfg.tema, layout: cfg.layout, estilo: cfg.estilo }, false))) return;
+  let pub = true;
+  if (pagDados().slug) pub = await pagPublicar(true);
+  PAG_ED.alterado = false;
+  pagRenderEditor();
+  avisar(pagDados().slug ? (pub ? `Página salva e publicada em ${pagLink(pagDados().slug)}` : 'Página salva, mas não foi possível publicar agora.') : 'Página salva. Defina o endereço em Configurações → Links Padrão pra publicar.', 'Editor');
+}
+function pagEdPrevisualizar() {
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Pré-visualização</title><link rel="stylesheet" href="style.css"></head><body class="pp-body">${pagHtmlSite(PAG_ED.cfg, pagServicosPublicos(), 'previa')}</body></html>`;
+  const j = typeof window.open === 'function' ? window.open('', '_blank') : null;
+  if (!j) { avisar('O navegador bloqueou a nova aba. Libere pop-ups para este site.'); return; }
+  j.document.open(); j.document.write(html.replace('href="style.css"', `href="${location.origin + location.pathname.replace(/[^/]*$/, '')}style.css"`)); j.document.close();
+}
+function pagRenderEditor() {
+  const el = document.getElementById('pag-editor');
+  if (!el || !PAG_ED) return;
+  const item = (icone, t, acao) => `<button type="button" class="pag-ed-item" onclick="${acao}">${ic(icone, 'ic-herda')} ${t}</button>`;
+  el.innerHTML = `
+    <div class="pag-ed-topo">
+      <button type="button" class="btn btn-ghost btn-small" onclick="pagFecharEditor()">← Voltar</button><strong>Editor Visual</strong>${PAG_ED.alterado ? '<span class="kb-vazio-mini">· alterações não salvas</span>' : ''}
+      <span class="kb-espaco"></span>
+      <div class="kb-segmento">${[['desktop', 'computador', 'Computador'], ['tablet', 'tablet', 'Tablet'], ['celular', 'celular', 'Celular']].map(([d, i, t]) => `<button type="button" class="${PAG_ED.dispositivo === d ? 'ativo' : ''}" title="${t}" aria-label="${t}" onclick="PAG_ED.dispositivo = '${d}'; pagRenderEditor();">${ic(i, 'ic-herda')}</button>`).join('')}</div>
+      <span class="kb-espaco"></span>
+      <button type="button" class="btn btn-ghost btn-small" onclick="pagEdPrevisualizar()">${ic('olho', 'ic-herda')} Pré-visualizar</button>
+      <button type="button" class="btn btn-primary btn-small" onclick="pagEdSalvar()">${ic('aprovado', 'ic-herda')} Salvar</button>
+    </div>
+    <div class="pag-ed-corpo">
+      <aside class="pag-ed-esq">
+        <div class="kb-segmento" style="width:100%; margin-bottom:10px;"><button type="button" style="flex:1;" class="${PAG_ED.aba === 'elementos' ? 'ativo' : ''}" onclick="PAG_ED.aba = 'elementos'; pagRenderEditor();">${ic('camadas', 'ic-herda')} Elementos</button><button type="button" style="flex:1;" class="${PAG_ED.aba === 'config' ? 'ativo' : ''}" onclick="PAG_ED.aba = 'config'; pagRenderEditor();">${ic('configuracoes', 'ic-herda')} Config</button></div>
+        ${PAG_ED.aba === 'elementos' ? `
+          <div class="pag-ed-add"><button type="button" class="btn btn-small" style="width:100%; justify-content:space-between;" onclick="PAG_ED.menuBloco = !PAG_ED.menuBloco; pagRenderEditor();">${ic('mais', 'ic-herda')} Adicionar Bloco ${kbIc(PAG_ED.menuBloco ? 'setaCima' : 'setaBaixo')}</button>
+            ${PAG_ED.menuBloco ? `<div class="pag-ed-menu-bloco">${Object.entries(PAG_BLOCOS).map(([k, b]) => `<button type="button" onclick="pagEdAdicionarBloco('${k}')" ${b.unico && pagEdSecaoPorTipo(k) ? 'disabled title="Já está na página"' : ''}>${ic(b.icone, 'ic-herda')} ${b.nome}</button>`).join('')}</div>` : ''}</div>
+          <div class="pag-ed-grupo">Hero</div>
+          ${item('documento', 'Headline', "pagEdIrPara('hero', 'titulo')")}${item('imagem', 'Imagem', "pagEdIrPara('hero', 'imagemUrl')")}${item('pessoas', 'Prova Social', "pagEdIrPara('hero', 'provaTexto')")}${item('raio', 'Botão CTA', "pagEdIrPara('hero', 'ctaTexto')")}
+          <div class="pag-ed-grupo">Outras seções</div>
+          ${item('lista', 'Menu', "pagEdIrPara('menu', 'itens')")}${item('imagem', 'Logo', "pagEdIrPara('menu', 'logoUrl')")}${item('usuario', 'Sobre', "pagEdIrPara('sobre', 'titulo')")}${item('raio', 'CTA Final', "pagEdIrPara('cta', 'titulo')")}
+          <div class="pag-ed-grupo">Estilo</div>
+          ${item('paleta', 'Cores', "PAG_ED.sel = '__cores'; pagRenderPropriedades();")}${item('brilho', 'Templates de Estilo', "PAG_ED.sel = '__estilos'; pagRenderPropriedades();")}${item('colunas', 'Modelos de Layout', "PAG_ED.sel = '__layouts'; pagRenderPropriedades();")}${item('baixar', 'Carregar Template', "PAG_ED.sel = '__templates'; pagRenderPropriedades();")}
+          <div class="pag-ed-grupo">Seções da página</div>
+          ${PAG_ED.cfg.secoes.map((s) => `<button type="button" class="pag-ed-item${PAG_ED.sel === s.id ? ' ativo' : ''}${s.visivel === false ? ' oculto' : ''}" onclick="pagEditorSelecionar('${escapeParaOnclick(s.id)}')">${ic((PAG_BLOCOS[s.tipo] || {}).icone || 'documento', 'ic-herda')} ${escapeHtml((PAG_BLOCOS[s.tipo] || {}).nome || s.tipo)}${s.visivel === false ? ' <small>(oculta)</small>' : ''}</button>`).join('')}`
+          : `<div class="field full"><label>Título da aba (SEO)</label><input type="text" maxlength="70" value="${escapeHtml((PAG_ED.cfg.seo || {}).titulo || '')}" oninput="PAG_ED.cfg.seo = Object.assign({}, PAG_ED.cfg.seo, { titulo: this.value }); PAG_ED.alterado = true;"></div>
+             <div class="field full"><label>Descrição (Google)</label><textarea rows="3" maxlength="160" oninput="PAG_ED.cfg.seo = Object.assign({}, PAG_ED.cfg.seo, { descricao: this.value }); PAG_ED.alterado = true;">${escapeHtml((PAG_ED.cfg.seo || {}).descricao || '')}</textarea></div>
+             <label class="kb-imp-opcao"><input type="checkbox" ${PAG_ED.cfg.tema.escuro !== false ? 'checked' : ''} onchange="PAG_ED.cfg.tema.escuro = this.checked; PAG_ED.cfg.tema.fundo = this.checked ? '#0b0f14' : '#ffffff'; PAG_ED.cfg.tema.texto = this.checked ? '#f3f4f6' : '#111827'; pagEdMudou();"> Fundo escuro</label>`}
+      </aside>
+      <main class="pag-ed-centro"><div class="pag-ed-canvas pag-disp-${PAG_ED.dispositivo}" id="pag-ed-canvas"></div></main>
+      <aside class="pag-ed-dir" id="pag-ed-props"></aside>
+    </div>
+    <button type="button" class="pag-ed-cores" onclick="PAG_ED.sel = '__cores'; pagRenderPropriedades();"><span class="pag-card-cores"><i style="background:${corHexValida(PAG_ED.cfg.tema.primaria)}"></i><i style="background:${corHexValida(PAG_ED.cfg.tema.secundaria)}"></i></span> Editar Cores</button>`;
+  pagRenderCanvas();
+  pagRenderPropriedades();
+}
+function pagRenderCanvas() {
+  const c = document.getElementById('pag-ed-canvas');
+  if (!c || !PAG_ED) return;
+  c.innerHTML = pagHtmlSite(PAG_ED.cfg, pagServicosPublicos(), 'editor');
+  if (PAG_ED.sel) { const b = c.querySelector(`[data-sec="${PAG_ED.sel}"]`); if (b) b.classList.add('pp-selecionado'); }
+}
+// Painel de propriedades: campos de cada tipo de bloco
+const PAG_CAMPOS = {
+  menu: [['nome', 'Nome da marca (se não tiver logo)'], ['logoUrl', 'URL do logo (https://...)', 'url'], ['itens', 'Itens do menu', 'lista', [['texto', 'Texto'], ['link', 'Link (#servicos, https://...)']]]],
+  hero: [['etiqueta', 'Etiqueta / selo acima do título'], ['titulo', 'Headline (título principal)'], ['subtitulo', 'Subtítulo', 'area'], ['ctaTexto', 'Texto do botão CTA'], ['ctaLink', 'Link do botão (#contato, https://...)'], ['imagemUrl', 'Imagem (URL https://...)', 'url'], ['provaTexto', 'Prova social (ex: +120 clientes atendidos)'], ['provaNota', 'Estrelas (1 a 5)', 'numero']],
+  servicos: [['titulo', 'Título'], ['subtitulo', 'Subtítulo'], ['mostrarPreco', 'Mostrar preços', 'check']],
+  sobre: [['titulo', 'Título'], ['texto', 'Texto', 'area'], ['imagemUrl', 'Imagem (URL https://...)', 'url']],
+  depoimentos: [['titulo', 'Título'], ['itens', 'Depoimentos', 'lista', [['nome', 'Nome'], ['cargo', 'Cargo / empresa'], ['texto', 'Depoimento']]]],
+  galeria: [['titulo', 'Título'], ['itens', 'Imagens', 'lista', [['url', 'URL da imagem (https://...)'], ['legenda', 'Legenda']]]],
+  faq: [['titulo', 'Título'], ['itens', 'Perguntas', 'lista', [['pergunta', 'Pergunta'], ['resposta', 'Resposta']]]],
+  cta: [['titulo', 'Título'], ['texto', 'Texto', 'area'], ['botao', 'Texto do botão'], ['link', 'Link do botão']],
+  contato: [],
+  texto: [['titulo', 'Título'], ['texto', 'Texto', 'area']],
+  rodape: [['texto', 'Texto (ex: © 2026 Sua empresa)'], ['instagram', 'Instagram (@usuario)'], ['whatsapp', 'WhatsApp (com DDD)'], ['email', 'E-mail']],
+};
+function pagRenderPropriedades() {
+  const el = document.getElementById('pag-ed-props');
+  if (!el || !PAG_ED) return;
+  const sel = PAG_ED.sel;
+  const titulo = (t) => `<div class="pag-ed-props-tit">${t}</div>`;
+  if (!sel) { el.innerHTML = `${titulo('Propriedades')}<div class="kb-vazio-grande" style="padding:30px 10px;"><div class="ic-circulo">${ic('lapis')}</div><p style="margin:0;"><strong>Clique em uma seção</strong></p><p class="kb-vazio-mini">Selecione qualquer elemento no preview para editar</p></div>`; return; }
+  if (sel === '__cores') {
+    const t = PAG_ED.cfg.tema;
+    const cor = (k, rot) => `<div class="field full"><label>${rot}</label><div class="cfg-cor-linha"><input type="color" value="${expandirHex(t[k]) || '#000000'}" oninput="PAG_ED.cfg.tema.${k} = this.value; PAG_ED.cfg.tema.paleta = 'personalizada'; this.nextElementSibling.value = this.value; pagEdMudou();"><input type="text" maxlength="7" value="${escapeHtml(t[k] || '')}" onchange="const v = corHexValida(this.value); if (v) { PAG_ED.cfg.tema.${k} = v; PAG_ED.cfg.tema.paleta = 'personalizada'; pagEdMudou(); }"></div></div>`;
+    el.innerHTML = `${titulo('Cores')}<div class="pag-paletas pag-paletas-p">${PAG_PALETAS.map((x) => `<button type="button" class="pag-paleta${t.paleta === x.id ? ' ativo' : ''}" onclick="Object.assign(PAG_ED.cfg.tema, { paleta: '${x.id}', primaria: '${x.primaria}', secundaria: '${x.secundaria}' }); pagEdMudou();" title="${x.desc}"><span class="pag-paleta-cores"><i style="background:${x.primaria}"></i><i style="background:${x.secundaria}"></i></span><small>${x.nome}</small></button>`).join('')}</div>
+      ${cor('primaria', 'Cor principal')}${cor('secundaria', 'Cor secundária')}${cor('fundo', 'Fundo')}${cor('texto', 'Texto')}`;
+    return;
+  }
+  if (sel === '__estilos') { el.innerHTML = `${titulo('Templates de Estilo')}${Object.entries(PAG_ESTILOS).map(([k, e]) => `<button type="button" class="kb-wiz-opcao${PAG_ED.cfg.estilo === k ? ' ativo' : ''}" style="margin-bottom:8px;" onclick="PAG_ED.cfg.estilo = '${k}'; pagEdMudou();"><span class="kb-wiz-opcao-txt"><strong style="font-family:${e.fonte.replace(/"/g, '&quot;')}">${e.nome}</strong><small>${e.desc}</small></span></button>`).join('')}`; return; }
+  if (sel === '__layouts') { el.innerHTML = `${titulo('Modelos de Layout')}${[['classico', 'Clássico', 'Duas colunas e hero clássico'], ['hoverton', 'Hoverton PRO', 'Hero centralizado e cartões com movimento']].map(([k, n, d]) => `<button type="button" class="kb-wiz-opcao${PAG_ED.cfg.layout === k ? ' ativo' : ''}" style="margin-bottom:8px;" onclick="PAG_ED.cfg.layout = '${k}'; pagEdMudou();"><span class="kb-wiz-opcao-txt"><strong>${n}${k === 'hoverton' ? ' <span class="pag-pro">PRO</span>' : ''}</strong><small>${d}</small></span></button>`).join('')}`; return; }
+  if (sel === '__templates') { el.innerHTML = `${titulo('Carregar Template')}<p class="kb-vazio-mini">Troca as seções da página por um modelo pronto (as cores ficam). Dá pra desfazer saindo sem salvar.</p>${Object.entries(PAG_TEMPLATES).map(([k, t]) => `<button type="button" class="kb-wiz-opcao" style="margin-bottom:8px;" onclick="pagEdCarregarTemplate('${k}')"><span class="kb-wiz-opcao-txt"><strong>${t.nome}</strong><small>${t.secoes().map((s) => (PAG_BLOCOS[s.tipo] || {}).nome).join(' · ')}</small></span></button>`).join('')}`; return; }
+  const s = pagEdSecao(sel);
+  if (!s) { PAG_ED.sel = null; pagRenderPropriedades(); return; }
+  const sid = escapeParaOnclick(s.id);
+  const campos = PAG_CAMPOS[s.tipo] || [];
+  const campoHtml = ([k, rot, tipo, sub]) => {
+    const v = s.dados[k];
+    const set = `pagEdSet('${sid}', '${k}', this.${tipo === 'check' ? 'checked' : 'value'})`;
+    if (tipo === 'area') return `<div class="field full"><label>${rot}</label><textarea rows="3" maxlength="800" data-campo="${k}" oninput="${set}">${escapeHtml(v || '')}</textarea></div>`;
+    if (tipo === 'check') return `<label class="kb-imp-opcao"><input type="checkbox" data-campo="${k}" ${v !== false ? 'checked' : ''} onchange="${set}"> ${rot}</label>`;
+    if (tipo === 'numero') return `<div class="field full"><label>${rot}</label><input type="number" min="1" max="5" data-campo="${k}" value="${Number(v) || 5}" oninput="${set}"></div>`;
+    if (tipo === 'lista') return `<div class="field full"><label>${rot}</label><div data-campo="${k}">${(v || []).map((it, i) => `<div class="pag-ed-lista-item">${sub.map(([sk, sr]) => (sk === 'texto' && s.tipo !== 'menu') || sk === 'resposta' ? `<textarea rows="2" maxlength="500" placeholder="${sr}" oninput="pagEdSetLista('${sid}', '${k}', ${i}, '${sk}', this.value)">${escapeHtml(it[sk] || '')}</textarea>` : `<input type="text" maxlength="300" placeholder="${sr}" value="${escapeHtml(it[sk] || '')}" oninput="pagEdSetLista('${sid}', '${k}', ${i}, '${sk}', this.value)">`).join('')}<button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Remover" onclick="PAG_ED.cfg.secoes.find((x) => x.id === '${sid}').dados.${k}.splice(${i}, 1); pagEdMudou();">${ic('lixeira', 'ic-herda')}</button></div>`).join('')}
+      <button type="button" class="btn btn-small" onclick="(PAG_ED.cfg.secoes.find((x) => x.id === '${sid}').dados.${k} = PAG_ED.cfg.secoes.find((x) => x.id === '${sid}').dados.${k} || []).push({}); pagEdMudou();">${ic('mais', 'ic-herda')} Adicionar</button></div></div>`;
+    return `<div class="field full"><label>${rot}</label><input type="${tipo === 'url' ? 'url' : 'text'}" maxlength="${tipo === 'url' ? 500 : 160}" data-campo="${k}" value="${escapeHtml(v || '')}" oninput="${set}">${tipo === 'url' && v && !urlImagemSegura(v) ? '<p class="nivel-ajuda" style="color:var(--danger);">Use um endereço https:// de imagem.</p>' : ''}</div>`;
+  };
+  const i = PAG_ED.cfg.secoes.indexOf(s);
+  el.innerHTML = `${titulo((PAG_BLOCOS[s.tipo] || {}).nome || s.tipo)}
+    <div class="pag-ed-acoes-bloco">
+      <button type="button" class="kb-btn-ic" title="Subir" aria-label="Subir" onclick="pagEdMover('${sid}', -1)" ${i === 0 ? 'disabled' : ''}>${kbIc('setaCima')}</button>
+      <button type="button" class="kb-btn-ic" title="Descer" aria-label="Descer" onclick="pagEdMover('${sid}', 1)" ${i === PAG_ED.cfg.secoes.length - 1 ? 'disabled' : ''}>${kbIc('setaBaixo')}</button>
+      <button type="button" class="kb-btn-ic" title="${s.visivel === false ? 'Mostrar' : 'Ocultar'}" aria-label="Mostrar/ocultar" onclick="PAG_ED.cfg.secoes.find((x) => x.id === '${sid}').visivel = ${s.visivel === false}; pagEdMudou();">${ic('olho', 'ic-herda')}</button>
+      <span class="kb-espaco"></span>
+      <button type="button" class="kb-btn-ic kb-btn-perigo" title="Excluir bloco" aria-label="Excluir bloco" onclick="pagEdExcluir('${sid}')">${ic('lixeira', 'ic-herda')}</button>
+    </div>
+    ${s.tipo === 'contato' ? `<p class="kb-vazio-mini">O formulário é configurado em <strong>Captura de Leads</strong> (tipo, serviços, destino no Pipeline, textos e cores).</p><button type="button" class="btn btn-small" onclick="pagAbrirCaptura()">Abrir Captura de Leads</button>` : ''}
+    ${s.tipo === 'servicos' ? '<p class="kb-vazio-mini">Os cartões vêm do catálogo de Serviços (os marcados "Exibir na Página Pública").</p>' : ''}
+    ${campos.map(campoHtml).join('')}`;
+}
+function pagEdSet(id, campo, valor) {
+  const s = pagEdSecao(id);
+  if (!s) return;
+  s.dados[campo] = typeof valor === 'string' ? valor.slice(0, 800) : valor;
+  PAG_ED.alterado = true;
+  pagRenderCanvas();
+}
+function pagEdSetLista(id, campo, i, sub, valor) {
+  const s = pagEdSecao(id);
+  if (!s || !s.dados[campo] || !s.dados[campo][i]) return;
+  s.dados[campo][i][sub] = String(valor).slice(0, 500);
+  PAG_ED.alterado = true;
+  pagRenderCanvas();
+}
+function pagEdCarregarTemplate(k) {
+  const t = PAG_TEMPLATES[k];
+  if (!t) return;
+  confirmarAcao(`Carregar o template "${t.nome}"? As seções atuais da página serão substituídas (as cores ficam). Se não gostar, saia do editor sem salvar.`, () => {
+    PAG_ED.cfg.secoes = t.secoes();
+    PAG_ED.sel = null;
+    PAG_ED.alterado = true;
+    pagRenderEditor();
+  }, 'Carregar template');
+}
+
+// ---------- Configurações → Integrações: Meta Pixel e Google Analytics ----------
+let CFG_PIXELS_EDIT = null;
+function cfgAbrirPixels(qual) {
+  const el = document.getElementById('cfg-conteudo-aba');
+  if (!el) return;
+  if (!CFG_PIXELS_EDIT) CFG_PIXELS_EDIT = finLimpar(Object.assign({ meta: { ativo: false, pixelId: '', token: '' }, ga: { ativo: false, medicaoId: '' } }, PAG_PIXELS || {}));
+  const e = CFG_PIXELS_EDIT;
+  const meta = qual !== 'ga';
+  const conf = meta ? !!(e.meta.ativo && e.meta.pixelId) : !!(e.ga.ativo && e.ga.medicaoId);
+  el.innerHTML = `<div class="cfg-pixels">
+    <button type="button" class="btn btn-ghost btn-small" onclick="CFG_PIXELS_EDIT = null; renderAbaIntegracoesConfig();">← Voltar para Integrações</button>
+    <div class="kb-segmento" style="margin:12px 0;"><button type="button" class="${meta ? 'ativo' : ''}" onclick="cfgAbrirPixels('meta')">Meta Pixel</button><button type="button" class="${!meta ? 'ativo' : ''}" onclick="cfgAbrirPixels('ga')">Google Analytics</button></div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong>${meta ? 'Meta Pixel' : 'Google Analytics 4'}</strong><span class="kb-espaco"></span><span class="srv-tag">${conf ? 'Configurado' : 'Não configurado'}</span></div>
+      <div class="fin-info" style="border-color:color-mix(in srgb, #3b82f6 40%, var(--border)); background:color-mix(in srgb, #3b82f6 8%, transparent);">${meta ? 'O script do Pixel carrega nas suas páginas públicas (Página Pública e as próximas: Portfólio, Link da Bio, Formulários, Agendamento) e registra visitas (PageView) e envios do formulário (Lead).' : 'O Google Analytics carrega nas suas páginas públicas e registra visitas e envios do formulário (generate_lead).'}</div>
+      <div class="kb-linha-switch" style="margin:10px 0;"><div><strong>Ativar rastreamento</strong></div><label class="switch"><input type="checkbox" ${(meta ? e.meta.ativo : e.ga.ativo) ? 'checked' : ''} onchange="CFG_PIXELS_EDIT.${meta ? 'meta' : 'ga'}.ativo = this.checked"><span class="switch-slider"></span></label></div>
+      ${meta ? `<div class="field full"><label>Pixel ID</label><input type="text" id="cfg-px-id" inputmode="numeric" maxlength="20" value="${escapeHtml(e.meta.pixelId || '')}" placeholder="1234567890123456" oninput="CFG_PIXELS_EDIT.meta.pixelId = this.value.replace(/\\D/g, '')"><p class="nivel-ajuda">Encontre no Gerenciador de Eventos da Meta.</p></div>
+        <div class="field full"><label>Token de Acesso <span class="srv-tag" style="color:var(--warning);">Recomendado</span></label><input type="password" id="cfg-px-token" maxlength="400" value="${escapeHtml(e.meta.token || '')}" placeholder="EAAxxxxxxxxx..." oninput="CFG_PIXELS_EDIT.meta.token = this.value">
+          <p class="nivel-ajuda">Usado pelo envio pelo servidor (Conversions API), que melhora a atribuição. <strong>Fica guardado</strong> — o envio pelo servidor passa a funcionar quando o sistema tiver um servidor próprio. O token nunca vai pra página pública.</p></div>`
+      : `<div class="field full"><label>ID de medição</label><input type="text" id="cfg-ga-id" maxlength="20" value="${escapeHtml(e.ga.medicaoId || '')}" placeholder="G-XXXXXXXXXX" oninput="CFG_PIXELS_EDIT.ga.medicaoId = this.value.trim().toUpperCase()"><p class="nivel-ajuda">No Google Analytics: Administrador → Fluxos de dados → seu site.</p></div>`}
+      <button type="button" class="btn btn-primary" style="width:100%; justify-content:center;" onclick="cfgSalvarPixels('${meta ? 'meta' : 'ga'}')">${ic('aprovado', 'ic-herda')} Salvar Configuração</button>
+    </div>
+    ${meta ? `<div class="fin-painel"><strong>${ic('raio')} Eventos do funil do WhatsApp</strong><p class="kb-vazio-mini" style="margin:8px 0;">Avisar a Meta quando o lead avança na conversa do WhatsApp (ex.: virou cliente) depende da integração com o WhatsApp Business e do envio pelo servidor. Fica pra quando essas duas partes existirem.</p>
+      <div class="fin-info" style="margin:0;">${ic('alerta', 'ic-herda')} Para funcionar, preencha o Pixel ID e o Token de Acesso e salve. Os eventos do site (visita e lead) já funcionam só com o Pixel ID.</div></div>` : ''}
+  </div>`;
+}
+async function cfgSalvarPixels(qual) {
+  const e = CFG_PIXELS_EDIT;
+  if (!nivelEhDiretor()) { avisarSemPermissaoNivel('configurar integrações'); return; }
+  if (qual === 'meta' && e.meta.ativo && !/^\d{8,20}$/.test(e.meta.pixelId || '')) { avisar('O Pixel ID tem só números (de 8 a 20 dígitos).'); return; }
+  if (qual === 'ga' && e.ga.ativo && !/^G-[A-Z0-9]{4,15}$/.test(e.ga.medicaoId || '')) { avisar('O ID de medição começa com "G-" (ex.: G-ABC123XYZ).'); return; }
+  if (cloudSet(PAG_PIXELS_KEY, e) === false) return;
+  PAG_PIXELS = finLimpar(e);
+  // a página pública já publicada passa a carregar o pixel (sem o token)
+  try {
+    const pag = FIREBASE_PRONTO && TENANT_ID ? await cloudGetForce(PAG_KEY, null) : lsLoad(chaveLocalTenant(PAG_KEY), null);
+    if (pag && pag.slugPublicado && FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
+      await firestoreDb.collection(PAG_COLECAO).doc(pag.slugPublicado).set({ pixels: { meta: { ativo: !!e.meta.ativo, pixelId: e.meta.pixelId || '' }, ga: { ativo: !!e.ga.ativo, medicaoId: e.ga.medicaoId || '' } }, atualizadoEm: new Date().toISOString() }, { merge: true });
+    }
+  } catch (err) { console.error('Erro ao atualizar o pixel na página pública:', err); }
+  avisar('Configuração salva. Ela vale nas suas páginas públicas a partir de agora.', qual === 'meta' ? 'Meta Pixel' : 'Google Analytics');
+  cfgAbrirPixels(qual);
+}
+
+
+// =====================================================================
+// ---------- CRM no celular: gaveta, tela inicial e barra de baixo ----------
+// =====================================================================
+// Só aparece em telas estreitas (o CSS cuida disso). No computador e no
+// tablet o CRM continua com o menu lateral de sempre.
+const CRM_ATALHOS_MOBILE = [
+  ['dashboard', 'Dashboard', 'quadro'], ['clientes', 'Clientes', 'pessoas'], ['pipeline', 'Pipelines', 'kanban'], ['kanban', 'Tarefas', 'tarefas'],
+  ['agenda', 'Agenda', 'calendario'], ['financeiro', 'Financeiro', 'dinheiro'], ['servicos-servicos', 'Serviços', 'pacote'], ['orcamentos', 'Orçamentos', 'documento'],
+  ['briefings', 'Briefings', 'prancheta'], ['paginas-landing', 'Páginas', 'globo'], ['@usuarios.html', 'Equipe', 'usuario'], ['@configuracoes.html', 'Configurações', 'configuracoes'],
+];
+const CRM_TABBAR = [['dashboard', 'Início', 'quadro'], ['pipeline', 'Pipelines', 'kanban'], ['+', 'Nova venda', 'mais'], ['financeiro', 'Financeiro', 'dinheiro'], ['orcamentos', 'Orçamentos', 'documento']];
+
+function crmEhCelular() { return window.matchMedia && window.matchMedia('(max-width: 860px)').matches; }
+function crmIrPara(secao) {
+  if (secao.startsWith('@')) { location.href = secao.slice(1); return; }
+  mostrarSecaoCrm(secao, document.querySelector(`[data-menu-id="${secao}"]`));
+  window.scrollTo(0, 0);
+}
+function crmMontarMobile() {
+  if (!document.getElementById('crm-sidebar-painel') || document.getElementById('crm-tabbar')) return;
+  document.body.classList.add('pagina-crm');
+  // barra de baixo
+  const bar = document.createElement('nav');
+  bar.id = 'crm-tabbar'; bar.className = 'crm-tabbar'; bar.setAttribute('aria-label', 'Atalhos');
+  bar.innerHTML = CRM_TABBAR.map(([s, t, i]) => s === '+'
+    ? `<button type="button" class="crm-tab-mais" aria-label="${t}" onclick="openModal('modal-escolha-venda')">${ic(i, 'ic-herda')}</button>`
+    : `<button type="button" class="crm-tab" data-tab="${s}" aria-label="${t}" onclick="crmIrPara('${s}')">${ic(i, 'ic-herda')}<span>${t}</span></button>`).join('');
+  document.body.appendChild(bar);
+  // fundo escuro da gaveta
+  const fundo = document.createElement('div');
+  fundo.id = 'crm-gaveta-fundo'; fundo.className = 'crm-gaveta-fundo';
+  fundo.addEventListener('click', crmFecharGaveta);
+  document.body.appendChild(fundo);
+  // botão de fechar dentro da gaveta
+  const painel = document.getElementById('crm-sidebar-painel');
+  if (!painel.querySelector('.crm-gaveta-fechar')) painel.insertAdjacentHTML('afterbegin', `<button type="button" class="crm-gaveta-fechar" aria-label="Fechar menu" onclick="crmFecharGaveta()">${ic('x', 'ic-herda')}</button>`);
+  // tela inicial (saudação + grade de atalhos) no topo do Dashboard
+  const dash = document.getElementById('crm-secao-dashboard');
+  if (dash && !document.getElementById('crm-home-mobile')) {
+    dash.insertAdjacentHTML('afterbegin', '<div class="crm-home-mobile" id="crm-home-mobile"></div>');
+    crmRenderHomeMobile();
+  }
+  crmAtualizarTabbar('dashboard');
+}
+function crmRenderHomeMobile() {
+  const el = document.getElementById('crm-home-mobile');
+  if (!el) return;
+  const nome = String((typeof USUARIO_NOME !== 'undefined' && USUARIO_NOME) || (PERFIL_DATA && PERFIL_DATA.nomeFantasia) || '').split(' ')[0];
+  const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const atalhos = CRM_ATALHOS_MOBILE.filter(([s]) => s !== '@usuarios.html' || nivelEhDiretor());
+  el.innerHTML = `
+    <div class="crm-home-ola"><div><h2>Olá${nome ? ', ' + escapeHtml(nome) : ''}</h2><span>${escapeHtml(hoje)}</span></div></div>
+    <div class="crm-home-rotulo">Menu</div>
+    <div class="crm-home-grade">${atalhos.map(([s, t, i]) => `<button type="button" class="crm-home-tile" onclick="crmIrPara('${s}')"><span class="crm-home-ic">${ic(i, 'ic-herda')}</span><span class="crm-home-txt">${t}</span></button>`).join('')}</div>
+    <div class="crm-home-rotulo">Resumo rápido</div>`;
+}
+function crmAtualizarTabbar(secao) {
+  const grupo = (s) => (s.startsWith('fin-') || s === 'financeiro' ? 'financeiro' : s);
+  document.querySelectorAll('#crm-tabbar .crm-tab').forEach((b) => b.classList.toggle('ativo', b.dataset.tab === grupo(secao)));
+}
+function crmAbrirGaveta() { document.body.classList.add('crm-gaveta-aberta'); }
+function crmFecharGaveta() { document.body.classList.remove('crm-gaveta-aberta'); }
+
 // =====================================================================
 // ---------- Central de Atendimento (chatbot por regras) ----------
 // =====================================================================
@@ -11535,7 +14093,7 @@ const CHATBOT_KB = [
   { padroes: ['compra', 'pedido de compra'], resposta: 'Pedidos de compra a fornecedores ficam em Estoque → Pedido de compras.' },
 
   // ---------- Financeiro ----------
-  { padroes: ['financeiro', 'lançar receita', 'lançar despesa', 'lancamento manual'], resposta: 'No Financeiro, cada mês é independente — editar setembro nunca mexe em agosto ou outubro. Dá pra lançar receitas, pagamentos, adiantamentos e saídas variáveis manualmente, sem precisar de um pedido de venda.' },
+  { padroes: ['financeiro', 'lançar receita', 'lançar despesa', 'lancamento manual'], resposta: 'No Financeiro, cada conta é um lançamento com vencimento e status. Use "Venda Rápida" pra receitas e "Lançar Despesa" pra despesas — à vista, parceladas ou recorrentes. Em Receber e Pagar você registra recebimentos e pagamentos (até parciais), e a Visão Geral mostra o mês e o que está vencido.' },
   { padroes: ['marcar pago', 'receber pagamento', 'confirmar pagamento', 'cobranca', 'cobrança'], resposta: 'No Financeiro, aba Cobranças, encontre o lançamento e clique em "Marcar pago". Lá também dá pra ver quem está pendente ou atrasado.' },
   { padroes: ['duplicar'], resposta: 'No Financeiro, use o botão "Duplicar" para copiar todos os lançamentos do mês atual para o mês seguinte — útil pra contas fixas que se repetem.' },
   { padroes: ['meta de lucro', 'meta mensal'], resposta: 'Dá pra definir uma meta de lucro mensal no Financeiro — o sistema avisa quando o mês não está batendo a meta.' },
@@ -11587,8 +14145,10 @@ const CHATBOT_FAQ = [
     { p: 'Como envio um orçamento?', r: 'CRM → Orçamentos → "+ Novo orçamento". O assistente tem 4 passos; no fim, você gera um link pro cliente aprovar e assinar. A aparência dessa página fica em Configurações → Aparência → Página de Aprovação / Checkout.' },
     { p: 'Como envio um briefing?', r: 'CRM → Briefings → escolha um dos modelos (ou um template seu) e o cliente. O sistema gera um link pro cliente responder sem precisar de login. As respostas aparecem em "Ver respostas".' },
     { p: 'Como cadastro meus serviços?', r: 'Operacional → Serviços → "+ Novo Serviço": use uma das sugestões prontas ou crie do zero, com preço, categoria, recorrência e, se quiser, um pacote de conteúdos por mês — que já preenche o Novo Projeto. No orçamento, "Adicionar do catálogo" puxa nome e valor.' },
-    { p: 'Como mostro meus planos pro cliente?', r: 'Serviços → aba Planos: crie os planos (valor fixo + serviços inclusos) e clique em "Apresentação pública". Escolha endereço, cores e quais planos aparecem, e clique em "Salvar e publicar" — o link abre sem login.' },
-    { p: 'O financeiro do CRM e do ERP é o mesmo?', r: 'Sim. O caixa é um só: o que entra pelo CRM (negócio fechado, venda rápida, contrato) aparece no mesmo Financeiro do ERP. Quem tem os dois planos vê os mesmos números nos dois painéis.' },
+    { p: 'Como crio o site da minha empresa?', r: 'Páginas → Landing pages (Página Pública). Escolha cores e layout, clique em "Personalizar Página" pra editar cada seção no Editor Visual, configure a Captura de Leads e defina o endereço em Configurações → Links Padrão. Quem preencher o formulário vira cliente e negócio no Pipeline sozinho.' },
+        { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
+        { p: 'Como mostro meus planos pro cliente?', r: 'Serviços → aba Planos: crie os planos (valor fixo + serviços inclusos) e clique em "Apresentação pública". Escolha endereço, cores e quais planos aparecem, e clique em "Salvar e publicar" — o link abre sem login.' },
+    { p: 'O financeiro do CRM e do ERP é o mesmo?', r: 'Só pra quem tem os dois planos (ERP + CRM): aí o Financeiro é um só, com os mesmos números nos dois lados. Com um plano só, cada um tem o seu — o Financeiro do CRM mostra só o que veio do CRM (negócios, vendas, contratos) e o do ERP só o que veio do ERP (pedidos e lançamentos feitos lá). O topo da tela do Financeiro mostra qual é o seu caso.' },
   ] },
   { id: 'geral', titulo: 'Sistema', perguntas: [
     { p: 'Como mudo o tema e as cores?', r: 'Engrenagem no topo da tela → Aparência → "Aparência do Sistema": 14 temas, cores individuais e tamanho da fonte. Fica salvo neste navegador.' },
@@ -12811,12 +15371,7 @@ let FINANCE_CICLOS_CACHE = {};
 // reais chegarem da nuvem (o carregamento é assíncrono), ela apagaria
 // de verdade os outros meses que ainda não tinham sido carregados nessa
 // sessão. Foi exatamente isso que causou a perda de dados do Financeiro.
-function getCicloDoMes(mesKey) {
-  if (!FINANCE_CICLOS_CACHE[mesKey]) {
-    return criarCicloDoMes(FINANCE_TEMPLATE_CACHE || financeTemplatePadrao());
-  }
-  return FINANCE_CICLOS_CACHE[mesKey];
-}
+
 
 // ---------- Receitas de quem não vê o financeiro ----------
 // Um Administrativo que fecha um negócio (ou faz uma venda rápida, ou
@@ -12831,18 +15386,7 @@ let RECEITAS_PENDENTES_FILA = [];
 function receitasPendentesRef() { return firestoreDb.collection('tenants').doc(TENANT_ID).collection('receitas_pendentes'); }
 
 // Ponto ÚNICO pra lançar receita no Financeiro a partir de outras telas.
-function registrarReceitaFinanceiro(mesKey, receita) {
-  if (FIREBASE_PRONTO && TENANT_ID && !nivelVeFinanceiro()) {
-    if (!nivelPodeOperar()) { avisarSemPermissaoNivel(); return false; }
-    receitasPendentesRef().add({ mes: mesKey, receita: JSON.parse(JSON.stringify(receita)), criadoEm: new Date().toISOString(), criadoPor: USUARIO_UID || '' })
-      .catch((err) => { console.error('Erro ao enviar receita pro Financeiro:', err); avisar('Não foi possível registrar a receita no Financeiro agora. Tente de novo.'); });
-    return true;
-  }
-  const ciclo = getCicloDoMes(mesKey);
-  ciclo.receitas = ciclo.receitas || [];
-  ciclo.receitas.push(receita);
-  return salvarCicloDoMes(mesKey, ciclo);
-}
+
 
 function iniciarReceitasPendentes() {
   if (RECEITAS_PENDENTES_ESCUTANDO || !FIREBASE_PRONTO || !TENANT_ID || !nivelVeFinanceiro() || !firestoreDb) return;
@@ -12860,7 +15404,7 @@ function iniciarReceitasPendentes() {
 }
 
 function processarReceitasPendentes() {
-  if (!RECEITAS_PENDENTES_FILA.length || !chaveCarregadaNaNuvem(FINANCE_CICLOS_KEY)) return; // roda de novo quando o caixa carregar
+  if (!RECEITAS_PENDENTES_FILA.length || !FIN_CARREGADO) return; // roda de novo quando o financeiro carregar
   const fila = RECEITAS_PENDENTES_FILA.splice(0);
   fila.forEach((item) => {
     const reivindicar = typeof firestoreDb.runTransaction === 'function'
@@ -12868,11 +15412,10 @@ function processarReceitasPendentes() {
       : item.ref.delete().then(() => true);
     reivindicar.then((ganhou) => {
       if (!ganhou || !item.receita || !/^\d{4}-\d{2}$/.test(item.mes || '')) return;
-      const ciclo = getCicloDoMes(item.mes);
-      ciclo.receitas = ciclo.receitas || [];
-      if (ciclo.receitas.some((r) => r.origemPendenteId === item.id)) return;
-      ciclo.receitas.push(Object.assign({}, item.receita, { id: item.receita.id || genId('r'), origemPendenteId: item.id }));
-      salvarCicloDoMes(item.mes, ciclo);
+      const r = item.receita;
+      finCriar({ id: 'pend_' + item.id, tipo: 'receber', descricao: r.plano || 'Receita', cliente: r.cliente || '', valor: Number(r.valor) || 0,
+        vencimento: finDataDoMes(item.mes, r.diaAcerto || 10), status: r.status === 'pago' ? 'pago' : 'pendente', categoriaId: r.origemPedidoId ? 'produtos' : 'servicos',
+        origem: { tipo: r.origemNegocioId ? 'negocio' : r.origemPedidoId ? 'pedido' : 'venda-rapida' }, origemNegocioId: r.origemNegocioId || '', origemPedidoId: r.origemPedidoId || '' });
     }).catch((err) => console.error('Erro ao mover receita pendente:', err));
   });
 }
@@ -12962,9 +15505,7 @@ function carregarCicloAtual(mesInputId) {
   const mesInput = document.getElementById(mesInputId);
   FINANCE_MES_ATUAL = (mesInput && mesInput.value) || mesKeyDoHoje();
   if (mesInput) mesInput.value = FINANCE_MES_ATUAL;
-  cloudWatch(FINANCE_TEMPLATE_KEY, financeTemplatePadrao(), (data) => { FINANCE_TEMPLATE_CACHE = data; });
-  cloudWatch(FINANCE_CICLOS_KEY, {}, (data) => {
-    FINANCE_CICLOS_CACHE = data;
+  finEscutar(() => {
     FINANCE_CICLO = getCicloDoMes(FINANCE_MES_ATUAL);
     if (typeof onCicloCarregado === 'function') onCicloCarregado();
   });
@@ -13011,23 +15552,7 @@ function renderPainelLeitura() {
 // =====================================================================
 
 function initFinanceiro() {
-  onCicloCarregado = () => { renderFinanceiroTudo(); atualizarCobrancasComCiclo(); };
-  carregarCicloAtual('financas-mes');
-  initMetasWatch();
-
-  document.querySelectorAll('#tabs-cobrancas button').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#tabs-cobrancas button').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderCobrancasLista();
-    });
-  });
-
-  const params = new URLSearchParams(window.location.search);
-  const relatorio = params.get('relatorio');
-  if (relatorio) {
-    setTimeout(() => gerarRelatorioPeriodo(Number(relatorio)), 300);
-  }
+  finMontar(document.getElementById('fin-host'));
 }
 
 function mudarMesFinancas() {
@@ -14582,9 +17107,7 @@ function initMeuNegocio() {
   const mesInput = document.getElementById('mn-dashboard-mes');
   if (mesInput) mesInput.value = mesKeyDoHoje();
   FINANCE_MES_ATUAL = mesKeyDoHoje();
-  cloudWatch(FINANCE_TEMPLATE_KEY, financeTemplatePadrao(), (data) => { FINANCE_TEMPLATE_CACHE = data; });
-  cloudWatch(FINANCE_CICLOS_KEY, {}, (data) => {
-    FINANCE_CICLOS_CACHE = data;
+  finEscutar(() => {
     FINANCE_CICLO = getCicloDoMes(FINANCE_MES_ATUAL);
     gerarRelatorioPeriodo(1, 'mn-dashboard-conteudo', 'mn-dashboard-titulo');
   });
@@ -14658,8 +17181,7 @@ function initPedidosVendaExtra() {
   });
   // precisamos do ciclo financeiro carregado ANTES de permitir "Lançar",
   // senão salvar um mês novo poderia sobrescrever a nuvem com dados vazios.
-  cloudWatch(FINANCE_TEMPLATE_KEY, financeTemplatePadrao(), (data) => { FINANCE_TEMPLATE_CACHE = data; });
-  cloudWatch(FINANCE_CICLOS_KEY, {}, (data) => { FINANCE_CICLOS_CACHE = data; FINANCE_SYNC_PRONTO_PV = true; });
+  finEscutar(() => { FINANCE_SYNC_PRONTO_PV = true; });
 }
 
 function criarLinhaItemVazia() {
@@ -15833,7 +18355,7 @@ async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
 
     // todas as subcoleções da empresa (antes só "dados" era apagada e as
     // tarefas/projetos do Kanban ficavam órfãos no banco)
-    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes']) {
+    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta']) {
       const snap = await firestoreDb.collection('tenants').doc(tenantId).collection(sub).get();
       const docs = []; snap.forEach((d) => docs.push(d.ref));
       for (let i = 0; i < docs.length; i += 400) { // limite de 500 operações por lote

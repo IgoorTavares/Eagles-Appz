@@ -6373,6 +6373,13 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '07/10/2026 · Financeiro', itens: [
+    { titulo: 'Duplicar contas para o mês seguinte', badges: ['novo'], texto: 'Nas abas Receber e Pagar, o botão "Duplicar" copia as contas do mês do filtro para o mês seguinte, como pendentes. Você escolhe quais; recorrentes e parcelas ficam de fora (o sistema já cria o mês seguinte delas), e duplicar de novo não repete cópia.' },
+  ]},
+  { data: '07/10/2026 · Privacidade', itens: [
+    { titulo: 'Política de Privacidade e Termos de Uso', badges: ['novo'], texto: 'Duas páginas públicas novas (privacidade.html e termos.html), com links na tela de login. A política explica, pela LGPD, quais dados o sistema trata e o que faz com o Google Agenda, como o Google exige para verificar o app e tirar o aviso "O Google não verificou este app".' },
+    { titulo: 'Aviso de privacidade no Google Agenda', badges: ['melhoria'], texto: 'O botão Conectar do Google Agenda agora diz em uma linha o que o sistema faz com a sua agenda, com link para a política. O "Como configurar" ganhou o passo da verificação no Google.' },
+  ]},
   { data: '07/10/2026 · Backup', itens: [
     { titulo: 'Backup completo e restauração', badges: ['novo'], texto: 'Em Configurações → Backup, o Diretor baixa um arquivo com todos os dados da empresa e pode restaurar a partir dele (o que foi criado depois continua, e antes o sistema guarda o estado atual). Lembrete automático a cada 30 dias sem backup.' },
   ]},
@@ -12135,6 +12142,7 @@ function finHtmlContas(tipo) {
       <span class="fin-chip laranja">Pendente: ${finV(pendente)}</span>
       ${rec ? '' : `<span class="fin-chip verde">Selecionado: <strong>${selecionadas.length} conta${selecionadas.length === 1 ? '' : 's'}</strong></span>${selecionadas.length ? `<button type="button" class="btn btn-small btn-primary" onclick="finPagarSelecionadas()">${ic('aprovado', 'ic-herda')} Pagar selecionadas (${finV(selecionadas.reduce((a, l) => a + finRestante(l), 0))})</button>` : ''}`}
       <span class="kb-espaco"></span>
+      <button type="button" class="btn" onclick="finAbrirDuplicar('${tipo}')" title="Copiar lançamentos de ${escapeHtml(finNomeMes(FIN_MES))} para o mês seguinte">${ic('copiar', 'ic-herda')} Duplicar</button>
       <button type="button" class="kb-btn-modo${FIN_FILTRO.visao === 'grade' ? ' ativo' : ''}" aria-label="Cartões" onclick="FIN_FILTRO.visao = 'grade'; finRender();">${kbIc('quadro')}</button>
       <button type="button" class="kb-btn-modo${FIN_FILTRO.visao === 'lista' ? ' ativo' : ''}" aria-label="Lista" onclick="FIN_FILTRO.visao = 'lista'; finRender();">${kbIc('lista')}</button>
       ${rec ? `<button type="button" class="btn" onclick="finAbrirRecibos()">${ic('documento', 'ic-herda')} Recibos em lote</button><button type="button" class="btn fin-btn-venda" onclick="finAbrirVendaRapida()">${ic('tendencia', 'ic-herda')} Novo recebimento</button>`
@@ -12150,6 +12158,64 @@ function finHtmlContas(tipo) {
       ${lista.length ? (FIN_FILTRO.visao === 'lista' ? tabela : `<div class="fin-contas-grade">${lista.map(card).join('')}</div>`) : `<p class="kb-vazio" style="padding:22px;">Nenhuma conta a ${rec ? 'receber' : 'pagar'} encontrada</p>`}
     </div>
     ${rec ? '' : finHtmlRecorrentesPagar()}`;
+}
+// ---------- Duplicar para o mês seguinte ----------
+// Copia as contas do mês do filtro para o mês seguinte, como pendentes.
+// Recorrentes e parcelas ficam de fora (o sistema já cria o mês seguinte
+// delas). Id determinístico (dup_<origem>_<mês>): duplicar de novo não
+// cria uma segunda cópia, e nada que já existe no mês seguinte é apagado.
+function finDupId(l, mes) { return 'dup_' + l.id + '_' + mes; }
+function finDupVencimento(l, destino) {
+  const v = l.vencimento || '';
+  const dia = Number(v.slice(8, 10)) || 1;
+  const mesVenc = /^\d{4}-\d{2}/.test(v) ? v.slice(0, 7) : FIN_MES;
+  return finDataDoMes(finSomarMeses(mesVenc, 1), dia);
+}
+function finDuplicaveis(tipo) {
+  const destino = finSomarMeses(FIN_MES, 1);
+  const todos = FIN_LANC.filter((l) => l.tipo === tipo && finCompetencia(l) === FIN_MES && l.status !== 'cancelado');
+  const automaticos = todos.filter((l) => l.recorrenciaId || Number(l.totalParcelas) > 1);
+  const lista = todos.filter((l) => !automaticos.includes(l)).sort((a, b) => (a.vencimento || '').localeCompare(b.vencimento || ''));
+  const jaFeito = (l) => FIN_LANC_TODOS.some((x) => x.id === finDupId(l, destino));
+  return { destino, automaticos, lista, jaFeito };
+}
+function finAbrirDuplicar(tipo) {
+  if (finNuvem() && !nivelVeFinanceiro()) { avisarSemPermissaoNivel('duplicar lançamentos'); return; }
+  const rec = tipo === 'receber';
+  const { destino, automaticos, lista, jaFeito } = finDuplicaveis(tipo);
+  const livres = lista.filter((l) => !jaFeito(l));
+  const nomeContas = rec ? 'contas a receber' : 'contas a pagar';
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Duplicar para ${escapeHtml(finNomeMes(destino))}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub">Escolha quais ${nomeContas} de ${escapeHtml(finNomeMes(FIN_MES))} copiar. As cópias entram como pendentes, com o vencimento no mesmo dia do mês seguinte.</p>
+      ${lista.length ? `${livres.length ? `<label class="kb-imp-opcao" style="margin:0 0 8px;"><input type="checkbox" checked onchange="document.querySelectorAll('.fin-dup-sel').forEach((c) => { c.checked = this.checked; })"> <strong>Todos (${livres.length})</strong></label>` : ''}
+        <div style="max-height:320px; overflow-y:auto;">${lista.map((l) => { const feito = jaFeito(l); return `<label class="srv-cat-linha" style="cursor:${feito ? 'default' : 'pointer'};${feito ? ' opacity:.6;' : ''}"><input type="checkbox" class="${feito ? '' : 'fin-dup-sel '}kb-sel" value="${escapeHtml(l.id)}" ${feito ? 'disabled' : 'checked'}><span style="flex:1; min-width:0;">${escapeHtml((rec ? l.cliente : l.fornecedor) || l.descricao)} <small style="color:var(--text-soft);">· ${(rec ? l.cliente : l.fornecedor) ? escapeHtml(l.descricao) + ' · ' : ''}vence ${kbDataCurta(finDupVencimento(l, destino))}${feito ? ' · já duplicado' : ''}</small></span>${finV(l.valor, l.moeda)}</label>`; }).join('')}</div>`
+        : `<p class="kb-vazio" style="padding:20px;">Nenhuma conta para duplicar em ${escapeHtml(finNomeMes(FIN_MES))}.</p>`}
+      ${automaticos.length ? `<p class="kb-vazio-mini" style="margin:12px 0 0;">${ic('recorrente', 'ic-herda')} ${automaticos.length} ${automaticos.length === 1 ? 'conta recorrente ou parcelada fica' : 'contas recorrentes ou parceladas ficam'} de fora: o sistema já cria o mês seguinte delas sozinho.</p>` : ''}
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button>${livres.length ? `<button type="button" class="btn btn-primary" onclick="finDuplicarSelecionados('${tipo}')">${ic('copiar', 'ic-herda')} Duplicar</button>` : ''}</div>
+    </div>`;
+  openModal('modal-srv');
+}
+function finDuplicarSelecionados(tipo) {
+  if (finNuvem() && !nivelVeFinanceiro()) { avisarSemPermissaoNivel('duplicar lançamentos'); return; }
+  const { destino, lista, jaFeito } = finDuplicaveis(tipo);
+  const ids = new Set(Array.from(document.querySelectorAll('.fin-dup-sel:checked')).map((c) => c.value));
+  const escolhidos = lista.filter((l) => ids.has(l.id) && !jaFeito(l));
+  if (!escolhidos.length) { avisar('Escolha pelo menos uma conta para duplicar.'); return; }
+  let n = 0;
+  escolhidos.forEach((l) => {
+    const copia = { id: finDupId(l, destino), duplicadoDe: l.id, status: 'pendente', valorPago: 0, dataPagamento: null, origem: { tipo: 'manual' },
+      vencimento: finDupVencimento(l, destino), competencia: destino };
+    ['tipo', 'descricao', 'valor', 'categoriaId', 'cliente', 'fornecedor', 'subtipo', 'moeda', 'observacoes', 'itens', 'modulo'].forEach((k) => { if (l[k] !== undefined) copia[k] = l[k]; });
+    if (finCriar(copia)) n++;
+  });
+  srvFecharModal();
+  if (!n) return;
+  FIN_MES = destino;
+  finRender();
+  avisar(`${n} ${n === 1 ? 'conta duplicada' : 'contas duplicadas'} para ${finNomeMes(destino)}.`, 'Duplicar');
 }
 function finHtmlRecorrentesPagar() {
   const recs = FIN_REC.filter((r) => r.tipo === 'pagar');
@@ -15932,7 +15998,8 @@ function agMenuGoogle(ancora) {
         <button type="button" class="btn btn-small btn-ghost" onclick="kbFecharPopovers(); agGoogleDesconectar()">Desconectar</button></div>`
     : `<div class="kb-pop-form"><strong>${ic('calendario', 'ic-herda')} Google Calendar</strong><p class="kb-vazio-mini" style="margin:4px 0 10px;">Conecte para sincronizar eventos</p>
         <button type="button" class="btn btn-small btn-primary" onclick="kbFecharPopovers(); agGoogleConectar()">${ic('link', 'ic-herda')} Conectar</button>
-        <button type="button" class="kb-link" onclick="kbFecharPopovers(); agComoConfigurarGoogle()">Como configurar</button></div>`, ancora);
+        <button type="button" class="kb-link" onclick="kbFecharPopovers(); agComoConfigurarGoogle()">Como configurar</button>
+        <p class="kb-vazio-mini" style="margin:10px 0 0;">O sistema só lê seus eventos para mostrar aqui e cria na sua agenda os compromissos que você marcar. Veja a <a href="privacidade.html#google" target="_blank" rel="noopener">Política de Privacidade</a>.</p></div>`, ancora);
 }
 function agComoConfigurarGoogle() {
   const ov = srvGarantirModal();
@@ -15943,6 +16010,7 @@ function agComoConfigurarGoogle() {
       <li><b>Ligar a API do Google Agenda:</b> no Google Cloud Console, escolha o mesmo projeto do Firebase → APIs e serviços → Biblioteca → "Google Calendar API" → Ativar.</li>
       <li><b>Tela de consentimento:</b> APIs e serviços → Tela de consentimento OAuth → em Escopos, adicione <code>.../auth/calendar.events</code>. Enquanto o app não for verificado pelo Google, adicione os e-mails de quem vai usar em "Usuários de teste" (até 100).</li>
       <li><b>Domínio:</b> o endereço do site precisa estar em Authentication → Configurações → Domínios autorizados.</li>
+      <li><b>Tirar o aviso "O Google não verificou este app":</b> no Google Cloud → Google Auth Platform, preencha a Marca (logo, página inicial <code>eagleslabz.com.br/login.html</code>, privacidade <code>eagleslabz.com.br/privacidade.html</code> e termos <code>eagleslabz.com.br/termos.html</code>), mude o Público-alvo para "Em produção" e envie o pedido na Central de verificação. Até sair a aprovação, quem conectar clica em "Avançado" → "Acessar".</li>
     </ol>
     <p class="kb-vazio-mini">Depois disso, cada pessoa clica em "Conectar" na Agenda e autoriza a própria conta Google. A conexão dura cerca de 1 hora por sessão; depois, é só clicar em Conectar de novo.</p>
   </div>`;
@@ -16161,7 +16229,7 @@ const CHATBOT_KB = [
   // ---------- Financeiro ----------
   { padroes: ['financeiro', 'lançar receita', 'lançar despesa', 'lancamento manual'], resposta: 'No Financeiro, cada conta é um lançamento com vencimento e status. Use "Venda Rápida" pra receitas e "Lançar Despesa" pra despesas — à vista, parceladas ou recorrentes. Em Receber e Pagar você registra recebimentos e pagamentos (até parciais), e a Visão Geral mostra o mês e o que está vencido.' },
   { padroes: ['marcar pago', 'receber pagamento', 'confirmar pagamento', 'cobranca', 'cobrança'], resposta: 'No Financeiro, aba Cobranças, encontre o lançamento e clique em "Marcar pago". Lá também dá pra ver quem está pendente ou atrasado.' },
-  { padroes: ['duplicar'], resposta: 'No Financeiro, use o botão "Duplicar" para copiar todos os lançamentos do mês atual para o mês seguinte — útil pra contas fixas que se repetem.' },
+  { padroes: ['duplicar'], resposta: 'No Financeiro, nas abas Receber ou Pagar, escolha o mês no filtro e clique em "Duplicar": você marca quais contas copiar para o mês seguinte, e elas entram como pendentes. Recorrentes e parcelas ficam de fora, porque o sistema já cria o mês seguinte delas.' },
   { padroes: ['meta de lucro', 'meta mensal'], resposta: 'Dá pra definir uma meta de lucro mensal no Financeiro — o sistema avisa quando o mês não está batendo a meta.' },
   { padroes: ['calendario financeiro', 'calendário financeiro'], resposta: 'O calendário no Financeiro mostra os vencimentos do mês dia a dia — clique num dia pra ver o detalhe do que vence ali.' },
 
@@ -16214,6 +16282,9 @@ const CHATBOT_FAQ = [
     { p: 'Como crio o site da minha empresa?', r: 'Páginas → Landing pages (Página Pública). Escolha cores e layout, clique em "Personalizar Página" pra editar cada seção no Editor Visual, configure a Captura de Leads e defina o endereço em Configurações → Links Padrão. Quem preencher o formulário vira cliente e negócio no Pipeline sozinho.' },
         { p: 'Como meu cliente entra no portal?', r: 'CRM → Operacional → Portal do cliente → Logins: crie um login (nome, e-mail e senha) para o cliente. Ele entra pelo link do portal (botão "Copiar link") e vê só os conteúdos dele: aprova, pede ajustes, baixa arquivos e manda ideias. Logins de cliente não contam no limite de usuários do seu plano.' },
         { p: 'Como conecto o Google Agenda?', r: 'Operacional → Agenda → botão do calendário (ao lado de "Hoje") → Conectar. Na primeira vez, o Diretor precisa ligar o login com Google no Firebase e a API do Google Agenda — o passo a passo está em "Como configurar", no mesmo botão. A conexão dura cerca de 1 hora; depois é só conectar de novo.' },
+        { p: 'Apareceu "O Google não verificou este app"', r: 'É o aviso do Google enquanto o Eagles Labz não termina a verificação dele. É seguro continuar: clique em "Avançado" e depois em "Acessar". O sistema só lê seus eventos para mostrar na Agenda e cria na sua agenda os compromissos que você marcar para sincronizar. Os detalhes estão na Política de Privacidade (link na tela de login).' },
+        { p: 'Onde estão a Política de Privacidade e os Termos?', r: 'Na tela de login, embaixo do botão Entrar, e nos endereços eagleslabz.com.br/privacidade.html e eagleslabz.com.br/termos.html. A política explica o que o sistema faz com os dados, incluindo o Google Agenda, e quais são seus direitos pela LGPD.' },
+        { p: 'Como copio as contas de um mês para o seguinte?', r: 'Financeiro → Receber ou Pagar → escolha o mês no filtro → "Duplicar". Marque as contas que quer copiar: elas vão para o mês seguinte como pendentes, com o vencimento no mesmo dia. Recorrentes e parcelas ficam de fora (o sistema já cria o mês seguinte delas), e duplicar de novo não cria cópia repetida.' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },

@@ -4395,3 +4395,48 @@ body.pc-body { background: #0b0f14; }
 .bkp-lembrete-caixa strong { display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--warning); }
 .bkp-lembrete-caixa strong .ic { width: 18px; height: 18px; }
 .bkp-lembrete-caixa p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text); }
+
+/* ---------- Meu Negócio no celular e tablet ----------
+   A regra geral do .mn-layout (220px + conteúdo) vinha depois da quebra
+   de celular e ganhava dela: a tela ficava com duas colunas espremidas e
+   a página rolava para o lado. Aqui ela vira uma coluna só, e o menu
+   lateral vira uma fileira de atalhos que rola para o lado. */
+@media (max-width: 860px) {
+  .mn-layout.mn-pagina { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .mn-pagina .mn-menu-painel { padding: 6px !important; position: sticky; top: calc(var(--topbar-h) + 6px); z-index: 20; }
+  .mn-pagina .mn-menu { flex-direction: row !important; gap: 6px !important; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+  .mn-pagina .mn-menu::-webkit-scrollbar { display: none; }
+  .mn-pagina .mn-menu > div { display: contents; }
+  .mn-pagina .mn-menu > div > .mn-nav-item { display: none; } /* títulos de grupo (Vendas ▾, Estoque ▾...) */
+  .mn-pagina .mn-menu [id^="mn-sub-"] { display: contents !important; }
+  .mn-pagina .mn-nav-item, .mn-pagina .mn-nav-sublink { flex-shrink: 0; width: auto; white-space: nowrap; padding: 8px 12px; border-radius: 9px; font-size: 13px; }
+  .mn-pagina .mn-nav-sublink { color: var(--text-soft); }
+  .mn-pagina .page-header { flex-wrap: wrap; gap: 10px; }
+  .mn-pagina .page-header > div { min-width: 0; }
+  .mn-pagina .stat-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+  .mn-pagina .stat-card { padding: 14px; min-width: 0; }
+  .mn-pagina .stat-value { font-size: 18px !important; overflow-wrap: anywhere; }
+  .mn-pagina .grid-2, .mn-pagina .grid-3 { grid-template-columns: minmax(0, 1fr) !important; }
+  .mn-pagina .panel { min-width: 0; }
+  .mn-pagina canvas { max-width: 100%; }
+  .mn-pagina table { min-width: 520px; }
+  .mn-pagina .panel:has(> table), .mn-pagina .panel:has(> div > table) { overflow-x: auto; }
+  .mn-pagina .fin-comp-grid { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 420px) {
+  .mn-pagina .stat-value { font-size: 16px !important; }
+  .mn-pagina .fin-comp-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
+/* Relatório do Financeiro dentro do Meu Negócio */
+.fin-so-relatorios > .fin-painel-cab:first-child { flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+@media (max-width: 860px) {
+  .fin-so-relatorios > .fin-painel-cab:first-child .srv-select { flex: 1 1 140px; min-width: 0; }
+  .fin-so-relatorios .kb-tabela-wrap { overflow-x: auto; }
+}
+@media (max-width: 560px) {
+  .fin-so-relatorios .fin-painel-cab { flex-wrap: wrap; row-gap: 8px; }
+  .fin-so-relatorios .kb-tabela { min-width: 0 !important; width: 100%; font-size: 13px; }
+  .fin-so-relatorios .kb-tabela th, .fin-so-relatorios .kb-tabela td { padding: 8px 6px; }
+  .fin-so-relatorios .kb-tabela td:first-child, .fin-so-relatorios .kb-tabela td.kb-vazio-mini { white-space: normal !important; }
+  .fin-so-relatorios .kb-tabela td:not(:first-child), .fin-so-relatorios .kb-tabela th:not(:first-child) { white-space: nowrap; }
+}

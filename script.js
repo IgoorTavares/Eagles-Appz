@@ -6373,6 +6373,16 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '07/10/2026 · Meu Negócio (v92)', itens: [
+    { titulo: 'Relatório do Financeiro garantido no Meu Negócio', badges: ['corrigido'], texto: 'Se o navegador ou a publicação ainda trouxer a página antiga do Meu Negócio, o sistema troca sozinho o relatório antigo pelo de Financeiro → Relatórios.' },
+  ]},
+  { data: '07/10/2026 · Meu Negócio', itens: [
+    { titulo: 'Meu Negócio usa o relatório do Financeiro', badges: ['melhoria'], texto: 'A seção Financeiro do Meu Negócio agora mostra o mesmo relatório de Financeiro → Relatórios (resumo competência × caixa, DRE, gráficos, receita por serviço e top clientes). Sai o relatório antigo, que tinha outro cálculo e outros períodos: os números passam a ser sempre iguais nos dois lugares.' },
+  ]},
+  { data: '07/10/2026 · Meu Negócio', itens: [
+    { titulo: 'Relatórios com o mesmo período dos dois lados', badges: ['corrigido'], texto: 'O relatório de 12 meses do Meu Negócio pegava os últimos 12 meses, mas o Financeiro só tinha "Este ano" (de janeiro até agora): por isso o Meu Negócio parecia somar a mais. Agora o Financeiro → Relatórios tem "Últimos 12 meses" e o Meu Negócio tem "Este ano", e o Meu Negócio explica que soma por competência. Também deixou de voltar sozinho para "Mês atual" quando os dados atualizavam, e alterar a meta de lucro não dá mais erro.' },
+    { titulo: 'Meu Negócio no celular', badges: ['melhoria'], texto: 'A tela ficava com duas colunas espremidas e rolava para o lado. Agora é uma coluna só, o menu vira uma fileira de atalhos no topo, os cartões ficam dois por linha e os gráficos têm altura certa.' },
+  ]},
   { data: '07/10/2026 · Financeiro', itens: [
     { titulo: 'Duplicar contas para o mês seguinte', badges: ['novo'], texto: 'Nas abas Receber e Pagar, o botão "Duplicar" copia as contas do mês do filtro para o mês seguinte, como pendentes. Você escolhe quais; recorrentes e parcelas ficam de fora (o sistema já cria o mês seguinte delas), e duplicar de novo não repete cópia.' },
   ]},
@@ -11935,6 +11945,13 @@ function finRender() {
   const ativo = document.activeElement;
   const foco = ativo && host.contains(ativo) && ativo.id ? ativo.id : null;
   const pos = foco && ativo.selectionStart;
+  if (host.dataset && host.dataset.finSoRelatorios === '1') {
+    FIN_ABA = 'relatorios';
+    host.innerHTML = `<div class="fin fin-so-relatorios${finOcultoAtivo() ? ' fin-oculto' : ''}">${!FIN_CARREGADO ? '<p class="kb-vazio">Carregando o financeiro...</p>' : finHtmlRelatorios()}</div>`;
+    if (foco) { const i = document.getElementById(foco); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} } }
+    setTimeout(finDesenharGraficos, 0);
+    return;
+  }
   const corpo = FIN_ABAS_DEPOIS[FIN_ABA] ? finHtmlEmBreve(FIN_ABA) : ({ visao: finHtmlVisao, receber: () => finHtmlContas('receber'), pagar: () => finHtmlContas('pagar'),
     clientes: () => finHtmlPessoas('receber'), fornecedores: () => finHtmlPessoas('pagar'), recorrentes: finHtmlRecorrentes, caixa: finHtmlCaixa, relatorios: finHtmlRelatorios, pix: finHtmlPix }[FIN_ABA] || finHtmlVisao)();
   host.innerHTML = `
@@ -12854,6 +12871,7 @@ function finPeriodoRelatorio() {
   if (p === 'passado') { const m = finSomarMeses(atual, -1); return { de: m, ate: m, nome: 'Mês passado' }; }
   if (p === '3m') return { de: finSomarMeses(atual, -2), ate: atual, nome: 'Últimos 3 meses' };
   if (p === '6m') return { de: finSomarMeses(atual, -5), ate: atual, nome: 'Últimos 6 meses' };
+  if (p === '12m') return { de: finSomarMeses(atual, -11), ate: atual, nome: 'Últimos 12 meses' };
   if (p === 'ano') return { de: atual.slice(0, 4) + '-01', ate: atual, nome: 'Este ano' };
   return { de: atual, ate: atual, nome: 'Este mês' };
 }
@@ -12929,7 +12947,7 @@ function finHtmlRelatorios() {
     <div class="fin-painel-cab"><div><strong style="font-size:18px;">Relatórios Financeiros</strong><div class="kb-vazio-mini">${escapeHtml(d.per.nome)}</div></div><span class="kb-espaco"></span>
       <button type="button" class="btn" onclick="finExportarRelatorio()">${ic('baixar', 'ic-herda')} Exportar</button>
       <select class="srv-select" onchange="FIN_REL.cliente = this.value; finRender();"><option value="">Todos os clientes</option>${clientes.map((c) => `<option value="${escapeHtml(c)}"${FIN_REL.cliente === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>
-      <select class="srv-select" onchange="FIN_REL.periodo = this.value; finRender();">${[['mes', 'Este mês'], ['passado', 'Mês passado'], ['3m', 'Últimos 3 meses'], ['6m', 'Últimos 6 meses'], ['ano', 'Este ano']].map(([v, t]) => `<option value="${v}"${FIN_REL.periodo === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+      <select class="srv-select" onchange="FIN_REL.periodo = this.value; finRender();">${[['mes', 'Este mês'], ['passado', 'Mês passado'], ['3m', 'Últimos 3 meses'], ['6m', 'Últimos 6 meses'], ['12m', 'Últimos 12 meses'], ['ano', 'Este ano']].map(([v, t]) => `<option value="${v}"${FIN_REL.periodo === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
     </div>
     <div class="fin-painel">
       <div class="fin-painel-cab"><strong>Resumo do Período</strong></div>
@@ -16234,7 +16252,7 @@ const CHATBOT_KB = [
   { padroes: ['calendario financeiro', 'calendário financeiro'], resposta: 'O calendário no Financeiro mostra os vencimentos do mês dia a dia — clique num dia pra ver o detalhe do que vence ali.' },
 
   // ---------- Meu Negócio / relatórios ----------
-  { padroes: ['exportar', 'relatorio', 'relatório', 'pdf do relatorio'], resposta: 'Em Meu Negócio → Dashboard, escolha o período (mês atual, 3, 6 ou 12 meses) e clique em "Baixar em PDF" — o relatório com os números do período é gerado e baixado direto, com gráficos e a lista de clientes.' },
+  { padroes: ['exportar', 'relatorio', 'relatório', 'pdf do relatorio'], resposta: 'O relatório financeiro fica em Financeiro → Relatórios e também em Meu Negócio → Financeiro (é o mesmo relatório nos dois lugares). Escolha o período (este mês, mês passado, 3, 6 ou 12 meses, ou este ano) e clique em "Exportar" para baixar a planilha com o resumo e a DRE.' },
   { padroes: ['mapa', 'vendas por estado', 'vendas por cidade'], resposta: 'Em Meu Negócio → Vendas, tem um mapa do Brasil: cada estado fica mais escuro conforme vendeu mais ali. Clique num estado pra dar zoom e ver as vendas por cidade dentro dele.' },
   { padroes: ['venda por vendedor', 'ranking de vendedor'], resposta: 'Em Meu Negócio → Venda por vendedor tem o ranking de vendas por vendedor, por produto, e a evolução das vendas mês a mês.' },
 
@@ -16285,6 +16303,7 @@ const CHATBOT_FAQ = [
         { p: 'Apareceu "O Google não verificou este app"', r: 'É o aviso do Google enquanto o Eagles Labz não termina a verificação dele. É seguro continuar: clique em "Avançado" e depois em "Acessar". O sistema só lê seus eventos para mostrar na Agenda e cria na sua agenda os compromissos que você marcar para sincronizar. Os detalhes estão na Política de Privacidade (link na tela de login).' },
         { p: 'Onde estão a Política de Privacidade e os Termos?', r: 'Na tela de login, embaixo do botão Entrar, e nos endereços eagleslabz.com.br/privacidade.html e eagleslabz.com.br/termos.html. A política explica o que o sistema faz com os dados, incluindo o Google Agenda, e quais são seus direitos pela LGPD.' },
         { p: 'Como copio as contas de um mês para o seguinte?', r: 'Financeiro → Receber ou Pagar → escolha o mês no filtro → "Duplicar". Marque as contas que quer copiar: elas vão para o mês seguinte como pendentes, com o vencimento no mesmo dia. Recorrentes e parcelas ficam de fora (o sistema já cria o mês seguinte delas), e duplicar de novo não cria cópia repetida.' },
+        { p: 'O relatório do Meu Negócio é o mesmo do Financeiro?', r: 'Sim. Meu Negócio → Financeiro mostra exatamente o relatório de Financeiro → Relatórios: mesmo período, mesmos números, mesma DRE e mesmos gráficos. O período e o filtro de cliente escolhidos valem para os dois. Lembre: a coluna "Competência" conta cada conta no mês dela, paga ou não; a "Caixa" conta só o que entrou ou saiu de fato.' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
@@ -18295,11 +18314,12 @@ function gerarRelatorioPeriodo(quantidade, containerId, tituloId) {
 
   const meses = gerarListaMeses(FINANCE_MES_ATUAL, quantidade);
   const dados = agregarPeriodo(meses);
-  RELATORIO_DADOS_ATUAIS = { meses, dados, quantidade };
+  RELATORIO_DADOS_ATUAIS = { meses, dados, quantidade, containerId, tituloId };
 
   const tituloPeriodo = quantidade === 1 ? formatMesLabel(meses[0]) : `${formatMesLabel(meses[0])} – ${formatMesLabel(meses[meses.length - 1])}`;
   const tituloEl = document.getElementById(tituloId);
   if (tituloEl) tituloEl.textContent = 'Relatório financeiro · ' + tituloPeriodo;
+  document.querySelectorAll('[data-rel-qtd]').forEach((b) => b.classList.toggle('ativo', Number(b.dataset.relQtd) === quantidade));
 
   renderRelatorioConteudo(dados, quantidade, containerId);
   if (abrirComoModal) openModal('modal-relatorio');
@@ -18336,10 +18356,11 @@ function renderRelatorioConteudo(dados, quantidade, containerId) {
       <div class="panel-title"><h2>Meta de lucro mensal</h2><span>${bateuMeta ? '✓ meta batida' : '✗ abaixo da meta'}</span></div>
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
         <label style="font-size:13px; color:var(--text-soft);">Meta por mês (R$)</label>
-        <input type="number" id="input-meta-lucro" value="${metaLucro}" style="width:140px;" onchange="salvarMetaLucro(this.value); gerarRelatorioPeriodo(${quantidade});">
+        <input type="number" id="input-meta-lucro" value="${metaLucro}" style="width:140px;" onchange="salvarMetaLucro(this.value); const r = RELATORIO_DADOS_ATUAIS; if (r) gerarRelatorioPeriodo(r.quantidade, r.containerId, r.tituloId);">
         <span style="font-size:13px; color:var(--text-soft);">Meta do período: ${formatMoney(metaLucroPeriodo)} · Realizado: ${formatMoney(dados.lucroTotal)}</span>
       </div>
     </div>
+    <p class="kb-vazio-mini" style="margin:-6px 0 14px;">Valores por <strong>competência</strong>: cada conta conta no mês dela (vencimento), já paga ou não — o mesmo critério da coluna "Competência" em Financeiro → Relatórios.</p>
     <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:18px;">${alertasHtml.join('')}</div>
     <div class="panel" style="margin-bottom:18px;">
       <div class="panel-title"><h2>Evolução no período</h2><span>receita, despesas e lucro mês a mês</span></div>
@@ -19248,11 +19269,28 @@ function initMeuNegocio() {
   const mesInput = document.getElementById('mn-dashboard-mes');
   if (mesInput) mesInput.value = mesKeyDoHoje();
   FINANCE_MES_ATUAL = mesKeyDoHoje();
-  finEscutar(() => {
-    FINANCE_CICLO = getCicloDoMes(FINANCE_MES_ATUAL);
-    gerarRelatorioPeriodo(1, 'mn-dashboard-conteudo', 'mn-dashboard-titulo');
-  });
+  mnAjustarGraficosCelular();
+  // Se a página veio de uma versão antiga (meu-negocio.html em cache ou
+  // publicado pela metade), troca o relatório antigo pelo do Financeiro
+  // mesmo assim — o relatório antigo não aparece mais em nenhum caso.
+  const secaoRel = document.getElementById('mn-secao-dashboard');
+  if (secaoRel && !document.getElementById('mn-fin-relatorios')) {
+    secaoRel.innerHTML = '<div id="mn-fin-relatorios" data-fin-so-relatorios="1"></div>';
+  }
+  const hostRel = document.getElementById('mn-fin-relatorios');
+  if (hostRel) { try { finMontar(hostRel, 'relatorios'); } catch (e) { console.error('Relatório financeiro:', e); } }
   renderVisaoGeral();
+}
+
+// No celular os gráficos de linha e barra ficavam achatados (a altura
+// vinha fixa do HTML, pensada para a tela larga). Aqui eles passam a ter
+// uma proporção mais alta; os de rosca continuam redondos.
+function mnAjustarGraficosCelular() {
+  if (typeof Chart === 'undefined' || typeof window.matchMedia !== 'function') return;
+  const mq = window.matchMedia('(max-width: 860px)');
+  const aplicar = () => { Chart.defaults.aspectRatio = mq.matches ? 1.3 : undefined; };
+  aplicar();
+  if (mq.addEventListener) mq.addEventListener('change', () => { aplicar(); atualizarSecaoAtivaMeuNegocio(); });
 }
 
 function atualizarSecaoAtivaMeuNegocio() {
@@ -19273,6 +19311,7 @@ function mostrarSecaoNegocio(secao, btn) {
   document.querySelectorAll('.mn-nav-item, .mn-nav-sublink').forEach((b) => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (secao === 'visao-geral') renderVisaoGeral();
+  if (secao === 'dashboard' && typeof finRender === 'function') finRender();
   if (secao === 'vendas') renderDashboardVendas();
   if (secao === 'vendedor') renderDashboardVendedor();
   if (secao === 'vendas-pedidos') renderVendasPedidosDashboard();

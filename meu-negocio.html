@@ -85,9 +85,9 @@
   </div>
 </div>
 
-<div class="mn-layout">
-  <div class="panel" style="padding:10px;">
-    <nav style="display:flex; flex-direction:column; gap:2px;">
+<div class="mn-layout mn-pagina">
+  <div class="panel mn-menu-painel" style="padding:10px;">
+    <nav class="mn-menu" style="display:flex; flex-direction:column; gap:2px;">
       <button type="button" class="mn-nav-item active" onclick="mostrarSecaoNegocio('visao-geral', this)" style="justify-content:flex-start; gap:9px;"><svg class="icone-menu" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Visão geral</button>
       <button type="button" class="mn-nav-item" onclick="mostrarSecaoNegocio('dashboard', this)" style="justify-content:flex-start; gap:9px;"><svg class="icone-menu" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Financeiro</button>
 
@@ -237,17 +237,8 @@
     </div>
 
     <div class="mn-secao" id="mn-secao-dashboard" style="display:none;">
-      <div class="page-header" style="margin-bottom:16px;">
-        <div><h2 id="mn-dashboard-titulo" style="margin:0; font-size:17px;">Relatório financeiro</h2></div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button type="button" class="btn btn-small" onclick="gerarRelatorioPeriodo(1,'mn-dashboard-conteudo','mn-dashboard-titulo')">Mês atual</button>
-          <button type="button" class="btn btn-small" onclick="gerarRelatorioPeriodo(3,'mn-dashboard-conteudo','mn-dashboard-titulo')">3 meses</button>
-          <button type="button" class="btn btn-small" onclick="gerarRelatorioPeriodo(6,'mn-dashboard-conteudo','mn-dashboard-titulo')">6 meses</button>
-          <button type="button" class="btn btn-small" onclick="gerarRelatorioPeriodo(12,'mn-dashboard-conteudo','mn-dashboard-titulo')">12 meses</button>
-          <button type="button" class="btn btn-small btn-primary" onclick="imprimirRelatorioPeriodo()">Baixar em PDF</button>
-        </div>
-      </div>
-      <div id="mn-dashboard-conteudo"></div>
+      <!-- Mesmo relatório de Financeiro → Relatórios (mesmo código, mesmos números) -->
+      <div id="mn-fin-relatorios" data-fin-so-relatorios="1"></div>
     </div>
 
     <div class="mn-secao" id="mn-secao-vendas" style="display:none;">

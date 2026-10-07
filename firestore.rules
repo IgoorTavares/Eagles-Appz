@@ -18,6 +18,12 @@
 //   consegue criar nem remover outros usuários.
 // - Um TenantAdmin só cria/gerencia usuários dentro da PRÓPRIA empresa.
 //
+// Agenda: coleção agenda.
+//
+// Portal do Cliente: papel 'Cliente' + coleções portal e portal_pedidos.
+//
+// Conteúdos: coleções conteudos e conteudos_publicos.
+//
 // Página Pública: coleções paginas_publicas e leads_publicos.
 //
 // Financeiro novo: coleções fin_lancamentos, fin_recorrencias e fin_meta.
@@ -97,6 +103,15 @@ service cloud.firestore {
       return estaLogado() && (meuRole() == 'SuperAdmin' || ehRoleDiretor(meuRole()) || meuRole() == 'Administrativo');
     }
 
+    // Login do Portal do Cliente: NÃO é da equipe. Só vê o que é do
+    // cliente dele (clienteNome) e só faz o que as regras abaixo liberam.
+    function souCliente(tenantId) {
+      return estaLogado() && meuRole() == 'Cliente' && meuTenantId() == tenantId && empresaAtiva(tenantId);
+    }
+    function meuClienteNome() {
+      return meuUsuarioDoc().get('clienteNome', '');
+    }
+
     // Níveis que um Diretor pode dar (nunca SuperAdmin).
     function roleNovo(role) {
       return role == 'Diretor' || role == 'Administrativo' || role == 'Financeiro';
@@ -129,7 +144,7 @@ service cloud.firestore {
 
     // Sou membro dessa empresa e ela está ativa.
     function souMembroAtivo(tenantId) {
-      return estaLogado() && meuTenantId() != null && meuTenantId() == tenantId && empresaAtiva(tenantId);
+      return estaLogado() && meuTenantId() != null && meuTenantId() == tenantId && meuRole() != 'Cliente' && empresaAtiva(tenantId);
     }
 
     // ---------- usuarios/{uid} ----------
@@ -140,7 +155,7 @@ service cloud.firestore {
       allow read: if estaLogado() && (
         request.auth.uid == userId ||
         souSuperAdmin() ||
-        (resource.data.get('tenantId', null) != null && meuTenantId() == resource.data.get('tenantId', null))
+        (resource.data.get('tenantId', null) != null && meuTenantId() == resource.data.get('tenantId', null) && meuRole() != 'Cliente')
       );
 
       // Super Admin cria qualquer usuário. Diretor só cria na própria
@@ -153,7 +168,15 @@ service cloud.firestore {
           empresaAtiva(meuTenantId()) &&
           roleNovo(request.resource.data.role) &&
           request.resource.data.get('titular', false) == false &&
-          vagaValida(meuTenantId(), userId))
+          vagaValida(meuTenantId(), userId)) ||
+        // login de cliente do portal: quem opera cria, sem vaga (não conta no limite)
+        (podeOperar() &&
+          request.resource.data.tenantId == meuTenantId() &&
+          empresaAtiva(meuTenantId()) &&
+          request.resource.data.role == 'Cliente' &&
+          request.resource.data.clienteNome is string && request.resource.data.clienteNome.size() > 0 &&
+          request.resource.data.get('titular', false) == false &&
+          !('vaga' in request.resource.data))
       );
 
       allow update: if estaLogado() && (
@@ -161,7 +184,10 @@ service cloud.firestore {
         // o próprio usuário: pode mudar o nome etc., NUNCA nível, empresa,
         // titularidade ou vaga
         (request.auth.uid == userId &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'tenantId', 'titular', 'vaga'])) ||
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'tenantId', 'titular', 'vaga', 'clienteNome'])) ||
+        (podeOperar() && resource.data.role == 'Cliente' &&
+          resource.data.tenantId == meuTenantId() && request.resource.data.tenantId == meuTenantId() &&
+          request.resource.data.role == 'Cliente' && !('vaga' in request.resource.data)) ||
         // Diretor: só gente da própria empresa, que continua nela, num nível
         // de empresa — e nunca mexe no titular
         (souDiretor() &&
@@ -178,7 +204,8 @@ service cloud.firestore {
         (souDiretor() &&
           resource.data.tenantId == meuTenantId() &&
           resource.data.get('titular', false) == false &&
-          roleDeEmpresa(resource.data.role))
+          roleDeEmpresa(resource.data.role)) ||
+        (podeOperar() && resource.data.tenantId == meuTenantId() && resource.data.role == 'Cliente')
       );
     }
 
@@ -201,15 +228,15 @@ service cloud.firestore {
           (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1']) || veFinanceiro()));
         allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && (
           (docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1'] && veFinanceiro()) ||
-          (docId in ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1'] && souDiretor()) ||
-          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1']) && podeOperar())
+          (docId in ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'] && souDiretor()) ||
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1']) && podeOperar())
         ));
       }
 
       // Vagas do limite de usuários: o Diretor ocupa uma vaga junto com a
       // criação do usuário (mesmo lote) e libera junto com a remoção.
       match /vagas/{vagaId} {
-        allow read: if souSuperAdmin() || (estaLogado() && meuTenantId() == tenantId);
+        allow read: if souSuperAdmin() || souMembroAtivo(tenantId);
         allow create: if souSuperAdmin() || (
           souDiretor() && meuTenantId() == tenantId && empresaAtiva(tenantId) &&
           int(vagaId) >= 1 &&
@@ -252,6 +279,46 @@ service cloud.firestore {
       // Kanban do CRM: UMA tarefa por documento (pra equipe editar o
       // quadro ao mesmo tempo sem uma gravação apagar a outra). Mesma
       // proteção dos dados: só membros de empresa ativa (ou Super Admin).
+      // Conteúdos (produção): um documento por conteúdo
+      match /conteudos/{conteudoId} {
+        allow read: if souSuperAdmin() || souMembroAtivo(tenantId) ||
+          (souCliente(tenantId) && resource.data.cliente == meuClienteNome());
+        allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
+        // cliente no portal: só responde (aprovar/ajustes) e marca como postado
+        allow update: if souCliente(tenantId) && resource.data.cliente == meuClienteNome() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['portalResposta', 'portalComentario', 'portalRespondidoEm', 'portalPostadoEm', 'portalPendente']) &&
+          request.resource.data.get('portalComentario', '') is string && request.resource.data.get('portalComentario', '').size() <= 1000;
+      }
+
+      // Agenda: um documento por compromisso
+      match /agenda/{compromissoId} {
+        allow read: if souSuperAdmin() || souMembroAtivo(tenantId);
+        allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
+      }
+
+      // Portal do Cliente: padrão da agência (_padrao) e ajustes de cada cliente
+      match /portal/{docId} {
+        allow read: if souSuperAdmin() || souMembroAtivo(tenantId) ||
+          (souCliente(tenantId) && (docId == '_padrao' || resource.data.cliente == meuClienteNome()));
+        allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
+      }
+
+      // Pedidos do portal (ideias de post e serviços)
+      match /portal_pedidos/{pedidoId} {
+        allow read: if souSuperAdmin() || souMembroAtivo(tenantId) ||
+          (souCliente(tenantId) && resource.data.cliente == meuClienteNome());
+        allow create: if souCliente(tenantId) &&
+          request.resource.data.keys().hasOnly(['cliente', 'tipo', 'titulo', 'texto', 'links', 'prazo', 'criadoEm', 'processado', 'autorUid']) &&
+          request.resource.data.cliente == meuClienteNome() && request.resource.data.processado == false &&
+          request.resource.data.autorUid == request.auth.uid &&
+          request.resource.data.tipo in ['ideia', 'servico'] &&
+          request.resource.data.titulo is string && request.resource.data.titulo.size() > 0 && request.resource.data.titulo.size() <= 100 &&
+          request.resource.data.texto is string && request.resource.data.texto.size() <= 2000 &&
+          request.resource.data.links is list && request.resource.data.links.size() <= 10;
+        allow update, delete: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
+        allow create: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar()); // restaurar backup
+      }
+
       match /kanban_tarefas/{tarefaId} {
         allow read: if souSuperAdmin() || souMembroAtivo(tenantId);
         allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
@@ -327,6 +394,29 @@ service cloud.firestore {
         get(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)).data.tenantId == request.resource.data.tenantId;
       allow read, delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
       allow update: if false;
+    }
+
+    // ---------- eagles/{chave} (dados de antes das empresas separadas) ----------
+    // Só o Super Admin lê, pra ferramenta de importar dados antigos. Ninguém grava.
+    match /eagles/{chave} {
+      allow read: if souSuperAdmin();
+      allow write: if false;
+    }
+
+    // ---------- conteudos_publicos/{codigo} ----------
+    // Link de aprovação de um conteúdo: o cliente (sem login) lê UM
+    // documento pelo código e responde UMA vez — só os campos da resposta.
+    match /conteudos_publicos/{codigo} {
+      allow get: if true;
+      allow list: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+      allow create: if estaLogado() && request.resource.data.tenantId == meuTenantId() && empresaAtiva(meuTenantId()) && podeOperar();
+      allow update: if
+        (estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar())) && request.resource.data.tenantId == resource.data.tenantId) ||
+        (resource.data.resposta == '' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resposta', 'comentario', 'respondidoEm']) &&
+          request.resource.data.resposta in ['aprovado', 'ajustes'] &&
+          request.resource.data.comentario is string && request.resource.data.comentario.size() <= 1000);
+      allow delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
     }
 
     // ---------- pix_publico/{tenantId} ----------

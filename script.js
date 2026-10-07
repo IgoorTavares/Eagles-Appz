@@ -204,6 +204,7 @@ aplicarTemaSalvo();
 // em cada celular/sistema operacional.
 
 const ICONES_SISTEMA = {
+  filtro: '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
   quadro: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   prancheta: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>',
   x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
@@ -817,6 +818,7 @@ function protegerPagina(callback) {
         initPerfilWatch();
         initBuscaGlobalWatch();
         callback();
+        setTimeout(() => { if (typeof bkpVerificarLembrete === 'function') bkpVerificarLembrete(); }, 1500); // lembrete de backup (30 dias)
       });
     } else {
       window.location.href = 'login.html';
@@ -843,6 +845,7 @@ async function resolverTenantDoUsuario(user) {
     const dados = snap.data();
     console.log('[EaglesLabz] Documento encontrado:', dados);
     USUARIO_ROLE = dados.role || 'TenantUser';
+    if (USUARIO_ROLE === 'Cliente' && !/portal\.html$/.test(location.pathname)) { location.replace('portal.html'); return false; }
     USUARIO_TITULAR = !!dados.titular;
     USUARIO_NOME = dados.nome || user.email;
     USUARIO_UID = user.uid;
@@ -901,12 +904,13 @@ const NIVEIS = {
   financeiro: { nome: 'Financeiro', desc: 'Financeiro completo; o resto só visualiza (não cadastra nem edita)' },
 };
 const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1'];
-const CHAVES_CONFIG_EMPRESA = ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1'];
+const CHAVES_CONFIG_EMPRESA = ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'];
 
 function nivelDoRole(role) {
   if (role === 'SuperAdmin') return 'superadmin';
   if (role === 'Administrativo') return 'administrativo';
   if (role === 'Financeiro') return 'financeiro';
+  if (role === 'Cliente') return 'cliente'; // login do Portal do Cliente: nenhuma permissão na área da agência
   return 'diretor'; // Diretor, TenantAdmin, TenantUser
 }
 function nivelUsuario() {
@@ -2825,6 +2829,7 @@ function escutarPropostasCrm() {
     snap.forEach((doc) => CRM_PROPOSTAS_DATA.push({ id: doc.id, ...doc.data() }));
     converterPropostasAprovadasEmContrato();
     renderPropostasListaCrm();
+    if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard(); // proposta aprovada aparece na atividade
     const subPdf = document.getElementById('crm-orcamentos-sub-pdf');
     if (subPdf && subPdf.style.display !== 'none') renderCrmPdfOrcamentosLista();
   }, (err) => console.error('Erro ao carregar propostas:', err));
@@ -3105,10 +3110,24 @@ function renderCrmContratosLista() {
       <td>${formatMoney(c.valor)}</td>
       <td><span class="badge ${c.status === 'vigente' ? 'badge-success' : 'badge-neutral'}">${c.status === 'vigente' ? 'Vigente' : 'Encerrado'}</span></td>
       <td style="font-size:12.5px;">${c.dataInicio ? formatDatePt(c.dataInicio) : '—'}</td>
-      <td style="text-align:right;">
-        ${c.textoContrato ? `<button type="button" class="btn btn-small btn-ghost" onclick="baixarContratoPdfPorId('${c.id}')">Baixar PDF</button>` : '<span style="font-size:11px; color:var(--text-soft);">Sem texto gerado</span>'}
+      <td style="text-align:right; white-space:nowrap;">
+        ${c.textoContrato ? `<button type="button" class="btn btn-small btn-ghost" onclick="baixarContratoPdfPorId('${escapeParaOnclick(c.id)}')">Baixar PDF</button>` : '<span style="font-size:11px; color:var(--text-soft);">Sem texto gerado</span>'}
+        <button type="button" class="kb-btn-ic kb-btn-perigo" title="Excluir contrato" aria-label="Excluir contrato" onclick="excluirContratoCrm('${escapeParaOnclick(c.id)}')">${ic('lixeira', 'ic-herda')}</button>
       </td>
     </tr>`).join('') : '<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-soft);">Nenhum contrato ainda — gerado automaticamente quando um orçamento é aprovado, ou manualmente pelo menu de ações.</td></tr>';
+}
+
+function excluirContratoCrm(id) {
+  if (!exigirPodeOperar('excluir contratos')) return;
+  const c = (CADASTROS_DATA['contrato'] || []).find((x) => x.id === id);
+  if (!c) return;
+  const compartilhado = typeof crmUsaDadosDoErp === 'function' && crmUsaDadosDoErp();
+  confirmarAcao(`Excluir o contrato "${c.titulo || 'Sem título'}"${c.cliente ? ` (${c.cliente})` : ''}? Isso não pode ser desfeito.${compartilhado ? ' Como sua conta tem ERP + CRM, ele sai também da lista de Contratos do ERP.' : ''}${c.origemPropostaId ? ' O orçamento de origem continua aprovado e não gera o contrato de novo.' : ''}`, () => {
+    const lista = (CADASTROS_DATA['contrato'] || []).filter((x) => x.id !== id);
+    if (cloudSet('eagles_contratos_v1', lista) === false) return; // ainda carregando ou sem permissão: a própria trava avisa
+    CADASTROS_DATA['contrato'] = lista;
+    renderCrmContratosLista();
+  }, 'Excluir contrato');
 }
 
 function baixarContratoPdfPorId(id) {
@@ -4692,6 +4711,7 @@ function escutarBriefingsCrm() {
   firestoreDb.collection(BRIEFINGS_PUBLICOS_COLECAO).where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
     CRM_BRIEFINGS_DATA = [];
     snap.forEach((doc) => CRM_BRIEFINGS_DATA.push({ id: doc.id, ...doc.data() }));
+    if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard(); // briefing respondido aparece na atividade
     renderCrmBriefingsLista();
   }, (err) => console.error('Erro ao carregar briefings:', err));
 }
@@ -5036,9 +5056,10 @@ function initConfiguracoesPage() {
     });
   }
   cloudWatch(PAG_PIXELS_KEY, PAG_PIXELS, (d) => { PAG_PIXELS = Object.assign({ meta: {}, ga: {} }, d || {}); });
+  if (/^#portal/.test(window.location.hash || '')) { mostrarAbaConfig('aparencia'); setTimeout(() => { if (typeof abrirCardAparenciaConfig === 'function') abrirCardAparenciaConfig('portal'); }, 0); return; }
   if (/^#integracoes-pixels/.test(window.location.hash || '')) { mostrarAbaConfig('integracoes'); setTimeout(() => cfgAbrirPixels('meta'), 0); return; }
   const abaInicial = (window.location.hash || '').replace('#', '');
-  mostrarAbaConfig(['perfil', 'aparencia', 'atualizacoes', 'notificacoes', 'automacoes', 'integracoes', 'email', 'conteudos'].includes(abaInicial) ? abaInicial : 'perfil');
+  mostrarAbaConfig(['perfil', 'aparencia', 'atualizacoes', 'notificacoes', 'automacoes', 'integracoes', 'email', 'conteudos', 'backup'].includes(abaInicial) ? abaInicial : 'perfil');
 }
 
 function mostrarAbaConfig(aba) {
@@ -5055,6 +5076,7 @@ function mostrarAbaConfig(aba) {
     integracoes: renderAbaIntegracoesConfig,
     email: renderAbaEmailConfig,
     conteudos: renderAbaConteudosConfig,
+    backup: renderAbaBackupConfig,
   };
   if (funcoes[aba]) funcoes[aba]();
 }
@@ -5628,7 +5650,7 @@ function restaurarAparenciaSistemaPadrao() {
 // lá tem data-menu-id igual ao id daqui). Se um item novo for criado no
 // menu, ele precisa entrar aqui também.
 
-const CRM_MENU_ESTRUTURA = [{"id": "dashboard", "nome": "Dashboard", "icone": "<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"/>", "obrigatorio": true}, {"id": "crm-grupo-comercial", "nome": "Comercial", "icone": "<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"1\"/><line x1=\"9\" y1=\"6\" x2=\"9\" y2=\"6.01\"/><line x1=\"15\" y1=\"6\" x2=\"15\" y2=\"6.01\"/><line x1=\"9\" y1=\"10\" x2=\"9\" y2=\"10.01\"/><line x1=\"15\" y1=\"10\" x2=\"15\" y2=\"10.01\"/>", "filhos": [{"id": "clientes", "nome": "Clientes", "icone": "<path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/>"}, {"id": "pipeline", "nome": "Pipelines", "icone": "<path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"/>"}, {"id": "leads", "nome": "Leads", "icone": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"8.5\" cy=\"7\" r=\"4\"/><line x1=\"20\" y1=\"8\" x2=\"20\" y2=\"14\"/><line x1=\"17\" y1=\"11\" x2=\"23\" y2=\"11\"/>"}, {"id": "orcamentos", "nome": "Orçamentos", "icone": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><polyline points=\"9 15 11 17 16 12\"/>"}, {"id": "briefings", "nome": "Briefings", "icone": "<rect x=\"7\" y=\"3\" width=\"10\" height=\"4\" rx=\"1\"/><path d=\"M8 4H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2\"/>"}]}, {"id": "crm-grupo-agentes", "nome": "Agentes IA", "icone": "<path d=\"M12 2l1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5z\"/>", "filhos": [{"id": "agente-analista", "nome": "Analista", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>"}, {"id": "agente-copywriter", "nome": "Copywriter", "icone": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>"}, {"id": "agente-designer", "nome": "Designer", "icone": "<path d=\"M12 2l1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5z\"/>"}]}, {"id": "crm-grupo-operacional", "nome": "Operacional", "icone": "<polyline points=\"9 11 12 14 22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/>", "filhos": [{"id": "kanban", "nome": "Kanban", "icone": "<polyline points=\"9 11 12 14 22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/>"}, {"id": "conteudos", "nome": "Conteúdos", "icone": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/>"}, {"id": "portal-cliente", "nome": "Portal do cliente", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>"}, {"id": "agendamentos", "nome": "Agendamentos", "icone": "<line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"/><polygon points=\"22 2 15 22 11 13 2 9 22 2\"/>", "beta": true}, {"id": "relatorios-redes", "nome": "Relatórios de redes", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>", "beta": true}, {"id": "anuncios-meta", "nome": "Anúncios Meta", "icone": "<path d=\"M3 11l18-7-7 18-2-8-9-3z\"/>", "beta": true}, {"id": "agenda", "nome": "Agenda", "icone": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/>"}, {"id": "crm-sub-atendimento", "nome": "Atendimento", "icone": "<path d=\"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z\"/>", "filhos": [{"id": "whatsapp", "nome": "WhatsApp", "icone": "<path d=\"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z\"/>"}, {"id": "atendentes", "nome": "Atendentes", "icone": "<path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/>"}, {"id": "automacoes", "nome": "Automações", "icone": "<rect x=\"2\" y=\"7\" width=\"20\" height=\"14\" rx=\"2\"/><path d=\"M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"/>"}, {"id": "monitor-grupos", "nome": "Monitor de Grupos", "icone": "<path d=\"M3 11v3a1 1 0 0 0 1 1h2l4 5V6l-4 5H4a1 1 0 0 0-1 1z\"/><path d=\"M15 9a3 3 0 0 1 0 6\"/>"}]}, {"id": "crm-sub-financeiro", "nome": "Financeiro", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>", "filhos": [{"id": "financeiro", "nome": "Visão geral", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>"}, {"id": "fin-receber", "nome": "Receber", "icone": "<path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"/>"}, {"id": "fin-pagar", "nome": "Pagar", "icone": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>"}, {"id": "fin-recorrencias", "nome": "Recorrências", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/>"}, {"id": "fin-relatorios", "nome": "Relatórios", "icone": "<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"/>"}, {"id": "fin-caixa", "nome": "Caixa", "icone": "<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"1\"/><line x1=\"9\" y1=\"6\" x2=\"9\" y2=\"6.01\"/><line x1=\"15\" y1=\"6\" x2=\"15\" y2=\"6.01\"/><line x1=\"9\" y1=\"10\" x2=\"9\" y2=\"10.01\"/><line x1=\"15\" y1=\"10\" x2=\"15\" y2=\"10.01\"/>"}, {"id": "fin-integracoes", "nome": "Integrações", "icone": "<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z\"/>"}]}, {"id": "crm-sub-servicos", "nome": "Serviços", "icone": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>", "filhos": [{"id": "servicos-servicos", "nome": "Serviços", "icone": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>"}, {"id": "servicos-produtos", "nome": "Produtos", "icone": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>"}, {"id": "servicos-planos", "nome": "Planos", "icone": "<polygon points=\"12 2 2 7 12 12 22 7 12 2\"/><polyline points=\"2 17 12 22 22 17\"/><polyline points=\"2 12 12 17 22 12\"/>"}]}, {"id": "crm-sub-paginas", "nome": "Páginas", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>", "filhos": [{"id": "paginas-landing", "nome": "Landing page", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>"}, {"id": "paginas-link-bio", "nome": "Link da bio", "icone": "<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\"/><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\"/>"}, {"id": "paginas-formularios", "nome": "Formulários", "icone": "<rect x=\"7\" y=\"3\" width=\"10\" height=\"4\" rx=\"1\"/><path d=\"M8 4H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2\"/>"}, {"id": "paginas-agendamento", "nome": "Agendamento", "icone": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/>"}, {"id": "paginas-portfolio", "nome": "Portfólio", "icone": "<rect x=\"2\" y=\"7\" width=\"20\" height=\"14\" rx=\"2\"/><path d=\"M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"/>"}, {"id": "paginas-captura", "nome": "Páginas de captura", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>", "beta": true}]}]}];
+const CRM_MENU_ESTRUTURA = [{"id": "dashboard", "nome": "Dashboard", "icone": "<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"/>", "obrigatorio": true}, {"id": "crm-grupo-comercial", "nome": "Comercial", "icone": "<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"1\"/><line x1=\"9\" y1=\"6\" x2=\"9\" y2=\"6.01\"/><line x1=\"15\" y1=\"6\" x2=\"15\" y2=\"6.01\"/><line x1=\"9\" y1=\"10\" x2=\"9\" y2=\"10.01\"/><line x1=\"15\" y1=\"10\" x2=\"15\" y2=\"10.01\"/>", "filhos": [{"id": "clientes", "nome": "Clientes", "icone": "<path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/>"}, {"id": "pipeline", "nome": "Pipelines", "icone": "<path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"/>"}, {"id": "leads", "nome": "Leads", "icone": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"8.5\" cy=\"7\" r=\"4\"/><line x1=\"20\" y1=\"8\" x2=\"20\" y2=\"14\"/><line x1=\"17\" y1=\"11\" x2=\"23\" y2=\"11\"/>"}, {"id": "orcamentos", "nome": "Orçamentos", "icone": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><polyline points=\"9 15 11 17 16 12\"/>"}, {"id": "briefings", "nome": "Briefings", "icone": "<rect x=\"7\" y=\"3\" width=\"10\" height=\"4\" rx=\"1\"/><path d=\"M8 4H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2\"/>"}]}, {"id": "crm-grupo-agentes", "nome": "Agentes IA", "icone": "<path d=\"M12 2l1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5z\"/>", "filhos": [{"id": "agente-analista", "nome": "Analista", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>"}, {"id": "agente-copywriter", "nome": "Copywriter", "icone": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>"}, {"id": "agente-designer", "nome": "Designer", "icone": "<path d=\"M12 2l1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5z\"/>"}]}, {"id": "crm-grupo-operacional", "nome": "Operacional", "icone": "<polyline points=\"9 11 12 14 22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/>", "filhos": [{"id": "kanban", "nome": "Kanban", "icone": "<polyline points=\"9 11 12 14 22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/>"}, {"id": "conteudos", "nome": "Conteúdos", "icone": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/>"}, {"id": "portal-cliente", "nome": "Portal do cliente", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>"}, {"id": "agendamentos", "nome": "Agendamentos", "icone": "<line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"/><polygon points=\"22 2 15 22 11 13 2 9 22 2\"/>", "beta": true}, {"id": "relatorios-redes", "nome": "Relatórios de redes", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>", "beta": true}, {"id": "anuncios-meta", "nome": "Anúncios Meta", "icone": "<path d=\"M3 11l18-7-7 18-2-8-9-3z\"/>", "beta": true}, {"id": "agenda", "nome": "Agenda", "icone": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/>"}]}, {"id": "crm-sub-atendimento", "nome": "Atendimento", "icone": "<path d=\"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z\"/>", "filhos": [{"id": "whatsapp", "nome": "WhatsApp", "icone": "<path d=\"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z\"/>"}, {"id": "atendentes", "nome": "Atendentes", "icone": "<path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/>"}, {"id": "automacoes", "nome": "Automações", "icone": "<rect x=\"2\" y=\"7\" width=\"20\" height=\"14\" rx=\"2\"/><path d=\"M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"/>"}, {"id": "monitor-grupos", "nome": "Monitor de Grupos", "icone": "<path d=\"M3 11v3a1 1 0 0 0 1 1h2l4 5V6l-4 5H4a1 1 0 0 0-1 1z\"/><path d=\"M15 9a3 3 0 0 1 0 6\"/>"}]}, {"id": "crm-sub-financeiro", "nome": "Financeiro", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>", "filhos": [{"id": "financeiro", "nome": "Visão geral", "icone": "<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/>"}, {"id": "fin-receber", "nome": "Receber", "icone": "<path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"/>"}, {"id": "fin-pagar", "nome": "Pagar", "icone": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>"}, {"id": "fin-recorrencias", "nome": "Recorrências", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/>"}, {"id": "fin-relatorios", "nome": "Relatórios", "icone": "<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"/>"}, {"id": "fin-caixa", "nome": "Caixa", "icone": "<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"1\"/><line x1=\"9\" y1=\"6\" x2=\"9\" y2=\"6.01\"/><line x1=\"15\" y1=\"6\" x2=\"15\" y2=\"6.01\"/><line x1=\"9\" y1=\"10\" x2=\"9\" y2=\"10.01\"/><line x1=\"15\" y1=\"10\" x2=\"15\" y2=\"10.01\"/>"}, {"id": "fin-integracoes", "nome": "Integrações", "icone": "<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z\"/>"}]}, {"id": "crm-sub-servicos", "nome": "Serviços", "icone": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>", "filhos": [{"id": "servicos-servicos", "nome": "Serviços", "icone": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>"}, {"id": "servicos-produtos", "nome": "Produtos", "icone": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>"}, {"id": "servicos-planos", "nome": "Planos", "icone": "<polygon points=\"12 2 2 7 12 12 22 7 12 2\"/><polyline points=\"2 17 12 22 22 17\"/><polyline points=\"2 12 12 17 22 12\"/>"}]}, {"id": "crm-sub-paginas", "nome": "Páginas", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>", "filhos": [{"id": "paginas-landing", "nome": "Landing page", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>"}, {"id": "paginas-link-bio", "nome": "Link da bio", "icone": "<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\"/><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\"/>"}, {"id": "paginas-formularios", "nome": "Formulários", "icone": "<rect x=\"7\" y=\"3\" width=\"10\" height=\"4\" rx=\"1\"/><path d=\"M8 4H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2\"/>"}, {"id": "paginas-agendamento", "nome": "Agendamento", "icone": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/>"}, {"id": "paginas-portfolio", "nome": "Portfólio", "icone": "<rect x=\"2\" y=\"7\" width=\"20\" height=\"14\" rx=\"2\"/><path d=\"M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"/>"}, {"id": "paginas-captura", "nome": "Páginas de captura", "icone": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z\"/>", "beta": true}]}];
 
 
 function lerPrefsMenuCrm() {
@@ -6351,6 +6373,45 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '07/10/2026 · Backup', itens: [
+    { titulo: 'Backup completo e restauração', badges: ['novo'], texto: 'Em Configurações → Backup, o Diretor baixa um arquivo com todos os dados da empresa e pode restaurar a partir dele (o que foi criado depois continua, e antes o sistema guarda o estado atual). Lembrete automático a cada 30 dias sem backup.' },
+  ]},
+  { data: '07/10/2026 · Revisão geral', itens: [
+    { titulo: 'Excluir empresa apaga também as páginas públicas', badges: ['corrigido'], texto: 'Ao excluir uma empresa, o site, as propostas, os briefings, os planos, os links de aprovação, os leads e o PIX dela também saem do ar (antes continuavam acessíveis pelos links).' },
+    { titulo: 'Busca do topo encontra o CRM', badges: ['melhoria'], texto: 'No CRM, a busca agora acha clientes, negócios, orçamentos, projetos, tarefas, conteúdos, compromissos e serviços — e clicar leva direto ao item.' },
+    { titulo: 'Pequenos ajustes', badges: ['corrigido'], texto: 'Ícone que faltava no menu dos Conteúdos e permissão da ferramenta de importar dados antigos (Super Admin).' },
+  ]},
+  { data: '06/10/2026 · Agenda', itens: [
+    { titulo: 'Agenda com Mês, Semana e Dia', badges: ['novo'], texto: 'Compromissos (simples ou avançados: vários dias, repetir, vincular a cliente/projeto/tarefa, virar card no Kanban, tags e responsáveis), bloqueio de horário, feriados nacionais e datas comemorativas, e as tarefas do Kanban e os conteúdos no mesmo calendário. Painel do dia com o resumo do mês.' },
+    { titulo: 'Google Agenda', badges: ['novo'], texto: 'Conecte sua conta Google: seus eventos aparecem na Agenda e os compromissos marcados pra sincronizar vão pro seu Google Agenda (incluindo repetições). Os compromissos também aparecem em "Próximas reuniões" do Dashboard.' },
+  ]},
+  { data: '06/10/2026 · Dashboard do CRM', itens: [
+    { titulo: 'Dashboard ligado a todos os módulos', badges: ['corrigido'], texto: 'Tarefas atrasadas e de hoje agora incluem o Kanban e os Conteúdos (antes só a lista do dia). Reuniões, estoque (também dos Produtos do CRM), conteúdos do dia, projetos e contas de hoje puxam de cada módulo e se atualizam sozinhos.' },
+    { titulo: 'Atividade recente completa', badges: ['melhoria'], texto: 'Leads do site, avanço no Pipeline, propostas aprovadas, briefings respondidos, aprovações e ajustes de conteúdo, pedidos do portal, tarefas concluídas e pagamentos — com o tempo de cada um.' },
+    { titulo: 'Painel Entregas', badges: ['novo'], texto: 'Progresso da produção do mês (entregues × meta), clientes ativos, ritmo, lead time, conteúdos travados, retrabalho, qualidade e o ranking da equipe.' },
+  ]},
+  { data: '06/10/2026 · Portal do Cliente', itens: [
+    { titulo: 'Portal do Cliente com login', badges: ['novo'], texto: 'Seus clientes entram com login próprio e veem só os conteúdos deles: produção, calendário, agendados, feed, modo Instagram, materiais e relatório. Aprovam ou pedem ajustes, marcam como postado, baixam arquivos e mandam ideias e pedidos de serviço — tudo volta sozinho pro seu quadro.' },
+    { titulo: 'Configuração por cliente', badges: ['novo'], texto: '"Aparência e padrões" vale pra todos; cada cliente pode ter o próprio ajuste (permissões, abas, conteúdos visíveis, como recebe a aprovação, pra onde vão os pedidos e um recado no topo). Logins de cliente não contam no limite de usuários.' },
+  ]},
+  { data: '06/10/2026 · Quadros', itens: [
+    { titulo: 'Só o quadro rola pro lado', badges: ['corrigido'], texto: 'Em Conteúdos, Pipeline e Kanban, quando as colunas não cabem na tela, só elas rolam pro lado — o título, os botões, os filtros e o menu lateral ficam parados. Antes a página inteira rolava e o menu saía da tela.' },
+  ]},
+  { data: '06/10/2026 · Conteúdos (Entrega 2)', itens: [
+    { titulo: 'Clientes, Prazos e Fixar aqui', badges: ['novo'], texto: 'Aba Clientes com o andamento de cada cliente (por etapa, atrasados e próxima publicação), aba Prazos agrupando o que vence hoje, amanhã, na semana e o atrasado, e clientes fixados no topo pra filtrar com um clique.' },
+    { titulo: 'Planejamento mensal e Modelos', badges: ['novo'], texto: 'Diga quantos conteúdos de cada tipo o cliente terá no mês e o sistema cria os rascunhos com as datas. Modelos prontos (post promocional, reels tutorial, carrossel, stories) e "Salvar como modelo" a partir de qualquer conteúdo.' },
+  ]},
+  { data: '06/10/2026 · Conteúdos (Entrega 1)', itens: [
+    { titulo: 'Produção de conteúdos', badges: ['novo'], texto: 'Quadro por etapas (Planejamento até Publicação, personalizável), lista e calendário, filtros, cronômetro de trabalho, histórico e alerta de atraso. 17 tipos de conteúdo, cada um com seu formulário (vídeo e capa, imagem com formato, páginas de carrossel...).' },
+    { titulo: 'Aprovação pelo cliente', badges: ['novo'], texto: 'Cada conteúdo gera um link de aprovação: o cliente vê e aprova ou pede ajustes, sem login. O conteúdo vai sozinho pra "Aprovado" ou "Revisão".' },
+    { titulo: 'Planos dos projetos viram conteúdos', badges: ['novo'], texto: 'Os planos de conteúdo montados no Novo Projeto (e os pacotes dos serviços) viram rascunhos com um clique, com as datas distribuídas como no plano.' },
+  ]},
+  { data: '06/10/2026 · Contratos', itens: [
+    { titulo: 'Excluir contrato no CRM', badges: ['novo'], texto: 'Em Orçamentos → Contratos, cada contrato ganhou o botão de excluir (com confirmação). O orçamento de origem continua aprovado e não gera o contrato de novo.' },
+  ]},
+  { data: '06/10/2026 · Menu do CRM', itens: [
+    { titulo: 'Menu separado por área', badges: ['melhoria'], texto: 'Atendimento, Financeiro, Serviços e Páginas saíram de dentro do Operacional e viraram grupos próprios no menu. O Operacional agora vai do Kanban até a Agenda. Ao abrir uma tela, o grupo dela aparece aberto no menu. Suas personalizações de Itens do Menu continuam valendo.' },
+  ]},
   { data: '06/10/2026 · Auditoria', itens: [
     { titulo: 'Atualizações chegam na hora', badges: ['corrigido'], texto: 'Depois de publicar uma versão nova, o app abria a versão antiga guardada no aparelho até a segunda abertura. Agora páginas e scripts vêm sempre do servidor primeiro (a cópia guardada fica só pra quando estiver sem internet).' },
     { titulo: 'Links de proposta e briefing', badges: ['corrigido'], texto: 'Gerados a partir de outras telas (como o Funil de Vendas), os links saíam quebrados. Agora funcionam de qualquer página.' },
@@ -6679,12 +6740,9 @@ const CRM_EM_CONSTRUCAO_INFO = {
   'agente-analista': { icone: 'grafico', titulo: 'Agente Analista', texto: 'Leitura automática dos seus dados e relatórios — precisa de acesso a uma IA (custo por uso).' },
   'agente-copywriter': { icone: 'caneta', titulo: 'Agente Copywriter', texto: 'Geração de textos para anúncios, e-mails e landing pages — precisa de acesso a uma IA (custo por uso).' },
   'agente-designer': { icone: 'paleta', titulo: 'Agente Designer', texto: 'Apoio na geração de briefings e criativos visuais — precisa de acesso a uma IA (custo por uso).' },
-  conteudos: { icone: 'calendario', titulo: 'Conteúdos', texto: 'Calendário operacional de entregas — planejamento, produção, revisão, aprovação e publicação.' },
-  'portal-cliente': { icone: 'aprovado', titulo: 'Portal do cliente', texto: 'Um link exclusivo pro seu cliente aprovar artes, carrosséis e vídeos, com histórico de quem aprovou e quando.' },
   agendamentos: { icone: 'enviar', titulo: 'Agendamento de posts', texto: 'Publicação automática nas redes sociais — precisa de app aprovado pela Meta/TikTok.' },
   'relatorios-redes': { icone: 'tendencia', titulo: 'Relatórios de redes', texto: 'Métricas de desempenho das suas redes sociais — precisa de acesso à API do Meta.' },
   'anuncios-meta': { icone: 'megafone', titulo: 'Anúncios Meta', texto: 'Acompanhamento de campanhas do Facebook/Instagram Ads — precisa de acesso à API do Meta Ads.' },
-  agenda: { icone: 'calendario', titulo: 'Agenda', texto: 'Link de agendamento de reunião e sincronização com o Google Agenda.' },
   whatsapp: { icone: 'conversa', titulo: 'Central de WhatsApp', texto: 'Histórico de conversas e dados do CRM lado a lado — precisa de WhatsApp Business API aprovada.' },
   atendentes: { icone: 'pessoas', titulo: 'Atendentes', texto: 'Vários atendentes usando o mesmo número de WhatsApp — precisa de WhatsApp Business API.' },
   automacoes: { icone: 'engrenagem', titulo: 'Automações de mensagem', texto: 'Disparos automáticos por evento (novo lead, proposta aprovada, cobrança) — precisa de WhatsApp Business API.' },
@@ -6736,7 +6794,10 @@ function initCrmHub() {
     atualizarSecaoAtivaCrm();
   });
   // leads que chegam pelo formulário da Página Pública
-  if (nivelPodeOperar()) { pagIniciarDados(); pagIniciarLeads(); }
+  if (nivelPodeOperar()) { pagIniciarDados(); pagIniciarLeads(); portalIniciarDados(); portalIniciarProcessamento(); }
+  if (typeof srvIniciarDados === 'function') srvIniciarDados(); // estoque no Dashboard (já se protege contra rodar 2x)
+  cntIniciarDados(); // Kanban + Conteúdos alimentam o Dashboard (tarefas, projetos, entregas)
+  agIniciarDados(); // compromissos da Agenda → "Próximas reuniões" do Dashboard
   cloudWatch(CRM_MODELOS_CONTRATO_KEY, modelosContratoSeed(), (data) => { CRM_MODELOS_CONTRATO_DATA = data; });
   cloudWatch(CRM_APROVACAO_KEY, aprovacaoConfigPadrao(), (data) => {
     const primeiraCarga = !CRM_APROVACAO_CARREGADO;
@@ -6784,6 +6845,9 @@ function atualizarSecaoAtivaCrm() {
   if (secao === 'briefings') renderCrmBriefings();
   if (secao === 'kanban') renderKanbanConteudo(); // só o conteúdo: não apaga a busca digitada
   if (secao.startsWith('servicos-')) srvRender();
+  if (secao === 'conteudos') cntRender();
+  if (secao === 'agenda') agRender();
+  if (secao === 'portal-cliente') portalRender();
   if (secao.startsWith('paginas-')) pagRender();
   if (typeof PAG_LEADS_FILA !== 'undefined' && PAG_LEADS_FILA.length) pagProcessarLeads();
   if (secao.startsWith('fin-')) finRender();
@@ -6796,7 +6860,13 @@ function mostrarSecaoCrm(secao, btn) {
   const alvo = document.getElementById('crm-secao-' + secao);
   if (alvo) alvo.style.display = '';
   document.querySelectorAll('.mn-nav-item, .mn-nav-sublink').forEach((b) => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
+  if (btn) {
+    btn.classList.add('active');
+    // abre o grupo do item (ex.: abriu o Financeiro pela barra de baixo → o grupo Financeiro aparece aberto no menu)
+    for (let el = btn.parentElement; el && el.id !== 'crm-sidebar-painel'; el = el.parentElement) {
+      if (el.id && /^crm-(grupo|sub)-/.test(el.id) && el.style.display === 'none') el.style.display = 'flex';
+    }
+  }
 
   if (secao === 'dashboard') renderCrmDashboard();
   if (secao === 'clientes') renderCrmClientes();
@@ -6806,6 +6876,9 @@ function mostrarSecaoCrm(secao, btn) {
   if (secao === 'financeiro') renderCrmFinanceiroSecao();
   if (secao === 'briefings') renderCrmBriefings();
   if (secao.startsWith('servicos-')) renderServicosModulo(secao.slice(9));
+  if (secao === 'conteudos') cntMontar(document.getElementById('crm-secao-conteudos'));
+  if (secao === 'agenda') { agMontar(document.getElementById('crm-secao-agenda')); agGoogleBuscar(); }
+  if (secao === 'portal-cliente') portalMontar(document.getElementById('crm-secao-portal-cliente'));
   const abaPag = { 'paginas-landing': 'pagina', 'paginas-link-bio': 'linkbio', 'paginas-formularios': 'formularios', 'paginas-agendamento': 'agendamento', 'paginas-portfolio': 'portfolio' }[secao];
   if (abaPag) pagMontar(document.getElementById('crm-secao-' + secao), abaPag);
   if (secao.startsWith('fin-')) finMontar(document.getElementById('crm-secao-' + secao), { 'fin-receber': 'receber', 'fin-pagar': 'pagar', 'fin-recorrencias': 'recorrentes', 'fin-relatorios': 'relatorios', 'fin-caixa': 'caixa', 'fin-integracoes': 'pix' }[secao]);
@@ -6844,6 +6917,7 @@ function renderCrmDashboard() {
     }).join('');
   }
 
+  renderCrmDashEntregas();
   renderCrmDashTopo();
   renderCrmDashChartFinanceiro();
   if (!nivelVeFinanceiro()) {
@@ -6856,6 +6930,9 @@ function renderCrmDashboard() {
   renderCrmDashAtividade();
   renderCrmDashReunioes();
   renderCrmDashEstoque();
+  renderCrmDashConteudosDia();
+  renderCrmDashProjetos();
+  renderCrmDashVencimentos();
   renderCrmDashSaudeRelacionamento();
   renderCrmDashNps();
   renderCrmFinanceiroResumo();
@@ -6978,55 +7055,9 @@ function despesasDoMesCrm(mesKey) {
   return (ciclo.pagamentos || []).reduce((a, p) => a + Number(p.valor || 0), 0);
 }
 
-function renderCrmDashTarefasFiltradas() {
-  const hoje = isoHoje();
-  const elAtrasadas = document.getElementById('crm-dash-tarefas-atrasadas');
-  const elHoje = document.getElementById('crm-dash-tarefas-hoje');
-  if (elAtrasadas) {
-    const atrasadas = CRM_TAREFAS_DATA.filter((t) => (!t.recorrencia || t.recorrencia === 'nenhuma') && !t.feita && t.data && t.data < hoje);
-    elAtrasadas.innerHTML = atrasadas.length
-      ? atrasadas.map((t) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title">${escapeHtml(t.texto)}</div><div class="list-row-sub" style="color:var(--danger);">${formatDatePt(t.data)}</div></div></div>`).join('')
-      : '<div class="crm-dash-vazio"><p>Nenhuma tarefa atrasada ' + ic('festa') + '</p></div>';
-  }
-  if (elHoje) {
-    const deHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje) && !tarefaConcluidaEm(t, hoje));
-    elHoje.innerHTML = deHoje.length
-      ? deHoje.map((t) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title">${escapeHtml(t.texto)}</div></div></div>`).join('')
-      : '<div class="crm-dash-vazio"><p>Nenhuma tarefa para hoje</p></div>';
-  }
-}
 
-function renderCrmDashAtividade() {
-  const el = document.getElementById('crm-dash-atividade');
-  if (!el) return;
-  const eventos = [];
-  CRM_NEGOCIOS_DATA.forEach((n) => eventos.push({ data: n.atualizadoEm || n.criadoEm, texto: `Negócio "${n.nome}" está em ${CRM_ETAPAS.find((e) => e.key === n.etapa)?.label || 'Lead'}` }));
-  CRM_PROPOSTAS_DATA.forEach((p) => eventos.push({ data: p.atualizadoEm || p.criadoEm, texto: `Proposta "${p.titulo}" — ${p.status}` }));
-  eventos.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
-  const recentes = eventos.slice(0, 6);
-  el.innerHTML = recentes.length
-    ? recentes.map((e) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title" style="font-size:13px;">${escapeHtml(e.texto)}</div></div></div>`).join('')
-    : '<div class="crm-dash-vazio"><p>Nenhuma atividade recente</p><span>Suas atividades aparecerão aqui</span></div>';
-}
 
-function renderCrmDashReunioes() {
-  const el = document.getElementById('crm-dash-reunioes');
-  if (!el) return;
-  el.innerHTML = '<div class="crm-dash-vazio"><p>Nenhuma reunião agendada</p><span>Vai aparecer aqui quando o módulo de Agenda estiver pronto</span></div>';
-}
 
-function renderCrmDashEstoque() {
-  const card = document.getElementById('crm-dash-estoque-card');
-  const el = document.getElementById('crm-dash-estoque');
-  if (!card || !el) return;
-  if (!crmUsaDadosDoErp()) { card.style.display = 'none'; return; }
-  card.style.display = '';
-  const produtos = CADASTROS_DATA['produto'] || [];
-  const baixos = produtos.filter(produtoTemEstoqueBaixo);
-  el.innerHTML = baixos.length
-    ? baixos.slice(0, 5).map((p) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title">${escapeHtml(p.nome)}</div></div><div class="list-row-value" style="color:var(--danger);">${Number(p.estoque || 0)}</div></div>`).join('')
-    : '<div class="crm-dash-vazio"><p>Todos os produtos com estoque adequado ' + ic('aprovado', 'ic-sucesso') + '</p></div>';
-}
 
 function renderCrmDashSaudeRelacionamento() {
   const el = document.getElementById('crm-dash-saude-relacionamento');
@@ -7810,6 +7841,21 @@ function executarBuscaGlobal(termoBruto) {
     });
   });
 
+  // No CRM: clientes, negócios, propostas, tarefas, projetos, conteúdos,
+  // compromissos e serviços (antes a busca só via os cadastros do ERP)
+  if (document.getElementById('crm-sidebar-painel')) {
+    const tem = (t) => String(t || '').toLowerCase().includes(termo);
+    const ir = (secao, extra) => `mostrarSecaoCrm('${secao}', document.querySelector('[data-menu-id=&quot;${secao}&quot;]'))${extra ? '; ' + extra : ''}`;
+    (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : []).filter((c) => tem(c.nome) || tem(c.email)).forEach((c) => resultados.push({ tag: 'Cliente', nome: c.nome, acao: ir('clientes') }));
+    (typeof CRM_NEGOCIOS_DATA !== 'undefined' ? CRM_NEGOCIOS_DATA : []).filter((n) => tem(n.nome) || tem(n.cliente)).forEach((n) => resultados.push({ tag: 'Negócio', nome: n.nome, acao: ir('pipeline') }));
+    (typeof CRM_PROPOSTAS_DATA !== 'undefined' ? CRM_PROPOSTAS_DATA : []).filter((x) => tem(x.titulo) || tem(x.cliente)).forEach((x) => resultados.push({ tag: 'Orçamento', nome: x.titulo, acao: ir('orcamentos') }));
+    (typeof KB_PROJETOS !== 'undefined' ? KB_PROJETOS : []).filter((x) => !x.arquivado && tem(x.nome)).forEach((x) => resultados.push({ tag: 'Projeto', nome: x.nome, acao: ir('kanban') }));
+    (typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS : []).filter((x) => !x.arquivada && tem(x.titulo)).forEach((x) => resultados.push({ tag: 'Tarefa', nome: x.titulo, acao: `dshIrKanban('${escapeParaOnclick(x.id)}')` }));
+    (typeof CNT !== 'undefined' ? CNT : []).filter((x) => tem(x.titulo)).forEach((x) => resultados.push({ tag: 'Conteúdo', nome: x.titulo, acao: `dshIrConteudo('${escapeParaOnclick(x.id)}')` }));
+    (typeof AG !== 'undefined' ? AG : []).filter((x) => tem(x.titulo)).forEach((x) => resultados.push({ tag: 'Compromisso', nome: x.titulo, acao: ir('agenda', `AG_VIEW.data = '${escapeParaOnclick(x.data)}'; AG_VIEW.dia = '${escapeParaOnclick(x.data)}'; agRender()`) }));
+    (typeof KB_SERVICOS !== 'undefined' ? KB_SERVICOS : []).filter((x) => tem(x.nome)).forEach((x) => resultados.push({ tag: 'Serviço', nome: x.nome, acao: ir('servicos-servicos') }));
+  }
+
   return resultados.slice(0, 12);
 }
 
@@ -7822,8 +7868,9 @@ function onBuscaGlobalInput(valor) {
     resultadosEl.innerHTML = '';
     return;
   }
-  resultadosEl.innerHTML = resultados.map((r) =>
-    `<a class="topbar-search-result-item" href="${r.href}"><div class="topbar-search-result-tag">${escapeHtml(r.tag)}</div>${escapeHtml(r.nome)}</a>`
+  resultadosEl.innerHTML = resultados.map((r) => r.acao
+    ? `<a class="topbar-search-result-item" href="#" onclick="event.preventDefault(); document.getElementById('topbar-search-results').classList.remove('open'); ${r.acao}"><div class="topbar-search-result-tag">${escapeHtml(r.tag)}</div>${escapeHtml(r.nome || '')}</a>`
+    : `<a class="topbar-search-result-item" href="${escapeHtml(r.href)}"><div class="topbar-search-result-tag">${escapeHtml(r.tag)}</div>${escapeHtml(r.nome || '')}</a>`
   ).join('');
   resultadosEl.classList.add('open');
 }
@@ -7967,6 +8014,7 @@ function kbIniciarDados() {
       KB_TAREFAS = lista;
       KB_CARREGADO = true;
       renderKanbanConteudo();
+      if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard();
     }, (err) => {
       console.error('Erro ao carregar tarefas do Kanban:', err);
       const el = document.getElementById('kb-conteudo');
@@ -9174,6 +9222,7 @@ function kbIniciarDadosEntrega2() {
       KB_PROJETOS = l;
       KB_PROJETOS_CARREGADO = true;
       renderKanbanConteudo();
+      if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard();
     }, (err) => console.error('Erro ao carregar projetos do Kanban:', err));
   } else {
     KB_PROJETOS = lsLoad(kbChaveLocalProjetos(), []);
@@ -10775,7 +10824,7 @@ function srvIniciarDados() {
   SRV_INICIADO = true;
   if (!KB_SERVICOS_CARREGADO) cloudWatch(KB_SERVICOS_KEY, [], (data) => { KB_SERVICOS = Array.isArray(data) ? data : []; KB_SERVICOS_CARREGADO = true; srvRender(); });
   cloudWatch(SRV_CATEGORIAS_KEY, SRV_CATEGORIAS_PADRAO, (data) => { SRV_CATEGORIAS = Array.isArray(data) && data.length ? data : SRV_CATEGORIAS_PADRAO.slice(); srvRender(); });
-  cloudWatch(srvChaveProdutos(), [], (data) => { SRV_PRODUTOS = Array.isArray(data) ? data : []; srvRender(); });
+  cloudWatch(srvChaveProdutos(), [], (data) => { SRV_PRODUTOS = Array.isArray(data) ? data : []; srvRender(); if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard(); });
   cloudWatch(srvChaveMovimentos(), [], (data) => { SRV_MOVIMENTOS = Array.isArray(data) ? data : []; srvRender(); });
   cloudWatch(SRV_PLANOS_KEY, [], (data) => { SRV_PLANOS = Array.isArray(data) ? data : []; srvRender(); });
   cloudWatch(SRV_PAGINA_PLANOS_KEY, null, (data) => { SRV_PAGINA = data; });
@@ -14049,6 +14098,2023 @@ function crmAtualizarTabbar(secao) {
 function crmAbrirGaveta() { document.body.classList.add('crm-gaveta-aberta'); }
 function crmFecharGaveta() { document.body.classList.remove('crm-gaveta-aberta'); }
 
+
+// =====================================================================
+// ---------- CRM → Operacional → Conteúdos (produção de conteúdo) ----------
+// =====================================================================
+// Um documento por conteúdo (tenants/{id}/conteudos), como no Kanban: a
+// equipe mexe ao mesmo tempo sem apagar a mudança da outra. Mídia entra
+// por LINK (Drive, OneDrive, etc.); o envio de arquivos depende do plano
+// Blaze do Firebase e fica pra depois.
+
+const CNT_COLECAO = 'conteudos';
+const CNT_PUB_COLECAO = 'conteudos_publicos';
+const CNT_CONFIG_KEY = 'eagles_conteudos_config_v1';
+let CNT = [];
+let CNT_CARREGADO = false;
+let CNT_INICIADO = false;
+let CNT_CONFIG = null;
+let CNT_FILTRO = { busca: '', mes: '', ver: '', cliente: '', projeto: '', tarefa: '', tipo: '', ordem: 'entrega', visao: 'quadro', miniaturas: true, abertos: {} };
+let CNT_ABA = 'producao';
+let CNT_TIMER = null;
+
+const CNT_TIPOS = {
+  reels: { nome: 'Reels', grupo: 'redes', icone: 'reuniao', midia: 'video', cor: '#ec4899' },
+  imagem: { nome: 'Imagem Única', grupo: 'redes', icone: 'imagem', midia: 'imagem', cor: '#8b5cf6' },
+  carrossel: { nome: 'Carrossel', grupo: 'redes', icone: 'camadas', midia: 'paginas', cor: '#a855f7' },
+  stories: { nome: 'Stories', grupo: 'redes', icone: 'celular', midia: 'video', cor: '#f59e0b' },
+  tiktok: { nome: 'TikTok', grupo: 'redes', icone: 'reuniao', midia: 'video', cor: '#64748b' },
+  youtube: { nome: 'YouTube', grupo: 'redes', icone: 'reuniao', midia: 'video', cor: '#ef4444' },
+  shorts: { nome: 'Shorts', grupo: 'redes', icone: 'reuniao', midia: 'video', cor: '#dc2626' },
+  linkedin: { nome: 'LinkedIn', grupo: 'redes', icone: 'usuario', midia: 'imagem', cor: '#3b82f6' },
+  'carrossel-linkedin': { nome: 'Carrossel LinkedIn (PDF)', grupo: 'redes', icone: 'camadas', midia: 'paginas', cor: '#2563eb' },
+  audio: { nome: 'Áudio / Música', grupo: 'outros', icone: 'raio', midia: 'arquivo', cor: '#14b8a6' },
+  arte: { nome: 'Arte / Design', grupo: 'outros', icone: 'paleta', midia: 'imagem', cor: '#d946ef' },
+  branding: { nome: 'Branding', grupo: 'outros', icone: 'brilho', midia: 'imagem', cor: '#f43f5e' },
+  copy: { nome: 'Copy / Texto', grupo: 'outros', icone: 'documento', midia: 'nenhuma', cor: '#22c55e' },
+  apresentacao: { nome: 'Apresentação', grupo: 'outros', icone: 'grafico', midia: 'arquivo', cor: '#6366f1' },
+  servico: { nome: 'Serviço', grupo: 'outros', icone: 'pacote', midia: 'arquivo', cor: '#eab308' },
+  landing: { nome: 'Landing Page', grupo: 'outros', icone: 'globo', midia: 'arquivo', cor: '#84cc16' },
+  foto: { nome: 'Fotografia', grupo: 'outros', icone: 'imagem', midia: 'imagem', cor: '#0ea5e9' },
+};
+const CNT_COLUNAS_PADRAO = [
+  { id: 'planejamento', nome: 'Planejamento', cor: '#64748b', icone: 'tarefas' }, { id: 'copy', nome: 'Copy', cor: '#3b82f6', icone: 'lapis' },
+  { id: 'design', nome: 'Design', cor: '#a855f7', icone: 'paleta' }, { id: 'aprovacao', nome: 'Aprovação', cor: '#f59e0b', icone: 'olho' },
+  { id: 'revisao', nome: 'Revisão', cor: '#f97316', icone: 'recorrente' }, { id: 'aprovado', nome: 'Aprovado', cor: '#22c55e', icone: 'aprovado' },
+  { id: 'publicacao', nome: 'Publicação', cor: '#06b6d4', icone: 'raio' },
+];
+const CNT_STATUS = { rascunho: 'Rascunho', andamento: 'Em andamento', aguardando: 'Aguardando cliente', aprovado: 'Aprovado', publicado: 'Publicado' };
+const CNT_PRIORIDADES = { urgente: { nome: 'Urgente', cor: '#ef4444' }, alta: { nome: 'Alta', cor: '#f97316' }, normal: { nome: 'Normal', cor: '#3b82f6' }, baixa: { nome: 'Baixa', cor: '#64748b' } };
+const CNT_REDES = { instagram: 'Instagram', facebook: 'Facebook', twitter: 'Twitter/X', youtube: 'YouTube', linkedin: 'LinkedIn' };
+const CNT_TAGS_SUGERIDAS = ['Urgente', 'Prioridade', 'Reels', 'Story', 'Carrossel'];
+
+function cntNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
+function cntRef() { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(CNT_COLECAO); }
+function cntColunas() { const c = CNT_CONFIG && Array.isArray(CNT_CONFIG.colunas) && CNT_CONFIG.colunas.length ? CNT_CONFIG.colunas : CNT_COLUNAS_PADRAO; return c; }
+function cntColuna(id) { return cntColunas().find((c) => c.id === id) || cntColunas()[0]; }
+function cntFinalizado(c) { const cols = cntColunas(); return c.status === 'publicado' || c.etapa === cols[cols.length - 1].id; }
+function cntAtrasoDias(c) {
+  if (!c.entrega || cntFinalizado(c)) return 0;
+  const hoje = new Date(finHoje() + 'T00:00:00'), ent = new Date(c.entrega + 'T00:00:00');
+  return Math.max(0, Math.round((hoje - ent) / 86400000));
+}
+function cntCategorias() {
+  const base = ['Social Media', 'Tráfego Pago', 'Branding', 'Conteúdo Institucional', 'Vídeo'];
+  const empresa = (typeof CFG_CATEGORIAS_DATA !== 'undefined' && Array.isArray(CFG_CATEGORIAS_DATA) ? CFG_CATEGORIAS_DATA : []).map((c) => c.nome);
+  return Array.from(new Set(base.concat(empresa)));
+}
+
+function cntIniciarDados() {
+  if (CNT_INICIADO) return;
+  CNT_INICIADO = true;
+  if (typeof kbIniciarDados === 'function') kbIniciarDados(); // equipe e projetos
+  cntIniciarEntrega2();
+  cloudWatch(CNT_CONFIG_KEY, { colunas: CNT_COLUNAS_PADRAO }, (d) => { CNT_CONFIG = d && Array.isArray(d.colunas) ? d : { colunas: CNT_COLUNAS_PADRAO }; cntRender(); });
+  if (typeof CFG_CATEGORIAS_CONTEUDO_KEY !== 'undefined' && !CFG_CATEGORIAS_CARREGADO) cloudWatch(CFG_CATEGORIAS_CONTEUDO_KEY, [], (d) => { CFG_CATEGORIAS_DATA = Array.isArray(d) ? d : []; CFG_CATEGORIAS_CARREGADO = true; });
+  if (cntNuvem()) {
+    try {
+      cntRef().onSnapshot((snap) => {
+        const l = []; snap.forEach((d) => l.push(Object.assign({}, d.data(), { id: d.id })));
+        CNT = l; CNT_CARREGADO = true; cntRender(); crmAvisarDashboard();
+      }, (err) => console.error('Erro ao carregar conteúdos:', err));
+      cntEscutarAprovacoes();
+    } catch (err) { console.error('Não foi possível carregar os conteúdos:', err); }
+  } else {
+    CNT = lsLoad(chaveLocalTenant('eagles_conteudos_local_v1'), []);
+    CNT_CARREGADO = true;
+  }
+}
+function cntGravarLocal() { lsSave(chaveLocalTenant('eagles_conteudos_local_v1'), CNT); }
+function cntErro(err) { console.error('Erro nos conteúdos:', err); avisar(typeof mensagemErroFirestore === 'function' ? mensagemErroFirestore(err) : 'Não foi possível salvar agora.'); }
+function cntPronto() { if (!CNT_CARREGADO) { avisar('Os conteúdos ainda estão carregando — aguarde um instante.'); return false; } return exigirPodeOperar('editar conteúdos'); }
+function cntHist(acao) { return { em: new Date().toISOString(), por: (typeof USUARIO_NOME !== 'undefined' && USUARIO_NOME) || 'Você', acao: String(acao).slice(0, 200) }; }
+
+function cntNovo(dados) {
+  const agora = new Date().toISOString();
+  return Object.assign({
+    id: genId('ct'), tipo: 'imagem', titulo: '', etapa: cntColunas()[0].id, status: 'rascunho', cliente: '', responsavel: '', projetoId: '', prioridade: 'normal',
+    entrega: '', entregaHora: '', publicacao: '', publicacaoHora: '', categoria: 'Social Media', redes: ['instagram'], legenda: '', briefing: '', roteiro: '', notas: '',
+    midia: { url: '', capaUrl: '', paginas: [], formato: '4:5' }, checklist: [], tags: [], trafego: false, tarefaId: '', download: 'cliente',
+    tempo: { total: 0, inicio: null }, historico: [], criadoEm: agora, atualizadoEm: agora,
+  }, dados || {});
+}
+function cntCriar(dados) {
+  if (!cntPronto()) return null;
+  const c = cntNovo(dados);
+  c.historico = [cntHist('Criou o conteúdo')].concat(c.historico || []);
+  CNT.push(c);
+  if (cntNuvem()) cntRef().doc(c.id).set(finLimpar(c)).catch(cntErro); else cntGravarLocal();
+  cntRender();
+  return c;
+}
+function cntAtualizar(id, campos, registro) {
+  if (!cntPronto()) return false;
+  const c = CNT.find((x) => x.id === id);
+  if (!c) return false;
+  const m = Object.assign({}, campos, { atualizadoEm: new Date().toISOString() });
+  if (registro) m.historico = (c.historico || []).concat([cntHist(registro)]).slice(-60);
+  Object.assign(c, m);
+  if (cntNuvem()) cntRef().doc(id).set(finLimpar(m), { merge: true }).catch(cntErro); else cntGravarLocal();
+  cntRender();
+  return true;
+}
+function cntExcluir(id) {
+  if (!cntPronto()) return;
+  const c = CNT.find((x) => x.id === id);
+  if (!c) return;
+  confirmarAcao(`Excluir o conteúdo "${c.titulo || 'Sem título'}"? Isso não pode ser desfeito.`, () => {
+    CNT = CNT.filter((x) => x.id !== id);
+    if (cntNuvem()) cntRef().doc(id).delete().catch(cntErro); else cntGravarLocal();
+    cntRender();
+  }, 'Excluir conteúdo');
+}
+function cntDuplicar(id) {
+  const c = CNT.find((x) => x.id === id);
+  if (!c) return;
+  const copia = finLimpar(c);
+  delete copia.id; delete copia.aprovacao;
+  cntCriar(Object.assign(copia, { titulo: (c.titulo || 'Sem título') + ' (cópia)', etapa: cntColunas()[0].id, status: 'rascunho', tempo: { total: 0, inicio: null }, historico: [] }));
+}
+function cntMover(id, etapa) {
+  const c = CNT.find((x) => x.id === id);
+  if (!c || c.etapa === etapa || !cntColunas().some((x) => x.id === etapa)) return;
+  const cols = cntColunas();
+  const extra = etapa === cols[cols.length - 1].id ? {} : (c.status === 'publicado' ? { status: 'andamento' } : {});
+  cntAtualizar(id, Object.assign({ etapa }, extra), `Moveu de "${cntColuna(c.etapa).nome}" para "${cntColuna(etapa).nome}"`);
+}
+// cronômetro (Iniciar / Pausar)
+function cntTempoSeg(c) { const t = c.tempo || {}; return (Number(t.total) || 0) + (t.inicio ? Math.max(0, Math.floor((Date.now() - new Date(t.inicio).getTime()) / 1000)) : 0); }
+function cntAlternarTempo(id) {
+  const c = CNT.find((x) => x.id === id);
+  if (!c) return;
+  const t = c.tempo || { total: 0, inicio: null };
+  if (t.inicio) cntAtualizar(id, { tempo: { total: cntTempoSeg(c), inicio: null } }, 'Pausou o cronômetro');
+  else cntAtualizar(id, { tempo: { total: Number(t.total) || 0, inicio: new Date().toISOString() }, status: c.status === 'rascunho' ? 'andamento' : c.status }, 'Iniciou o trabalho');
+}
+
+// ---------- tela ----------
+let CNT_HOST = null;
+function cntMontar(host) {
+  CNT_HOST = host;
+  cntIniciarDados();
+  cntRender();
+  if (!CNT_TIMER) CNT_TIMER = setInterval(() => { if (CNT.some((c) => c.tempo && c.tempo.inicio) && CNT_HOST && CNT_HOST.isConnected && CNT_HOST.style.display !== 'none') document.querySelectorAll('[data-cnt-tempo]').forEach((el) => { const c = CNT.find((x) => x.id === el.dataset.cntTempo); if (c) el.textContent = kbFormatarTempo(cntTempoSeg(c)); }); }, 1000);
+}
+function cntFiltrados() {
+  const f = CNT_FILTRO, b = kbNomeNorm(f.busca);
+  const lista = CNT.filter((c) => {
+    if (b && !kbNomeNorm(`${c.titulo} ${c.legenda || ''} ${c.cliente || ''} ${(c.tags || []).join(' ')}`).includes(b)) return false;
+    if (f.mes && ![c.entrega, c.publicacao].some((d) => (d || '').startsWith(f.mes))) return false;
+    if (f.ver === 'meus' && c.responsavel !== kbMeuUid()) return false;
+    if (f.ver === 'sem' && c.responsavel) return false;
+    if (f.ver === 'atrasados' && !cntAtrasoDias(c)) return false;
+    if (f.cliente && c.cliente !== f.cliente) return false;
+    if (f.projeto && c.projetoId !== f.projeto) return false;
+    if (f.tarefa === 'com' && !c.tarefaId) return false;
+    if (f.tarefa === 'sem' && c.tarefaId) return false;
+    if (f.tipo && c.tipo !== f.tipo) return false;
+    return true;
+  });
+  const ord = { titulo: (a, z) => (a.titulo || '').localeCompare(z.titulo || ''), entrega: (a, z) => (a.entrega || '9999').localeCompare(z.entrega || '9999'), prioridade: (a, z) => Object.keys(CNT_PRIORIDADES).indexOf(a.prioridade) - Object.keys(CNT_PRIORIDADES).indexOf(z.prioridade), criacao: (a, z) => (z.criadoEm || '').localeCompare(a.criadoEm || '') }[f.ordem];
+  return ord ? lista.sort(ord) : lista;
+}
+function cntRender() {
+  const host = CNT_HOST;
+  if (!host || !host.isConnected || host.style.display === 'none') return;
+  const ativo = document.activeElement, foco = ativo && host.contains(ativo) && ativo.id ? ativo.id : null, pos = foco && ativo.selectionStart;
+  const f = CNT_FILTRO;
+  const lista = cntFiltrados();
+  const clientes = Array.from(new Set(CNT.map((c) => c.cliente).filter(Boolean).concat(typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []))).sort((a, b) => a.localeCompare(b));
+  const sel = (campo, ops) => `<select class="srv-select" onchange="CNT_FILTRO.${campo} = this.value; cntRender();">${ops.map(([v, t]) => `<option value="${escapeHtml(v)}"${f[campo] === v ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+  const planos = cntPlanosParaGerar();
+  host.innerHTML = `<div class="cnt">
+    <div class="cnt-cab">
+      <div><h1>Produção de Conteúdos</h1><p>${f.cliente ? escapeHtml(f.cliente) + ' · <button type="button" class="kb-link" style="padding:0;" onclick="CNT_FILTRO.cliente = \'\'; cntRender();">ver todos os clientes</button>' : 'Selecione um cliente para começar — ou veja todos'}</p></div>
+      <span class="kb-espaco"></span>
+      <button type="button" class="kb-btn kb-btn-tutorial" title="Tutorial" aria-label="Tutorial" onclick="iniciarTourCrm('conteudos')">${kbIc('chapeu')} <span class="aba-txt">Tutorial</span></button>
+      <div class="kb-segmento">${[['clientes', 'Clientes'], ['producao', 'Produção'], ['prazos', 'Prazos']].map(([a, t]) => `<button type="button" class="${CNT_ABA === a ? 'ativo' : ''}" onclick="CNT_ABA = '${a}'; cntRender();">${t}</button>`).join('')}</div>
+      <button type="button" class="btn" onclick="cntAbrirPlanejamento()">${ic('tarefas', 'ic-herda')} <span class="aba-txt">Planejamento</span></button>
+      <button type="button" class="btn" onclick="cntAbrirModelos()">${ic('colunas', 'ic-herda')} <span class="aba-txt">Modelos</span></button>
+      <button type="button" class="btn btn-primary" onclick="cntAbrirTipos()">${ic('mais', 'ic-herda')} Novo Conteúdo</button>
+      <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Mais opções" id="cnt-btn-mais" onclick="cntMenuMais(this)">${kbIc('pontos')}</button>
+    </div>
+    ${cntHtmlFixados()}
+    ${planos.length ? `<div class="fin-info cnt-aviso-plano">${ic('brilho', 'ic-herda')} <span>${planos.length} projeto(s) têm plano de conteúdos pronto pra virar rascunhos (${planos.reduce((a, p) => a + p.total, 0)} conteúdos).</span><button type="button" class="btn btn-small btn-primary" onclick="cntGerarDosPlanos()">Gerar conteúdos</button></div>` : ''}
+    ${!CNT_CARREGADO && CNT_ABA !== 'producao' ? '<p class="kb-vazio">Carregando...</p>' : CNT_ABA === 'clientes' ? cntHtmlAbaClientes() : CNT_ABA === 'prazos' ? cntHtmlAbaPrazos() : `
+    <div class="cnt-filtros">
+      ${ic('filtro', 'ic-herda')}
+      <label class="kb-busca">${kbIc('busca')}<input type="search" id="cnt-busca" placeholder="Buscar conteúdo..." value="${escapeHtml(f.busca)}" oninput="CNT_FILTRO.busca = this.value; cntRender();"></label>
+      <span class="fin-filtro-mes"><button type="button" class="kb-btn-ic" aria-label="Mês anterior" onclick="CNT_FILTRO.mes = finSomarMeses(CNT_FILTRO.mes || finMesAtual(), -1); cntRender();">${kbIc('setaEsq')}</button>${ic('calendario', 'ic-herda')} ${f.mes ? escapeHtml(finNomeMes(f.mes)) : 'Todo o período'}<button type="button" class="kb-btn-ic" aria-label="Próximo mês" onclick="CNT_FILTRO.mes = finSomarMeses(CNT_FILTRO.mes || finMesAtual(), 1); cntRender();">${kbIc('seta')}</button>${f.mes ? '<button type="button" class="kb-link" onclick="CNT_FILTRO.mes = \'\'; cntRender();">todo o período</button>' : ''}</span>
+      ${sel('ver', [['', 'Ver todos'], ['meus', 'Meus conteúdos'], ['sem', 'Sem responsável'], ['atrasados', 'Atrasados']])}
+      ${sel('cliente', [['', 'Todos os clientes']].concat(clientes.map((c) => [c, c])))}
+      ${sel('projeto', [['', 'Todos os projetos']].concat((typeof KB_PROJETOS !== 'undefined' ? KB_PROJETOS : []).filter((p) => !p.arquivado).map((p) => [p.id, p.nome])))}
+      ${sel('tarefa', [['', 'Todas as tarefas'], ['com', 'Com tarefa vinculada'], ['sem', 'Sem tarefa vinculada']])}
+      ${sel('tipo', [['', 'Qualquer tipo']].concat(Object.entries(CNT_TIPOS).map(([k, t]) => [k, t.nome])))}
+    </div>
+    <div class="cnt-barra">
+      <span class="kb-vazio-mini">${lista.length} de ${CNT.length} conteúdos</span><span class="kb-espaco"></span>
+      ${sel('ordem', [['entrega', 'Ordenar: Entrega'], ['titulo', 'Ordenar: Título (A–Z)'], ['prioridade', 'Ordenar: Prioridade'], ['criacao', 'Ordenar: Mais recentes']])}
+      <div class="kb-segmento">${[['quadro', 'quadro', 'Quadro'], ['lista', 'lista', 'Lista'], ['calendario', 'calendario', 'Calendário']].map(([v, i, t]) => `<button type="button" class="${f.visao === v ? 'ativo' : ''}" onclick="CNT_FILTRO.visao = '${v}'; cntRender();">${ic(i, 'ic-herda')} <span class="aba-txt">${t}</span></button>`).join('')}</div>
+      <button type="button" class="btn btn-small" onclick="CNT_FILTRO.miniaturas = !CNT_FILTRO.miniaturas; cntRender();">${ic('imagem', 'ic-herda')} ${f.miniaturas ? 'Ocultar' : 'Mostrar'} miniaturas</button>
+      <button type="button" class="btn btn-small" onclick="cntAbrirColunas()">${ic('configuracoes', 'ic-herda')} Personalizar colunas</button>
+    </div>
+    ${!CNT_CARREGADO ? '<p class="kb-vazio">Carregando...</p>' : f.visao === 'lista' ? cntHtmlLista(lista) : f.visao === 'calendario' ? cntHtmlCalendario(lista) : cntHtmlQuadro(lista)}`}
+  </div>`;
+  if (foco) { const i = document.getElementById(foco); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} } }
+}
+function cntMenuMais(ancora) {
+  kbMostrarPopover(`
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); cntGerarDosPlanos()">${ic('brilho', 'ic-herda')}<span>Gerar conteúdos dos planos dos projetos</span></button>
+    <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); cntAbrirColunas()">${kbIc('colunas')}<span>Personalizar colunas</span></button>`, ancora);
+}
+function cntMiniatura(c) {
+  const u = urlImagemSegura(c.midia && (c.midia.capaUrl || c.midia.url || (c.midia.paginas || [])[0]));
+  return u && CNT_FILTRO.miniaturas ? `<img class="cnt-mini" src="${escapeHtml(u)}" alt="" loading="lazy">` : '';
+}
+function cntCardHtml(c) {
+  const id = escapeParaOnclick(c.id), t = CNT_TIPOS[c.tipo] || CNT_TIPOS.imagem, atraso = cntAtrasoDias(c), pr = CNT_PRIORIDADES[c.prioridade] || CNT_PRIORIDADES.normal;
+  const aberto = !!CNT_FILTRO.abertos[c.id];
+  return `<div class="cnt-card${atraso ? ' atrasado' : ''}" draggable="true" data-cnt-card="${escapeHtml(c.id)}" ondragstart="event.dataTransfer.setData('text/plain', '${id}')">
+    ${cntMiniatura(c)}
+    <div class="cnt-card-cab"><span class="cnt-bolinha${cntFinalizado(c) ? ' ok' : ''}"></span><strong onclick="cntAbrirEditor('${id}')">${escapeHtml(c.titulo || 'Sem título')}</strong></div>
+    <div class="cnt-chips"><span class="cnt-chip" style="--c:${t.cor};">${escapeHtml(t.nome)}</span>${c.categoria ? `<span class="cnt-chip">${escapeHtml(c.categoria)}</span>` : ''}<span class="cnt-chip" style="--c:${pr.cor};">${pr.nome.toLowerCase()}</span>${c.trafego ? '<span class="cnt-chip" style="--c:#22c55e;">tráfego</span>' : ''}</div>
+    <div class="cnt-datas">${c.entrega ? `<span title="Entrega">${ic('relogio', 'ic-herda')} ${kbDataCurta(c.entrega)}</span>` : ''}${c.publicacao ? `<span title="Publicação">${ic('calendario', 'ic-herda')} ${kbDataCurta(c.publicacao)}</span>` : ''}<span class="kb-espaco"></span>${c.responsavel ? kbAvatar(c.responsavel, 'p') : ''}</div>
+    <div class="cnt-acoes">
+      <button type="button" class="kb-link" onclick="cntVerHistorico('${id}')">${ic('recorrente', 'ic-herda')} Ver histórico</button><span class="kb-espaco"></span>
+      <button type="button" class="kb-btn-ic" title="Link de aprovação" aria-label="Link de aprovação" onclick="cntEnviarAprovacao('${id}')">${ic('link', 'ic-herda')}</button>
+      <button type="button" class="kb-btn-ic" title="Duplicar" aria-label="Duplicar" onclick="cntDuplicar('${id}')">${ic('copiar', 'ic-herda')}</button>
+      <button type="button" class="kb-btn-ic kb-btn-perigo" title="Excluir" aria-label="Excluir" onclick="cntExcluir('${id}')">${ic('lixeira', 'ic-herda')}</button>
+      <button type="button" class="btn btn-small" onclick="cntAlternarTempo('${id}')">${c.tempo && c.tempo.inicio ? `⏸ <span data-cnt-tempo="${escapeHtml(c.id)}">${kbFormatarTempo(cntTempoSeg(c))}</span>` : `▶ ${cntTempoSeg(c) ? kbFormatarTempo(cntTempoSeg(c)) : 'Iniciar'}`}</button>
+    </div>
+    <button type="button" class="cnt-detalhes-btn" onclick="CNT_FILTRO.abertos['${id}'] = !CNT_FILTRO.abertos['${id}']; cntRender();">${kbIc(aberto ? 'setaCima' : 'setaBaixo')} Detalhes</button>
+    ${aberto ? `<div class="cnt-detalhes">${c.cliente ? `<div><b>Cliente:</b> ${escapeHtml(c.cliente)}</div>` : ''}${c.legenda ? `<p>${escapeHtml(c.legenda).slice(0, 220)}</p>` : ''}<div><b>Publicar em:</b> ${(c.redes || []).map((r) => CNT_REDES[r]).filter(Boolean).join(', ') || '—'}</div>
+      <label class="kb-vazio-mini">Mover para <select onchange="cntMover('${id}', this.value)">${cntColunas().map((col) => `<option value="${escapeHtml(col.id)}"${col.id === c.etapa ? ' selected' : ''}>${escapeHtml(col.nome)}</option>`).join('')}</select></label></div>` : ''}
+    ${atraso ? `<span class="cnt-atraso">${ic('alerta', 'ic-herda')} Atrasado ${atraso} dia${atraso > 1 ? 's' : ''}</span>` : ''}
+  </div>`;
+}
+function cntHtmlQuadro(lista) {
+  return `<div class="cnt-quadro">${cntColunas().map((col) => {
+    const itens = lista.filter((c) => (cntColunas().some((x) => x.id === c.etapa) ? c.etapa : cntColunas()[0].id) === col.id);
+    return `<section class="cnt-coluna" style="--c:${corHexValida(col.cor) || '#64748b'};" ondragover="event.preventDefault(); this.classList.add('alvo');" ondragleave="this.classList.remove('alvo')" ondrop="event.preventDefault(); this.classList.remove('alvo'); cntMover(event.dataTransfer.getData('text/plain'), '${escapeParaOnclick(col.id)}');">
+      <header><span class="cnt-col-ic">${ic(col.icone || 'tarefas', 'ic-herda')}</span><div><strong>${escapeHtml(col.nome)}</strong><small>${itens.length} item(s)</small></div></header>
+      <div class="cnt-col-itens">${itens.map(cntCardHtml).join('') || '<p class="cnt-vazio">vazio</p>'}</div>
+    </section>`;
+  }).join('')}</div>`;
+}
+function cntHtmlLista(lista) {
+  return `<div class="kb-tabela-wrap"><table class="kb-tabela" style="min-width:760px;"><thead><tr><th>Título</th><th>Tipo</th><th>Etapa</th><th>Cliente</th><th>Entrega</th><th>Publicação</th><th>Prioridade</th><th></th></tr></thead><tbody>
+    ${lista.map((c) => { const id = escapeParaOnclick(c.id), at = cntAtrasoDias(c); return `<tr><td><button type="button" class="kb-tabela-titulo" onclick="cntAbrirEditor('${id}')">${escapeHtml(c.titulo || 'Sem título')}</button>${at ? ` <span class="cnt-atraso">Atrasado ${at}d</span>` : ''}</td>
+      <td>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}</td><td><select class="nivel-select" onchange="cntMover('${id}', this.value)">${cntColunas().map((col) => `<option value="${escapeHtml(col.id)}"${col.id === c.etapa ? ' selected' : ''}>${escapeHtml(col.nome)}</option>`).join('')}</select></td>
+      <td>${escapeHtml(c.cliente || '—')}</td><td>${c.entrega ? kbDataCurta(c.entrega) : '—'}</td><td>${c.publicacao ? kbDataCurta(c.publicacao) : '—'}</td><td>${(CNT_PRIORIDADES[c.prioridade] || {}).nome || ''}</td>
+      <td style="text-align:right;"><button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir" onclick="cntExcluir('${id}')">${ic('lixeira', 'ic-herda')}</button></td></tr>`; }).join('') || '<tr><td colspan="8" class="kb-vazio">Nenhum conteúdo com esses filtros.</td></tr>'}
+  </tbody></table></div>`;
+}
+function cntHtmlCalendario(lista) {
+  const mes = CNT_FILTRO.mes || finMesAtual();
+  const [a, m] = mes.split('-').map(Number);
+  const primeiro = new Date(a, m - 1, 1).getDay(), dias = new Date(a, m, 0).getDate();
+  const celulas = [];
+  for (let i = 0; i < primeiro; i++) celulas.push('<div class="cnt-dia vazio"></div>');
+  for (let d = 1; d <= dias; d++) {
+    const data = `${mes}-${String(d).padStart(2, '0')}`;
+    const doDia = lista.filter((c) => (c.publicacao || c.entrega) === data);
+    celulas.push(`<div class="cnt-dia${data === finHoje() ? ' hoje' : ''}"><span class="cnt-dia-n">${d}</span>${doDia.map((c) => `<button type="button" class="cnt-dia-item" style="--c:${(CNT_TIPOS[c.tipo] || {}).cor || '#64748b'};" onclick="cntAbrirEditor('${escapeParaOnclick(c.id)}')">${escapeHtml(c.titulo || 'Sem título')}</button>`).join('')}</div>`);
+  }
+  return `<div class="cnt-cal-cab"><strong>${escapeHtml(finNomeMes(mes))}</strong><span class="kb-vazio-mini">pela data de publicação (ou de entrega)</span></div>
+    <div class="cnt-cal">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((n) => `<div class="cnt-cal-sem">${n}</div>`).join('')}${celulas.join('')}</div>`;
+}
+function cntVerHistorico(id) {
+  const c = CNT.find((x) => x.id === id);
+  if (!c) return;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:480px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Histórico — ${escapeHtml(c.titulo || 'Sem título')}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    ${(c.historico || []).slice().reverse().map((h) => `<div class="srv-cat-linha"><span style="flex:1;">${escapeHtml(h.acao)}<small style="display:block; color:var(--text-soft);">${escapeHtml(h.por || '')} · ${escapeHtml(new Date(h.em).toLocaleString('pt-BR'))}</small></span></div>`).join('') || '<p class="kb-vazio">Sem histórico.</p>'}
+    <p class="kb-vazio-mini">Tempo trabalhado: ${kbFormatarTempo(cntTempoSeg(c))}</p>
+  </div>`;
+  openModal('modal-srv');
+}
+// Personalizar colunas
+let CNT_COLS_EDIT = null;
+function cntAbrirColunas() {
+  if (!exigirPodeOperar('personalizar colunas')) return;
+  CNT_COLS_EDIT = finLimpar(cntColunas());
+  cntRenderColunas();
+  openModal('modal-srv');
+}
+function cntRenderColunas() {
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:520px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Personalizar colunas</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub">A última coluna conta como "finalizado" (não aparece como atrasado).</p>
+    ${CNT_COLS_EDIT.map((c, i) => `<div class="kb-col-edit"><input type="color" value="${expandirHex(c.cor) || '#64748b'}" oninput="CNT_COLS_EDIT[${i}].cor = this.value"><input type="text" maxlength="30" value="${escapeHtml(c.nome)}" oninput="CNT_COLS_EDIT[${i}].nome = this.value">
+      <button type="button" class="kb-btn-ic" aria-label="Subir" ${i ? '' : 'disabled'} onclick="[CNT_COLS_EDIT[${i}], CNT_COLS_EDIT[${i - 1}]] = [CNT_COLS_EDIT[${i - 1}], CNT_COLS_EDIT[${i}]]; cntRenderColunas();">${kbIc('setaCima')}</button>
+      <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir coluna" ${CNT_COLS_EDIT.length <= 2 ? 'disabled' : ''} onclick="CNT_COLS_EDIT.splice(${i}, 1); cntRenderColunas();">${ic('lixeira', 'ic-herda')}</button></div>`).join('')}
+    <button type="button" class="btn btn-small" onclick="CNT_COLS_EDIT.push({ id: genId('cc'), nome: 'Nova etapa', cor: '#94a3b8', icone: 'tarefas' }); cntRenderColunas();">${ic('mais', 'ic-herda')} Nova coluna</button>
+    <div class="cfg-modal-rodape"><button type="button" class="btn btn-ghost" onclick="CNT_COLS_EDIT = finLimpar(CNT_COLUNAS_PADRAO); cntRenderColunas();">Restaurar padrão</button><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="cntSalvarColunas()">Salvar</button></div>
+  </div>`;
+}
+function cntSalvarColunas() {
+  const cols = CNT_COLS_EDIT.map((c) => Object.assign({}, c, { nome: String(c.nome || '').trim().slice(0, 30) || 'Etapa', cor: corHexValida(c.cor) || '#64748b' }));
+  if (cloudSet(CNT_CONFIG_KEY, { colunas: cols }) === false) return;
+  CNT_CONFIG = { colunas: cols };
+  // quem estava numa coluna que saiu vai pra primeira
+  CNT.filter((c) => !cols.some((x) => x.id === c.etapa)).forEach((c) => cntAtualizar(c.id, { etapa: cols[0].id }, 'Coluna removida: voltou pra ' + cols[0].nome));
+  srvFecharModal();
+  cntRender();
+}
+
+// ---------- gerar conteúdos a partir dos planos dos projetos ----------
+const CNT_TIPO_DO_PLANO = { feed: 'imagem', reels: 'reels', stories: 'stories', carrossel: 'carrossel', artigo: 'copy', branding: 'branding', apresentacao: 'apresentacao', foto: 'foto', landing: 'landing', email: 'copy' };
+function cntPlanosParaGerar() {
+  if (typeof KB_PROJETOS === 'undefined') return [];
+  return KB_PROJETOS.filter((p) => !p.arquivado && p.planoConteudo && p.planoConteudo.ativo && !p.planoConteudo.gerado)
+    .map((p) => ({ projeto: p, total: (p.planoConteudo.blocos || []).filter((b) => b.ativo).reduce((a, b) => a + Object.values(b.qtd || {}).reduce((x, n) => x + (Number(n) || 0), 0) * (Number(b.periodo) || 1), 0) }))
+    .filter((x) => x.total > 0);
+}
+// datas dentro do mês: espalhadas, só em dias da semana escolhidos, ou sem data
+function cntDatasDoMes(mes, n, modo, dias) {
+  if (modo === 'rascunho' || !n) return Array(n).fill('');
+  const ultimo = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate();
+  let candidatos = [];
+  for (let d = 1; d <= ultimo; d++) { const data = `${mes}-${String(d).padStart(2, '0')}`; if (modo !== 'semana' || (dias || []).includes(new Date(data + 'T12:00:00').getDay())) candidatos.push(data); }
+  if (!candidatos.length) candidatos = [`${mes}-01`];
+  return Array.from({ length: n }, (_, i) => candidatos[Math.min(candidatos.length - 1, Math.floor((i * candidatos.length) / n))]);
+}
+function cntGerarDosPlanos() {
+  if (!cntPronto()) return;
+  const lista = cntPlanosParaGerar();
+  if (!lista.length) { avisar('Nenhum projeto com plano de conteúdos pendente. O plano é montado na etapa "Conteúdos" do Novo Projeto.'); return; }
+  const total = lista.reduce((a, x) => a + x.total, 0);
+  confirmarAcao(`Gerar ${total} conteúdo(s) em rascunho a partir dos planos de ${lista.length} projeto(s)?`, () => {
+    let n = 0;
+    lista.forEach(({ projeto: p }) => {
+      const inicio = (p.dataInicio || finHoje()).slice(0, 7);
+      (p.planoConteudo.blocos || []).filter((b) => b.ativo).forEach((b) => {
+        for (let mi = 0; mi < (Number(b.periodo) || 1); mi++) {
+          const mes = finSomarMeses(inicio, mi);
+          Object.entries(b.qtd || {}).forEach(([tipoPlano, qtd]) => {
+            const q = Number(qtd) || 0;
+            const datas = cntDatasDoMes(mes, q, b.datas, b.dias);
+            const nomeTipo = (KB_TIPOS_CONTEUDO.find((t) => t.id === tipoPlano) || {}).nome || 'Conteúdo';
+            for (let i = 0; i < q; i++) {
+              const resp = b.modoResp === 'conteudo' ? ((b.respPorTipo || {})[tipoPlano] || b.responsavel) : b.responsavel;
+              if (cntCriar({ tipo: CNT_TIPO_DO_PLANO[tipoPlano] || 'arte', titulo: `${nomeTipo} ${i + 1}/${q} — ${finNomeMes(mes)}`, cliente: p.cliente || '', projetoId: p.id, responsavel: resp || '', publicacao: datas[i], entrega: datas[i] ? kbSomarDias(datas[i], -2) : '', origem: { projetoId: p.id, blocoId: b.id } })) n++;
+            }
+          });
+        }
+      });
+      kbGravarProjeto(p, { planoConteudo: Object.assign({}, p.planoConteudo, { gerado: true, geradoEm: new Date().toISOString() }) });
+    });
+    cntRender(); // tira o aviso do plano, que já foi gerado
+    avisar(`${n} conteúdo(s) criados em rascunho, na coluna "${cntColunas()[0].nome}".`, 'Conteúdos');
+  }, 'Gerar conteúdos');
+}
+
+// ---------- "O que deseja criar?" ----------
+function cntAbrirTipos() {
+  if (!cntPronto()) return;
+  const grupo = (g) => Object.entries(CNT_TIPOS).filter(([, t]) => t.grupo === g).map(([k, t]) => `<button type="button" class="cnt-tipo" style="--c:${t.cor};" onclick="cntAbrirEditor(null, '${k}')">${ic(t.icone, 'ic-herda')}<span>${escapeHtml(t.nome)}</span></button>`).join('');
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>O que deseja criar?</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub" style="margin-top:-8px;">Selecione o tipo de conteúdo</p>
+    <div class="cfg-secao-rotulo" style="margin-top:0;">Redes sociais</div><div class="cnt-tipos">${grupo('redes')}</div>
+    <div class="cfg-secao-rotulo">Outros</div><div class="cnt-tipos">${grupo('outros')}</div>
+  </div>`;
+  openModal('modal-srv');
+}
+
+// ---------- editor (tela de cada tipo) ----------
+let CNT_ED = null;
+function cntAbrirEditor(id, tipo) {
+  const c = id ? CNT.find((x) => x.id === id) : null;
+  if (!c && !cntPronto()) return;
+  CNT_ED = c ? finLimpar(c) : cntNovo({ tipo: tipo || 'imagem', cliente: CNT_FILTRO.cliente || '', entrega: finHoje(), publicacao: finHoje(), tags: tipo === 'reels' ? ['Reels'] : tipo === 'stories' ? ['Story'] : tipo === 'carrossel' ? ['Carrossel'] : [] });
+  CNT_ED.midia = Object.assign({ url: '', capaUrl: '', paginas: [], formato: '4:5' }, CNT_ED.midia || {});
+  CNT_ED.__novo = !c;
+  cntRenderEditor();
+  openModal('modal-srv');
+}
+function cntCampoTexto(campo, rot, ph, linhas) {
+  const v = CNT_ED[campo] || '';
+  return `<div class="cnt-campo"><label>${rot}</label><textarea rows="${linhas || 4}" maxlength="5000" placeholder="${ph}" oninput="CNT_ED.${campo} = this.value; this.nextElementSibling.textContent = this.value.length + ' caracteres';">${escapeHtml(v)}</textarea><small>${v.length} caracteres</small></div>`;
+}
+function cntPreviaImg(url, ph) { const u = urlImagemSegura(url); return u ? `<img src="${escapeHtml(u)}" alt="">` : `<span>${ph}</span>`; }
+function cntHtmlMidia() {
+  const e = CNT_ED, t = CNT_TIPOS[e.tipo] || CNT_TIPOS.imagem, m = e.midia;
+  const link = (campo, rot, ph) => `<input type="url" maxlength="600" placeholder="${ph}" value="${escapeHtml(m[campo] || '')}" oninput="CNT_ED.midia.${campo} = this.value.trim()" onchange="cntRenderEditor()" aria-label="${rot}">`;
+  if (t.midia === 'video') return `<div class="cnt-midia-2"><div><label class="cnt-rot">Vídeo</label><div class="cnt-caixa-midia vertical">${ic('reuniao')}<span>9:16 · cole o link abaixo</span></div><small class="kb-vazio-mini">Cole o link do vídeo</small>${link('url', 'Link do vídeo', 'Drive, OneDrive ou link de compartilhamento')}</div>
+    <div><label class="cnt-rot">Capa</label><div class="cnt-caixa-midia vertical">${cntPreviaImg(m.capaUrl, ic('imagem') + '<span>Imagem de capa</span>')}</div>${link('capaUrl', 'Link da capa', 'https://... (imagem)')}</div></div>`;
+  if (t.midia === 'imagem') return `<div><div class="cnt-rot-linha"><label class="cnt-rot">Imagem</label><span class="kb-espaco"></span>${['4:5', '1:1', '16:9', '9:16'].map((f) => `<button type="button" class="cnt-formato${m.formato === f ? ' ativo' : ''}" onclick="CNT_ED.midia.formato = '${f}'; cntRenderEditor();">${f}</button>`).join('')}</div>
+    <div class="cnt-caixa-midia" style="aspect-ratio:${m.formato.replace(':', '/')};">${cntPreviaImg(m.url, ic('baixar') + '<span>Cole o link da imagem abaixo</span>')}</div>${link('url', 'Link da imagem', 'https://... (Drive, OneDrive ou link direto da imagem)')}</div>`;
+  if (t.midia === 'paginas') return `<div><label class="cnt-rot">Páginas do carrossel (${m.paginas.length})</label>
+    <div class="cnt-paginas">${m.paginas.map((u, i) => `<div class="cnt-pagina">${cntPreviaImg(u, '<span>Página ' + (i + 1) + '</span>')}<input type="url" maxlength="600" value="${escapeHtml(u)}" oninput="CNT_ED.midia.paginas[${i}] = this.value.trim()" onchange="cntRenderEditor()" aria-label="Link da página ${i + 1}">
+      <span class="cnt-pagina-acoes"><button type="button" class="kb-btn-ic" aria-label="Mover pra esquerda" ${i ? '' : 'disabled'} onclick="const p = CNT_ED.midia.paginas; [p[${i}], p[${i - 1}]] = [p[${i - 1}], p[${i}]]; cntRenderEditor();">${kbIc('setaEsq')}</button><button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Remover página" onclick="CNT_ED.midia.paginas.splice(${i}, 1); cntRenderEditor();">${ic('lixeira', 'ic-herda')}</button></span></div>`).join('')}
+      <button type="button" class="cnt-pagina cnt-pagina-nova" onclick="CNT_ED.midia.paginas.push(''); cntRenderEditor();">${ic('mais')}<span>Adicionar página (link)</span></button></div></div>`;
+  if (t.midia === 'arquivo') return `<div><label class="cnt-rot">Arquivo</label>${link('url', 'Link do arquivo', 'Link do arquivo (Drive, OneDrive, Figma, site...)')}</div>`;
+  return '';
+}
+function cntRenderEditor() {
+  const e = CNT_ED;
+  if (!e) return;
+  const t = CNT_TIPOS[e.tipo] || CNT_TIPOS.imagem;
+  const video = t.midia === 'video';
+  const usuarios = typeof KB_USUARIOS !== 'undefined' ? KB_USUARIOS : [];
+  const clientes = Array.from(new Set((typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []).concat(e.cliente ? [e.cliente] : []))).sort((a, b) => a.localeCompare(b));
+  const lado = (icone, rot, html) => `<div class="cnt-lado-campo"><label>${ic(icone, 'ic-herda')} ${rot}</label>${html}</div>`;
+  const opts = (lista, atual) => lista.map(([v, n]) => `<option value="${escapeHtml(v)}"${atual === v ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('');
+  const ov = srvGarantirModal();
+  const rolagem = ov.querySelector('.cnt-ed-principal') ? [ov.querySelector('.cnt-ed-principal').scrollTop, ov.querySelector('.cnt-ed-lado').scrollTop] : null;
+  ov.innerHTML = `<div class="modal kb-modal cnt-editor" role="dialog" aria-modal="true">
+    <div class="cnt-ed-topo">
+      ${e.__novo ? `<button type="button" class="kb-btn-ic" aria-label="Voltar aos tipos" onclick="cntAbrirTipos()">${kbIc('setaEsq')}</button>` : ''}
+      <span class="cnt-ed-tipo" style="--c:${t.cor};">${escapeHtml(t.nome)}</span>
+      <input type="text" class="cnt-ed-titulo" maxlength="140" placeholder="Título do conteúdo..." value="${escapeHtml(e.titulo)}" oninput="CNT_ED.titulo = this.value">
+      <button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal(); CNT_ED = null;">✕</button>
+    </div>
+    <div class="cnt-ed-corpo">
+      <div class="cnt-ed-principal">
+        <div class="cnt-ed-grade ${t.midia === 'paginas' || t.midia === 'nenhuma' || t.midia === 'arquivo' ? 'uma' : ''}">
+          <div class="cnt-ed-midia">${cntHtmlMidia()}
+            <details class="cnt-notas" open><summary>${ic('documento', 'ic-herda')} Notas Internas</summary><textarea rows="3" maxlength="2000" placeholder="Notas visíveis apenas para a equipe..." oninput="CNT_ED.notas = this.value">${escapeHtml(e.notas || '')}</textarea></details></div>
+          <div>
+            ${cntCampoTexto('legenda', video ? 'Roteiro / Legenda' : (e.tipo === 'copy' ? 'Texto' : 'Legenda'), video ? 'Gancho inicial, desenvolvimento, CTA final...' : 'Escreva a legenda do post...', 5)}
+            ${cntCampoTexto('briefing', 'Briefing / Referências', 'Links de referência, inspirações, observações...', 3)}
+            <label class="cnt-rot">Publicar em</label>
+            <div class="cnt-redes">${Object.entries(CNT_REDES).map(([k, n]) => `<button type="button" class="${(e.redes || []).includes(k) ? 'ativo' : ''}" onclick="CNT_ED.redes = (CNT_ED.redes || []).includes('${k}') ? CNT_ED.redes.filter((x) => x !== '${k}') : (CNT_ED.redes || []).concat(['${k}']); cntRenderEditor();">${n}</button>`).join('')}</div>
+            <div class="kb-campos-2"><div class="field"><label>${ic('calendario', 'ic-herda')} Data de publicação</label><input type="date" value="${escapeHtml(e.publicacao || '')}" onchange="CNT_ED.publicacao = this.value"></div><div class="field"><label>${ic('relogio', 'ic-herda')} Horário</label><input type="time" value="${escapeHtml(e.publicacaoHora || '')}" onchange="CNT_ED.publicacaoHora = this.value"></div></div>
+          </div>
+        </div>
+        ${video ? cntCampoTexto('roteiro', 'Roteiro', 'Roteiro do vídeo: falas, cenas, cortes...', 5) : ''}
+        <div class="kb-wiz-caixa"><strong>Checklist</strong>
+          ${(e.checklist || []).map((it, i) => `<div class="kb-m-check"><input type="checkbox" ${it.feito ? 'checked' : ''} onchange="CNT_ED.checklist[${i}].feito = this.checked" aria-label="Feito"><span style="flex:1;">${escapeHtml(it.texto)}</span><button type="button" class="kb-btn-ic" aria-label="Remover" onclick="CNT_ED.checklist.splice(${i}, 1); cntRenderEditor();">${ic('x', 'ic-herda')}</button></div>`).join('')}
+          <div class="kb-m-check-add"><input type="text" id="cnt-check-novo" maxlength="200" placeholder="Adicionar item..." onkeydown="if(event.key==='Enter'){ event.preventDefault(); cntAddCheck(); }"><button type="button" class="btn btn-small" aria-label="Adicionar item" onclick="cntAddCheck()">${ic('mais', 'ic-herda')}</button></div></div>
+      </div>
+      <aside class="cnt-ed-lado">
+        ${lado('camadas', 'Etapa', `<select onchange="CNT_ED.etapa = this.value">${opts(cntColunas().map((c) => [c.id, c.nome]), e.etapa)}</select>`)}
+        ${lado('aprovado', 'Status', `<select onchange="CNT_ED.status = this.value">${opts(Object.entries(CNT_STATUS), e.status)}</select>`)}
+        ${lado('usuario', 'Cliente', `<input type="text" list="cnt-lista-clientes" maxlength="100" value="${escapeHtml(e.cliente || '')}" placeholder="Nenhum" oninput="CNT_ED.cliente = this.value"><datalist id="cnt-lista-clientes">${clientes.map((c) => `<option value="${escapeHtml(c)}">`).join('')}</datalist>`)}
+        ${lado('pessoas', 'Responsável', `<select onchange="CNT_ED.responsavel = this.value"><option value="">Sem responsável</option>${opts(usuarios.map((u) => [u.uid, u.nome]), e.responsavel)}</select>`)}
+        ${lado('maleta', 'Projeto', `<select onchange="CNT_ED.projetoId = this.value"><option value="">Nenhum</option>${opts((typeof KB_PROJETOS !== 'undefined' ? KB_PROJETOS : []).filter((p) => !p.arquivado || p.id === e.projetoId).map((p) => [p.id, p.nome]), e.projetoId)}</select>`)}
+        ${lado('alerta', 'Prioridade', `<div class="cnt-prio">${Object.entries(CNT_PRIORIDADES).map(([k, p]) => `<button type="button" class="${e.prioridade === k ? 'ativo' : ''}" style="--c:${p.cor};" onclick="CNT_ED.prioridade = '${k}'; cntRenderEditor();">${p.nome}</button>`).join('')}</div>`)}
+        ${lado('calendario', 'Data de entrega', `<input type="date" value="${escapeHtml(e.entrega || '')}" onchange="CNT_ED.entrega = this.value">`)}
+        ${lado('relogio', 'Horário', `<input type="time" value="${escapeHtml(e.entregaHora || '')}" onchange="CNT_ED.entregaHora = this.value">`)}
+        ${lado('tag', 'Categoria', `<select onchange="CNT_ED.categoria = this.value">${opts(cntCategorias().map((n) => [n, n]), e.categoria)}</select>`)}
+        ${lado('documento', 'Tipo', `<select onchange="CNT_ED.tipo = this.value; cntRenderEditor();">${opts(Object.entries(CNT_TIPOS).map(([k, x]) => [k, x.nome]), e.tipo)}</select>`)}
+        <div class="kb-wiz-caixa kb-linha-switch"><div><strong>${ic('tarefas')} Tarefa vinculada</strong><span>${e.tarefaId ? 'Ligada a uma tarefa no Kanban' : 'Cria uma tarefa no Kanban pra esse conteúdo'}</span></div><label class="switch"><input type="checkbox" ${e.tarefaId || e.__criarTarefa ? 'checked' : ''} ${e.tarefaId ? 'disabled' : ''} onchange="CNT_ED.__criarTarefa = this.checked"><span class="switch-slider"></span></label></div>
+        <div class="kb-wiz-caixa kb-linha-switch"><div><strong>Usar em campanha de tráfego pago</strong><span>Marca o conteúdo pra equipe de tráfego</span></div><label class="switch"><input type="checkbox" ${e.trafego ? 'checked' : ''} onchange="CNT_ED.trafego = this.checked"><span class="switch-slider"></span></label></div>
+        <div class="cnt-lado-campo"><label>${ic('tag', 'ic-herda')} Tags</label>
+          <div class="kb-m-check-add"><input type="text" id="cnt-tag-nova" maxlength="30" placeholder="Adicionar tag..." onkeydown="if(event.key==='Enter'){ event.preventDefault(); cntAddTag(this.value); }"><button type="button" class="btn btn-small btn-primary" aria-label="Adicionar tag" onclick="cntAddTag(document.getElementById('cnt-tag-nova').value)">${ic('mais', 'ic-herda')}</button></div>
+          <div class="fin-itens">${(e.tags || []).map((tg, i) => `<span class="srv-tag ativo">${escapeHtml(tg)} <button type="button" aria-label="Remover" onclick="CNT_ED.tags.splice(${i}, 1); cntRenderEditor();">✕</button></span>`).join('')}${CNT_TAGS_SUGERIDAS.filter((tg) => !(e.tags || []).includes(tg)).map((tg) => `<button type="button" class="srv-tag" onclick="cntAddTag('${tg}')">+ ${tg}</button>`).join('')}</div></div>
+        <div class="kb-wiz-caixa"><strong>Baixar arquivos</strong><span class="kb-vazio-mini" style="display:block;">No link de aprovação: bloqueado, o cliente vê e aprova, mas não baixa.</span>
+          <div class="fin-seg" style="margin-top:8px;">${[['cliente', 'Como no cliente'], ['pode', 'Pode baixar'], ['bloqueado', 'Bloqueado']].map(([v, n]) => `<button type="button" class="${e.download === v ? 'ativo' : ''}" onclick="CNT_ED.download = '${v}'; cntRenderEditor();">${n}</button>`).join('')}</div></div>
+      </aside>
+    </div>
+    <div class="cnt-ed-rodape">
+      ${!e.__novo ? `<button type="button" class="btn btn-ghost" onclick="cntSalvarEditor(true).then((ok) => ok && cntEnviarAprovacao(CNT_ED ? CNT_ED.id : null))">${ic('link', 'ic-herda')} Enviar para aprovação</button>` : ''}
+      <button type="button" class="btn btn-ghost" onclick="cntSalvarComoModelo()">${ic('colunas', 'ic-herda')} Salvar como modelo</button>
+      <span class="kb-espaco"></span>
+      <button type="button" class="btn" onclick="srvFecharModal(); CNT_ED = null;">Cancelar</button>
+      <button type="button" class="btn" onclick="cntSalvarEditor(true)">${ic('aprovado', 'ic-herda')} Salvar</button>
+      ${e.__novo ? '<button type="button" class="btn btn-primary" onclick="cntSalvarEditor(false)">Criar</button>' : '<button type="button" class="btn btn-primary" onclick="cntSalvarEditor(false)">Salvar e fechar</button>'}
+    </div>
+  </div>`;
+  if (rolagem) { ov.querySelector('.cnt-ed-principal').scrollTop = rolagem[0]; ov.querySelector('.cnt-ed-lado').scrollTop = rolagem[1]; }
+}
+function cntAddCheck() {
+  const i = document.getElementById('cnt-check-novo'); const v = (i.value || '').trim();
+  if (!v) return;
+  CNT_ED.checklist = (CNT_ED.checklist || []).concat([{ id: genId('ck'), texto: v.slice(0, 200), feito: false }]);
+  cntRenderEditor(); setTimeout(() => { const n = document.getElementById('cnt-check-novo'); if (n) n.focus(); }, 0);
+}
+function cntAddTag(v) {
+  const t = String(v || '').trim().slice(0, 30);
+  if (!t || (CNT_ED.tags || []).includes(t)) return;
+  CNT_ED.tags = (CNT_ED.tags || []).concat([t]).slice(0, 15);
+  cntRenderEditor();
+}
+async function cntSalvarEditor(manterAberto) {
+  const e = CNT_ED;
+  if (!e) return false;
+  if (!String(e.titulo || '').trim()) { avisar('Dê um título pro conteúdo.'); return false; }
+  const midia = { url: String(e.midia.url || '').slice(0, 600), capaUrl: String(e.midia.capaUrl || '').slice(0, 600), paginas: (e.midia.paginas || []).map((u) => String(u).slice(0, 600)).filter(Boolean).slice(0, 20), formato: e.midia.formato };
+  const ruim = [midia.url, midia.capaUrl].concat(midia.paginas).find((u) => u && !/^https:\/\//i.test(u));
+  if (ruim) { avisar('Os links de mídia precisam começar com https://'); return false; }
+  const dados = { tipo: e.tipo, titulo: e.titulo.trim().slice(0, 140), etapa: e.etapa, status: e.status, cliente: String(e.cliente || '').trim().slice(0, 100), responsavel: e.responsavel, projetoId: e.projetoId, prioridade: e.prioridade,
+    entrega: e.entrega, entregaHora: e.entregaHora, publicacao: e.publicacao, publicacaoHora: e.publicacaoHora, categoria: e.categoria, redes: e.redes || [], legenda: String(e.legenda || '').slice(0, 5000),
+    briefing: String(e.briefing || '').slice(0, 5000), roteiro: String(e.roteiro || '').slice(0, 5000), notas: String(e.notas || '').slice(0, 2000), midia, checklist: e.checklist || [], tags: e.tags || [], trafego: !!e.trafego, download: e.download };
+  let salvo;
+  if (e.__novo) { salvo = cntCriar(dados); if (!salvo) return false; }
+  else {
+    const antes = CNT.find((x) => x.id === e.id);
+    const mudouEtapa = antes && antes.etapa !== dados.etapa;
+    if (!cntAtualizar(e.id, dados, mudouEtapa ? `Moveu de "${cntColuna(antes.etapa).nome}" para "${cntColuna(dados.etapa).nome}"` : 'Editou o conteúdo')) return false;
+    salvo = CNT.find((x) => x.id === e.id);
+  }
+  // tarefa vinculada no Kanban
+  if (e.__criarTarefa && !salvo.tarefaId && typeof kbCriarTarefa === 'function' && KB_CARREGADO) {
+    const t = kbCriarTarefa({ titulo: 'Conteúdo: ' + dados.titulo, cliente: dados.cliente, responsavel: dados.responsavel, prazo: dados.entrega, projetoId: dados.projetoId, etiquetas: ['conteúdo'] });
+    if (t) cntAtualizar(salvo.id, { tarefaId: t.id }, 'Criou a tarefa vinculada no Kanban');
+  }
+  if (manterAberto) { CNT_ED = Object.assign(finLimpar(salvo), { __novo: false }); cntRenderEditor(); }
+  else { srvFecharModal(); CNT_ED = null; }
+  return true;
+}
+
+// ---------- aprovação pelo cliente (link público) ----------
+// O cliente abre aprovacao.html?c=<código>, vê o conteúdo e responde.
+// A resposta vem pelo próprio documento público; o CRM aplica no conteúdo.
+function cntLinkAprovacao(token) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'aprovacao.html?c=' + encodeURIComponent(token); }
+async function cntEnviarAprovacao(id) {
+  const c = id && CNT.find((x) => x.id === id);
+  if (!c || !cntPronto()) return;
+  if (c.cliente && typeof portalEfetivo === 'function' && portalEfetivo(portalPadrao(), portalCfgCliente(c.cliente)).link === 'portal') {
+    cntAtualizar(c.id, { etapa: cntColunas().some((x) => x.id === 'aprovacao') ? 'aprovacao' : c.etapa, status: 'aguardando' }, 'Enviou para aprovação no portal do cliente');
+    avisar(`"${c.titulo || 'Conteúdo'}" está esperando a aprovação de ${c.cliente} no portal (${portalLink()}).`, 'Aprovação');
+    return;
+  }
+  const token = (c.aprovacao && c.aprovacao.token) || (genId('ap') + Math.random().toString(36).slice(2, 10));
+  const empresa = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '';
+  const pub = { tenantId: TENANT_ID || 'local', conteudoId: c.id, empresaNome: empresa, titulo: c.titulo, tipo: (CNT_TIPOS[c.tipo] || {}).nome || '', legenda: c.legenda || '', midia: c.midia || {}, cliente: c.cliente || '',
+    publicacao: c.publicacao || '', redes: (c.redes || []).map((r) => CNT_REDES[r]).filter(Boolean), download: c.download === 'bloqueado' ? 'bloqueado' : 'pode', resposta: '', comentario: '', respondidoEm: '', enviadoEm: new Date().toISOString() };
+  if (cntNuvem()) {
+    try { await firestoreDb.collection(CNT_PUB_COLECAO).doc(token).set(finLimpar(pub)); }
+    catch (err) { cntErro(err); return; }
+  }
+  const link = cntLinkAprovacao(token);
+  cntAtualizar(c.id, { aprovacao: { token, status: 'pendente', enviadoEm: pub.enviadoEm }, etapa: cntColunas().some((x) => x.id === 'aprovacao') ? 'aprovacao' : c.etapa, status: 'aguardando' }, 'Enviou para aprovação do cliente');
+  try { navigator.clipboard && navigator.clipboard.writeText(link); } catch (e) {}
+  avisar(`Link de aprovação copiado — mande pro cliente:\n${link}\n\nQuando ele responder, o conteúdo vai sozinho pra "Aprovado" ou "Revisão".`, 'Aprovação');
+}
+let CNT_APROV_ESCUTANDO = false;
+function cntEscutarAprovacoes() {
+  if (CNT_APROV_ESCUTANDO || !cntNuvem() || !nivelPodeOperar()) return;
+  CNT_APROV_ESCUTANDO = true;
+  firestoreDb.collection(CNT_PUB_COLECAO).where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
+    snap.forEach((d) => {
+      const p = d.data();
+      if (!p.resposta || p.aplicado || !CNT_CARREGADO) return;
+      const c = CNT.find((x) => x.id === p.conteudoId);
+      if (!c) return;
+      const aprovou = p.resposta === 'aprovado';
+      const destino = aprovou ? 'aprovado' : 'revisao';
+      cntAtualizar(c.id, { aprovacao: Object.assign({}, c.aprovacao, { status: p.resposta, comentario: p.comentario || '', respondidoEm: p.respondidoEm }), status: aprovou ? 'aprovado' : 'andamento', etapa: cntColunas().some((x) => x.id === destino) ? destino : c.etapa },
+        aprovou ? 'Cliente aprovou pelo link' : `Cliente pediu ajustes: "${String(p.comentario || '').slice(0, 150)}"`);
+      d.ref.set({ aplicado: true }, { merge: true }).catch(() => {});
+    });
+  }, (err) => console.error('Erro ao acompanhar aprovações:', err));
+}
+
+// página pública (aprovacao.html)
+let CNT_PUB = null;
+async function carregarAprovacaoConteudo() {
+  initFirebase();
+  const token = String(new URLSearchParams(location.search).get('c') || '').replace(/[^\w-]/g, '');
+  const el = document.getElementById('ap-conteudo');
+  const msg = (t, s) => { el.innerHTML = `<div class="ap-caixa"><h1>${escapeHtml(t)}</h1><p>${escapeHtml(s || '')}</p></div>`; };
+  if (!token || !firestoreDb) { msg('Link inválido', 'Confira o endereço com quem te enviou.'); return; }
+  try {
+    const snap = await firestoreDb.collection(CNT_PUB_COLECAO).doc(token).get();
+    if (!snap.exists) { msg('Conteúdo não encontrado', 'O link pode ter expirado.'); return; }
+    CNT_PUB = Object.assign({ token }, snap.data());
+    cntRenderAprovacaoPublica();
+  } catch (e) { msg('Conteúdo não encontrado', 'O link pode ter expirado.'); }
+}
+function cntRenderAprovacaoPublica() {
+  const p = CNT_PUB, el = document.getElementById('ap-conteudo'), m = p.midia || {};
+  const imgs = [m.capaUrl, m.url].concat(m.paginas || []).map(urlImagemSegura).filter(Boolean);
+  const links = [m.url].concat(m.paginas || []).filter((u) => /^https:\/\//i.test(u || '') && !urlImagemSegura(u));
+  el.innerHTML = `<div class="ap-caixa">
+    ${p.empresaNome ? `<div class="ap-empresa">${escapeHtml(p.empresaNome)}</div>` : ''}
+    <span class="ap-tipo">${escapeHtml(p.tipo)}</span><h1>${escapeHtml(p.titulo || 'Conteúdo')}</h1>
+    ${p.publicacao ? `<p class="ap-sub">Publicação prevista: ${escapeHtml(formatDatePt(p.publicacao))}${p.redes && p.redes.length ? ' · ' + escapeHtml(p.redes.join(', ')) : ''}</p>` : ''}
+    ${imgs.length ? `<div class="ap-midia">${imgs.map((u) => `<img src="${escapeHtml(u)}" alt="" oncontextmenu="${p.download === 'bloqueado' ? 'return false;' : ''}">`).join('')}</div>` : ''}
+    ${links.length ? `<div class="ap-links">${links.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener">${p.download === 'bloqueado' ? 'Ver' : 'Abrir / baixar'} arquivo ${links.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
+    ${p.download !== 'bloqueado' && imgs.length ? `<div class="ap-links">${imgs.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" download>Baixar imagem ${imgs.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
+    ${p.legenda ? `<div class="ap-legenda">${escapeHtml(p.legenda).replace(/\n/g, '<br>')}</div>` : ''}
+    ${p.resposta ? `<div class="ap-resp ${p.resposta === 'aprovado' ? 'ok' : ''}">${p.resposta === 'aprovado' ? '✓ Você aprovou este conteúdo. Obrigado!' : 'Você pediu ajustes. A equipe já foi avisada.'}${p.comentario ? `<p>${escapeHtml(p.comentario)}</p>` : ''}</div>`
+      : `<div class="ap-acoes"><textarea id="ap-comentario" maxlength="1000" rows="3" placeholder="Comentário (obrigatório se pedir ajustes)"></textarea>
+        <div class="ap-botoes"><button type="button" class="ap-btn ajuste" onclick="cntResponderAprovacao('ajustes')">Pedir ajustes</button><button type="button" class="ap-btn ok" onclick="cntResponderAprovacao('aprovado')">Aprovar</button></div><p class="ap-erro" id="ap-erro"></p></div>`}
+  </div>`;
+}
+async function cntResponderAprovacao(resposta) {
+  const com = (document.getElementById('ap-comentario').value || '').trim().slice(0, 1000);
+  if (resposta === 'ajustes' && !com) { document.getElementById('ap-erro').textContent = 'Conte o que precisa ajustar.'; return; }
+  const dados = { resposta: resposta === 'aprovado' ? 'aprovado' : 'ajustes', comentario: com, respondidoEm: new Date().toISOString() };
+  try {
+    await firestoreDb.collection(CNT_PUB_COLECAO).doc(CNT_PUB.token).set(dados, { merge: true });
+    Object.assign(CNT_PUB, dados);
+    cntRenderAprovacaoPublica();
+  } catch (e) { document.getElementById('ap-erro').textContent = 'Não foi possível enviar agora. Tente de novo.'; }
+}
+
+// tutorial
+if (typeof TOURS_CRM !== 'undefined') TOURS_CRM.conteudos = [
+  { alvo: '.cnt-cab h1', titulo: 'Produção de Conteúdos', texto: 'Aqui a equipe produz os posts, vídeos e peças de cada cliente, etapa por etapa.' },
+  { alvo: '.cnt-cab .btn-primary', titulo: 'Novo Conteúdo', texto: 'Escolha o tipo (Reels, Carrossel, Stories...) e preencha: mídia por link, legenda, roteiro, datas e responsável.' },
+  { alvo: '.cnt-filtros', titulo: 'Filtros', texto: 'Filtre por cliente, projeto, tipo, período e veja só os seus ou os atrasados.' },
+  { alvo: '.cnt-quadro', titulo: 'Quadro', texto: 'Arraste os cartões entre as etapas. "Iniciar" conta o tempo de trabalho e "Ver histórico" mostra tudo o que aconteceu.' },
+  { alvo: '#cnt-btn-mais', titulo: 'Gerar dos planos', texto: 'Os planos de conteúdo dos projetos (e os pacotes dos serviços) viram rascunhos aqui, com as datas já distribuídas.' },
+];
+
+
+// =====================================================================
+// ---------- Conteúdos · Entrega 2 ----------
+// Fixar clientes, abas Clientes e Prazos, Planejamento mensal e Modelos.
+// =====================================================================
+const CNT_MODELOS_KEY = 'eagles_conteudos_modelos_v1';
+const CNT_FIXADOS_KEY = 'eagles_conteudos_fixados_v1'; // por pessoa (neste navegador)
+let CNT_MODELOS = null;
+const CNT_MODELOS_PADRAO = [
+  { id: 'cm-promo', nome: 'Post promocional', tipo: 'imagem', categoria: 'Social Media', redes: ['instagram', 'facebook'], legenda: '🔥 [Oferta / novidade]\n\n[Benefício principal em 1 frase]\n\n👉 [Chamada para ação]', briefing: 'Destacar o preço/condição. Logo visível.', checklist: ['Texto da arte', 'Arte', 'Legenda', 'Aprovação'], tags: ['Prioridade'] },
+  { id: 'cm-reels', nome: 'Reels tutorial', tipo: 'reels', categoria: 'Social Media', redes: ['instagram'], legenda: '[Gancho nos 3 primeiros segundos]\n\nPasso 1...\nPasso 2...\nPasso 3...\n\nSalve pra não esquecer!', roteiro: 'Gancho (0-3s) → Problema → Passos → CTA final', checklist: ['Roteiro', 'Gravação', 'Edição', 'Legenda', 'Capa'], tags: ['Reels'] },
+  { id: 'cm-carrossel', nome: 'Carrossel educativo', tipo: 'carrossel', categoria: 'Social Media', redes: ['instagram', 'linkedin'], legenda: '[Título que gera curiosidade]\n\nArrasta pro lado →', briefing: 'Capa forte, 5 a 8 páginas, última com CTA.', checklist: ['Pauta', 'Textos das páginas', 'Design', 'Legenda'], tags: ['Carrossel'] },
+  { id: 'cm-stories', nome: 'Stories de bastidores', tipo: 'stories', categoria: 'Social Media', redes: ['instagram'], legenda: '', briefing: 'Sequência de 3 a 5 stories mostrando o dia a dia. Usar enquete na última.', checklist: ['Captação', 'Edição', 'Enquete/CTA'], tags: ['Story'] },
+];
+
+function cntIniciarEntrega2() {
+  if (CNT_MODELOS !== null) return;
+  CNT_MODELOS = CNT_MODELOS_PADRAO.slice();
+  cloudWatch(CNT_MODELOS_KEY, CNT_MODELOS_PADRAO, (d) => { CNT_MODELOS = Array.isArray(d) ? d : CNT_MODELOS_PADRAO.slice(); });
+}
+
+// ---------- Fixar aqui (clientes fixados no topo) ----------
+function cntFixados() { try { return JSON.parse(localStorage.getItem(chaveLocalTenant(CNT_FIXADOS_KEY)) || '[]').filter((x) => typeof x === 'string'); } catch (e) { return []; } }
+function cntSalvarFixados(l) { try { localStorage.setItem(chaveLocalTenant(CNT_FIXADOS_KEY), JSON.stringify(l.slice(0, 12))); } catch (e) {} cntRender(); }
+function cntHtmlFixados() {
+  const fix = cntFixados();
+  return `<div class="cnt-fixados">${fix.map((n) => `<button type="button" class="cnt-fixado${CNT_FILTRO.cliente === n ? ' ativo' : ''}" title="${escapeHtml(n)}" onclick="CNT_FILTRO.cliente = CNT_FILTRO.cliente === ${escapeHtml(JSON.stringify(n))} ? '' : ${escapeHtml(JSON.stringify(n))}; CNT_ABA = 'producao'; cntRender();"><span class="cnt-fixado-av">${escapeHtml(initials(n))}</span><span class="cnt-fixado-nome">${escapeHtml(n)}</span></button>`).join('')}
+    <button type="button" class="cnt-fixado cnt-fixar" title="Fixar um cliente aqui" id="cnt-btn-fixar" onclick="cntAbrirFixar(this)"><span class="cnt-fixado-av">${ic('mais', 'ic-herda')}</span><span class="cnt-fixado-nome">Fixar aqui</span></button></div>`;
+}
+function cntAbrirFixar(ancora) {
+  const fix = cntFixados();
+  const clientes = Array.from(new Set(CNT.map((c) => c.cliente).filter(Boolean).concat(typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []))).sort((a, b) => a.localeCompare(b));
+  kbMostrarPopover(`<div class="kb-pop-titulo">Fixar cliente no topo</div>${clientes.map((n) => `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); cntAlternarFixado(${escapeHtml(JSON.stringify(n))})">${fix.includes(n) ? kbIc('x') : kbIc('mais')}<span>${escapeHtml(n)}</span><em>${fix.includes(n) ? 'desafixar' : ''}</em></button>`).join('') || '<div class="kb-pop-form"><p class="kb-vazio-mini" style="margin:0;">Nenhum cliente ainda.</p></div>'}`, ancora);
+}
+function cntAlternarFixado(nome) { const f = cntFixados(); cntSalvarFixados(f.includes(nome) ? f.filter((x) => x !== nome) : f.concat([nome])); }
+
+// ---------- aba Clientes ----------
+function cntHtmlAbaClientes() {
+  const porCliente = new Map();
+  CNT.forEach((c) => { const k = c.cliente || 'Sem cliente'; (porCliente.get(k) || porCliente.set(k, []).get(k)).push(c); });
+  const cols = cntColunas();
+  const cards = Array.from(porCliente.entries()).sort((a, b) => b[1].length - a[1].length).map(([nome, lista]) => {
+    const atrasados = lista.filter(cntAtrasoDias).length, feitos = lista.filter(cntFinalizado).length;
+    const prox = lista.filter((c) => !cntFinalizado(c) && c.publicacao && c.publicacao >= finHoje()).sort((a, b) => a.publicacao.localeCompare(b.publicacao))[0];
+    const n = escapeHtml(JSON.stringify(nome === 'Sem cliente' ? '' : nome));
+    return `<button type="button" class="cnt-cli" onclick="CNT_FILTRO.cliente = ${n}; CNT_ABA = 'producao'; cntRender();">
+      <div class="cnt-cli-cab"><span class="cnt-fixado-av">${escapeHtml(initials(nome))}</span><div><strong>${escapeHtml(nome)}</strong><small>${lista.length} conteúdo(s) · ${feitos} finalizado(s)</small></div></div>
+      <div class="cnt-cli-barra">${cols.map((col) => { const q = lista.filter((c) => c.etapa === col.id).length; return q ? `<i style="flex:${q}; background:${corHexValida(col.cor) || '#64748b'};" title="${escapeHtml(col.nome)}: ${q}"></i>` : ''; }).join('')}</div>
+      <div class="cnt-cli-linhas"><span>${atrasados ? `<b class="fin-vermelho">${atrasados} atrasado(s)</b>` : '<span class="fin-verde">Em dia</span>'}</span>${prox ? `<span>Próxima publicação: ${kbDataCurta(prox.publicacao)}</span>` : ''}</div>
+    </button>`;
+  });
+  return cards.length ? `<div class="cnt-clientes">${cards.join('')}</div>` : `<div class="kb-vazio-grande"><div class="ic-circulo">${ic('pessoas')}</div><h3>Nenhum conteúdo ainda</h3><p>Crie conteúdos e eles aparecem aqui agrupados por cliente.</p></div>`;
+}
+
+// ---------- aba Prazos ----------
+function cntHtmlAbaPrazos() {
+  const hoje = finHoje(), amanha = kbSomarDias(hoje, 1);
+  const dow = new Date(hoje + 'T12:00:00').getDay();
+  const fimSemana = kbSomarDias(hoje, 6 - dow), fimProx = kbSomarDias(fimSemana, 7);
+  const abertos = CNT.filter((c) => !cntFinalizado(c)).filter((c) => !CNT_FILTRO.cliente || c.cliente === CNT_FILTRO.cliente);
+  const grupos = [
+    ['Atrasados', (c) => c.entrega && c.entrega < hoje, 'var(--danger)'], ['Hoje', (c) => c.entrega === hoje, 'var(--warning)'], ['Amanhã', (c) => c.entrega === amanha, '#3b82f6'],
+    ['Esta semana', (c) => c.entrega > amanha && c.entrega <= fimSemana, '#3b82f6'], ['Próxima semana', (c) => c.entrega > fimSemana && c.entrega <= fimProx, '#8b5cf6'],
+    ['Mais tarde', (c) => c.entrega > fimProx, '#64748b'], ['Sem data de entrega', (c) => !c.entrega, '#64748b'],
+  ];
+  const usados = new Set();
+  const blocos = grupos.map(([nome, f, cor]) => {
+    const l = abertos.filter((c) => !usados.has(c.id) && f(c)).sort((a, b) => (a.entrega || '').localeCompare(b.entrega || ''));
+    l.forEach((c) => usados.add(c.id));
+    if (!l.length) return '';
+    return `<div class="cnt-prazo-grupo"><div class="cnt-prazo-tit" style="--c:${cor};">${nome} <span>${l.length}</span></div>
+      ${l.map((c) => { const id = escapeParaOnclick(c.id); const at = cntAtrasoDias(c); return `<div class="cnt-prazo-linha">
+        <span class="cnt-chip" style="--c:${(CNT_TIPOS[c.tipo] || {}).cor || '#64748b'};">${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}</span>
+        <button type="button" class="kb-tabela-titulo" onclick="cntAbrirEditor('${id}')">${escapeHtml(c.titulo || 'Sem título')}</button>
+        <span class="kb-vazio-mini">${escapeHtml(c.cliente || '')}</span><span class="kb-espaco"></span>
+        ${c.entrega ? `<span class="${at ? 'fin-vermelho' : ''}">${kbDataCurta(c.entrega)}${c.entregaHora ? ' ' + escapeHtml(c.entregaHora) : ''}${at ? ` · ${at}d` : ''}</span>` : ''}
+        ${c.responsavel ? kbAvatar(c.responsavel, 'p') : ''}
+        <select class="nivel-select" aria-label="Etapa" onchange="cntMover('${id}', this.value)">${cntColunas().map((col) => `<option value="${escapeHtml(col.id)}"${col.id === c.etapa ? ' selected' : ''}>${escapeHtml(col.nome)}</option>`).join('')}</select>
+      </div>`; }).join('')}</div>`;
+  }).join('');
+  return blocos || `<div class="kb-vazio-grande"><div class="ic-circulo">${ic('aprovado')}</div><h3>Nada pendente</h3><p>Todos os conteúdos${CNT_FILTRO.cliente ? ' deste cliente' : ''} estão finalizados.</p></div>`;
+}
+
+// ---------- Planejamento mensal ----------
+let CNT_PLAN = null;
+function cntAbrirPlanejamento() {
+  if (!cntPronto()) return;
+  CNT_PLAN = { cliente: CNT_FILTRO.cliente || '', mes: CNT_FILTRO.mes || finMesAtual(), qtd: {}, datas: 'uniforme', dias: [1, 3, 5], responsavel: kbMeuUid() };
+  cntRenderPlanejamento();
+  openModal('modal-srv');
+}
+function cntRenderPlanejamento() {
+  const p = CNT_PLAN, ov = srvGarantirModal();
+  const clientes = Array.from(new Set(CNT.map((c) => c.cliente).filter(Boolean).concat(typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []))).sort((a, b) => a.localeCompare(b));
+  const doMes = CNT.filter((c) => (!p.cliente || c.cliente === p.cliente) && (c.publicacao || c.entrega || '').startsWith(p.mes));
+  const total = Object.values(p.qtd).reduce((a, n) => a + (Number(n) || 0), 0);
+  const usuarios = typeof KB_USUARIOS !== 'undefined' ? KB_USUARIOS : [];
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:620px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${ic('tarefas')} Planejamento mensal</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub" style="margin-top:-8px;">Diga quantos conteúdos de cada tipo o cliente vai ter no mês e o sistema cria os rascunhos, com as datas distribuídas.</p>
+    <div class="kb-campos-2">
+      <div class="field"><label>Cliente</label><input type="text" list="cnt-plan-clientes" maxlength="100" value="${escapeHtml(p.cliente)}" placeholder="Escolha o cliente" oninput="CNT_PLAN.cliente = this.value" onchange="cntRenderPlanejamento()"><datalist id="cnt-plan-clientes">${clientes.map((c) => `<option value="${escapeHtml(c)}">`).join('')}</datalist></div>
+      <div class="field"><label>Mês</label><input type="month" value="${escapeHtml(p.mes)}" onchange="if (this.value) { CNT_PLAN.mes = this.value; cntRenderPlanejamento(); }"></div>
+    </div>
+    <div class="kb-wiz-caixa"><strong>Já existe nesse mês${p.cliente ? ' para ' + escapeHtml(p.cliente) : ''}:</strong> ${doMes.length ? Object.entries(doMes.reduce((m, c) => { m[c.tipo] = (m[c.tipo] || 0) + 1; return m; }, {})).map(([t, n]) => `<span class="cnt-chip" style="--c:${(CNT_TIPOS[t] || {}).cor};">${n} ${escapeHtml((CNT_TIPOS[t] || {}).nome || t)}</span>`).join(' ') : '<span class="kb-vazio-mini">nada ainda</span>'}</div>
+    <div class="kb-bloco-tipos" style="max-height:280px;">${Object.entries(CNT_TIPOS).map(([k, t]) => { const n = Number(p.qtd[k]) || 0; return `<div class="kb-bloco-tipo"><span class="kb-tipo-ic" style="--kb-cor:${t.cor};">${ic(t.icone, 'ic-herda')}</span><span class="kb-tipo-nome">${escapeHtml(t.nome)}</span>
+      <span class="kb-contador-qtd"><button type="button" aria-label="Menos" onclick="CNT_PLAN.qtd['${k}'] = Math.max(0, (CNT_PLAN.qtd['${k}'] || 0) - 1); cntRenderPlanejamento();">−</button><input type="number" min="0" max="60" value="${n}" aria-label="Quantidade" onchange="CNT_PLAN.qtd['${k}'] = Math.max(0, Math.min(60, Math.round(Number(this.value) || 0))); cntRenderPlanejamento();"><button type="button" aria-label="Mais" onclick="CNT_PLAN.qtd['${k}'] = Math.min(60, (CNT_PLAN.qtd['${k}'] || 0) + 1); cntRenderPlanejamento();">+</button></span></div>`; }).join('')}</div>
+    <div class="kb-campos-2" style="margin-top:12px;">
+      <div class="field"><label>Datas</label><select onchange="CNT_PLAN.datas = this.value; cntRenderPlanejamento();">${[['uniforme', 'Espalhar uniformemente'], ['semana', 'Dias específicos da semana'], ['rascunho', 'Sem data (rascunho)']].map(([v, t]) => `<option value="${v}"${p.datas === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="field"><label>Responsável</label><select onchange="CNT_PLAN.responsavel = this.value"><option value="">Sem responsável</option>${usuarios.map((u) => `<option value="${escapeHtml(u.uid)}"${p.responsavel === u.uid ? ' selected' : ''}>${escapeHtml(u.nome)}</option>`).join('')}</select></div>
+    </div>
+    ${p.datas === 'semana' ? `<div class="kb-dias">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((n, di) => `<label class="kb-dia${p.dias.includes(di) ? ' ativo' : ''}"><input type="checkbox" ${p.dias.includes(di) ? 'checked' : ''} onchange="CNT_PLAN.dias = this.checked ? CNT_PLAN.dias.concat([${di}]) : CNT_PLAN.dias.filter((x) => x !== ${di}); cntRenderPlanejamento();">${n}</label>`).join('')}</div>` : ''}
+    <div class="cfg-modal-rodape"><span class="kb-vazio-mini">${total} conteúdo(s) serão criados em rascunho</span><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" ${total ? '' : 'disabled'} onclick="cntGerarPlanejamento()">Criar ${total} rascunho(s)</button></div>
+  </div>`;
+}
+function cntGerarPlanejamento() {
+  const p = CNT_PLAN;
+  if (!p.cliente.trim()) { avisar('Escolha o cliente.'); return; }
+  if (p.datas === 'semana' && !p.dias.length) { avisar('Escolha pelo menos um dia da semana.'); return; }
+  let n = 0;
+  Object.entries(p.qtd).forEach(([tipo, q]) => {
+    q = Number(q) || 0;
+    const datas = cntDatasDoMes(p.mes, q, p.datas, p.dias);
+    for (let i = 0; i < q; i++) if (cntCriar({ tipo, titulo: `${CNT_TIPOS[tipo].nome} ${i + 1}/${q} — ${finNomeMes(p.mes)}`, cliente: p.cliente.trim().slice(0, 100), responsavel: p.responsavel, publicacao: datas[i], entrega: datas[i] ? kbSomarDias(datas[i], -2) : '', origem: { planejamento: p.mes } })) n++;
+  });
+  srvFecharModal();
+  CNT_FILTRO.cliente = p.cliente.trim(); CNT_ABA = 'producao'; cntRender();
+  avisar(`${n} rascunho(s) criados para ${p.cliente} em ${finNomeMes(p.mes)}.`, 'Planejamento');
+}
+
+// ---------- Modelos ----------
+function cntAbrirModelos() {
+  cntIniciarEntrega2();
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${ic('colunas')} Modelos de conteúdo</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub" style="margin-top:-8px;">Comece um conteúdo já com legenda base, briefing, checklist e tags. Pra criar o seu, abra um conteúdo e use "Salvar como modelo".</p>
+    ${(CNT_MODELOS || []).map((m) => { const t = CNT_TIPOS[m.tipo] || CNT_TIPOS.imagem; const mid = escapeParaOnclick(m.id); return `<div class="kb-modelo"><span class="kb-tipo-ic" style="--kb-cor:${t.cor};">${ic(t.icone, 'ic-herda')}</span>
+      <div style="flex:1; min-width:0;"><strong>${escapeHtml(m.nome)}</strong><div class="kb-modelo-info">${escapeHtml(t.nome)} · ${(m.checklist || []).length} itens no checklist</div></div>
+      <button type="button" class="btn btn-small btn-primary" onclick="cntUsarModelo('${mid}')">Usar</button>
+      <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir modelo" onclick="cntExcluirModelo('${mid}')">${ic('lixeira', 'ic-herda')}</button></div>`; }).join('') || '<p class="kb-vazio">Nenhum modelo.</p>'}
+    ${CNT_MODELOS_PADRAO.some((m) => !(CNT_MODELOS || []).some((x) => x.id === m.id)) ? '<div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn btn-small" onclick="cntCompletarModelos()">Adicionar os modelos prontos que faltam</button></div>' : ''}
+  </div>`;
+  openModal('modal-srv');
+}
+function cntUsarModelo(id) {
+  const m = (CNT_MODELOS || []).find((x) => x.id === id);
+  if (!m || !cntPronto()) return;
+  cntAbrirEditor(null, m.tipo);
+  Object.assign(CNT_ED, { categoria: m.categoria || CNT_ED.categoria, redes: (m.redes || CNT_ED.redes).slice(), legenda: m.legenda || '', briefing: m.briefing || '', roteiro: m.roteiro || '',
+    checklist: (m.checklist || []).map((texto) => ({ id: genId('ck'), texto, feito: false })), tags: Array.from(new Set((m.tags || []).concat(CNT_ED.tags || []))) });
+  cntRenderEditor();
+}
+function cntSalvarComoModelo() {
+  const e = CNT_ED;
+  if (!e || !exigirPodeOperar('criar modelos')) return;
+  cntIniciarEntrega2();
+  const nome = String(e.titulo || '').trim() || (CNT_TIPOS[e.tipo] || {}).nome || 'Modelo';
+  const novo = { id: genId('cm'), nome: nome.slice(0, 80), tipo: e.tipo, categoria: e.categoria, redes: (e.redes || []).slice(), legenda: e.legenda || '', briefing: e.briefing || '', roteiro: e.roteiro || '', checklist: (e.checklist || []).map((c) => c.texto), tags: (e.tags || []).slice() };
+  const lista = (CNT_MODELOS || []).concat([novo]);
+  if (cloudSet(CNT_MODELOS_KEY, lista) === false) return;
+  CNT_MODELOS = lista;
+  avisar(`"${novo.nome}" agora é um modelo. Use em Modelos → Usar.`, 'Modelo salvo');
+}
+function cntExcluirModelo(id) {
+  const m = (CNT_MODELOS || []).find((x) => x.id === id);
+  if (!m || !exigirPodeOperar('excluir modelos')) return;
+  confirmarAcao(`Excluir o modelo "${m.nome}"? Os conteúdos já criados com ele não mudam.`, () => {
+    const lista = CNT_MODELOS.filter((x) => x.id !== id);
+    if (cloudSet(CNT_MODELOS_KEY, lista) === false) return;
+    CNT_MODELOS = lista;
+    cntAbrirModelos();
+  }, 'Excluir modelo');
+}
+function cntCompletarModelos() {
+  const lista = (CNT_MODELOS || []).concat(CNT_MODELOS_PADRAO.filter((m) => !(CNT_MODELOS || []).some((x) => x.id === m.id)));
+  if (cloudSet(CNT_MODELOS_KEY, lista) === false) return;
+  CNT_MODELOS = lista;
+  cntAbrirModelos();
+}
+
+
+// =====================================================================
+// ---------- Portal do Cliente (lado da equipe, no CRM) ----------
+// =====================================================================
+// O cliente entra com login próprio (papel "Cliente"): só vê os
+// conteúdos DELE (regras do banco), não conta no limite de usuários e
+// não abre CRM/ERP. A configuração da agência (Configurações → Portal do
+// Cliente) é o padrão; cada cliente pode ter ajustes próprios.
+// O portal lê duas cópias: tenants/{id}/portal/_padrao e .../portal/<cliente>.
+
+const PORTAL_CLIENTES_KEY = 'eagles_portal_clientes_v1';
+let PORTAL_CLIENTES = {};
+let PORTAL_LOGINS = [];
+let PORTAL_INICIADO = false;
+let PORTAL_ABA = 'clientes';
+let PORTAL_FILTRO = { busca: '', tipo: 'todos' };
+let PORTAL_HOST = null;
+const PORTAL_PERMISSOES = [
+  ['sugerir', 'Sugerir ideias de post', 'Aba para mandar referências, links e arquivos.'],
+  ['servicos', 'Solicitar serviços', 'Pedido de orçamento com prazo e anexos.'],
+  ['baixar', 'Baixar arquivos', 'Botões de download nas artes e vídeos.'],
+  ['postado', 'Marcar como postado', 'Para quem posta por conta própria: botão em cada conteúdo para avisar que já foi ao ar. Atualiza o quadro da agência.'],
+];
+const PORTAL_ABAS = [
+  ['producao', 'Produção', 'Em que etapa cada conteúdo está.'], ['calendario', 'Calendário', 'O mês nas datas de publicação.'],
+  ['agendados', 'Agendados', 'O que está na fila e o que já foi ao ar.'], ['feed', 'Feed', 'Prévia de como o perfil vai ficar.'],
+  ['instagram', 'Modo Instagram', 'Aprovação no formato do Instagram.'], ['materiais', 'Materiais', 'Histórico do que já foi aprovado, para baixar.'],
+  ['relatorio', 'Relatório', 'Resumo do mês, com PDF.'],
+];
+const PORTAL_VISIVEIS = [['aguardando', 'Aguardando aprovação', '#f59e0b'], ['revisao', 'Em revisão', '#f97316'], ['aprovado', 'Aprovados', '#22c55e'], ['publicado', 'Publicados', '#06b6d4'], ['rascunho', 'Rascunhos', '#64748b']];
+
+// padrão da agência (a partir da configuração de Configurações → Portal do Cliente)
+function portalPadrao() {
+  const c = mesclarComPadrao(portalConfigPadrao(), CFG_PORTAL_DATA);
+  const ex = (CFG_PORTAL_DATA && CFG_PORTAL_DATA.padroes) || {}; // mesclarComPadrao só copia campos que o padrão conhece
+  return {
+    marca: c.nomeMarca || (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '', logoUrl: c.logoUrl || '', cor: corHexValida(c.corBotao) || '#7c3aed',
+    perm: Object.assign({ sugerir: !!c.solicitacoes.sugestoesPost, servicos: !!c.solicitacoes.permitirSolicitacoes, baixar: !!c.permissoes.baixarArquivos, postado: false }, ex.perm || {}),
+    abas: Object.assign({ producao: c.solicitacoes.abaProducao !== false, calendario: true, agendados: true, feed: true, instagram: true, materiais: true, relatorio: !!c.solicitacoes.abaRelatorio }, ex.abas || {}),
+    visiveis: Object.assign({ aguardando: c.visibilidade.emAprovacao !== false, revisao: c.visibilidade.emRevisao !== false, aprovado: c.visibilidade.aprovado !== false, publicado: c.visibilidade.publicado !== false, rascunho: !!c.visibilidade.emProducao }, ex.visiveis || {}),
+    link: ex.link || 'post', pedidos: ex.pedidos || 'kanban',
+  };
+}
+function portalSlug(nome) { return 'c_' + (kbNomeNorm(nome).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'cliente'); }
+function portalCfgCliente(nome) { return PORTAL_CLIENTES[nome] || {}; }
+// efetivo = padrão da agência + o que o cliente tem de próprio ('padrao' | true | false)
+function portalEfetivo(padrao, cfg) {
+  const r = (grupo, k) => { const v = ((cfg || {})[grupo] || {})[k]; return v === true || v === false ? v : padrao[grupo][k]; };
+  return {
+    marca: padrao.marca, logoUrl: (cfg && cfg.logoUrl) || padrao.logoUrl, cor: padrao.cor, recado: (cfg && cfg.recado) || '',
+    perm: Object.fromEntries(Object.keys(padrao.perm).map((k) => [k, r('perm', k)])),
+    abas: Object.fromEntries(Object.keys(padrao.abas).map((k) => [k, r('abas', k)])),
+    visiveis: Object.fromEntries(Object.keys(padrao.visiveis).map((k) => [k, r('visiveis', k)])),
+    link: (cfg && cfg.link && cfg.link !== 'padrao') ? cfg.link : padrao.link,
+    pedidos: (cfg && cfg.pedidos && cfg.pedidos !== 'padrao') ? cfg.pedidos : padrao.pedidos,
+  };
+}
+
+function portalIniciarDados() {
+  if (PORTAL_INICIADO) return;
+  PORTAL_INICIADO = true;
+  cloudWatch(CFG_PORTAL_KEY, portalConfigPadrao(), (d) => { CFG_PORTAL_DATA = d; CFG_PORTAL_CARREGADO = true; portalRender(); });
+  cloudWatch(PORTAL_CLIENTES_KEY, {}, (d) => { PORTAL_CLIENTES = d && typeof d === 'object' ? d : {}; portalRender(); });
+  if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
+    try {
+      firestoreDb.collection('usuarios').where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
+        PORTAL_LOGINS = []; snap.forEach((d) => { const u = d.data(); if (u.role === 'Cliente') PORTAL_LOGINS.push(Object.assign({ uid: d.id }, u)); });
+        portalRender();
+      }, () => {});
+    } catch (e) { console.error(e); }
+  }
+}
+function portalLink() { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'portal.html'; }
+function portalClientes() {
+  const nomes = new Set((typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []).concat(Object.keys(PORTAL_CLIENTES), PORTAL_LOGINS.map((l) => l.clienteNome)).filter(Boolean));
+  return Array.from(nomes).sort((a, b) => a.localeCompare(b));
+}
+
+function portalMontar(host) { PORTAL_HOST = host; portalIniciarDados(); if (typeof cntIniciarDados === 'function') { /* conteúdos carregam sob demanda */ } portalRender(); }
+function portalRender() {
+  const host = PORTAL_HOST;
+  if (!host || !host.isConnected || host.style.display === 'none') return;
+  const ativo = document.activeElement, foco = ativo && host.contains(ativo) && ativo.id ? ativo.id : null;
+  const clientes = portalClientes();
+  const comLogin = new Set(PORTAL_LOGINS.map((l) => l.clienteNome));
+  const personalizados = clientes.filter((n) => Object.keys(portalCfgCliente(n)).length);
+  const b = kbNomeNorm(PORTAL_FILTRO.busca);
+  const lista = clientes.filter((n) => (!b || kbNomeNorm(n).includes(b)) && (PORTAL_FILTRO.tipo === 'todos' || (PORTAL_FILTRO.tipo === 'login' && comLogin.has(n)) || (PORTAL_FILTRO.tipo === 'personalizados' && personalizados.includes(n))));
+  host.innerHTML = `<div class="portal-equipe">
+    <div class="fin-cab"><div><h1 style="display:flex; align-items:center; gap:8px;">${ic('globo')} Portal do cliente</h1><p>Onde seus clientes aprovam, acompanham a produção e mandam material.</p></div><span class="kb-espaco"></span>
+      <button type="button" class="btn" onclick="navigator.clipboard && navigator.clipboard.writeText(portalLink()); avisar('Link do portal copiado: ' + portalLink() + '\\n\\nO cliente entra com o e-mail e a senha do login dele.', 'Portal')">${ic('copiar', 'ic-herda')} Copiar link</button>
+      <button type="button" class="btn" onclick="portalAbrirPrevia()">${ic('abrir', 'ic-herda')} Abrir portal</button>
+      <button type="button" class="btn btn-primary" onclick="PORTAL_ABA = 'aparencia'; portalRender();">${ic('paleta', 'ic-herda')} Aparência e padrões</button></div>
+    <div class="kb-segmento" style="margin-bottom:12px;">${[['clientes', 'Clientes'], ['aparencia', 'Aparência e padrões']].map(([a, t]) => `<button type="button" class="${PORTAL_ABA === a ? 'ativo' : ''}" onclick="PORTAL_ABA = '${a}'; portalRender();">${t}</button>`).join('')}</div>
+    ${PORTAL_ABA === 'aparencia' ? portalHtmlPadroes() : `
+    <div class="portal-resumo"><span><b>${clientes.length}</b> clientes</span><span><b>${comLogin.size}</b> com login no portal</span><span><b>${personalizados.length}</b> com configuração própria</span><small>"Aparência e padrões" vale para todos; cada cliente pode ter o próprio ajuste.</small></div>
+    <div class="srv-acoes"><label class="kb-busca" style="flex:1; max-width:none;">${kbIc('busca')}<input type="search" id="portal-busca" placeholder="Buscar cliente..." value="${escapeHtml(PORTAL_FILTRO.busca)}" oninput="PORTAL_FILTRO.busca = this.value; portalRender();"></label>
+      ${[['todos', 'Todos'], ['login', 'Com login'], ['personalizados', 'Personalizados']].map(([v, t]) => `<button type="button" class="btn${PORTAL_FILTRO.tipo === v ? ' btn-primary' : ''}" onclick="PORTAL_FILTRO.tipo = '${v}'; portalRender();">${t}</button>`).join('')}</div>
+    <div class="fin-painel" style="padding:0;">${lista.map((n) => { const nn = escapeHtml(JSON.stringify(n)); const nl = PORTAL_LOGINS.filter((l) => l.clienteNome === n).length; return `<div class="portal-linha">
+      <span class="cnt-fixado-av">${escapeHtml(initials(n))}</span><div style="flex:1; min-width:0;"><strong>${escapeHtml(n)}</strong><div><span class="srv-tag">${nl ? nl + ' login(s)' : 'Sem login'}</span>${Object.keys(portalCfgCliente(n)).length ? ' <span class="srv-tag ativo">Personalizado</span>' : ''}</div></div>
+      <button type="button" class="btn btn-small" onclick="portalAbrirConfig(${nn})">${ic('configuracoes', 'ic-herda')} Configurar</button>
+      <button type="button" class="btn btn-small" onclick="portalAbrirLogins(${nn})">${ic('usuario', 'ic-herda')} Logins</button></div>`; }).join('') || '<p class="kb-vazio" style="padding:20px;">Nenhum cliente encontrado. Os clientes vêm de CRM → Clientes.</p>'}</div>`}
+  </div>`;
+  if (foco) { const i = document.getElementById(foco); if (i) { i.focus(); try { i.setSelectionRange(i.value.length, i.value.length); } catch (e) {} } }
+}
+function portalAbrirPrevia() {
+  const n = portalClientes()[0];
+  if (!n) { avisar('Cadastre um cliente primeiro (CRM → Clientes).'); return; }
+  window.open('portal.html?previa=' + encodeURIComponent(n), '_blank');
+}
+
+// ---------- padrões da agência ----------
+let PORTAL_PAD_EDIT = null;
+function portalHtmlPadroes() {
+  if (!PORTAL_PAD_EDIT) PORTAL_PAD_EDIT = portalPadrao();
+  const p = PORTAL_PAD_EDIT;
+  const linha = (grupo, k, t, d) => `<div class="portal-op"><div><strong>${t}</strong><small>${d}</small></div><label class="switch"><input type="checkbox" ${p[grupo][k] ? 'checked' : ''} onchange="PORTAL_PAD_EDIT.${grupo}['${k}'] = this.checked"><span class="switch-slider"></span></label></div>`;
+  const esc = (campo, ops) => `<div class="fin-seg">${ops.map(([v, t, s]) => `<button type="button" class="${p[campo] === v ? 'ativo' : ''}" onclick="PORTAL_PAD_EDIT.${campo} = '${v}'; portalRender();">${t}<small style="display:block; font-weight:400;">${s}</small></button>`).join('')}</div>`;
+  return `<div class="fin-painel">
+    <div class="fin-painel-cab"><strong>Logo, cores e tela de login</strong><span class="kb-espaco"></span><a class="btn btn-small" href="configuracoes.html#portal">${ic('paleta', 'ic-herda')} Editar em Configurações</a></div>
+    <p class="kb-vazio-mini" style="margin:0;">Marca: <b>${escapeHtml(p.marca || '—')}</b> · cor <span class="kb-bolinha" style="background:${p.cor};"></span> ${p.logoUrl ? '· com logo' : '· sem logo'}</p></div>
+    <div class="fin-painel"><div class="cfg-secao-rotulo" style="margin-top:0;">O que o cliente pode fazer (padrão)</div>${PORTAL_PERMISSOES.map(([k, t, d]) => linha('perm', k, t, d)).join('')}
+    <div class="cfg-secao-rotulo">Abas que o cliente vê (padrão)</div>${PORTAL_ABAS.map(([k, t, d]) => linha('abas', k, t, d)).join('')}
+    <div class="cfg-secao-rotulo">Conteúdos visíveis (padrão)</div><div class="fin-itens">${PORTAL_VISIVEIS.map(([k, t, c]) => `<button type="button" class="portal-chip${p.visiveis[k] ? ' ativo' : ''}" style="--c:${c};" onclick="PORTAL_PAD_EDIT.visiveis['${k}'] = !PORTAL_PAD_EDIT.visiveis['${k}']; portalRender();">● ${t}${p.visiveis[k] ? ' ✓' : ''}</button>`).join('')}</div>
+    <div class="cfg-secao-rotulo">Como o cliente recebe o link de aprovação</div>${esc('link', [['portal', 'Portal', 'Lista de tudo, com login'], ['post', 'Link do post', 'Só aquele post, sem senha']])}
+    <div class="cfg-secao-rotulo">Pedidos dos clientes vão para</div>${esc('pedidos', [['kanban', 'Kanban', 'Tarefa em A Fazer'], ['conteudos', 'Conteúdos', 'Etapa de Planejamento']])}
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="portalSalvarPadroes()">Salvar padrões</button></div></div>`;
+}
+async function portalSalvarPadroes() {
+  if (!nivelEhDiretor()) { avisarSemPermissaoNivel('mudar os padrões do portal (só o Diretor)'); return; }
+  const p = PORTAL_PAD_EDIT;
+  const nova = Object.assign({}, mesclarComPadrao(portalConfigPadrao(), CFG_PORTAL_DATA), { padroes: { perm: p.perm, abas: p.abas, visiveis: p.visiveis, link: p.link, pedidos: p.pedidos } });
+  if (cloudSet(CFG_PORTAL_KEY, nova) === false) return;
+  CFG_PORTAL_DATA = nova;
+  await portalPublicarPadrao();
+  PORTAL_PAD_EDIT = null;
+  avisar('Padrões salvos. Valem para todos os clientes que não têm configuração própria.', 'Portal');
+  portalRender();
+}
+// cópia que o cliente consegue ler (sem nada interno)
+async function portalPublicarPadrao() {
+  if (!(FIREBASE_PRONTO && TENANT_ID && firestoreDb)) return;
+  try { await firestoreDb.collection('tenants').doc(TENANT_ID).collection('portal').doc('_padrao').set(finLimpar(portalPadrao())); }
+  catch (e) { console.error('Erro ao publicar o padrão do portal:', e); }
+}
+
+// ---------- configurar um cliente ----------
+let PORTAL_CFG_EDIT = null;
+function portalAbrirConfig(nome) {
+  if (!exigirPodeOperar('configurar o portal')) return;
+  PORTAL_CFG_EDIT = Object.assign({ nome, perm: {}, abas: {}, visiveis: {}, link: 'padrao', pedidos: 'padrao', recado: '', logoUrl: '' }, finLimpar(portalCfgCliente(nome)));
+  PORTAL_CFG_EDIT.nome = nome;
+  portalRenderConfig();
+  openModal('modal-srv');
+}
+function portalRenderConfig() {
+  const e = PORTAL_CFG_EDIT, pad = portalPadrao();
+  const tri = (grupo, k) => { const v = e[grupo][k]; const padTxt = `Padrão (${pad[grupo][k] ? 'sim' : 'não'})`;
+    return `<div class="portal-tri">${[['padrao', padTxt], [true, 'Sim'], [false, 'Não']].map(([val, t]) => { const ativo = val === 'padrao' ? (v !== true && v !== false) : v === val; return `<button type="button" class="${ativo ? 'ativo' : ''}" onclick="${val === 'padrao' ? `delete PORTAL_CFG_EDIT.${grupo}['${k}']` : `PORTAL_CFG_EDIT.${grupo}['${k}'] = ${val}`}; portalRenderConfig();">${t}</button>`; }).join('')}</div>`; };
+  const linhaTri = (grupo, [k, t, d]) => `<div class="portal-op"><div><strong>${t}</strong><small>${d}</small></div>${tri(grupo, k)}</div>`;
+  const ef = portalEfetivo(pad, e);
+  const esc = (campo, ops) => `<div class="fin-seg">${ops.map(([v, t, s]) => `<button type="button" class="${e[campo] === v ? 'ativo' : ''}" onclick="PORTAL_CFG_EDIT.${campo} = '${v}'; portalRenderConfig();">${t}<small style="display:block; font-weight:400;">${s}</small></button>`).join('')}</div>`;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:600px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><div style="display:flex; gap:12px; align-items:center;"><span class="cnt-fixado-av" style="overflow:hidden;">${urlImagemSegura(e.logoUrl) ? `<img src="${escapeHtml(urlImagemSegura(e.logoUrl))}" alt="" style="width:100%; height:100%; object-fit:cover;">` : escapeHtml(initials(e.nome))}</span><div><h2 style="margin:0;">Portal de ${escapeHtml(e.nome)}</h2><small class="kb-vazio-mini">O que esse cliente vê e pode fazer. "Padrão" segue Aparência e padrões.</small></div></div><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="kb-wiz-corpo">
+      <div class="srv-endereco" style="margin-bottom:10px;"><input type="text" readonly value="${escapeHtml(portalLink())}"><button type="button" class="btn btn-small" onclick="navigator.clipboard && navigator.clipboard.writeText(portalLink()); this.textContent = 'Copiado ✓';">Copiar</button><button type="button" class="btn btn-small" onclick="window.open('portal.html?previa=' + encodeURIComponent(PORTAL_CFG_EDIT.nome), '_blank')">Abrir</button></div>
+      <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;"><button type="button" class="btn btn-small" onclick="portalAbrirLogins(PORTAL_CFG_EDIT.nome)">${ic('usuario', 'ic-herda')} Logins (${PORTAL_LOGINS.filter((l) => l.clienteNome === e.nome).length})</button><input type="url" maxlength="500" placeholder="Logo do cliente (URL https://...)" value="${escapeHtml(e.logoUrl || '')}" oninput="PORTAL_CFG_EDIT.logoUrl = this.value.trim()" style="flex:1; min-width:200px;"></div>
+      <div class="cfg-secao-rotulo" style="margin-top:0;">O que o cliente pode fazer</div>${PORTAL_PERMISSOES.map((x) => linhaTri('perm', x)).join('')}
+      <div class="cfg-secao-rotulo">Abas que o cliente vê</div>${PORTAL_ABAS.map((x) => linhaTri('abas', x)).join('')}
+      <div class="cfg-secao-rotulo">Conteúdos visíveis</div><div class="fin-itens">${PORTAL_VISIVEIS.map(([k, t, c]) => `<button type="button" class="portal-chip${ef.visiveis[k] ? ' ativo' : ''}" style="--c:${c};" onclick="PORTAL_CFG_EDIT.visiveis['${k}'] = !${ef.visiveis[k]}; portalRenderConfig();">● ${t}${ef.visiveis[k] ? ' ✓' : ''}</button>`).join('')}</div>
+      <p class="kb-vazio-mini">Seguindo o padrão da agência até você mudar.</p>
+      <div class="cfg-secao-rotulo">Como este cliente recebe o link de aprovação</div>${esc('link', [['padrao', 'Padrão da agência', 'Hoje: ' + (pad.link === 'portal' ? 'portal' : 'link do post')], ['portal', 'Portal', 'Lista de tudo, com login'], ['post', 'Link do post', 'Só aquele post, sem senha']])}
+      <div class="cfg-secao-rotulo">Pedidos deste cliente vão para</div>${esc('pedidos', [['padrao', 'Padrão da agência', 'Hoje: ' + (pad.pedidos === 'conteudos' ? 'Conteúdos' : 'Kanban')], ['kanban', 'Kanban', 'Tarefa em A Fazer'], ['conteudos', 'Conteúdos', 'Etapa de Planejamento']])}
+      <div class="cfg-secao-rotulo">Recado no topo do portal</div>
+      <textarea rows="3" maxlength="400" placeholder="Ex: Olá! Os posts de outubro já estão para aprovação. Qualquer dúvida, chame no WhatsApp." oninput="PORTAL_CFG_EDIT.recado = this.value">${escapeHtml(e.recado || '')}</textarea><p class="kb-vazio-mini">Aparece só para este cliente, no início do portal. Vazio, não aparece.</p>
+    </div>
+    <div class="cfg-modal-rodape"><button type="button" class="btn btn-ghost" onclick="portalRestaurarPadrao()">Voltar tudo ao padrão</button><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="portalSalvarConfig()">Salvar</button></div>
+  </div>`;
+}
+function portalRestaurarPadrao() { const n = PORTAL_CFG_EDIT.nome; PORTAL_CFG_EDIT = { nome: n, perm: {}, abas: {}, visiveis: {}, link: 'padrao', pedidos: 'padrao', recado: '', logoUrl: '' }; portalRenderConfig(); }
+async function portalSalvarConfig() {
+  const e = PORTAL_CFG_EDIT;
+  const logo = String(e.logoUrl || '').trim();
+  if (logo && !urlImagemSegura(logo)) { avisar('A logo precisa ser um endereço https:// de imagem.'); return; }
+  const limpo = {};
+  ['perm', 'abas', 'visiveis'].forEach((g) => { const o = Object.fromEntries(Object.entries(e[g] || {}).filter(([, v]) => v === true || v === false)); if (Object.keys(o).length) limpo[g] = o; });
+  if (e.link && e.link !== 'padrao') limpo.link = e.link;
+  if (e.pedidos && e.pedidos !== 'padrao') limpo.pedidos = e.pedidos;
+  if (String(e.recado || '').trim()) limpo.recado = String(e.recado).trim().slice(0, 400);
+  if (logo) limpo.logoUrl = logo;
+  const todos = Object.assign({}, PORTAL_CLIENTES);
+  if (Object.keys(limpo).length) todos[e.nome] = limpo; else delete todos[e.nome];
+  if (cloudSet(PORTAL_CLIENTES_KEY, todos) === false) return;
+  PORTAL_CLIENTES = todos;
+  if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
+    try {
+      await portalPublicarPadrao();
+      await firestoreDb.collection('tenants').doc(TENANT_ID).collection('portal').doc(portalSlug(e.nome)).set(Object.assign({ cliente: e.nome }, finLimpar(limpo)));
+    } catch (err) { console.error(err); avisar(mensagemErroFirestore(err)); return; }
+  }
+  srvFecharModal();
+  portalRender();
+}
+
+// ---------- logins dos clientes ----------
+function portalAbrirLogins(nome) {
+  if (!exigirPodeOperar('gerenciar logins de clientes')) return;
+  const logins = PORTAL_LOGINS.filter((l) => l.clienteNome === nome);
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:480px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Logins — ${escapeHtml(nome)}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub" style="margin-top:-8px;">Quem do cliente entra no portal. Não contam no limite de usuários do seu plano.</p>
+    ${logins.map((l) => `<div class="srv-cat-linha"><span style="flex:1;"><strong>${escapeHtml(l.nome || '')}</strong><small style="display:block; color:var(--text-soft);">${escapeHtml(l.email || '')}</small></span><button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Remover acesso" onclick="portalRemoverLogin('${escapeParaOnclick(l.uid)}')">${ic('lixeira', 'ic-herda')}</button></div>`).join('') || '<p class="kb-vazio-mini">Nenhum login ainda.</p>'}
+    <div class="cfg-secao-rotulo">Novo login</div>
+    <div class="field full"><label>Nome</label><input type="text" id="pl-nome" maxlength="80"></div>
+    <div class="field full"><label>E-mail</label><input type="email" id="pl-email" maxlength="120"></div>
+    <div class="field full"><label>Senha inicial (mín. 8)</label><input type="password" id="pl-senha" minlength="8"></div>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Fechar</button><button type="button" class="btn btn-primary" id="pl-criar" onclick="portalCriarLogin(${escapeHtml(JSON.stringify(nome))})">Criar login</button></div>
+  </div>`;
+  openModal('modal-srv');
+}
+async function portalCriarLogin(nome) {
+  const g = (id) => document.getElementById(id).value.trim();
+  const n = g('pl-nome'), email = g('pl-email'), senha = document.getElementById('pl-senha').value;
+  if (!n || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || senha.length < 8) { avisar('Preencha nome, um e-mail válido e uma senha com pelo menos 8 caracteres.'); return; }
+  if (!(FIREBASE_PRONTO && TENANT_ID)) { avisar('O login de cliente precisa do sistema conectado ao Firebase.'); return; }
+  const btn = document.getElementById('pl-criar'); btn.disabled = true; btn.textContent = 'Criando...';
+  let app2;
+  try {
+    app2 = firebase.initializeApp(FIREBASE_CONFIG, 'secundario-' + Date.now());
+    const cred = await app2.auth().createUserWithEmailAndPassword(email, senha);
+    try {
+      await firestoreDb.collection('usuarios').doc(cred.user.uid).set({ tenantId: TENANT_ID, role: 'Cliente', clienteNome: nome, nome: n.slice(0, 80), email, criadoEm: new Date().toISOString(), criadoPor: USUARIO_UID || '' });
+    } catch (e2) { await cred.user.delete().catch(() => {}); throw e2; }
+    await app2.auth().signOut(); await app2.delete();
+    await portalPublicarPadrao();
+    avisar(`Login criado! ${n} entra em ${portalLink()} com o e-mail e a senha cadastrados.`, 'Portal');
+    srvFecharModal();
+  } catch (err) {
+    console.error(err);
+    avisar('Não foi possível criar o login: ' + (err && err.code && String(err.code).startsWith('auth/') ? mensagemErroCriacaoConta(err.code) : mensagemErroFirestore(err)));
+    if (app2) { try { await app2.delete(); } catch (e) {} }
+  } finally { if (btn) { btn.disabled = false; btn.textContent = 'Criar login'; } }
+}
+function portalRemoverLogin(uid) {
+  confirmarAcao('Remover o acesso deste login ao portal?', async () => {
+    try { await firestoreDb.collection('usuarios').doc(uid).delete(); srvFecharModal(); }
+    catch (err) { avisar(mensagemErroFirestore(err)); }
+  }, 'Remover acesso');
+}
+
+// ---------- o que os clientes fazem no portal → CRM ----------
+// O cliente só grava campos "portal*" no conteúdo e pedidos em
+// portal_pedidos; quem opera no CRM aplica (mover etapa, criar tarefa).
+let PORTAL_PROC = false;
+function portalIniciarProcessamento() {
+  if (PORTAL_PROC || !(FIREBASE_PRONTO && TENANT_ID && firestoreDb) || !nivelPodeOperar()) return;
+  PORTAL_PROC = true;
+  const base = firestoreDb.collection('tenants').doc(TENANT_ID);
+  try {
+    base.collection('conteudos').where('portalPendente', '==', true).onSnapshot((snap) => snap.forEach((d) => {
+      const c = d.data(), cols = (typeof cntColunas === 'function' ? cntColunas() : []).map((x) => x.id);
+      const m = { portalPendente: false, atualizadoEm: new Date().toISOString() };
+      let acao = '';
+      if (c.portalResposta === 'aprovado') { m.etapa = cols.includes('aprovado') ? 'aprovado' : c.etapa; m.status = 'aprovado'; acao = 'Cliente aprovou pelo portal'; }
+      else if (c.portalResposta === 'ajustes') { m.etapa = cols.includes('revisao') ? 'revisao' : c.etapa; m.status = 'andamento'; acao = `Cliente pediu ajustes pelo portal: "${String(c.portalComentario || '').slice(0, 150)}"`; }
+      if (c.portalPostadoEm && !c.postadoRegistrado) { m.status = 'publicado'; m.postadoRegistrado = true; if (cols.length) m.etapa = cols[cols.length - 1]; acao = acao || 'Cliente marcou como postado'; }
+      if (acao) m.historico = (c.historico || []).concat([{ em: new Date().toISOString(), por: c.cliente || 'Cliente', acao }]).slice(-60);
+      d.ref.set(m, { merge: true }).catch((e) => console.error(e));
+    }), () => {});
+    base.collection('portal_pedidos').where('processado', '==', false).onSnapshot((snap) => snap.forEach((d) => {
+      const p = d.data();
+      if (!p.cliente) return;
+      const destino = portalEfetivo(portalPadrao(), portalCfgCliente(p.cliente)).pedidos;
+      const titulo = (p.tipo === 'servico' ? 'Pedido de serviço: ' : 'Ideia de post: ') + String(p.titulo || '').slice(0, 100);
+      const desc = [p.texto, (p.links || []).join('\n'), p.prazo ? 'Prazo desejado: ' + p.prazo : ''].filter(Boolean).join('\n\n').slice(0, 3000);
+      const agora = new Date().toISOString();
+      const lote = firestoreDb.batch();
+      if (destino === 'conteudos') {
+        const id = genId('ct');
+        lote.set(base.collection('conteudos').doc(id), { id, tipo: 'imagem', titulo, etapa: 'planejamento', status: 'rascunho', cliente: p.cliente, briefing: desc, prioridade: 'normal', redes: ['instagram'], midia: { url: '', capaUrl: '', paginas: [], formato: '4:5' }, checklist: [], tags: ['portal'], historico: [{ em: agora, por: p.cliente, acao: 'Pedido do cliente pelo portal' }], tempo: { total: 0, inicio: null }, download: 'cliente', criadoEm: agora, atualizadoEm: agora });
+      } else {
+        const id = genId('kb');
+        lote.set(base.collection('kanban_tarefas').doc(id), { id, titulo, descricao: desc, status: 'afazer', prioridade: p.tipo === 'servico' ? 'alta' : 'media', cliente: p.cliente, etiquetas: ['portal'], checklist: [], responsavel: '', prazo: p.prazo || '', ordem: Date.now(), arquivada: false, criadoEm: agora, atualizadoEm: agora });
+      }
+      lote.set(d.ref, { processado: true, destino }, { merge: true });
+      lote.commit().catch((e) => console.error('Erro ao processar pedido do portal:', e));
+    }), () => {});
+  } catch (e) { console.error('Não foi possível acompanhar o portal:', e); }
+}
+
+// ---------- Portal do Cliente (página do cliente: portal.html) ----------
+let PC = { cliente: '', previa: false, cfg: null, conteudos: [], aba: '', mes: '' };
+function portalPadraoFallback() {
+  const c = portalConfigPadrao();
+  return { marca: '', logoUrl: '', cor: c.corBotao, perm: { sugerir: true, servicos: false, baixar: true, postado: false }, abas: { producao: true, calendario: true, agendados: true, feed: true, instagram: true, materiais: true, relatorio: false }, visiveis: { aguardando: true, revisao: true, aprovado: true, publicado: true, rascunho: false }, link: 'post', pedidos: 'kanban' };
+}
+function initPortalCliente() {
+  try { initFirebase(); } catch (e) { /* sem Firebase: a mensagem abaixo explica */ }
+  const el = document.getElementById('pc-app');
+  const msg = (t, s) => { el.innerHTML = `<div class="ap-caixa"><h1>${escapeHtml(t)}</h1><p>${escapeHtml(s || '')}</p><p><a href="login.html" style="color:#22c55e;">Ir para o login</a></p></div>`; };
+  if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) { msg('Portal indisponível', 'Não foi possível conectar agora. Verifique a internet e recarregue a página.'); return; }
+  firebase.auth().onAuthStateChanged(async (user) => {
+    if (!user) { location.replace('login.html'); return; }
+    try {
+      const u = (await firestoreDb.collection('usuarios').doc(user.uid).get()).data() || {};
+      if (!u.tenantId) { msg('Acesso não configurado', 'Fale com a agência.'); return; }
+      TENANT_ID = u.tenantId; FIREBASE_PRONTO = true; USUARIO_UID = user.uid; USUARIO_ROLE = u.role;
+      if (u.role === 'Cliente') PC.cliente = u.clienteNome;
+      else { PC.cliente = new URLSearchParams(location.search).get('previa') || ''; PC.previa = true; if (!PC.cliente) { msg('Pré-visualização', 'Abra o portal pelo CRM → Portal do cliente → Configurar → Abrir.'); return; } }
+      const base = firestoreDb.collection('tenants').doc(TENANT_ID).collection('portal');
+      const [pad, pro] = await Promise.all([base.doc('_padrao').get().catch(() => null), base.doc(portalSlug(PC.cliente)).get().catch(() => null)]);
+      PC.cfg = portalEfetivo(Object.assign(portalPadraoFallback(), pad && pad.exists ? pad.data() : {}), pro && pro.exists ? pro.data() : {});
+      PC.aba = Object.keys(PC.cfg.abas).find((k) => PC.cfg.abas[k]) || 'producao';
+      PC.mes = finMesAtual();
+      firestoreDb.collection('tenants').doc(TENANT_ID).collection('conteudos').where('cliente', '==', PC.cliente).onSnapshot((snap) => {
+        PC.conteudos = []; snap.forEach((d) => PC.conteudos.push(Object.assign({}, d.data(), { id: d.id })));
+        pcRender();
+      }, (err) => { console.error(err); msg('Não foi possível carregar', 'Tente de novo em instantes.'); });
+      pcRender();
+    } catch (err) { console.error(err); msg('Não foi possível abrir o portal', 'Tente de novo em instantes.'); }
+  });
+}
+function pcCategoria(c) {
+  // a etapa do quadro manda (a equipe pode arrastar o cartão sem mudar o status)
+  if (c.status === 'publicado' || c.etapa === 'publicacao' || c.portalPostadoEm) return 'publicado';
+  if (c.etapa === 'aprovado') return 'aprovado';
+  if (c.etapa === 'revisao') return 'revisao';
+  if (c.etapa === 'aprovacao') return 'aguardando';
+  if (c.status === 'aprovado') return 'aprovado';
+  if (c.status === 'aguardando') return 'aguardando';
+  return 'rascunho';
+}
+function pcVisiveis() { return PC.conteudos.filter((c) => PC.cfg.visiveis[pcCategoria(c)]).sort((a, b) => (a.publicacao || '9999').localeCompare(b.publicacao || '9999')); }
+function pcImg(c) { const m = c.midia || {}; return urlImagemSegura(m.capaUrl) || urlImagemSegura(m.url) || urlImagemSegura((m.paginas || [])[0]) || ''; }
+function pcRender() {
+  const el = document.getElementById('pc-app'), cfg = PC.cfg;
+  if (!el || !cfg) return;
+  const ABAS = { producao: 'Produção', calendario: 'Calendário', agendados: 'Agendados', feed: 'Feed', instagram: 'Modo Instagram', materiais: 'Materiais', relatorio: 'Relatório' };
+  const abas = Object.keys(ABAS).filter((k) => cfg.abas[k]);
+  const corpo = { producao: pcHtmlProducao, calendario: pcHtmlCalendario, agendados: pcHtmlAgendados, feed: pcHtmlFeed, instagram: pcHtmlInstagram, materiais: pcHtmlMateriais, relatorio: pcHtmlRelatorio }[PC.aba] || (() => '');
+  const pend = pcVisiveis().filter((c) => pcCategoria(c) === 'aguardando' && !c.portalResposta).length;
+  el.innerHTML = `<div class="pc" style="--pc-cor:${corHexValida(cfg.cor) || '#7c3aed'};">
+    ${PC.previa ? `<div class="pc-previa">Pré-visualização: você está vendo o portal como <b>${escapeHtml(PC.cliente)}</b>. As ações ficam desligadas.</div>` : ''}
+    <header class="pc-topo">${urlImagemSegura(cfg.logoUrl) ? `<img class="pc-logo" src="${escapeHtml(urlImagemSegura(cfg.logoUrl))}" alt="">` : `<strong class="pc-marca">${escapeHtml(cfg.marca || 'Portal')}</strong>`}
+      <span class="pc-cliente">${escapeHtml(PC.cliente)}</span><span class="kb-espaco"></span>
+      ${cfg.perm.sugerir ? '<button type="button" class="pc-btn" onclick="pcAbrirPedido(\'ideia\')">Sugerir ideia</button>' : ''}
+      ${cfg.perm.servicos ? '<button type="button" class="pc-btn" onclick="pcAbrirPedido(\'servico\')">Solicitar serviço</button>' : ''}
+      <button type="button" class="pc-btn pc-sair" onclick="firebase.auth().signOut().then(() => location.replace('login.html'))">Sair</button></header>
+    ${cfg.recado ? `<div class="pc-recado">${escapeHtml(cfg.recado)}</div>` : ''}
+    ${pend ? `<div class="pc-aviso"><b>${pend}</b> conteúdo(s) esperando a sua aprovação.</div>` : ''}
+    <nav class="pc-abas">${abas.map((k) => `<button type="button" class="${PC.aba === k ? 'ativo' : ''}" onclick="PC.aba = '${k}'; pcRender();">${ABAS[k]}</button>`).join('')}</nav>
+    <main>${corpo()}</main>
+  </div>`;
+}
+function pcAcoes(c, compacto) {
+  const cfg = PC.cfg, cat = pcCategoria(c), id = escapeParaOnclick(c.id);
+  const m = c.midia || {}, links = [m.url, m.capaUrl].concat(m.paginas || []).filter((u) => /^https:\/\//i.test(u || ''));
+  let h = '';
+  if (cat === 'aguardando') h += c.portalResposta ? `<span class="pc-estado">${c.portalResposta === 'aprovado' ? 'Você aprovou ✓' : 'Você pediu ajustes'}</span>` : `<button type="button" class="pc-btn pc-ok" onclick="pcResponder('${id}', 'aprovado')">Aprovar</button><button type="button" class="pc-btn" onclick="pcResponder('${id}', 'ajustes')">Pedir ajustes</button>`;
+  if (cfg.perm.postado && cat === 'aprovado') h += c.portalPostadoEm ? '<span class="pc-estado">Marcado como postado ✓</span>' : `<button type="button" class="pc-btn" onclick="pcPostado('${id}')">Marcar como postado</button>`;
+  if (cfg.perm.baixar && c.download !== 'bloqueado' && links.length && !compacto) h += links.map((u, i) => `<a class="pc-link" href="${escapeHtml(u)}" target="_blank" rel="noopener" download>Baixar${links.length > 1 ? ' ' + (i + 1) : ''}</a>`).join('');
+  return h ? `<div class="pc-acoes">${h}</div>` : '';
+}
+function pcCard(c) {
+  const img = pcImg(c), CATS = { aguardando: 'Aguardando aprovação', revisao: 'Em revisão', aprovado: 'Aprovado', publicado: 'Publicado', rascunho: 'Em produção' };
+  return `<article class="pc-card">${img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy">` : ''}
+    <div class="pc-card-corpo"><span class="pc-tag pc-${pcCategoria(c)}">${CATS[pcCategoria(c)]}</span><strong>${escapeHtml(c.titulo || 'Sem título')}</strong>
+    <small>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}${c.publicacao ? ' · ' + escapeHtml(formatDatePt(c.publicacao)) : ''}</small>
+    ${c.legenda ? `<p>${escapeHtml(c.legenda).slice(0, 400).replace(/\n/g, '<br>')}</p>` : ''}${pcAcoes(c)}</div></article>`;
+}
+function pcHtmlProducao() {
+  const ordem = ['aguardando', 'revisao', 'rascunho', 'aprovado', 'publicado'], NOMES = { aguardando: 'Aguardando sua aprovação', revisao: 'Em revisão', rascunho: 'Em produção', aprovado: 'Aprovados', publicado: 'Publicados' };
+  const l = pcVisiveis();
+  return ordem.map((cat) => { const g = l.filter((c) => pcCategoria(c) === cat); return g.length ? `<section><h2>${NOMES[cat]} <small>${g.length}</small></h2><div class="pc-grade">${g.map(pcCard).join('')}</div></section>` : ''; }).join('') || '<p class="pc-vazio">Nada por aqui ainda.</p>';
+}
+function pcHtmlCalendario() {
+  const mes = PC.mes, [a, m] = mes.split('-').map(Number), primeiro = new Date(a, m - 1, 1).getDay(), dias = new Date(a, m, 0).getDate(), l = pcVisiveis();
+  const cel = []; for (let i = 0; i < primeiro; i++) cel.push('<div class="cnt-dia vazio"></div>');
+  for (let d = 1; d <= dias; d++) { const data = `${mes}-${String(d).padStart(2, '0')}`; cel.push(`<div class="cnt-dia"><span class="cnt-dia-n">${d}</span>${l.filter((c) => c.publicacao === data).map((c) => `<span class="cnt-dia-item" style="--c:var(--pc-cor);">${escapeHtml(c.titulo || '')}</span>`).join('')}</div>`); }
+  return `<div class="pc-mes"><button type="button" class="pc-btn" onclick="PC.mes = finSomarMeses(PC.mes, -1); pcRender();">‹</button><strong>${escapeHtml(finNomeMes(mes))}</strong><button type="button" class="pc-btn" onclick="PC.mes = finSomarMeses(PC.mes, 1); pcRender();">›</button></div>
+    <div class="cnt-cal">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((n) => `<div class="cnt-cal-sem">${n}</div>`).join('')}${cel.join('')}</div>`;
+}
+function pcHtmlAgendados() {
+  const l = pcVisiveis(), hoje = finHoje();
+  const fila = l.filter((c) => pcCategoria(c) === 'aprovado' && c.publicacao && c.publicacao >= hoje), foi = l.filter((c) => pcCategoria(c) === 'publicado').reverse();
+  const linha = (c) => `<div class="pc-linha"><strong>${escapeHtml(c.publicacao ? formatDatePt(c.publicacao) : '—')}${c.publicacaoHora ? ' ' + escapeHtml(c.publicacaoHora) : ''}</strong><span>${escapeHtml(c.titulo || '')}</span><small>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}</small></div>`;
+  return `<section><h2>Na fila <small>${fila.length}</small></h2>${fila.map(linha).join('') || '<p class="pc-vazio">Nada agendado.</p>'}</section><section><h2>Já foram ao ar <small>${foi.length}</small></h2>${foi.map(linha).join('') || '<p class="pc-vazio">Nada publicado ainda.</p>'}</section>`;
+}
+function pcHtmlFeed() {
+  const l = pcVisiveis().filter((c) => ['aguardando', 'aprovado', 'publicado'].includes(pcCategoria(c)) && pcImg(c)).sort((a, b) => (b.publicacao || '').localeCompare(a.publicacao || ''));
+  return `<p class="pc-dica">Prévia de como o perfil vai ficar (do mais novo para o mais antigo).</p><div class="pc-feed">${l.map((c) => `<div class="pc-feed-item${pcCategoria(c) === 'aguardando' ? ' pend' : ''}" title="${escapeHtml(c.titulo || '')}"><img src="${escapeHtml(pcImg(c))}" alt="" loading="lazy"></div>`).join('') || '<p class="pc-vazio">Sem imagens ainda.</p>'}</div>`;
+}
+function pcHtmlInstagram() {
+  const l = pcVisiveis().filter((c) => pcCategoria(c) === 'aguardando');
+  return l.map((c) => `<article class="pc-ig"><header><span class="pc-ig-av">${escapeHtml(initials(PC.cliente))}</span><strong>${escapeHtml(PC.cliente)}</strong></header>
+    ${pcImg(c) ? `<img src="${escapeHtml(pcImg(c))}" alt="">` : '<div class="pc-ig-sem">Sem imagem</div>'}
+    <div class="pc-ig-corpo"><p><b>${escapeHtml(PC.cliente)}</b> ${escapeHtml(c.legenda || '').replace(/\n/g, '<br>')}</p>${pcAcoes(c, true)}</div></article>`).join('') || '<p class="pc-vazio">Nenhum conteúdo esperando aprovação.</p>';
+}
+function pcHtmlMateriais() {
+  const l = pcVisiveis().filter((c) => ['aprovado', 'publicado'].includes(pcCategoria(c))).reverse();
+  return l.length ? `<div class="pc-grade">${l.map(pcCard).join('')}</div>` : '<p class="pc-vazio">Nada aprovado ainda.</p>';
+}
+function pcHtmlRelatorio() {
+  const mes = PC.mes, l = pcVisiveis().filter((c) => (c.publicacao || c.entrega || '').startsWith(mes));
+  const por = (f) => l.reduce((m, c) => { const k = f(c); m[k] = (m[k] || 0) + 1; return m; }, {});
+  const cats = por(pcCategoria), tipos = por((c) => (CNT_TIPOS[c.tipo] || {}).nome || c.tipo);
+  return `<div class="pc-mes"><button type="button" class="pc-btn" onclick="PC.mes = finSomarMeses(PC.mes, -1); pcRender();">‹</button><strong>${escapeHtml(finNomeMes(mes))}</strong><button type="button" class="pc-btn" onclick="PC.mes = finSomarMeses(PC.mes, 1); pcRender();">›</button><span class="kb-espaco"></span><button type="button" class="pc-btn" onclick="window.print()">Salvar PDF</button></div>
+    <div class="pc-rel"><div><b>${l.length}</b><small>conteúdos no mês</small></div><div><b>${cats.publicado || 0}</b><small>publicados</small></div><div><b>${cats.aprovado || 0}</b><small>aprovados</small></div><div><b>${cats.aguardando || 0}</b><small>aguardando você</small></div></div>
+    <section><h2>Por tipo</h2>${Object.entries(tipos).map(([t, n]) => `<div class="pc-linha"><span>${escapeHtml(t)}</span><strong>${n}</strong></div>`).join('') || '<p class="pc-vazio">Nada nesse mês.</p>'}</section>`;
+}
+// ---------- ações do cliente ----------
+function pcSoCliente() { if (PC.previa) { alert('Na pré-visualização as ações ficam desligadas.'); return false; } return true; }
+async function pcResponder(id, resposta) {
+  if (!pcSoCliente()) return;
+  let comentario = '';
+  if (resposta === 'ajustes') { comentario = (prompt('O que precisa ajustar?') || '').trim().slice(0, 1000); if (!comentario) return; }
+  try { await firestoreDb.collection('tenants').doc(TENANT_ID).collection('conteudos').doc(id).set({ portalResposta: resposta, portalComentario: comentario, portalRespondidoEm: new Date().toISOString(), portalPendente: true }, { merge: true }); }
+  catch (e) { console.error(e); alert('Não foi possível enviar agora. Tente de novo.'); }
+}
+async function pcPostado(id) {
+  if (!pcSoCliente() || !confirm('Confirmar que esse conteúdo já foi postado?')) return;
+  try { await firestoreDb.collection('tenants').doc(TENANT_ID).collection('conteudos').doc(id).set({ portalPostadoEm: new Date().toISOString(), portalPendente: true }, { merge: true }); }
+  catch (e) { console.error(e); alert('Não foi possível enviar agora.'); }
+}
+function pcAbrirPedido(tipo) {
+  if (!pcSoCliente()) return;
+  const el = document.getElementById('pc-modal');
+  el.innerHTML = `<div class="pc-modal-caixa"><h2>${tipo === 'servico' ? 'Solicitar serviço' : 'Sugerir ideia de post'}</h2>
+    <label>Título<input id="pcp-titulo" maxlength="100" placeholder="${tipo === 'servico' ? 'Ex: Vídeo institucional' : 'Ex: Post sobre o lançamento'}"></label>
+    <label>Detalhes<textarea id="pcp-texto" rows="4" maxlength="2000" placeholder="Explique o que você quer"></textarea></label>
+    <label>Links de referência ou arquivos (um por linha)<textarea id="pcp-links" rows="2" maxlength="1500" placeholder="https://..."></textarea></label>
+    ${tipo === 'servico' ? '<label>Prazo desejado<input id="pcp-prazo" type="date"></label>' : ''}
+    <p class="ap-erro" id="pcp-erro"></p>
+    <div class="ap-botoes"><button type="button" class="ap-btn ajuste" onclick="document.getElementById('pc-modal').innerHTML = ''">Cancelar</button><button type="button" class="ap-btn ok" onclick="pcEnviarPedido('${tipo === 'servico' ? 'servico' : 'ideia'}')">Enviar</button></div></div>`;
+}
+async function pcEnviarPedido(tipo) {
+  const v = (id) => ((document.getElementById(id) || {}).value || '').trim();
+  if (!v('pcp-titulo')) { document.getElementById('pcp-erro').textContent = 'Dê um título.'; return; }
+  const links = v('pcp-links').split('\n').map((x) => x.trim()).filter((x) => /^https:\/\//i.test(x)).slice(0, 10).map((x) => x.slice(0, 500));
+  try {
+    await firestoreDb.collection('tenants').doc(TENANT_ID).collection('portal_pedidos').add({ cliente: PC.cliente, tipo, titulo: v('pcp-titulo').slice(0, 100), texto: v('pcp-texto').slice(0, 2000), links, prazo: v('pcp-prazo').slice(0, 10), criadoEm: new Date().toISOString(), processado: false, autorUid: USUARIO_UID });
+    document.getElementById('pc-modal').innerHTML = `<div class="pc-modal-caixa"><h2>Enviado! ✓</h2><p>A agência já recebeu o seu ${tipo === 'servico' ? 'pedido' : 'sugestão'}.</p><div class="ap-botoes"><button type="button" class="ap-btn ok" onclick="document.getElementById('pc-modal').innerHTML = ''">Fechar</button></div></div>`;
+  } catch (e) { console.error(e); document.getElementById('pcp-erro').textContent = 'Não foi possível enviar agora.'; }
+}
+
+
+// =====================================================================
+// ---------- Dashboard do CRM ligado a cada módulo ----------
+// =====================================================================
+// Cada bloco olha pra fonte certa: Kanban (tarefas e projetos), Conteúdos
+// (produção, aprovações, entregas), Financeiro (vencimentos e pagamentos),
+// Produtos (estoque), Pipeline/Página Pública (leads), Briefings e Portal.
+let CRM_DASH_TIMER = null;
+function crmAvisarDashboard() {
+  clearTimeout(CRM_DASH_TIMER);
+  CRM_DASH_TIMER = setTimeout(() => {
+    const s = document.getElementById('crm-secao-dashboard');
+    if (s && s.style.display !== 'none' && typeof renderCrmDashboard === 'function') renderCrmDashboard();
+  }, 150);
+}
+function dshDoCliente(nome) { return !CRM_CLIENTE_FILTRO || nome === CRM_CLIENTE_FILTRO; }
+function dshKb() { return typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS.filter((t) => !t.arquivada && dshDoCliente(t.cliente)) : []; }
+function dshCnt() { return typeof CNT !== 'undefined' ? CNT.filter((c) => dshDoCliente(c.cliente)) : []; }
+function dshQuando(iso) {
+  if (!iso) return '';
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return 'agora'; if (min < 60) return `há ${min} min`;
+  const h = Math.round(min / 60); if (h < 24) return `há ${h} h`;
+  const d = Math.round(h / 24); return d < 30 ? `há ${d} dia${d > 1 ? 's' : ''}` : formatDatePt(String(iso).slice(0, 10));
+}
+function dshIrKanban(id) { mostrarSecaoCrm('kanban', document.querySelector('[data-menu-id="kanban"]')); setTimeout(() => { if (typeof kbAbrirTarefa === 'function') kbAbrirTarefa(id); }, 60); }
+function dshIrConteudo(id) { mostrarSecaoCrm('conteudos', document.querySelector('[data-menu-id="conteudos"]')); setTimeout(() => { if (typeof cntAbrirEditor === 'function') cntAbrirEditor(id); }, 60); }
+function dshLinha(texto, sub, origem, acao, cor) {
+  return `<div class="list-row${acao ? ' dsh-clicavel' : ''}"${acao ? ` onclick="${acao}"` : ''}><div class="list-row-main"><div class="list-row-title">${escapeHtml(texto)}</div>${sub ? `<div class="list-row-sub"${cor ? ` style="color:${cor};"` : ''}>${sub}</div>` : ''}</div>${origem ? `<span class="dsh-origem">${escapeHtml(origem)}</span>` : ''}</div>`;
+}
+
+// ---------- tarefas atrasadas e de hoje (lista do dia + Kanban + Conteúdos) ----------
+function renderCrmDashTarefasFiltradas() {
+  const hoje = isoHoje();
+  const elAt = document.getElementById('crm-dash-tarefas-atrasadas'), elHoje = document.getElementById('crm-dash-tarefas-hoje');
+  const kb = dshKb().filter((t) => t.prazo && !kbConcluida(t));
+  const cnt = dshCnt().filter((c) => c.entrega && !cntFinalizado(c));
+  const at = [], dia = [];
+  CRM_TAREFAS_DATA.filter((t) => (!t.recorrencia || t.recorrencia === 'nenhuma') && !t.feita && t.data && t.data < hoje).forEach((t) => at.push({ data: t.data, h: dshLinha(t.texto, formatDatePt(t.data), 'Tarefas do dia', '', 'var(--danger)') }));
+  kb.filter((t) => t.prazo < hoje).forEach((t) => at.push({ data: t.prazo, h: dshLinha(t.titulo || 'Sem título', `${formatDatePt(t.prazo)}${t.cliente ? ' · ' + escapeHtml(t.cliente) : ''}`, 'Kanban', `dshIrKanban('${escapeParaOnclick(t.id)}')`, 'var(--danger)') }));
+  cnt.filter((c) => c.entrega < hoje).forEach((c) => at.push({ data: c.entrega, h: dshLinha(c.titulo || 'Sem título', `${formatDatePt(c.entrega)}${c.cliente ? ' · ' + escapeHtml(c.cliente) : ''}`, 'Conteúdo', `dshIrConteudo('${escapeParaOnclick(c.id)}')`, 'var(--danger)') }));
+  CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje) && !tarefaConcluidaEm(t, hoje)).forEach((t) => dia.push(dshLinha(t.texto, '', 'Tarefas do dia')));
+  kb.filter((t) => t.prazo === hoje).forEach((t) => dia.push(dshLinha(t.titulo || 'Sem título', t.cliente ? escapeHtml(t.cliente) : '', 'Kanban', `dshIrKanban('${escapeParaOnclick(t.id)}')`)));
+  cnt.filter((c) => c.entrega === hoje).forEach((c) => dia.push(dshLinha(c.titulo || 'Sem título', `Entrega${c.cliente ? ' · ' + escapeHtml(c.cliente) : ''}`, 'Conteúdo', `dshIrConteudo('${escapeParaOnclick(c.id)}')`)));
+  if (elAt) elAt.innerHTML = at.length ? at.sort((a, b) => a.data.localeCompare(b.data)).slice(0, 8).map((x) => x.h).join('') + (at.length > 8 ? `<p class="kb-vazio-mini">+ ${at.length - 8} atrasada(s)</p>` : '') : '<div class="crm-dash-vazio"><p>Nenhuma tarefa atrasada ' + ic('festa') + '</p></div>';
+  if (elHoje) elHoje.innerHTML = dia.length ? dia.slice(0, 8).join('') + (dia.length > 8 ? `<p class="kb-vazio-mini">+ ${dia.length - 8} para hoje</p>` : '') : '<div class="crm-dash-vazio"><p>Nenhuma tarefa para hoje</p></div>';
+}
+
+// ---------- atividade recente (tudo o que aconteceu) ----------
+function renderCrmDashAtividade() {
+  const el = document.getElementById('crm-dash-atividade');
+  if (!el) return;
+  const ev = [], limite = new Date(Date.now() - 30 * 86400000).toISOString();
+  const add = (data, icone, texto, cor) => { if (data && data >= limite) ev.push({ data, icone, texto, cor }); };
+  CRM_NEGOCIOS_DATA.filter((n) => dshDoCliente(n.cliente)).forEach((n) => {
+    if (n.origem === 'Página pública') add(n.criadoEm, 'usuario', `Novo lead pelo site: ${n.cliente || n.nome}`, '#22c55e');
+    if (n.atualizadoEm && n.atualizadoEm !== n.criadoEm) add(n.atualizadoEm, 'kanban', `Lead "${n.nome}" avançou para ${(CRM_ETAPAS.find((e) => e.key === n.etapa) || {}).label || 'Lead'}`, '#3b82f6');
+  });
+  CRM_PROPOSTAS_DATA.filter((p) => dshDoCliente(p.cliente)).forEach((p) => {
+    if (p.status === 'aprovada') add(p.respondidoEm || p.atualizadoEm, 'aprovado', `${p.cliente || 'Cliente'} aprovou a proposta "${p.titulo}"`, '#22c55e');
+    else if (p.status === 'recusada') add(p.respondidoEm || p.atualizadoEm, 'alerta', `${p.cliente || 'Cliente'} recusou a proposta "${p.titulo}"`, '#ef4444');
+  });
+  (typeof CRM_BRIEFINGS_DATA !== 'undefined' ? CRM_BRIEFINGS_DATA : []).filter((b) => b.status === 'respondido' && dshDoCliente(b.cliente)).forEach((b) => add(b.respondidoEm || b.atualizadoEm, 'prancheta', `${b.cliente || 'Cliente'} respondeu o briefing "${b.titulo || ''}"`, '#a855f7'));
+  dshCnt().forEach((c) => (c.historico || []).slice(-4).forEach((h) => {
+    if (/Criou o conteúdo|Editou o conteúdo|cronômetro|Iniciou o trabalho/.test(h.acao)) return;
+    add(h.em, /aprovou/i.test(h.acao) ? 'aprovado' : /ajuste/i.test(h.acao) ? 'alerta' : 'brilho', `${c.titulo || 'Conteúdo'}: ${h.acao}`, /aprovou/i.test(h.acao) ? '#22c55e' : /ajuste/i.test(h.acao) ? '#f97316' : '#a855f7');
+  }));
+  dshKb().forEach((t) => {
+    if ((t.etiquetas || []).includes('portal')) add(t.criadoEm, 'mensagem', `Pedido do cliente pelo portal: ${t.titulo}`, '#06b6d4');
+    if (kbConcluida(t) && t.atualizadoEm) add(t.atualizadoEm, 'aprovado', `Tarefa concluída: ${t.titulo}`, '#22c55e');
+  });
+  if (nivelVeFinanceiro() && typeof FIN_LANC !== 'undefined') FIN_LANC.filter((l) => Number(l.valorPago) > 0 && l.dataPagamento && dshDoCliente(l.cliente)).forEach((l) => {
+    const quando = l.atualizadoEm && String(l.atualizadoEm).slice(0, 10) === l.dataPagamento ? l.atualizadoEm : l.dataPagamento + 'T12:00:00';
+    add(quando, 'dinheiro', l.tipo === 'receber' ? `Recebido ${formatMoney(l.valorPago)}${l.cliente ? ' de ' + l.cliente : ''} — ${l.descricao}` : `Pago ${formatMoney(l.valorPago)}${l.fornecedor ? ' a ' + l.fornecedor : ''} — ${l.descricao}`, l.tipo === 'receber' ? '#22c55e' : '#ef4444');
+  });
+  ev.sort((a, b) => b.data.localeCompare(a.data));
+  el.innerHTML = ev.length ? ev.slice(0, 8).map((e) => `<div class="list-row dsh-ev"><span class="dsh-ev-ic" style="--c:${e.cor};">${ic(e.icone, 'ic-herda')}</span><div class="list-row-main"><div class="list-row-title" style="font-size:13px;">${escapeHtml(e.texto)}</div><div class="list-row-sub">${dshQuando(e.data)}</div></div></div>`).join('')
+    : '<div class="crm-dash-vazio"><p>Nenhuma atividade recente</p><span>Leads, aprovações, produção e pagamentos aparecem aqui</span></div>';
+}
+
+// ---------- próximas reuniões (Kanban agora; Agenda quando chegar) ----------
+function renderCrmDashReunioes() {
+  const el = document.getElementById('crm-dash-reunioes');
+  if (!el) return;
+  const hoje = isoHoje();
+  const daAgenda = typeof agendaProximasReunioes === 'function' ? agendaProximasReunioes() : [];
+  const doKanban = dshKb().filter((t) => !kbConcluida(t) && t.prazo && t.prazo >= hoje && (t.tipo === 'reuniao' || /reuni|call|meet/i.test(t.titulo || '') || (t.etiquetas || []).some((e) => /reuni/i.test(e))))
+    .map((t) => ({ data: t.prazo, hora: t.prazoHora || '', titulo: t.titulo, cliente: t.cliente, acao: `dshIrKanban('${escapeParaOnclick(t.id)}')` }));
+  const todas = daAgenda.concat(doKanban).sort((a, b) => (a.data + (a.hora || '')).localeCompare(b.data + (b.hora || ''))).slice(0, 5);
+  el.innerHTML = todas.length ? todas.map((r) => dshLinha(r.titulo, `${r.data === hoje ? '<b>Hoje</b>' : formatDatePt(r.data)}${r.hora ? ' · ' + escapeHtml(r.hora) : ''}${r.cliente ? ' · ' + escapeHtml(r.cliente) : ''}`, '', r.acao)).join('')
+    : '<div class="crm-dash-vazio"><p>Nenhuma reunião marcada</p><span>Tarefas do Kanban com "Reunião" no título aparecem aqui (e os compromissos da Agenda, quando ela chegar)</span></div>';
+}
+
+// ---------- estoque (Produtos do CRM ou do ERP) ----------
+function renderCrmDashEstoque() {
+  const card = document.getElementById('crm-dash-estoque-card'), el = document.getElementById('crm-dash-estoque');
+  if (!card || !el) return;
+  const produtos = crmUsaDadosDoErp() ? (CADASTROS_DATA['produto'] || []) : (typeof SRV_PRODUTOS !== 'undefined' ? SRV_PRODUTOS : []);
+  if (!produtos.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const baixos = produtos.filter((p) => p.ativo !== false && produtoTemEstoqueBaixo(p));
+  el.innerHTML = baixos.length ? baixos.slice(0, 5).map((p) => `<div class="list-row"><div class="list-row-main"><div class="list-row-title">${escapeHtml(p.nome)}</div><div class="list-row-sub">mínimo ${Number(p.quantidadeMinima) || 0}</div></div><div class="list-row-value" style="color:var(--danger);">${Number(p.estoque) || 0}</div></div>`).join('')
+    : '<div class="crm-dash-vazio"><p>Todos os produtos com estoque adequado ' + ic('aprovado', 'ic-sucesso') + '</p></div>';
+}
+
+// ---------- conteúdos do dia ----------
+function renderCrmDashConteudosDia() {
+  const el = document.getElementById('crm-dash-conteudos-dia');
+  if (!el) return;
+  const hoje = isoHoje();
+  const l = dshCnt().filter((c) => !cntFinalizado(c) && (c.publicacao === hoje || c.entrega === hoje));
+  el.innerHTML = l.length ? l.slice(0, 6).map((c) => dshLinha(c.titulo || 'Sem título', `${c.publicacao === hoje ? 'Publica hoje' : 'Entrega hoje'} · ${escapeHtml(cntColuna(c.etapa).nome)}${c.cliente ? ' · ' + escapeHtml(c.cliente) : ''}`, (CNT_TIPOS[c.tipo] || {}).nome || '', `dshIrConteudo('${escapeParaOnclick(c.id)}')`)).join('')
+    : '<div class="crm-dash-vazio"><p>Nenhum conteúdo para hoje</p></div>';
+}
+
+// ---------- projetos (Kanban) ----------
+function renderCrmDashProjetos() {
+  const el = document.getElementById('crm-dash-projetos');
+  if (!el) return;
+  const hoje = isoHoje();
+  const pjs = (typeof KB_PROJETOS !== 'undefined' ? KB_PROJETOS : []).filter((p) => !p.arquivado && p.situacao !== 'cancelado' && dshDoCliente(p.cliente))
+    .map((p) => Object.assign({ prog: kbProgressoProjeto(p.id), atrasado: p.prazo && p.prazo < hoje }, p))
+    .filter((p) => !(p.prog.total && p.prog.feitas === p.prog.total))
+    .sort((a, b) => (b.atrasado - a.atrasado) || (a.prazo || '9999').localeCompare(b.prazo || '9999'));
+  el.innerHTML = pjs.length ? pjs.slice(0, 5).map((p) => `<div class="list-row dsh-clicavel" onclick="mostrarSecaoCrm('kanban', document.querySelector('[data-menu-id=&quot;kanban&quot;]'))"><div class="list-row-main"><div class="list-row-title">${escapeHtml(p.nome)}</div>
+      <div class="list-row-sub"${p.atrasado ? ' style="color:var(--danger);"' : ''}>${p.prog.feitas}/${p.prog.total} tarefas${p.prog.atrasadas ? ` · ${p.prog.atrasadas} atrasada(s)` : ''}${p.prazo ? ` · prazo ${formatDatePt(p.prazo)}` : ''}${p.situacao === 'pausado' ? ' · pausado' : ''}</div>
+      <span class="kb-barra-prog" style="display:block; margin-top:6px;"><i style="width:${p.prog.pct}%;"></i></span></div><div class="list-row-value">${p.prog.pct}%</div></div>`).join('')
+    : '<div class="crm-dash-vazio"><p>Nenhum projeto em andamento</p><span>Os projetos do Kanban aparecem aqui</span></div>';
+}
+
+// ---------- contas de hoje (Financeiro) ----------
+function renderCrmDashVencimentos() {
+  const el = document.getElementById('crm-dash-vencimentos'), card = document.getElementById('crm-dash-venc-card');
+  if (!el || !card) return;
+  if (!nivelVeFinanceiro()) { el.innerHTML = '<div class="crm-dash-vazio"><p>Só o Diretor e o Financeiro veem as contas</p></div>'; return; }
+  const hoje = isoHoje();
+  const lista = (typeof FIN_LANC !== 'undefined' ? FIN_LANC : []).filter((l) => l.status !== 'pago' && l.status !== 'cancelado' && l.vencimento && l.vencimento <= hoje && dshDoCliente(l.cliente))
+    .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  const tot = (tipo) => lista.filter((l) => l.tipo === tipo).reduce((a, l) => a + finRestante(l), 0);
+  el.innerHTML = lista.length ? `<div class="dsh-venc-tot"><span>A receber <b class="fin-verde">${formatMoney(tot('receber'))}</b></span><span>A pagar <b class="fin-vermelho">${formatMoney(tot('pagar'))}</b></span></div>
+    ${lista.slice(0, 6).map((l) => dshLinha(l.descricao, `${l.vencimento === hoje ? '<b>Vence hoje</b>' : 'Venceu ' + formatDatePt(l.vencimento)} · ${escapeHtml(l.tipo === 'receber' ? (l.cliente || '') : (l.fornecedor || ''))}`, formatMoney(finRestante(l)), `mostrarSecaoCrm('${l.tipo === 'receber' ? 'fin-receber' : 'fin-pagar'}', document.querySelector('[data-menu-id=&quot;${l.tipo === 'receber' ? 'fin-receber' : 'fin-pagar'}&quot;]'))`, l.vencimento < hoje ? 'var(--danger)' : '')).join('')}`
+    : '<div class="crm-dash-vazio"><p>Nenhuma conta vencendo hoje ' + ic('aprovado', 'ic-sucesso') + '</p></div>';
+}
+
+// ---------- painel ENTREGAS (produção de conteúdo) ----------
+let DSH_ENT = { mes: '', periodo: 'mes', modo: 'meta', recolhido: false };
+function dshPeriodo() {
+  const atual = finMesAtual(), p = DSH_ENT.periodo;
+  if (p === '3m') return [finSomarMeses(atual, -2), atual];
+  if (p === '6m') return [finSomarMeses(atual, -5), atual];
+  if (p === 'ano') return [atual.slice(0, 4) + '-01', atual];
+  return [DSH_ENT.mes || atual, DSH_ENT.mes || atual];
+}
+function dshDataFinal(c) { const h = (c.historico || []).slice().reverse().find((x) => /para "(Publicação|Publicado|Aprovado)"|postado|aprovou/i.test(x.acao)); return h ? h.em : (cntFinalizado(c) ? c.atualizadoEm : ''); }
+function renderCrmDashEntregas() {
+  const el = document.getElementById('crm-dash-entregas');
+  if (!el) return;
+  if (typeof CNT === 'undefined') { el.innerHTML = ''; return; }
+  const mes = DSH_ENT.mes || finMesAtual();
+  const doMes = dshCnt().filter((c) => (c.publicacao || c.entrega || '').startsWith(mes));
+  const entregues = doMes.filter(cntFinalizado);
+  const meta = doMes.length, pct = meta ? Math.round((entregues.length / meta) * 100) : 0;
+  const clientes = new Set(doMes.map((c) => c.cliente).filter(Boolean)).size;
+  // ritmo: quanto do mês já passou × quanto já foi entregue
+  const hoje = new Date(), ehAtual = mes === finMesAtual();
+  const passou = ehAtual ? hoje.getDate() / new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate() : (mes < finMesAtual() ? 1 : 0);
+  const msg = !meta ? 'Nenhum conteúdo planejado para este mês.' : pct >= 100 ? 'Mês entregue! Parabéns, equipe.' : pct / 100 + 0.1 < passou ? 'Atenção: precisamos acelerar o mês.' : 'No ritmo certo.';
+  const corMsg = !meta ? 'var(--text-soft)' : pct >= 100 ? 'var(--success)' : pct / 100 + 0.1 < passou ? 'var(--warning)' : 'var(--success)';
+  // indicadores do período
+  const [de, ate] = dshPeriodo();
+  const per = dshCnt().filter((c) => { const m = (c.publicacao || c.entrega || '').slice(0, 7); return m && m >= de && m <= ate; });
+  const finais = per.filter(cntFinalizado);
+  const leads = finais.map((c) => { const f = dshDataFinal(c); return f && c.criadoEm ? (new Date(f) - new Date(c.criadoEm)) / 86400000 : null; }).filter((x) => x !== null && x >= 0);
+  const leadTime = leads.length ? (leads.reduce((a, x) => a + x, 0) / leads.length) : null;
+  const travados = per.filter((c) => !cntFinalizado(c) && c.atualizadoEm && (Date.now() - new Date(c.atualizadoEm)) > 7 * 86400000).length;
+  const comRetrab = per.filter((c) => (c.historico || []).some((h) => /para "Revisão"|ajuste/i.test(h.acao))).length;
+  const retrab = per.length ? Math.round((comRetrab / per.length) * 100) : 0;
+  const aprovados = per.filter((c) => (c.historico || []).some((h) => /aprovou/i.test(h.acao)) || cntFinalizado(c));
+  const qualidade = aprovados.length ? Math.round((aprovados.filter((c) => !(c.historico || []).some((h) => /ajuste/i.test(h.acao))).length / aprovados.length) * 100) : null;
+  // top membros
+  const mapa = new Map();
+  per.filter((c) => c.responsavel).forEach((c) => { const r = mapa.get(c.responsavel) || { uid: c.responsavel, total: 0, feitos: 0 }; r.total++; if (cntFinalizado(c)) r.feitos++; mapa.set(c.responsavel, r); });
+  const top = Array.from(mapa.values()).map((r) => Object.assign(r, { pct: Math.round((r.feitos / r.total) * 100) })).sort((a, b) => DSH_ENT.modo === 'meta' ? (b.pct - a.pct || b.feitos - a.feitos) : (b.feitos - a.feitos)).slice(0, 5);
+  const circ = 2 * Math.PI * 34, faltam = Math.max(0, meta - entregues.length);
+  const info = (t) => `<span class="dsh-info" title="${escapeHtml(t)}">${ic('ajuda', 'ic-herda')}</span>`;
+  el.innerHTML = `<div class="dsh-ent${DSH_ENT.recolhido ? ' recolhido' : ''}">
+    <button type="button" class="dsh-ent-recolher" aria-label="${DSH_ENT.recolhido ? 'Expandir' : 'Recolher'}" onclick="DSH_ENT.recolhido = !DSH_ENT.recolhido; renderCrmDashEntregas();">${kbIc(DSH_ENT.recolhido ? 'setaBaixo' : 'setaCima')}</button>
+    <div class="dsh-ent-topo">
+      <div class="dsh-anel"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="dsh-anel-fundo"/><circle cx="40" cy="40" r="34" class="dsh-anel-valor" stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - Math.min(1, pct / 100))}"/></svg><div><b>${pct}<small>%</small></b><span>${entregues.length}/${meta}</span></div></div>
+      <div class="dsh-ent-tit"><div><strong>ENTREGAS</strong><span class="dsh-mes"><button type="button" aria-label="Mês anterior" onclick="DSH_ENT.mes = finSomarMeses(DSH_ENT.mes || finMesAtual(), -1); renderCrmDashEntregas();">${kbIc('setaEsq')}</button>${escapeHtml(finNomeMes(mes).replace(/^(\w{3})\w*/, '$1'))}<button type="button" aria-label="Próximo mês" onclick="DSH_ENT.mes = finSomarMeses(DSH_ENT.mes || finMesAtual(), 1); renderCrmDashEntregas();">${kbIc('seta')}</button></span></div><em style="color:${corMsg};">${msg}</em></div>
+      <span class="kb-espaco"></span>
+      <div class="dsh-kpis"><div><small>CLIENTES ATIVOS ${info('Clientes com conteúdo no mês')}</small><b>${clientes}</b></div>
+        <div><small>META DO MÊS ${info('Conteúdos com publicação ou entrega no mês')}</small><b>${meta}</b>${faltam ? `<button type="button" class="dsh-faltam" onclick="CNT_FILTRO.mes = '${mes}'; mostrarSecaoCrm('conteudos', document.querySelector('[data-menu-id=&quot;conteudos&quot;]'));">faltam ${faltam} →</button>` : ''}</div>
+        <div><small>ENTREGUES ${info('Conteúdos na última etapa ou publicados')}</small><b class="fin-verde">${entregues.length}</b></div></div>
+    </div>
+    ${DSH_ENT.recolhido ? '' : `<div class="dsh-ent-ind">
+      <span>Lead time ${info('Tempo médio, em dias, do conteúdo criado até aprovado/publicado')} <b>${leadTime === null ? '—' : leadTime.toFixed(1).replace('.', ',') + ' d'}</b></span>
+      <span>Travados ${info('Conteúdos parados há mais de 7 dias sem mudança')} <b${travados ? ' class="fin-vermelho"' : ''}>${travados}</b></span>
+      <span>Retrabalho ${info('Conteúdos que voltaram pra revisão ou tiveram pedido de ajuste')} <b>${retrab}%</b></span>
+      <span>Qualidade ${info('Aprovados de primeira, sem pedido de ajuste')} <b>${qualidade === null ? '—' : qualidade + '%'}</b></span>
+    </div>
+    <div class="dsh-ent-membros"><strong>TOP MEMBROS</strong>
+      ${top.length ? top.map((r) => `<span class="dsh-membro">${kbAvatar(r.uid, 'p')} ${escapeHtml(kbNomeUsuario(r.uid) || '')} <b>${DSH_ENT.modo === 'meta' ? r.pct + '%' : r.feitos}</b></span>`).join('') : '<span class="kb-vazio-mini">sem responsável nos conteúdos do período</span>'}
+      <span class="kb-espaco"></span>
+      <span class="dsh-modo">${[['meta', 'POR META'], ['geral', 'GERAL']].map(([v, t]) => `<button type="button" class="${DSH_ENT.modo === v ? 'ativo' : ''}" onclick="DSH_ENT.modo = '${v}'; renderCrmDashEntregas();">${t}</button>`).join('')}</span>
+      <select class="srv-select" aria-label="Período" onchange="DSH_ENT.periodo = this.value; renderCrmDashEntregas();">${[['mes', 'Este mês'], ['3m', '3 meses'], ['6m', '6 meses'], ['ano', 'Este ano']].map(([v, t]) => `<option value="${v}"${DSH_ENT.periodo === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+    </div>`}
+  </div>`;
+}
+
+
+// =====================================================================
+// ---------- CRM → Operacional → Agenda (Timeline de Projetos) ----------
+// =====================================================================
+// Compromissos: um documento por compromisso (tenants/{id}/agenda). A tela
+// junta 4 fontes: compromissos, tarefas do Kanban, conteúdos e feriados —
+// e, conectado, os eventos do Google Agenda da pessoa.
+const AG_COLECAO = 'agenda';
+let AG = [];
+let AG_CARREGADO = false;
+let AG_INICIADO = false;
+let AG_HOST = null;
+let AG_VIEW = { modo: 'mes', data: '', dia: '', densidade: 'normal', ocultarVazios: false, ocultarConcluidas: false, fontes: { compromissos: true, tarefas: true, conteudos: true, feriados: true }, destacado: false };
+
+function agNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
+function agRef() { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(AG_COLECAO); }
+function agIniciarDados() {
+  if (AG_INICIADO) return;
+  AG_INICIADO = true;
+  if (typeof cntIniciarDados === 'function') cntIniciarDados(); // Kanban + Conteúdos
+  try { const v = JSON.parse(localStorage.getItem('eagles_agenda_vista_v1') || 'null'); if (v) Object.assign(AG_VIEW, { modo: v.modo || 'mes', densidade: v.densidade || 'normal', fontes: Object.assign(AG_VIEW.fontes, v.fontes || {}) }); } catch (e) {}
+  if (agNuvem()) {
+    try {
+      agRef().onSnapshot((snap) => { const l = []; snap.forEach((d) => l.push(Object.assign({}, d.data(), { id: d.id }))); AG = l; AG_CARREGADO = true; agRender(); if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard(); }, (err) => console.error('Erro ao carregar a agenda:', err));
+    } catch (err) { console.error(err); }
+  } else { AG = lsLoad(chaveLocalTenant('eagles_agenda_local_v1'), []); AG_CARREGADO = true; }
+}
+function agGravarLocal() { lsSave(chaveLocalTenant('eagles_agenda_local_v1'), AG); }
+function agSalvarVista() { try { localStorage.setItem('eagles_agenda_vista_v1', JSON.stringify({ modo: AG_VIEW.modo, densidade: AG_VIEW.densidade, fontes: AG_VIEW.fontes })); } catch (e) {} }
+
+// ---------- feriados nacionais e datas comemorativas ----------
+function agPascoa(ano) { const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1; return new Date(ano, mes - 1, dia); }
+function agIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function agMaisDias(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function agNesimoDomingo(ano, mes, n) { const d = new Date(ano, mes, 1); d.setDate(1 + ((7 - d.getDay()) % 7) + (n - 1) * 7); return d; }
+const AG_FERIADOS_CACHE = {};
+function agFeriados(ano) {
+  if (AG_FERIADOS_CACHE[ano]) return AG_FERIADOS_CACHE[ano];
+  const p = agPascoa(ano), f = (m, d) => `${ano}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const quintaThanks = (() => { const d = new Date(ano, 10, 1); d.setDate(1 + ((4 - d.getDay() + 7) % 7) + 21); return d; })();
+  const l = [
+    [f(1, 1), 'Confraternização Universal', 'feriado'], [agIso(agMaisDias(p, -48)), 'Carnaval', 'ponto'], [agIso(agMaisDias(p, -47)), 'Carnaval', 'ponto'],
+    [agIso(agMaisDias(p, -2)), 'Sexta-feira Santa', 'feriado'], [agIso(p), 'Páscoa', 'comemorativa'], [f(4, 21), 'Tiradentes', 'feriado'], [f(5, 1), 'Dia do Trabalho', 'feriado'],
+    [agIso(agMaisDias(p, 60)), 'Corpus Christi', 'ponto'], [f(9, 7), 'Independência do Brasil', 'feriado'], [f(10, 12), 'Nossa Sra. Aparecida', 'feriado'],
+    [f(11, 2), 'Finados', 'feriado'], [f(11, 15), 'Proclamação da República', 'feriado'], [f(11, 20), 'Consciência Negra', 'feriado'], [f(12, 25), 'Natal', 'feriado'],
+    [f(3, 8), 'Dia da Mulher', 'comemorativa'], [f(3, 15), 'Dia do Consumidor', 'comemorativa'], [agIso(agNesimoDomingo(ano, 4, 2)), 'Dia das Mães', 'comemorativa'],
+    [f(6, 12), 'Dia dos Namorados', 'comemorativa'], [agIso(agNesimoDomingo(ano, 7, 2)), 'Dia dos Pais', 'comemorativa'], [f(10, 12), 'Dia das Crianças', 'comemorativa'],
+    [f(10, 31), 'Halloween', 'comemorativa'], [agIso(agMaisDias(quintaThanks, 1)), 'Black Friday', 'comemorativa'], [f(12, 31), 'Réveillon', 'comemorativa'],
+  ].map(([data, nome, tipo]) => ({ data, nome, tipo }));
+  AG_FERIADOS_CACHE[ano] = l;
+  return l;
+}
+
+// ---------- itens de um intervalo (todas as fontes) ----------
+// repetições são calculadas na hora (não viram vários documentos)
+function agOcorrencias(c, de, ate) {
+  const out = [], dur = c.dataFim && c.dataFim > c.data ? Math.round((new Date(c.dataFim) - new Date(c.data)) / 86400000) : 0;
+  const push = (ini) => { const fim = agIso(agMaisDias(new Date(ini + 'T12:00:00'), dur)); if (fim >= de && ini <= ate) out.push(Object.assign({}, c, { _ini: ini, _fim: fim })); };
+  const r = c.repetir;
+  if (!r || !r.freq) { push(c.data); return out; }
+  let d = new Date(c.data + 'T12:00:00'), n = 0;
+  const limite = r.ate || '2100-01-01', max = Math.min(Number(r.vezes) || 500, 500);
+  while (n < max) { const iso = agIso(d); if (iso > limite || iso > ate) break; push(iso); n++; if (r.freq === 'diaria') d = agMaisDias(d, 1); else if (r.freq === 'semanal') d = agMaisDias(d, 7); else if (r.freq === 'quinzenal') d = agMaisDias(d, 14); else { d = new Date(d); d.setMonth(d.getMonth() + 1); } }
+  return out;
+}
+function agItens(de, ate) {
+  const f = AG_VIEW.fontes, itens = [];
+  if (f.compromissos) AG.forEach((c) => agOcorrencias(c, de, ate).forEach((o) => itens.push({ fonte: c.tipo === 'bloqueio' ? 'bloqueio' : 'compromisso', id: c.id, titulo: c.titulo || (c.tipo === 'bloqueio' ? 'Horário bloqueado' : 'Compromisso'), ini: o._ini, fim: o._fim, hora: c.hora || '', dur: Number(c.duracao) || 60, cliente: c.cliente, local: c.local, google: !!(c.google && c.google.eventId) })));
+  if (f.tarefas && typeof KB_TAREFAS !== 'undefined') KB_TAREFAS.filter((t) => t.prazo && t.prazo >= de && t.prazo <= ate && !(AG_VIEW.ocultarConcluidas && (t.arquivada || kbConcluida(t))) && !t.agendaId).forEach((t) => itens.push({ fonte: 'tarefa', id: t.id, titulo: t.titulo || 'Tarefa', ini: t.prazo, fim: t.prazo, hora: t.prazoHora || '', dur: 60, cliente: t.cliente, prioridade: t.prioridade, feita: kbConcluida(t) }));
+  if (f.conteudos && typeof CNT !== 'undefined') CNT.filter((c) => c.publicacao && c.publicacao >= de && c.publicacao <= ate && !(AG_VIEW.ocultarConcluidas && cntFinalizado(c))).forEach((c) => itens.push({ fonte: 'conteudo', id: c.id, titulo: c.titulo || 'Conteúdo', ini: c.publicacao, fim: c.publicacao, hora: c.publicacaoHora || '', dur: 30, cliente: c.cliente }));
+  if (f.feriados) for (let a = Number(de.slice(0, 4)); a <= Number(ate.slice(0, 4)); a++) agFeriados(a).filter((h) => h.data >= de && h.data <= ate).forEach((h) => itens.push({ fonte: 'feriado', id: h.data + h.nome, titulo: h.nome, ini: h.data, fim: h.data, hora: '', tipoFeriado: h.tipo }));
+  (AG_GOOGLE.eventos || []).filter((g) => g.ini <= ate && g.fim >= de && !AG.some((c) => c.google && c.google.eventId === g.id)).forEach((g) => itens.push(Object.assign({ fonte: 'google' }, g)));
+  return itens.sort((a, b) => (a.ini + (a.hora || '00:00')).localeCompare(b.ini + (b.hora || '00:00')));
+}
+function agDoDia(itens, dia) { return itens.filter((i) => i.ini <= dia && i.fim >= dia); }
+const AG_CORES = { compromisso: '#22c55e', bloqueio: '#64748b', tarefa: '#3b82f6', conteudo: '#a855f7', feriado: '#16a34a', google: '#ea4335' };
+function agChip(i) {
+  const acao = i.fonte === 'compromisso' || i.fonte === 'bloqueio' ? `agAbrirCompromisso('${escapeParaOnclick(i.id)}')` : i.fonte === 'tarefa' ? `dshIrKanban('${escapeParaOnclick(i.id)}')` : i.fonte === 'conteudo' ? `dshIrConteudo('${escapeParaOnclick(i.id)}')` : '';
+  const ic2 = { feriado: 'brilho', tarefa: 'tarefas', conteudo: 'imagem', google: 'calendario', bloqueio: 'alerta' }[i.fonte];
+  return `<button type="button" class="ag-chip ag-${i.fonte}${i.feita ? ' feita' : ''}" style="--c:${AG_CORES[i.fonte]};" title="${escapeHtml(i.titulo)}" ${acao ? `onclick="event.stopPropagation(); ${acao}"` : 'onclick="event.stopPropagation();"'}>${ic2 ? ic(ic2, 'ic-herda') : ''}${i.hora ? `<b>${escapeHtml(i.hora)}</b> ` : ''}${escapeHtml(i.titulo)}</button>`;
+}
+
+// ---------- tela ----------
+function agMontar(host) { AG_HOST = host; agIniciarDados(); if (!AG_VIEW.data) AG_VIEW.data = finHoje(); agRender(); }
+function agMudar(passo) {
+  const d = new Date(AG_VIEW.data + 'T12:00:00');
+  if (AG_VIEW.modo === 'mes') { d.setDate(1); d.setMonth(d.getMonth() + passo); } else d.setDate(d.getDate() + (AG_VIEW.modo === 'semana' ? 7 : 1) * passo);
+  AG_VIEW.data = agIso(d); agRender(); agGoogleBuscar();
+}
+function agRender() {
+  const host = AG_HOST;
+  if (!host || !host.isConnected || host.style.display === 'none') return;
+  const v = AG_VIEW, d = new Date(v.data + 'T12:00:00');
+  const nFontes = Object.values(v.fontes).filter(Boolean).length;
+  let titulo = '', corpo = '';
+  if (v.modo === 'mes') { titulo = finNomeMes(v.data.slice(0, 7)); corpo = agHtmlMes(); }
+  else if (v.modo === 'semana') { const ini = agMaisDias(d, -d.getDay()), fim = agMaisDias(ini, 6); titulo = `${ini.getDate()} - ${fim.getDate()} de ${finNomeMes(agIso(fim).slice(0, 7))}`; corpo = agHtmlHoras(Array.from({ length: 7 }, (_, i) => agIso(agMaisDias(ini, i)))); }
+  else { titulo = d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); corpo = agHtmlHoras([v.data]); }
+  host.innerHTML = `<div class="ag${v.destacado ? ' ag-destacado' : ''}">
+    <div class="fin-cab"><div><h1>Timeline de Projetos</h1><p>Visualização completa de todas as etapas e prazos</p></div><span class="kb-espaco"></span>
+      <button type="button" class="btn btn-small" onclick="AG_VIEW.destacado = !AG_VIEW.destacado; agRender();">${ic('abrir', 'ic-herda')} ${v.destacado ? 'Voltar' : 'Destacar'}</button></div>
+    <div class="ag-grade-tela${v.dia ? ' com-lado' : ''}"><div class="ag-principal fin-painel">
+      <div class="ag-barra">
+        <div class="kb-segmento">${[['mes', 'quadro', 'Mês'], ['semana', 'calendario', 'Semana'], ['dia', 'lista', 'Dia']].map(([m, i, t]) => `<button type="button" class="${v.modo === m ? 'ativo' : ''}" onclick="AG_VIEW.modo = '${m}'; agSalvarVista(); agRender(); agGoogleBuscar();">${ic(i, 'ic-herda')} ${t}</button>`).join('')}</div>
+        <span class="kb-espaco"></span>
+        <button type="button" class="btn btn-small" onclick="AG_VIEW.data = finHoje(); agRender(); agGoogleBuscar();">Hoje</button>
+        <button type="button" class="btn btn-small ag-btn-google${AG_GOOGLE.token ? ' conectado' : ''}" id="ag-btn-google" title="Google Agenda" aria-label="Google Agenda" onclick="agMenuGoogle(this)">${ic('calendario', 'ic-herda')}</button>
+        <button type="button" class="btn btn-small${v.ocultarConcluidas ? ' btn-primary' : ''}" onclick="AG_VIEW.ocultarConcluidas = !AG_VIEW.ocultarConcluidas; agRender();">${ic('olho', 'ic-herda')} Ocultar concluídas/arquivadas</button>
+        <button type="button" class="btn btn-small btn-primary" onclick="agAbrirCompromisso(null)">${ic('mais', 'ic-herda')} Novo Compromisso</button>
+        <button type="button" class="btn btn-small" onclick="agAbrirCompromisso(null, { tipo: 'bloqueio' })">${ic('alerta', 'ic-herda')} Bloquear horário</button>
+        <button type="button" class="btn btn-small" onclick="agGoogleBuscar(true); agRender();">${ic('recorrente', 'ic-herda')} Atualizar</button>
+      </div>
+      <div class="ag-barra">
+        <strong class="ag-titulo">${escapeHtml(titulo)}</strong>
+        <label class="ag-ir-data" title="Ir para uma data">${ic('calendario', 'ic-herda')}<input type="date" value="${escapeHtml(v.data)}" onchange="if (this.value) { AG_VIEW.data = this.value; agRender(); agGoogleBuscar(); }" aria-label="Ir para uma data"></label>
+        <button type="button" class="btn btn-small" id="ag-btn-exibir" onclick="agMenuExibir(this)">${ic('olho', 'ic-herda')} Exibir <span class="ag-num">${nFontes}</span></button>
+        ${v.modo !== 'mes' ? `<div class="kb-segmento ag-dens">${[['compacto', 'Compacto'], ['normal', 'Normal'], ['expandido', 'Expandido']].map(([x, t]) => `<button type="button" class="${v.densidade === x ? 'ativo' : ''}" onclick="AG_VIEW.densidade = '${x}'; agSalvarVista(); agRender();">${t}</button>`).join('')}</div>
+          <button type="button" class="btn btn-small${v.ocultarVazios ? ' btn-primary' : ''}" onclick="AG_VIEW.ocultarVazios = !AG_VIEW.ocultarVazios; agRender();">Ocultar vazios</button>` : ''}
+        <span class="kb-espaco"></span>
+        <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Anterior" onclick="agMudar(-1)">${kbIc('setaEsq')}</button>
+        <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Próximo" onclick="agMudar(1)">${kbIc('seta')}</button>
+      </div>
+      ${!AG_CARREGADO ? '<p class="kb-vazio">Carregando...</p>' : corpo}
+    </div>${v.dia ? agHtmlLado() : ''}</div></div>`;
+}
+function agHtmlMes() {
+  const v = AG_VIEW, mes = v.data.slice(0, 7), [a, m] = mes.split('-').map(Number);
+  const primeiro = new Date(a, m - 1, 1), ini = agMaisDias(primeiro, -primeiro.getDay());
+  const dias = Array.from({ length: 42 }, (_, i) => agIso(agMaisDias(ini, i)));
+  const ultimaSemana = dias.slice(35).every((x) => x.slice(0, 7) !== mes) ? 35 : 42;
+  const itens = agItens(dias[0], dias[ultimaSemana - 1]), hoje = finHoje();
+  return `<div class="ag-mes">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((n) => `<div class="ag-sem">${n}</div>`).join('')}
+    ${dias.slice(0, ultimaSemana).map((dia) => { const l = agDoDia(itens, dia); return `<div class="ag-dia${dia.slice(0, 7) !== mes ? ' fora' : ''}${dia === hoje ? ' hoje' : ''}${dia === v.dia ? ' sel' : ''}" onclick="AG_VIEW.dia = '${dia}'; agRender();" ondblclick="agAbrirCompromisso(null, { data: '${dia}' })">
+      <span class="ag-dia-n">${Number(dia.slice(8))}</span>${l.slice(0, 3).map(agChip).join('')}${l.length > 3 ? `<span class="ag-mais">+${l.length - 3}</span>` : ''}</div>`; }).join('')}</div>`;
+}
+function agHtmlHoras(dias) {
+  const v = AG_VIEW, alt = { compacto: 26, normal: 40, expandido: 64 }[v.densidade] || 40, itens = agItens(dias[0], dias[dias.length - 1]), hoje = finHoje();
+  const comHora = itens.filter((i) => i.hora && i.ini === i.fim), diaTodo = itens.filter((i) => !i.hora || i.ini !== i.fim);
+  let horas = Array.from({ length: 24 }, (_, h) => h);
+  if (v.ocultarVazios) { const usadas = new Set(); comHora.forEach((i) => { const h0 = Number(i.hora.slice(0, 2)); for (let h = h0; h < Math.min(24, h0 + Math.ceil((Number(i.dur) || 60) / 60)); h++) usadas.add(h); }); horas = horas.filter((h) => usadas.has(h)); if (!horas.length) horas = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]; }
+  const linhaDe = (hora) => horas.indexOf(Number(hora.slice(0, 2)));
+  return `<div class="ag-horas" style="--ag-alt:${alt}px; --ag-cols:${dias.length};">
+    <div class="ag-h-cab"><span></span>${dias.map((d) => { const x = new Date(d + 'T12:00:00'); return `<button type="button" class="${d === hoje ? 'hoje' : ''}" onclick="AG_VIEW.dia = '${d}'; agRender();"><small>${x.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</small><b>${x.getDate()}</b></button>`; }).join('')}</div>
+    ${diaTodo.length ? `<div class="ag-h-todo"><span>dia todo</span>${dias.map((d) => `<div>${agDoDia(diaTodo, d).map(agChip).join('')}</div>`).join('')}</div>` : ''}
+    <div class="ag-h-corpo">${horas.map((h) => `<div class="ag-h-linha"><span>${String(h).padStart(2, '0')}:00</span>${dias.map((d) => `<div ondblclick="agAbrirCompromisso(null, { data: '${d}', hora: '${String(h).padStart(2, '0')}:00' })"></div>`).join('')}</div>`).join('')}
+      ${comHora.map((i) => { const col = dias.indexOf(i.ini), lin = linhaDe(i.hora); if (col < 0 || lin < 0) return ''; const min = Number(i.hora.slice(3, 5)) || 0; return `<div class="ag-h-ev" style="--col:${col}; top:${(lin + min / 60) * alt}px; height:${Math.max(alt * 0.6, ((Number(i.dur) || 60) / 60) * alt - 2)}px;">${agChip(i)}</div>`; }).join('')}
+    </div></div>`;
+}
+function agHtmlLado() {
+  const v = AG_VIEW, d = new Date(v.dia + 'T12:00:00'), mes = v.data.slice(0, 7);
+  const doDia = agDoDia(agItens(v.dia, v.dia), v.dia);
+  const [a, m] = mes.split('-').map(Number), ultimo = agIso(new Date(a, m, 0));
+  const doMes = agItens(mes + '-01', ultimo);
+  const tarefas = doMes.filter((i) => i.fonte === 'tarefa'), alta = tarefas.filter((i) => ['alta', 'urgente'].includes(i.prioridade)).length;
+  return `<aside class="ag-lado">
+    <div class="fin-painel"><div class="fin-painel-cab"><strong>${ic('calendario', 'ic-herda')} ${escapeHtml(d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' }))}</strong><span class="kb-espaco"></span><button type="button" class="kb-btn-ic" aria-label="Fechar" onclick="AG_VIEW.dia = ''; agRender();">${ic('x', 'ic-herda')}</button></div>
+      ${doDia.length ? doDia.map((i) => `<div class="ag-lado-item" style="--c:${AG_CORES[i.fonte]};">${agChip(i)}<small>${{ compromisso: 'Compromisso', bloqueio: 'Bloqueio', tarefa: 'Tarefa', conteudo: 'Conteúdo', feriado: i.tipoFeriado === 'feriado' ? 'Feriado nacional' : i.tipoFeriado === 'ponto' ? 'Ponto facultativo' : 'Data comemorativa', google: 'Google Agenda' }[i.fonte]}${i.cliente ? ' · ' + escapeHtml(i.cliente) : ''}${i.local ? ' · ' + escapeHtml(i.local) : ''}</small></div>`).join('') : '<p class="kb-vazio">Nenhum evento para esta data</p>'}
+      <button type="button" class="btn btn-small" style="width:100%; justify-content:center;" onclick="agAbrirCompromisso(null, { data: '${v.dia}' })">${ic('mais', 'ic-herda')} Compromisso neste dia</button></div>
+    <div class="fin-painel"><strong>Resumo do Mês</strong>
+      <div class="fin-linha"><span>Tarefas</span><span class="ag-num">${tarefas.length}</span></div>
+      <div class="fin-linha"><span>Alta prioridade</span><span class="ag-num vermelho">${alta}</span></div>
+      <div class="fin-linha"><span>Compromissos</span><span class="ag-num">${doMes.filter((i) => i.fonte === 'compromisso').length}</span></div>
+      <div class="fin-linha"><span>Conteúdos</span><span class="ag-num">${doMes.filter((i) => i.fonte === 'conteudo').length}</span></div>
+      <div class="fin-linha"><span>Feriados</span><span class="ag-num">${doMes.filter((i) => i.fonte === 'feriado' && i.tipoFeriado !== 'comemorativa').length}</span></div></div>
+  </aside>`;
+}
+function agMenuExibir(ancora) {
+  const f = AG_VIEW.fontes;
+  kbMostrarPopover(`<div class="kb-pop-titulo">Exibir na agenda</div>${[['compromissos', 'Compromissos'], ['tarefas', 'Tarefas do Kanban'], ['conteudos', 'Conteúdos'], ['feriados', 'Feriados e datas comemorativas']].map(([k, t]) => `<label class="kb-pop-item"><input type="checkbox" ${f[k] ? 'checked' : ''} onchange="AG_VIEW.fontes['${k}'] = this.checked; agSalvarVista(); agRender();"><span>${t}</span></label>`).join('')}`, ancora);
+}
+// pro Dashboard (bloco "Próximas reuniões")
+function agendaProximasReunioes() {
+  if (typeof AG === 'undefined' || !AG.length) return [];
+  const hoje = finHoje(), ate = agIso(agMaisDias(new Date(), 30));
+  const l = [];
+  AG.filter((c) => c.tipo !== 'bloqueio' && (typeof dshDoCliente !== 'function' || dshDoCliente(c.cliente))).forEach((c) => agOcorrencias(c, hoje, ate).forEach((o) => l.push({ data: o._ini, hora: c.hora || '', titulo: c.titulo, cliente: c.cliente, acao: `mostrarSecaoCrm('agenda', document.querySelector('[data-menu-id=&quot;agenda&quot;]'))` })));
+  return l;
+}
+
+// ---------- Novo Compromisso (Simples / Avançado) ----------
+let AG_ED = null;
+function agModoForm() { try { return localStorage.getItem('eagles_agenda_form_v1') === 'avancado' ? 'avancado' : 'simples'; } catch (e) { return 'simples'; } }
+function agAbrirCompromisso(id, padrao) {
+  const c = id ? AG.find((x) => x.id === id) : null;
+  if (!exigirPodeOperar(c ? 'editar compromissos' : 'criar compromissos')) return;
+  if (!AG_CARREGADO) { avisar('A agenda ainda está carregando — aguarde um instante.'); return; }
+  AG_ED = Object.assign({ titulo: '', descricao: '', data: AG_VIEW.dia || finHoje(), hora: '09:00', duracao: 60, local: '', tipo: 'compromisso', variosDias: false, dataFim: '', repetir: null,
+    cliente: '', projetoId: '', tarefaPaiId: '', noKanban: false, kanbanColuna: '', kanbanPosicao: 'topo', tags: [], responsaveis: kbMeuUid() ? [kbMeuUid()] : [], sincronizarGoogle: !!AG_GOOGLE.token }, c ? finLimpar(c) : {}, padrao || {});
+  if (AG_ED.tipo === 'bloqueio' && !c) Object.assign(AG_ED, { titulo: 'Horário bloqueado', noKanban: false });
+  AG_ED.variosDias = !!(AG_ED.dataFim && AG_ED.dataFim > AG_ED.data);
+  AG_ED.__id = c ? c.id : null;
+  AG_ED.__modo = AG_ED.tipo === 'bloqueio' ? 'simples' : agModoForm();
+  agRenderCompromisso();
+  openModal('modal-srv');
+}
+function agRenderCompromisso() {
+  const e = AG_ED, av = e.__modo === 'avancado', bloq = e.tipo === 'bloqueio';
+  const usuarios = typeof KB_USUARIOS !== 'undefined' ? KB_USUARIOS : [];
+  const cols = typeof kbColunas === 'function' ? kbColunas() : [];
+  const clientes = (typeof nomesClientesCrm === 'function' ? nomesClientesCrm() : []);
+  const sw = (campo, ic2, t, d, extra) => `<div class="kb-wiz-caixa"><div class="kb-linha-switch"><div><strong>${ic(ic2)} ${t}</strong><span>${d}</span></div><label class="switch"><input type="checkbox" ${e[campo] ? 'checked' : ''} onchange="AG_ED.${campo} = this.checked; agRenderCompromisso();"><span class="switch-slider"></span></label></div>${e[campo] && extra ? extra : ''}</div>`;
+  const ov = srvGarantirModal();
+  const rol = ov.querySelector('.kb-wiz-corpo') ? ov.querySelector('.kb-wiz-corpo').scrollTop : 0;
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:${av ? 560 : 480}px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${ic('calendario')} ${e.__id ? 'Editar' : (bloq ? 'Bloquear horário' : 'Novo Compromisso')}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    ${bloq ? '' : `<div style="display:flex; align-items:center; gap:10px; margin:-6px 0 10px;"><div class="kb-segmento">${[['simples', 'Simples'], ['avancado', 'Avançado']].map(([m, t]) => `<button type="button" class="${e.__modo === m ? 'ativo' : ''}" onclick="AG_ED.__modo = '${m}'; try { localStorage.setItem('eagles_agenda_form_v1', '${m}'); } catch (x) {} agRenderCompromisso();">${t}</button>`).join('')}</div><small class="kb-vazio-mini">Fica salvo para as próximas</small></div>`}
+    <div class="kb-wiz-corpo">
+      <div class="field full"><label>Título</label><input type="text" maxlength="120" placeholder="Ex: Reunião com cliente" value="${escapeHtml(e.titulo)}" oninput="AG_ED.titulo = this.value"></div>
+      ${bloq ? '' : `<div class="field full"><label>Descrição</label><textarea rows="3" maxlength="2000" oninput="AG_ED.descricao = this.value">${escapeHtml(e.descricao || '')}</textarea></div>`}
+      <div class="ag-campos-3"><div class="field"><label>Data</label><input type="date" value="${escapeHtml(e.data)}" onchange="AG_ED.data = this.value"></div>
+        <div class="field"><label>Hora</label><input type="time" value="${escapeHtml(e.hora || '')}" onchange="AG_ED.hora = this.value"></div>
+        <div class="field"><label>Duração</label><select onchange="AG_ED.duracao = Number(this.value)">${[[15, '15 min'], [30, '30 min'], [45, '45 min'], [60, '1h'], [90, '1h30'], [120, '2h'], [180, '3h'], [240, '4h'], [480, 'Dia de trabalho (8h)']].map(([m, t]) => `<option value="${m}"${Number(e.duracao) === m ? ' selected' : ''}>${t}</option>`).join('')}</select></div></div>
+      ${bloq ? '' : `<div class="field full"><label>Local</label><input type="text" maxlength="300" placeholder="Endereço, link da reunião..." value="${escapeHtml(e.local || '')}" oninput="AG_ED.local = this.value"></div>`}
+      ${av ? `
+        ${sw('variosDias', 'calendario', 'Evento de vários dias', 'Marca o compromisso em todos os dias do período (ex: 10 a 14).', `<div class="field full" style="margin-top:10px;"><label>Até</label><input type="date" value="${escapeHtml(e.dataFim || e.data)}" min="${escapeHtml(e.data)}" onchange="AG_ED.dataFim = this.value"></div>`)}
+        <div class="kb-wiz-caixa"><div class="kb-linha-switch"><div><strong>${ic('recorrente')} Repetir compromisso</strong><span>Cria várias ocorrências automaticamente.</span></div><label class="switch"><input type="checkbox" ${e.repetir ? 'checked' : ''} onchange="AG_ED.repetir = this.checked ? { freq: 'semanal', ate: '' } : null; agRenderCompromisso();"><span class="switch-slider"></span></label></div>
+          ${e.repetir ? `<div class="kb-campos-2" style="margin-top:10px;"><div class="field"><label>Frequência</label><select onchange="AG_ED.repetir.freq = this.value">${[['diaria', 'Todo dia'], ['semanal', 'Toda semana'], ['quinzenal', 'A cada 15 dias'], ['mensal', 'Todo mês']].map(([v, t]) => `<option value="${v}"${e.repetir.freq === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div><div class="field"><label>Até (opcional)</label><input type="date" value="${escapeHtml(e.repetir.ate || '')}" onchange="AG_ED.repetir.ate = this.value"></div></div>` : ''}</div>
+        <div class="kb-wiz-caixa"><div class="cfg-secao-rotulo" style="margin-top:0;">${ic('link', 'ic-herda')} Vincular a (opcional)</div>
+          <div class="ag-campos-3"><div class="field"><label>Cliente</label><input type="text" list="ag-clientes" maxlength="100" placeholder="Nenhum" value="${escapeHtml(e.cliente || '')}" oninput="AG_ED.cliente = this.value"><datalist id="ag-clientes">${clientes.map((n) => `<option value="${escapeHtml(n)}">`).join('')}</datalist></div>
+            <div class="field"><label>Projeto</label><select onchange="AG_ED.projetoId = this.value"><option value="">Nenhum</option>${(typeof KB_PROJETOS !== 'undefined' ? KB_PROJETOS : []).filter((p) => !p.arquivado).map((p) => `<option value="${escapeHtml(p.id)}"${e.projetoId === p.id ? ' selected' : ''}>${escapeHtml(p.nome)}</option>`).join('')}</select></div>
+            <div class="field"><label>Tarefa/Card pai</label><select onchange="AG_ED.tarefaPaiId = this.value"><option value="">Nenhum</option>${(typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS : []).filter((t) => !t.arquivada && !t.agendaId).slice(0, 200).map((t) => `<option value="${escapeHtml(t.id)}"${e.tarefaPaiId === t.id ? ' selected' : ''}>${escapeHtml((t.titulo || '').slice(0, 50))}</option>`).join('')}</select></div></div></div>
+        ${sw('noKanban', 'kanban', 'Mostrar no quadro Kanban', 'O compromisso aparece na agenda e como card no quadro de tarefas.', `<div class="cfg-secao-rotulo">No quadro</div><div class="kb-campos-2"><div class="field"><label>Coluna / etapa</label><select onchange="AG_ED.kanbanColuna = this.value">${cols.filter((c) => !c.final).map((c) => `<option value="${escapeHtml(c.id)}"${(e.kanbanColuna || (cols.find((x) => !x.final) || {}).id) === c.id ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select></div><div class="field"><label>Posição</label><select onchange="AG_ED.kanbanPosicao = this.value"><option value="topo"${e.kanbanPosicao === 'topo' ? ' selected' : ''}>Topo da coluna</option><option value="fim"${e.kanbanPosicao === 'fim' ? ' selected' : ''}>Fim da coluna</option></select></div></div>`)}
+        <div class="cnt-lado-campo"><label>${ic('tag', 'ic-herda')} Tags</label><div class="kb-m-check-add"><input type="text" id="ag-tag" maxlength="30" placeholder="Adicionar tag..." onkeydown="if(event.key==='Enter'){ event.preventDefault(); agAddTag(this.value); }"><button type="button" class="btn btn-small btn-primary" aria-label="Adicionar tag" onclick="agAddTag(document.getElementById('ag-tag').value)">${ic('mais', 'ic-herda')}</button></div>
+          <div class="fin-itens">${(e.tags || []).map((t, i) => `<span class="srv-tag ativo">${escapeHtml(t)} <button type="button" aria-label="Remover" onclick="AG_ED.tags.splice(${i}, 1); agRenderCompromisso();">✕</button></span>`).join('')}${['Urgente', 'Bug', 'Melhoria', 'Design'].filter((t) => !(e.tags || []).includes(t)).map((t) => `<button type="button" class="srv-tag" onclick="agAddTag('${t}')">+ ${t}</button>`).join('')}</div></div>
+        <div class="cnt-lado-campo"><label>${ic('pessoas', 'ic-herda')} Responsáveis da Equipe</label><div class="fin-itens">${usuarios.map((u) => { const on = (e.responsaveis || []).includes(u.uid); return `<button type="button" class="srv-tag${on ? ' ativo' : ''}" onclick="AG_ED.responsaveis = ${on ? `AG_ED.responsaveis.filter((x) => x !== '${escapeParaOnclick(u.uid)}')` : `(AG_ED.responsaveis || []).concat(['${escapeParaOnclick(u.uid)}'])`}; agRenderCompromisso();">${escapeHtml(u.nome)}${on ? ' ✕' : ''}</button>`; }).join('') || '<span class="kb-vazio-mini">Só você.</span>'}</div></div>` : ''}
+      ${bloq ? '' : `<div class="kb-wiz-caixa"><div class="kb-linha-switch"><div><strong>Sincronizar com Google Agenda</strong><span>${AG_GOOGLE.token ? 'Conectado' + (AG_GOOGLE.email ? ' (' + escapeHtml(AG_GOOGLE.email) + ')' : '') + ': o compromisso vai pro seu Google Agenda.' : 'Conecte sua conta Google para enviar este compromisso ao Google Calendar.'}</span></div><label class="switch"><input type="checkbox" ${e.sincronizarGoogle ? 'checked' : ''} onchange="AG_ED.sincronizarGoogle = this.checked"><span class="switch-slider"></span></label></div>
+        ${AG_GOOGLE.token ? '' : '<button type="button" class="kb-link" style="padding:0; margin-top:6px;" onclick="agGoogleConectar().then(() => AG_ED && agRenderCompromisso())">Conectar Google Calendar →</button>'}</div>`}
+    </div>
+    <div class="cfg-modal-rodape">${e.__id ? `<button type="button" class="btn btn-ghost kb-btn-perigo" onclick="agExcluir('${escapeParaOnclick(e.__id)}')">${ic('lixeira', 'ic-herda')} Excluir</button>` : ''}<span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="agSalvar()">${e.__id ? 'Salvar' : 'Criar'}</button></div>
+  </div>`;
+  if (rol) { const c = ov.querySelector('.kb-wiz-corpo'); if (c) c.scrollTop = rol; }
+}
+function agAddTag(v) { const t = String(v || '').trim().slice(0, 30); if (!t || (AG_ED.tags || []).includes(t)) return; AG_ED.tags = (AG_ED.tags || []).concat([t]).slice(0, 10); agRenderCompromisso(); }
+async function agSalvar() {
+  const e = AG_ED;
+  if (!String(e.titulo || '').trim()) { avisar('Dê um título ao compromisso.'); return; }
+  if (!e.data) { avisar('Escolha a data.'); return; }
+  if (e.variosDias && e.dataFim && e.dataFim < e.data) { avisar('A data final precisa ser depois da inicial.'); return; }
+  const agora = new Date().toISOString();
+  const dados = { titulo: e.titulo.trim().slice(0, 120), descricao: String(e.descricao || '').slice(0, 2000), data: e.data, hora: e.hora || '', duracao: Number(e.duracao) || 60, local: String(e.local || '').slice(0, 300),
+    tipo: e.tipo === 'bloqueio' ? 'bloqueio' : 'compromisso', dataFim: e.variosDias ? (e.dataFim || e.data) : '', repetir: e.repetir && e.repetir.freq ? { freq: e.repetir.freq, ate: e.repetir.ate || '' } : null,
+    cliente: String(e.cliente || '').trim().slice(0, 100), projetoId: e.projetoId || '', tarefaPaiId: e.tarefaPaiId || '', tags: e.tags || [], responsaveis: e.responsaveis || [], sincronizarGoogle: !!e.sincronizarGoogle, atualizadoEm: agora };
+  let c = e.__id ? AG.find((x) => x.id === e.__id) : null;
+  if (c) Object.assign(c, dados);
+  else { c = Object.assign({ id: genId('ag'), criadoEm: agora, criadoPor: USUARIO_UID || '', google: null, kanbanTarefaId: '' }, dados); AG.push(c); }
+  // card no Kanban
+  if (e.noKanban && !c.kanbanTarefaId && typeof kbCriarTarefa === 'function' && KB_CARREGADO) {
+    const cols = kbColunas(), col = e.kanbanColuna || (cols.find((x) => !x.final) || cols[0] || {}).id;
+    const t = kbCriarTarefa({ titulo: dados.titulo, descricao: [dados.descricao, dados.local ? 'Local: ' + dados.local : ''].filter(Boolean).join('\n'), prazo: dados.data, prazoHora: dados.hora, cliente: dados.cliente, projetoId: dados.projetoId, status: col, responsavel: dados.responsaveis[0] || '', etiquetas: (dados.tags || []).concat(['agenda']), agendaId: c.id });
+    if (t) {
+      c.kanbanTarefaId = t.id;
+      if (e.kanbanPosicao === 'topo') { const min = Math.min(0, ...KB_TAREFAS.filter((x) => x.status === col && x.id !== t.id).map((x) => Number(x.ordem) || 0)); kbAtualizar(t.id, { ordem: min - 1 }); }
+    }
+  } else if (c.kanbanTarefaId && typeof kbAtualizar === 'function' && KB_TAREFAS.some((x) => x.id === c.kanbanTarefaId)) kbAtualizar(c.kanbanTarefaId, { titulo: dados.titulo, prazo: dados.data, prazoHora: dados.hora });
+  if (agNuvem()) { try { await agRef().doc(c.id).set(finLimpar(c)); } catch (err) { avisar(mensagemErroFirestore(err)); return; } } else agGravarLocal();
+  srvFecharModal();
+  agRender();
+  if (c.sincronizarGoogle) agGoogleEnviar(c);
+}
+function agExcluir(id) {
+  const c = AG.find((x) => x.id === id);
+  if (!c) return;
+  confirmarAcao(`Excluir "${c.titulo}"?${c.repetir ? ' Todas as repetições saem junto.' : ''}${c.google && c.google.eventId ? ' Ele sai também do seu Google Agenda.' : ''}`, async () => {
+    AG = AG.filter((x) => x.id !== id);
+    if (agNuvem()) agRef().doc(id).delete().catch((e) => avisar(mensagemErroFirestore(e))); else agGravarLocal();
+    if (c.google && c.google.eventId && AG_GOOGLE.token) agGoogleApi('DELETE', 'calendars/primary/events/' + encodeURIComponent(c.google.eventId)).catch(() => {});
+    srvFecharModal(); agRender();
+  }, 'Excluir compromisso');
+}
+
+// =====================================================================
+// ---------- Google Agenda ----------
+// =====================================================================
+// Sem servidor: o login do Firebase pede à conta Google da pessoa a
+// permissão de agenda e devolve um acesso que vale ~1 hora. O sistema
+// cria/edita/exclui os eventos e lê a agenda dela enquanto está aberto.
+const AG_GOOGLE_ESCOPO = 'https://www.googleapis.com/auth/calendar.events';
+let AG_GOOGLE = { token: null, expira: 0, email: '', eventos: [], ultimaBusca: '' };
+(function agGoogleRestaurar() { try { const g = JSON.parse(sessionStorage.getItem('eagles_google_agenda_v1') || 'null'); if (g && g.expira > Date.now()) Object.assign(AG_GOOGLE, { token: g.token, expira: g.expira, email: g.email || '' }); } catch (e) {} })();
+function agGoogleGuardar() { try { sessionStorage.setItem('eagles_google_agenda_v1', JSON.stringify({ token: AG_GOOGLE.token, expira: AG_GOOGLE.expira, email: AG_GOOGLE.email })); } catch (e) {} }
+async function agGoogleConectar() {
+  if (typeof firebase === 'undefined' || !firebase.auth || !firebase.auth().currentUser) { avisar('Entre no sistema (com o Firebase conectado) para ligar o Google Agenda.'); return false; }
+  const prov = new firebase.auth.GoogleAuthProvider();
+  prov.addScope(AG_GOOGLE_ESCOPO);
+  prov.setCustomParameters({ prompt: 'consent' });
+  const user = firebase.auth().currentUser;
+  let r;
+  try {
+    try { r = await user.linkWithPopup(prov); }
+    catch (e) { if (e && e.code === 'auth/provider-already-linked') r = await user.reauthenticateWithPopup(prov); else throw e; }
+  } catch (e) {
+    const msg = {
+      'auth/popup-closed-by-user': '', 'auth/cancelled-popup-request': '',
+      'auth/popup-blocked': 'O navegador bloqueou a janela do Google. Libere pop-ups para este site e tente de novo.',
+      'auth/operation-not-allowed': 'O login com Google ainda não está ligado no Firebase. Veja "Como configurar" no botão do Google Agenda.',
+      'auth/credential-already-in-use': 'Essa conta Google já está ligada a outro usuário do sistema. Use outra conta Google.',
+      'auth/unauthorized-domain': 'Este endereço não está autorizado no Firebase (Authentication → Configurações → Domínios autorizados).',
+    }[e && e.code];
+    if (msg !== '') avisar(msg || 'Não foi possível conectar ao Google agora: ' + ((e && e.message) || ''), 'Google Agenda');
+    return false;
+  }
+  const cred = r && r.credential;
+  if (!cred || !cred.accessToken) { avisar('O Google não devolveu a permissão de agenda. Tente de novo e marque a caixa de acesso ao Google Agenda.', 'Google Agenda'); return false; }
+  AG_GOOGLE.token = cred.accessToken; AG_GOOGLE.expira = Date.now() + 55 * 60000;
+  AG_GOOGLE.email = (r.user && (r.user.providerData || []).find((p) => p.providerId === 'google.com') || {}).email || '';
+  agGoogleGuardar();
+  if (agNuvem() && USUARIO_UID) firestoreDb.collection('usuarios').doc(USUARIO_UID).set({ googleAgenda: { conectado: true, email: AG_GOOGLE.email, em: new Date().toISOString() } }, { merge: true }).catch(() => {});
+  await agGoogleSincronizarPendentes();
+  await agGoogleBuscar(true);
+  agRender();
+  avisar(`Google Agenda conectado${AG_GOOGLE.email ? ' (' + AG_GOOGLE.email + ')' : ''}. Seus eventos aparecem aqui, e os compromissos marcados para sincronizar vão pra sua agenda.`, 'Google Agenda');
+  return true;
+}
+function agGoogleDesconectar() { AG_GOOGLE.token = null; AG_GOOGLE.eventos = []; try { sessionStorage.removeItem('eagles_google_agenda_v1'); } catch (e) {} agRender(); }
+async function agGoogleApi(metodo, caminho, corpo) {
+  if (!AG_GOOGLE.token || AG_GOOGLE.expira < Date.now()) { AG_GOOGLE.token = null; throw new Error('sem-token'); }
+  const r = await fetch('https://www.googleapis.com/calendar/v3/' + caminho, { method: metodo, headers: Object.assign({ Authorization: 'Bearer ' + AG_GOOGLE.token }, corpo ? { 'Content-Type': 'application/json' } : {}), body: corpo ? JSON.stringify(corpo) : undefined });
+  if (r.status === 401) { agGoogleDesconectar(); throw new Error('expirou'); }
+  if (!r.ok && r.status !== 204 && r.status !== 410) throw new Error('google-' + r.status);
+  return r.status === 204 || r.status === 410 ? null : r.json();
+}
+function agGoogleEvento(c) {
+  const ev = { summary: c.titulo, description: c.descricao || '', location: c.local || '' };
+  const fimDia = c.dataFim && c.dataFim > c.data ? c.dataFim : c.data;
+  if (!c.hora) { ev.start = { date: c.data }; ev.end = { date: agIso(agMaisDias(new Date(fimDia + 'T12:00:00'), 1)) }; }
+  else {
+    const ini = new Date(`${c.data}T${c.hora}:00`), fim = new Date(`${fimDia}T${c.hora}:00`); fim.setMinutes(fim.getMinutes() + (Number(c.duracao) || 60));
+    const fmt = (d) => `${agIso(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00`;
+    ev.start = { dateTime: fmt(ini), timeZone: 'America/Sao_Paulo' }; ev.end = { dateTime: fmt(fim), timeZone: 'America/Sao_Paulo' };
+  }
+  if (c.repetir && c.repetir.freq) { const f = { diaria: 'DAILY', semanal: 'WEEKLY', quinzenal: 'WEEKLY;INTERVAL=2', mensal: 'MONTHLY' }[c.repetir.freq]; ev.recurrence = [`RRULE:FREQ=${f}${c.repetir.ate ? ';UNTIL=' + c.repetir.ate.replace(/-/g, '') + 'T235959Z' : ''}`]; }
+  return ev;
+}
+async function agGoogleEnviar(c) {
+  if (!c.sincronizarGoogle) return;
+  if (!AG_GOOGLE.token) return; // fica pendente até conectar
+  try {
+    const r = c.google && c.google.eventId ? await agGoogleApi('PATCH', 'calendars/primary/events/' + encodeURIComponent(c.google.eventId), agGoogleEvento(c)) : await agGoogleApi('POST', 'calendars/primary/events', agGoogleEvento(c));
+    if (r && r.id && !(c.google && c.google.eventId === r.id)) {
+      c.google = { eventId: r.id, link: r.htmlLink || '', em: new Date().toISOString() };
+      if (agNuvem()) agRef().doc(c.id).set({ google: c.google }, { merge: true }).catch(() => {}); else agGravarLocal();
+      agRender();
+    }
+  } catch (e) { if (e.message === 'expirou') avisar('A conexão com o Google expirou (dura cerca de 1 hora). Clique no botão do Google Agenda para reconectar.', 'Google Agenda'); else console.error('Google Agenda:', e); }
+}
+async function agGoogleSincronizarPendentes() {
+  // só os compromissos que EU criei (pra não duplicar na agenda de cada colega)
+  for (const c of AG.filter((x) => x.sincronizarGoogle && !(x.google && x.google.eventId) && (!x.criadoPor || x.criadoPor === USUARIO_UID))) await agGoogleEnviar(c);
+}
+async function agGoogleBuscar(forcar) {
+  if (!AG_GOOGLE.token) return;
+  const d = new Date(AG_VIEW.data + 'T12:00:00');
+  const de = new Date(d.getFullYear(), d.getMonth() - 1, 1), ate = new Date(d.getFullYear(), d.getMonth() + 2, 0);
+  const chave = agIso(de) + agIso(ate);
+  if (!forcar && AG_GOOGLE.ultimaBusca === chave) return;
+  AG_GOOGLE.ultimaBusca = chave;
+  try {
+    const r = await agGoogleApi('GET', `calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=250&timeMin=${encodeURIComponent(de.toISOString())}&timeMax=${encodeURIComponent(ate.toISOString())}`);
+    AG_GOOGLE.eventos = ((r && r.items) || []).filter((g) => g.status !== 'cancelled').map((g) => {
+      const ini = (g.start && (g.start.date || (g.start.dateTime || '').slice(0, 10))) || '';
+      let fim = (g.end && (g.end.date ? agIso(agMaisDias(new Date(g.end.date + 'T12:00:00'), -1)) : (g.end.dateTime || '').slice(0, 10))) || ini;
+      if (fim < ini) fim = ini;
+      const hora = g.start && g.start.dateTime ? new Date(g.start.dateTime).toTimeString().slice(0, 5) : '';
+      const dur = g.start && g.start.dateTime && g.end && g.end.dateTime ? Math.round((new Date(g.end.dateTime) - new Date(g.start.dateTime)) / 60000) : 60;
+      return { id: (g.recurringEventId || g.id), idOcorrencia: g.id, titulo: String(g.summary || '(sem título)').slice(0, 120), ini, fim, hora, dur, local: String(g.location || '').slice(0, 200) };
+    });
+    agRender();
+  } catch (e) { if (e.message !== 'sem-token') console.error('Google Agenda (leitura):', e); }
+}
+function agMenuGoogle(ancora) {
+  kbMostrarPopover(AG_GOOGLE.token
+    ? `<div class="kb-pop-form"><strong>${ic('calendario', 'ic-herda')} Google Calendar</strong><p class="kb-vazio-mini" style="margin:4px 0 10px;">Conectado${AG_GOOGLE.email ? ': ' + escapeHtml(AG_GOOGLE.email) : ''}. ${AG_GOOGLE.eventos.length} evento(s) da sua agenda no período.</p>
+        <button type="button" class="btn btn-small" onclick="kbFecharPopovers(); agGoogleSincronizarPendentes().then(() => agGoogleBuscar(true))">${ic('recorrente', 'ic-herda')} Sincronizar agora</button>
+        <button type="button" class="btn btn-small btn-ghost" onclick="kbFecharPopovers(); agGoogleDesconectar()">Desconectar</button></div>`
+    : `<div class="kb-pop-form"><strong>${ic('calendario', 'ic-herda')} Google Calendar</strong><p class="kb-vazio-mini" style="margin:4px 0 10px;">Conecte para sincronizar eventos</p>
+        <button type="button" class="btn btn-small btn-primary" onclick="kbFecharPopovers(); agGoogleConectar()">${ic('link', 'ic-herda')} Conectar</button>
+        <button type="button" class="kb-link" onclick="kbFecharPopovers(); agComoConfigurarGoogle()">Como configurar</button></div>`, ancora);
+}
+function agComoConfigurarGoogle() {
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Configurar o Google Agenda (uma vez)</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <ol class="ag-passos">
+      <li><b>Ligar o login com Google:</b> Firebase Console → Authentication → Sign-in method → Google → Ativar → Salvar.</li>
+      <li><b>Ligar a API do Google Agenda:</b> no Google Cloud Console, escolha o mesmo projeto do Firebase → APIs e serviços → Biblioteca → "Google Calendar API" → Ativar.</li>
+      <li><b>Tela de consentimento:</b> APIs e serviços → Tela de consentimento OAuth → em Escopos, adicione <code>.../auth/calendar.events</code>. Enquanto o app não for verificado pelo Google, adicione os e-mails de quem vai usar em "Usuários de teste" (até 100).</li>
+      <li><b>Domínio:</b> o endereço do site precisa estar em Authentication → Configurações → Domínios autorizados.</li>
+    </ol>
+    <p class="kb-vazio-mini">Depois disso, cada pessoa clica em "Conectar" na Agenda e autoriza a própria conta Google. A conexão dura cerca de 1 hora por sessão; depois, é só clicar em Conectar de novo.</p>
+  </div>`;
+  openModal('modal-srv');
+}
+
+
+// =====================================================================
+// ---------- Backup completo (Configurações → Backup) ----------
+// =====================================================================
+// Baixa um arquivo com TODOS os dados da empresa e restaura a partir dele.
+// Restaurar devolve o que está no arquivo (sobrescreve esses itens) e NÃO
+// apaga o que foi criado depois do backup. Antes de restaurar, baixa um
+// backup do estado atual. Logins não entram (contas não se recriam).
+const BKP_META_KEY = 'eagles_backup_meta_v1';
+const BKP_SUBCOLECOES = ['dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'agenda', 'portal', 'portal_pedidos', 'receitas_pendentes'];
+const BKP_PUBLICAS = ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'conteudos_publicos', 'leads_publicos'];
+const BKP_LEMBRETE_DIAS = 30;
+const BKP_NOMES = { dados: 'Cadastros, CRM e configurações', kanban_tarefas: 'Tarefas do Kanban', kanban_projetos: 'Projetos', fin_lancamentos: 'Lançamentos financeiros', fin_recorrencias: 'Contas recorrentes', fin_meta: 'Controle do Financeiro', conteudos: 'Conteúdos', agenda: 'Compromissos', portal: 'Portal do Cliente', portal_pedidos: 'Pedidos do portal', receitas_pendentes: 'Receitas pendentes', propostas_publicas: 'Propostas', briefings_publicos: 'Briefings', planos_publicos: 'Planos publicados', paginas_publicas: 'Página pública', conteudos_publicos: 'Links de aprovação', leads_publicos: 'Leads do site', pix_publico: 'PIX' };
+let BKP_META = null;
+let BKP_ARQUIVO = null;
+
+function bkpNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
+function bkpBase() { return firestoreDb.collection('tenants').doc(TENANT_ID); }
+async function bkpColetar() {
+  const out = { app: 'eagles-labz', versao: 1, tenantId: TENANT_ID, empresa: (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '', geradoEm: new Date().toISOString(), geradoPor: USUARIO_NOME || '', colecoes: {} };
+  for (const sub of BKP_SUBCOLECOES) {
+    const snap = await bkpBase().collection(sub).get();
+    const docs = {}; snap.forEach((d) => { docs[d.id] = d.data(); });
+    out.colecoes[sub] = docs;
+  }
+  for (const col of BKP_PUBLICAS) {
+    const snap = await firestoreDb.collection(col).where('tenantId', '==', TENANT_ID).get();
+    const docs = {}; snap.forEach((d) => { docs[d.id] = d.data(); });
+    out.colecoes[col] = docs;
+  }
+  const pix = await firestoreDb.collection('pix_publico').doc(TENANT_ID).get().catch(() => null);
+  out.colecoes.pix_publico = pix && pix.exists ? { [TENANT_ID]: pix.data() } : {};
+  return out;
+}
+function bkpBaixarArquivo(obj, prefixo) {
+  const nome = `${prefixo || 'backup'}-${kbNomeNorm(obj.empresa || 'empresa').replace(/[^a-z0-9]+/g, '-').slice(0, 30) || 'empresa'}-${obj.geradoEm.slice(0, 10)}.json`;
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj)], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+  return nome;
+}
+function bkpContar(obj) { return Object.entries(obj.colecoes || {}).map(([c, docs]) => [c, Object.keys(docs || {}).length]).filter(([, n]) => n > 0); }
+async function bkpGerar() {
+  if (!nivelEhDiretor()) { avisarSemPermissaoNivel('fazer backup (só o Diretor)'); return; }
+  if (!bkpNuvem()) { avisar('O backup precisa do sistema conectado ao Firebase.'); return; }
+  const btn = document.getElementById('bkp-btn-gerar'); if (btn) { btn.disabled = true; btn.textContent = 'Gerando...'; }
+  try {
+    const obj = await bkpColetar();
+    const nome = bkpBaixarArquivo(obj, 'backup');
+    BKP_META = { ultimoEm: obj.geradoEm, por: USUARIO_NOME || '', itens: bkpContar(obj).reduce((a, [, n]) => a + n, 0) };
+    cloudSet(BKP_META_KEY, BKP_META);
+    renderAbaBackupConfig();
+    avisar(`Backup baixado: ${nome}\n\nGuarde esse arquivo num lugar seguro (Google Drive, OneDrive ou um pendrive). Ele tem todos os dados da empresa, inclusive o financeiro.`, 'Backup');
+  } catch (err) { console.error(err); avisar('Não foi possível gerar o backup agora: ' + mensagemErroFirestore(err)); }
+  finally { const b = document.getElementById('bkp-btn-gerar'); if (b) { b.disabled = false; b.textContent = 'Baixar backup completo'; } }
+}
+async function bkpLerArquivo(input) {
+  const f = input.files && input.files[0];
+  BKP_ARQUIVO = null;
+  if (!f) return;
+  try {
+    const obj = JSON.parse(await f.text());
+    if (obj.app !== 'eagles-labz' || !obj.colecoes || typeof obj.colecoes !== 'object') throw new Error('formato');
+    if (obj.tenantId !== TENANT_ID) { avisar('Esse backup é de OUTRA empresa. Por segurança, só dá pra restaurar o backup da própria empresa.'); input.value = ''; return; }
+    BKP_ARQUIVO = obj;
+  } catch (e) { avisar('Esse arquivo não é um backup válido do sistema.'); input.value = ''; return; }
+  renderAbaBackupConfig();
+}
+async function bkpRestaurar() {
+  const obj = BKP_ARQUIVO;
+  if (!obj || !nivelEhDiretor() || !bkpNuvem()) return;
+  const digitado = window.prompt('Restaurar devolve ao banco tudo o que está no arquivo (sobrescrevendo esses itens). O que foi criado depois do backup continua. Antes, o sistema baixa um backup do estado atual.\n\nPara confirmar, digite RESTAURAR:');
+  if (digitado === null) return;
+  if (String(digitado).trim().toUpperCase() !== 'RESTAURAR') { avisar('Palavra de confirmação incorreta. Nada foi alterado.'); return; }
+  const btn = document.getElementById('bkp-btn-restaurar'); if (btn) { btn.disabled = true; btn.textContent = 'Restaurando...'; }
+  try {
+    bkpBaixarArquivo(await bkpColetar(), 'antes-de-restaurar'); // segurança: o estado atual
+    const escritas = [];
+    Object.entries(obj.colecoes).forEach(([col, docs]) => {
+      Object.entries(docs || {}).forEach(([id, dados]) => {
+        if (!dados || typeof dados !== 'object' || !/^[\w.\-:@]{1,200}$/.test(id)) return;
+        let ref = null;
+        if (BKP_SUBCOLECOES.includes(col)) ref = bkpBase().collection(col).doc(id);
+        else if (BKP_PUBLICAS.includes(col)) { if (dados.tenantId !== TENANT_ID) return; ref = firestoreDb.collection(col).doc(id); }
+        else if (col === 'pix_publico' && id === TENANT_ID) ref = firestoreDb.collection('pix_publico').doc(id);
+        if (ref) escritas.push([ref, dados]);
+      });
+    });
+    let feitos = 0, falhas = 0;
+    for (let i = 0; i < escritas.length; i += 400) {
+      const lote = firestoreDb.batch();
+      escritas.slice(i, i + 400).forEach(([ref, dados]) => lote.set(ref, dados));
+      try { await lote.commit(); feitos += Math.min(400, escritas.length - i); }
+      catch (e) { // um lote recusado (ex.: algum item sem permissão): tenta um por um pra salvar o resto
+        for (const [ref, dados] of escritas.slice(i, i + 400)) { try { await ref.set(dados); feitos++; } catch (e2) { falhas++; } }
+      }
+    }
+    BKP_ARQUIVO = null;
+    avisar(`Restauração concluída: ${feitos} item(ns) devolvido(s)${falhas ? `, ${falhas} não puderam ser restaurados` : ''}. Recarregue a página para ver tudo atualizado.`, 'Backup');
+    renderAbaBackupConfig();
+  } catch (err) { console.error(err); avisar('Não foi possível restaurar: ' + mensagemErroFirestore(err)); }
+  finally { const b = document.getElementById('bkp-btn-restaurar'); if (b) { b.disabled = false; b.textContent = 'Restaurar'; } }
+}
+
+// ---------- aba em Configurações ----------
+function renderAbaBackupConfig() {
+  const el = document.getElementById('cfg-conteudo-aba');
+  if (!el) return;
+  if (BKP_META === null && bkpNuvem()) { BKP_META = {}; cloudWatch(BKP_META_KEY, {}, (d) => { BKP_META = d || {}; if (CFG_ABA_ATUAL === 'backup') renderAbaBackupConfig(); }); }
+  const m = BKP_META || {};
+  const dias = m.ultimoEm ? Math.floor((Date.now() - new Date(m.ultimoEm)) / 86400000) : null;
+  const diretor = nivelEhDiretor();
+  const lemb = bkpPrefLembrete();
+  el.innerHTML = `<div class="bkp">
+    <div class="fin-painel"><div class="fin-painel-cab"><strong style="font-size:16px;">${ic('baixar')} Backup completo</strong></div>
+      <p class="cfg-secao-nota" style="margin-top:0;">Baixa um arquivo com <b>todos os dados da empresa</b>: cadastros, clientes, CRM, Kanban, conteúdos, agenda, financeiro, portal e páginas públicas. Guarde num lugar seguro (Google Drive, OneDrive ou pendrive).</p>
+      <div class="bkp-status ${dias === null ? 'nunca' : dias > BKP_LEMBRETE_DIAS ? 'atrasado' : 'ok'}">${dias === null ? `${ic('alerta', 'ic-herda')} Nenhum backup feito ainda.` : `${dias > BKP_LEMBRETE_DIAS ? ic('alerta', 'ic-herda') : ic('aprovado', 'ic-herda')} Último backup: <b>${escapeHtml(formatDatePt(m.ultimoEm.slice(0, 10)))}</b> (${dias === 0 ? 'hoje' : `há ${dias} dia${dias > 1 ? 's' : ''}`})${m.por ? ' por ' + escapeHtml(m.por) : ''}.`}</div>
+      ${diretor ? '<button type="button" class="btn btn-primary" id="bkp-btn-gerar" onclick="bkpGerar()">Baixar backup completo</button>' : '<p class="kb-vazio-mini">Só o Diretor pode fazer e restaurar backups (o arquivo inclui o financeiro).</p>'}
+      <p class="kb-vazio-mini" style="margin-bottom:0;">Os logins da equipe e dos clientes não entram no arquivo: contas de acesso não podem ser recriadas a partir dele.</p></div>
+    ${diretor ? `<div class="fin-painel"><div class="fin-painel-cab"><strong style="font-size:16px;">${ic('recorrente')} Restaurar backup</strong></div>
+      <p class="cfg-secao-nota" style="margin-top:0;">Devolve ao banco tudo o que está no arquivo (sobrescrevendo esses itens). O que foi criado <b>depois</b> do backup continua. Antes de restaurar, o sistema baixa um backup do estado atual — assim nada se perde se você escolher o arquivo errado.</p>
+      <input type="file" accept=".json,application/json" id="bkp-arquivo" onchange="bkpLerArquivo(this)">
+      ${BKP_ARQUIVO ? `<div class="bkp-previa"><strong>Backup de ${escapeHtml(formatDatePt(String(BKP_ARQUIVO.geradoEm || '').slice(0, 10)))}${BKP_ARQUIVO.geradoPor ? ' · por ' + escapeHtml(BKP_ARQUIVO.geradoPor) : ''}</strong>
+        ${bkpContar(BKP_ARQUIVO).map(([c, n]) => `<div class="fin-linha"><span>${escapeHtml(BKP_NOMES[c] || c)}</span><span>${n}</span></div>`).join('')}
+        <button type="button" class="btn btn-primary" id="bkp-btn-restaurar" onclick="bkpRestaurar()">Restaurar</button></div>` : ''}</div>` : ''}
+    ${diretor ? `<div class="fin-painel"><div class="kb-linha-switch"><div><strong>Lembrete a cada ${BKP_LEMBRETE_DIAS} dias</strong><span>Avisa quando o último backup tiver mais de ${BKP_LEMBRETE_DIAS} dias.</span></div><label class="switch"><input type="checkbox" ${lemb.naoMostrar ? '' : 'checked'} onchange="bkpSalvarPrefLembrete(!this.checked)"><span class="switch-slider"></span></label></div></div>` : ''}
+  </div>`;
+}
+
+// ---------- lembrete a cada 30 dias ----------
+function bkpPrefLembrete() { try { return JSON.parse(localStorage.getItem(chaveLocalTenant('eagles_backup_lembrete_v1')) || '{}'); } catch (e) { return {}; } }
+function bkpSalvarPrefLembrete(naoMostrar) {
+  try { localStorage.setItem(chaveLocalTenant('eagles_backup_lembrete_v1'), JSON.stringify({ naoMostrar: !!naoMostrar, em: new Date().toISOString() })); } catch (e) {}
+  if (bkpNuvem() && USUARIO_UID) firestoreDb.collection('usuarios').doc(USUARIO_UID).set({ backupLembrete: { naoMostrar: !!naoMostrar } }, { merge: true }).catch(() => {});
+  if (naoMostrar) avisar('Lembrete desativado.\n\nMesmo assim, faça backups periódicos: eles são a única forma de recuperar dados apagados por engano, uma edição errada ou um acesso indevido. Um backup por mês já protege a empresa de perder semanas de trabalho.\n\nVocê pode reativar o lembrete em Configurações → Backup.', 'Backup periódico');
+  else avisar(`Lembrete ativado: você vai ser avisado sempre que o último backup tiver mais de ${BKP_LEMBRETE_DIAS} dias.`, 'Backup');
+}
+async function bkpVerificarLembrete() {
+  if (!bkpNuvem() || !nivelEhDiretor() || USUARIO_ROLE === 'SuperAdmin') return;
+  try { if (sessionStorage.getItem('eagles_backup_lembrete_visto')) return; sessionStorage.setItem('eagles_backup_lembrete_visto', '1'); } catch (e) {}
+  let pref = bkpPrefLembrete();
+  try { const u = (await firestoreDb.collection('usuarios').doc(USUARIO_UID).get()).data() || {}; if (u.backupLembrete) pref = u.backupLembrete; } catch (e) {}
+  if (pref.naoMostrar) return;
+  let meta = {};
+  try { meta = (await cloudGetForce(BKP_META_KEY, {})) || {}; } catch (e) {}
+  const dias = meta.ultimoEm ? Math.floor((Date.now() - new Date(meta.ultimoEm)) / 86400000) : null;
+  if (dias !== null && dias < BKP_LEMBRETE_DIAS) return;
+  bkpMostrarLembrete(dias);
+}
+function bkpMostrarLembrete(dias) {
+  let el = document.getElementById('bkp-lembrete');
+  if (!el) { el = document.createElement('div'); el.id = 'bkp-lembrete'; el.className = 'bkp-lembrete'; document.body.appendChild(el); }
+  el.innerHTML = `<div class="bkp-lembrete-caixa" role="dialog" aria-modal="true" aria-label="Lembrete de backup">
+    <strong>${ic('alerta', 'ic-herda')} Hora de fazer backup</strong>
+    <p>${dias === null ? 'Você ainda não fez nenhum backup dos dados da empresa.' : `O último backup foi há ${dias} dias.`} Leva menos de um minuto e protege tudo: clientes, CRM, conteúdos, agenda e financeiro.</p>
+    <label class="kb-imp-opcao"><input type="checkbox" id="bkp-nao-mostrar"> Não mostrar novamente</label>
+    <div class="cfg-modal-rodape"><button type="button" class="btn" onclick="bkpFecharLembrete()">Agora não</button><a class="btn btn-primary" href="configuracoes.html#backup" onclick="bkpFecharLembrete(true)">Fazer backup agora</a></div>
+  </div>`;
+}
+function bkpFecharLembrete(indo) {
+  const marcado = document.getElementById('bkp-nao-mostrar') && document.getElementById('bkp-nao-mostrar').checked;
+  const el = document.getElementById('bkp-lembrete'); if (el) el.remove();
+  if (marcado) bkpSalvarPrefLembrete(true);
+  void indo;
+}
+
 // =====================================================================
 // ---------- Central de Atendimento (chatbot por regras) ----------
 // =====================================================================
@@ -14146,6 +16212,10 @@ const CHATBOT_FAQ = [
     { p: 'Como envio um briefing?', r: 'CRM → Briefings → escolha um dos modelos (ou um template seu) e o cliente. O sistema gera um link pro cliente responder sem precisar de login. As respostas aparecem em "Ver respostas".' },
     { p: 'Como cadastro meus serviços?', r: 'Operacional → Serviços → "+ Novo Serviço": use uma das sugestões prontas ou crie do zero, com preço, categoria, recorrência e, se quiser, um pacote de conteúdos por mês — que já preenche o Novo Projeto. No orçamento, "Adicionar do catálogo" puxa nome e valor.' },
     { p: 'Como crio o site da minha empresa?', r: 'Páginas → Landing pages (Página Pública). Escolha cores e layout, clique em "Personalizar Página" pra editar cada seção no Editor Visual, configure a Captura de Leads e defina o endereço em Configurações → Links Padrão. Quem preencher o formulário vira cliente e negócio no Pipeline sozinho.' },
+        { p: 'Como meu cliente entra no portal?', r: 'CRM → Operacional → Portal do cliente → Logins: crie um login (nome, e-mail e senha) para o cliente. Ele entra pelo link do portal (botão "Copiar link") e vê só os conteúdos dele: aprova, pede ajustes, baixa arquivos e manda ideias. Logins de cliente não contam no limite de usuários do seu plano.' },
+        { p: 'Como conecto o Google Agenda?', r: 'Operacional → Agenda → botão do calendário (ao lado de "Hoje") → Conectar. Na primeira vez, o Diretor precisa ligar o login com Google no Firebase e a API do Google Agenda — o passo a passo está em "Como configurar", no mesmo botão. A conexão dura cerca de 1 hora; depois é só conectar de novo.' },
+        { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
+        { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
         { p: 'Como mostro meus planos pro cliente?', r: 'Serviços → aba Planos: crie os planos (valor fixo + serviços inclusos) e clique em "Apresentação pública". Escolha endereço, cores e quais planos aparecem, e clique em "Salvar e publicar" — o link abre sem login.' },
     { p: 'O financeiro do CRM e do ERP é o mesmo?', r: 'Só pra quem tem os dois planos (ERP + CRM): aí o Financeiro é um só, com os mesmos números nos dois lados. Com um plano só, cada um tem o seu — o Financeiro do CRM mostra só o que veio do CRM (negócios, vendas, contratos) e o do ERP só o que veio do ERP (pedidos e lançamentos feitos lá). O topo da tela do Financeiro mostra qual é o seu caso.' },
@@ -17994,7 +20064,7 @@ function escutarUsuariosTenant() {
   if (!FIREBASE_PRONTO || !TENANT_ID) return;
   firestoreDb.collection('usuarios').where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
     USUARIOS_TENANT_DATA = [];
-    snap.forEach((doc) => USUARIOS_TENANT_DATA.push({ uid: doc.id, ...doc.data() }));
+    snap.forEach((doc) => { if (doc.data().role !== 'Cliente') USUARIOS_TENANT_DATA.push({ uid: doc.id, ...doc.data() }); }); // clientes do portal não são equipe
     renderUsuariosTenant();
   }, (err) => console.error('Erro ao listar usuários da empresa:', err));
   firestoreDb.collection('tenants').doc(TENANT_ID).onSnapshot((snap) => {
@@ -18234,7 +20304,7 @@ function escutarTenants() {
   if (!FIREBASE_PRONTO) return;
   firestoreDb.collection('usuarios').onSnapshot((snap) => {
     USUARIOS_TODOS = [];
-    snap.forEach((doc) => USUARIOS_TODOS.push({ uid: doc.id, ...doc.data() }));
+    snap.forEach((doc) => { if (doc.data().role !== 'Cliente') USUARIOS_TODOS.push({ uid: doc.id, ...doc.data() }); });
     renderTenantsLista();
   }, (err) => console.error('Erro ao listar usuários:', err));
   firestoreDb.collection('tenants').onSnapshot((snap) => {
@@ -18355,7 +20425,7 @@ async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
 
     // todas as subcoleções da empresa (antes só "dados" era apagada e as
     // tarefas/projetos do Kanban ficavam órfãos no banco)
-    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta']) {
+    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'portal', 'portal_pedidos', 'agenda']) {
       const snap = await firestoreDb.collection('tenants').doc(tenantId).collection(sub).get();
       const docs = []; snap.forEach((d) => docs.push(d.ref));
       for (let i = 0; i < docs.length; i += 400) { // limite de 500 operações por lote
@@ -18364,6 +20434,15 @@ async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
         await lote.commit();
       }
     }
+
+    // Páginas e links PÚBLICOS da empresa (site, propostas, briefings,
+    // planos, aprovações, leads e PIX): antes ficavam no ar depois da exclusão.
+    for (const col of ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'leads_publicos', 'conteudos_publicos']) {
+      const snap = await firestoreDb.collection(col).where('tenantId', '==', tenantId).get();
+      const docs = []; snap.forEach((d) => docs.push(d.ref));
+      for (let i = 0; i < docs.length; i += 400) { const lote = firestoreDb.batch(); docs.slice(i, i + 400).forEach((ref) => lote.delete(ref)); await lote.commit(); }
+    }
+    await firestoreDb.collection('pix_publico').doc(tenantId).delete().catch(() => {});
 
     await firestoreDb.collection('tenants').doc(tenantId).delete();
 

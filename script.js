@@ -6374,6 +6374,12 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '09/10/2026 · Equipe e links', itens: [
+    { titulo: 'Equipe', badges: ['novo'], texto: 'Nova ferramenta em Operacional → Equipe: adicionar pessoas, mudar o nível de acesso, remover acesso, WhatsApp de cada um e o que cada pessoa tem em aberto (tarefas, atrasadas e conteúdos). Logins antigos de cliente do portal aparecem separados e podem ser apagados.' },
+    { titulo: 'Compartilhar link por WhatsApp ou e-mail', badges: ['novo'], texto: 'O link de aprovação (e o do portal) agora abre numa janela com "Copiar link" e "Compartilhar": WhatsApp (já com o número do cliente) ou e-mail, com uma mensagem pronta e editável.' },
+    { titulo: 'Conteúdo e cartão do Kanban sempre iguais', badges: ['corrigido'], texto: 'Marcar o conteúdo como entregue (pela coluna ou pelo status "Publicado") não movia o cartão do Kanban em todos os casos. Agora o sistema compara os dois lados sempre que algo muda — inclusive vindo de outro computador — e acerta quem ficou para trás.' },
+    { titulo: 'Responsáveis só da equipe', badges: ['corrigido'], texto: 'Logins de cliente do portal (como perfis de teste) apareciam como responsáveis no Kanban e nos Conteúdos. Agora só a equipe aparece, e quem sai da equipe some na hora.' },
+  ]},
   { data: '09/10/2026 · Produção e aprovação', itens: [
     { titulo: 'Conteúdos planeja, Kanban produz', badges: ['novo'], texto: '"Iniciar produção" no Conteúdos cria o cartão no Kanban, no projeto Produção de Conteúdo (A fazer → Em produção → Aprovação do cliente → Alteração → Aprovados → Entregue). Cartão e conteúdo andam juntos nos dois sentidos, e o Dashboard continua contando as entregas.' },
     { titulo: 'Aprovação com rodadas e notificação na hora', badges: ['novo'], texto: 'Do cartão do Kanban, "Enviar para aprovação" copia o link (sem login). Alteração volta o cartão para "Alteração" com o comentário do cliente; aprovação manda para "Aprovados". Chega aviso na tela, no sino do topo e, se permitido, no computador. Depois da alteração, "Reenviar ao cliente" usa o mesmo link com a versão nova. O cliente vê "Recebemos sua solicitação..." ou "Em breve te mandaremos o arquivo final", e o arquivo final aparece para ele quando o cartão chega em "Entregue".' },
@@ -6922,6 +6928,7 @@ function mostrarSecaoCrm(secao, btn) {
   if (secao === 'agenda') { agMontar(document.getElementById('crm-secao-agenda')); agGoogleBuscar(); }
   if (secao === 'portal-cliente') portalMontar(document.getElementById('crm-secao-portal-cliente'));
   if (secao === 'automacoes') atdMontar(document.getElementById('crm-secao-automacoes'));
+  if (secao === 'equipe') eqMontar(document.getElementById('crm-secao-equipe'));
   if (secao === 'agente-copywriter') cwMontar(document.getElementById('crm-secao-agente-copywriter'));
   if (secao === 'agente-analista') anMontar(document.getElementById('crm-secao-agente-analista'));
   if (secao === 'agente-designer') dsMontar(document.getElementById('crm-secao-agente-designer'));
@@ -9034,36 +9041,73 @@ function prdPapelDaColuna(colId) {
 function prdTarefaDoConteudo(c) { return c && c.tarefaId && typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS.find((t) => t.id === c.tarefaId && t.projetoId === PRD_PJ_ID) : null; }
 function prdEtapaCnt(id, reserva) { return typeof cntColunas === 'function' && cntColunas().some((x) => x.id === id) ? id : reserva; }
 
-// cartão do Kanban mudou de coluna → conteúdo acompanha
-function prdAoMoverCartao(t) {
-  if (PRD_SINC || !t || !t.conteudoId || t.projetoId !== PRD_PJ_ID || typeof CNT === 'undefined') return;
-  const c = CNT.find((x) => x.id === t.conteudoId);
-  if (!c) return;
-  const papel = prdPapelDaColuna(t.status);
+// ---------- sincronização cartão ↔ conteúdo ----------
+// Em vez de só reagir a um clique, o sistema compara os dois lados sempre
+// que algum dado muda (inclusive vindo de outro computador, ou quando o
+// Kanban carrega depois do Conteúdos). O conteúdo guarda em "prdColuna" a
+// coluna do cartão da última vez que os dois estavam iguais: se o cartão
+// saiu dela, foi o cartão que mexeu (o conteúdo acompanha); senão, foi o
+// conteúdo (o cartão acompanha).
+function prdMapaCartao(colId, c) {
   const cols = cntColunas(), ultima = cols[cols.length - 1].id;
-  const mapa = {
+  return {
     prd_afazer: { etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' }, prd_producao: { etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' },
     prd_aprovacao: { etapa: prdEtapaCnt('aprovacao', c.etapa), status: 'aguardando' }, prd_alteracao: { etapa: prdEtapaCnt('revisao', c.etapa), status: 'andamento' },
     prd_aprovado: { etapa: prdEtapaCnt('aprovado', c.etapa), status: 'aprovado' }, prd_entregue: { etapa: ultima, status: 'aprovado' },
-  }[papel];
-  if (!mapa || (c.etapa === mapa.etapa && c.status === mapa.status)) return;
-  PRD_SINC = true;
-  try { cntAtualizar(c.id, mapa, `Kanban: cartão foi para "${(((prdProjeto() || {}).colunas || PRD_COLUNAS).find((x) => x.id === t.status) || {}).nome || t.status}"`); }
-  finally { PRD_SINC = false; }
-  if (papel === 'prd_entregue' || papel === 'prd_aprovado') aprAtualizarFase(c, papel === 'prd_entregue' ? 'entregue' : 'aprovado');
+  }[prdPapelDaColuna(colId)] || null;
 }
-// conteúdo mudou de etapa (no quadro de Conteúdos ou pela resposta do cliente) → cartão acompanha
-function prdAoMoverConteudo(c) {
-  if (PRD_SINC) return;
-  const t = prdTarefaDoConteudo(c);
-  if (!t) return;
-  const cols = cntColunas(), ultima = cols[cols.length - 1].id;
-  const papel = c.etapa === ultima ? 'prd_entregue' : { aprovacao: 'prd_aprovacao', revisao: 'prd_alteracao', aprovado: 'prd_aprovado', design: 'prd_producao', copy: 'prd_producao' }[c.etapa];
-  const destino = papel && prdColuna(papel);
-  if (!destino || t.status === destino) return;
+function prdColunaDoConteudo(c) {
+  if (cntFinalizado(c)) return prdColuna('prd_entregue');
+  const papel = { aprovacao: 'prd_aprovacao', revisao: 'prd_alteracao', aprovado: 'prd_aprovado', design: 'prd_producao', copy: 'prd_producao' }[c.etapa];
+  return papel ? prdColuna(papel) : '';
+}
+// os dois lados dizem a mesma coisa?
+function prdEmDia(c, t) {
+  const papel = prdPapelDaColuna(t.status);
+  if (!papel) return true;
+  if (papel === 'prd_entregue') return cntFinalizado(c);
+  if (cntFinalizado(c)) return false;
+  const m = prdMapaCartao(t.status, c);
+  return !m || c.etapa === m.etapa || !cntColunas().some((x) => x.id === m.etapa);
+}
+function prdSincronizar(c, t) {
+  if (PRD_SINC || !c || !t || t.projetoId !== PRD_PJ_ID || !CNT_CARREGADO || !KB_CARREGADO) return;
+  if (prdEmDia(c, t)) {
+    if (c.prdColuna !== t.status && nivelPodeOperar()) { PRD_SINC = true; try { cntAtualizar(c.id, { prdColuna: t.status }); } finally { PRD_SINC = false; } }
+    return;
+  }
+  if (!nivelPodeOperar()) return;
+  const cartaoMexeu = !!c.prdColuna && c.prdColuna !== t.status;
   PRD_SINC = true;
-  try { kbAtualizar(t.id, papel === 'prd_entregue' ? { status: destino, concluidaEm: new Date().toISOString() } : { status: destino }); }
-  finally { PRD_SINC = false; }
+  try {
+    if (cartaoMexeu) {
+      const m = prdMapaCartao(t.status, c);
+      if (m) cntAtualizar(c.id, Object.assign({ prdColuna: t.status }, m), `Kanban: cartão foi para "${(((prdProjeto() || {}).colunas || PRD_COLUNAS).find((x) => x.id === t.status) || {}).nome || t.status}"`);
+      const papel = prdPapelDaColuna(t.status);
+      if (papel === 'prd_entregue' || papel === 'prd_aprovado') aprAtualizarFase(c, papel === 'prd_entregue' ? 'entregue' : 'aprovado');
+    } else {
+      const destino = prdColunaDoConteudo(c);
+      if (destino && destino !== t.status) {
+        const final = prdPapelDaColuna(destino) === 'prd_entregue';
+        kbAtualizar(t.id, final ? { status: destino, concluidaEm: new Date().toISOString() } : { status: destino });
+        cntAtualizar(c.id, { prdColuna: destino });
+        if (final) aprAtualizarFase(c, 'entregue');
+      }
+    }
+  } finally { PRD_SINC = false; }
+}
+function prdAoMoverCartao(t) {
+  if (!t || !t.conteudoId || typeof CNT === 'undefined') return;
+  prdSincronizar(CNT.find((x) => x.id === t.conteudoId), t);
+}
+function prdAoMoverConteudo(c) { prdSincronizar(c, prdTarefaDoConteudo(c)); }
+let PRD_TIMER = null;
+function prdReconciliarTodos() {
+  clearTimeout(PRD_TIMER);
+  PRD_TIMER = setTimeout(() => {
+    if (typeof CNT === 'undefined' || typeof KB_TAREFAS === 'undefined' || !CNT_CARREGADO || !KB_CARREGADO) return;
+    CNT.filter((c) => c.tarefaId).forEach((c) => { const t = prdTarefaDoConteudo(c); if (t) prdSincronizar(c, t); });
+  }, 400);
 }
 function prdDescricao(c) {
   const t = CNT_TIPOS[c.tipo] || {};
@@ -9086,7 +9130,7 @@ function prdIniciar(conteudoId, silencioso) {
     projetoId: PRD_PJ_ID, status: prdColuna('prd_producao') || prdColuna('prd_afazer'), prioridade: KB_PRIORIDADES[prio] ? prio : 'media', etiquetas: ['conteúdo', (CNT_TIPOS[c.tipo] || {}).nome || c.tipo].filter(Boolean), conteudoId: c.id });
   if (!t) return null;
   PRD_SINC = true;
-  try { cntAtualizar(c.id, { tarefaId: t.id, etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' }, 'Iniciou a produção: foi para o Kanban'); }
+  try { cntAtualizar(c.id, { tarefaId: t.id, prdColuna: t.status, etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' }, 'Iniciou a produção: foi para o Kanban'); }
   finally { PRD_SINC = false; }
   if (!silencioso) confirmarAcao(`"${c.titulo || 'Conteúdo'}" foi para o Kanban, no projeto Produção de Conteúdo, coluna "Em produção".\n\nAbrir o cartão agora?`, () => prdAbrirNoKanban(t.id), 'Produção iniciada');
   return t;
@@ -9135,7 +9179,6 @@ async function aprPrepararLink(c, renovar) {
   PRD_SINC = false;
   cntAtualizar(c.id, { aprovacao: { token, status: 'pendente', enviadoEm: pub.enviadoEm, rodada, comentario: '' }, etapa: prdEtapaCnt('aprovacao', c.etapa), status: 'aguardando' },
     rodada > 1 ? `Reenviou para aprovação do cliente (versão ${rodada})` : 'Enviou para aprovação do cliente');
-  prdAoMoverConteudo(CNT.find((x) => x.id === c.id));
   return token;
 }
 function aprAtualizarFase(c, fase) {
@@ -9272,9 +9315,11 @@ function portalCopiarLink(nome) {
   if (!PORTAL_LINKS_CARREGADO) { avisar('Carregando os links do portal. Tente de novo em alguns segundos.'); return; }
   if (!portalGarantirToken(nome)) { avisarSemPermissaoNivel('criar o link do portal'); return; }
   const link = portalLinkCliente(nome);
-  try { navigator.clipboard && navigator.clipboard.writeText(link); } catch (e) {}
-  avisar(`Link do portal de ${nome} copiado:\n${link}\n\nO cliente abre direto, sem login. Ali ele vê a produção, aprova ou pede alteração, e manda ideias e pedidos.`, 'Portal do cliente');
+  const contato = linkContatoCliente(nome);
   portalRender();
+  linkCompartilhar({ titulo: `Portal de ${nome}`, link, telefone: contato.telefone, email: contato.email, assunto: 'Seu portal de acompanhamento',
+    texto: 'O cliente abre direto, sem login. Ali ele vê a produção, aprova ou pede alteração, e manda ideias e pedidos.',
+    mensagem: `Olá, ${atdPrimeiroNome(nome)}! Este é o seu portal: lá você acompanha a produção, aprova os conteúdos e manda ideias. É só abrir:\n${link}` });
 }
 function portalNovoLink(nome) {
   confirmarAcao(`Gerar um link novo para ${nome}? O link antigo para de funcionar na hora.`, () => {
@@ -9313,6 +9358,150 @@ function portalPublicarCliente(nome, forcar) {
 function portalAgendarPublicacao() {
   clearTimeout(PORTAL_PUB_TIMER);
   PORTAL_PUB_TIMER = setTimeout(() => { Object.keys(PORTAL_LINKS).forEach((n) => portalPublicarCliente(n)); }, 1500);
+}
+
+// =====================================================================
+// ---------- CRM → Operacional → Equipe ----------
+// =====================================================================
+// Um lugar só para a equipe: quem é, nível de acesso, WhatsApp (o mesmo
+// das Automações), o que cada um tem em aberto, novos membros, remover
+// acesso e limpar os logins antigos de cliente do portal (que agora
+// funciona por link).
+let EQ_HOST = null;
+let EQ_INICIADO = false;
+function eqMontar(host) {
+  EQ_HOST = host;
+  if (!EQ_INICIADO) {
+    EQ_INICIADO = true;
+    try { if (typeof kbIniciarDados === 'function') kbIniciarDados(); } catch (e) { console.error(e); }
+    try { if (typeof atdIniciar === 'function') atdIniciar(); } catch (e) { console.error(e); }
+    if (FIREBASE_PRONTO && TENANT_ID && nivelEhDiretor() && typeof escutarUsuariosTenant === 'function') escutarUsuariosTenant();
+  }
+  eqRender();
+}
+function eqPodeGerir() { return !FIREBASE_PRONTO || !TENANT_ID || nivelEhDiretor(); }
+function eqRender() {
+  const host = EQ_HOST;
+  if (!host || !host.isConnected || host.style.display === 'none') return;
+  const foco = document.activeElement;
+  if (foco && host.contains(foco) && /INPUT|SELECT/.test(foco.tagName)) return;
+  const gerir = eqPodeGerir();
+  const membros = (typeof KB_USUARIOS !== 'undefined' ? KB_USUARIOS : []).slice().sort((a, b) => (b.titular ? 1 : 0) - (a.titular ? 1 : 0) || a.nome.localeCompare(b.nome));
+  const limite = typeof limiteUsuariosEmpresa === 'function' && USUARIOS_TENANT_INFO ? limiteUsuariosEmpresa() : null;
+  const hoje = kbHoje();
+  const stats = (uid) => {
+    const kb = (typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS : []).filter((t) => !t.arquivada && t.responsavel === uid);
+    const feita = (t) => { try { return kbConcluida(t); } catch (e) { return false; } };
+    const abertas = kb.filter((t) => !feita(t));
+    const cnt = (typeof CNT !== 'undefined' ? CNT : []).filter((c) => c.responsavel === uid && !cntFinalizado(c));
+    return { abertas: abertas.length, atrasadas: abertas.filter((t) => t.prazo && t.prazo < hoje).length, conteudos: cnt.length };
+  };
+  const NIVEIS = { Diretor: 'Tudo, inclusive financeiro e equipe', Administrativo: 'Tudo menos o financeiro', Financeiro: 'Financeiro completo; o resto só vê' };
+  const logins = typeof KB_LOGINS_CLIENTE !== 'undefined' ? KB_LOGINS_CLIENTE : [];
+  host.innerHTML = `
+    <div class="eq">
+      <div class="fin-cab"><div><h1 style="display:flex; align-items:center; gap:8px;">${ic('pessoas')} Equipe</h1><p>Quem usa o sistema, o nível de acesso de cada um e o que cada pessoa tem em aberto.</p></div><span class="kb-espaco"></span>
+        ${gerir ? `<button type="button" class="btn btn-primary" onclick="eqAbrirNovo()" ${limite && membros.length >= limite ? 'disabled title="Limite do plano atingido"' : ''}>${ic('mais', 'ic-herda')} Novo membro</button>` : ''}</div>
+      <div class="eq-resumo"><span><b>${membros.length}</b> ${membros.length === 1 ? 'pessoa' : 'pessoas'} na equipe</span>${limite ? `<span><b>${membros.length} de ${limite}</b> vagas do plano usadas</span>` : ''}<span><b>${membros.filter((m) => atdWaNumero((atdMembro(m.uid) || {}).whatsapp)).length}</b> com WhatsApp cadastrado</span></div>
+      ${gerir ? '' : '<p class="kb-vazio-mini" style="margin:0 0 10px;">Só o Diretor adiciona, remove ou muda o nível das pessoas.</p>'}
+      <div class="fin-painel" style="padding:0;">
+        ${membros.length ? membros.map((m) => {
+          const st = stats(m.uid), eu = m.uid === USUARIO_UID || m.uid === 'local', fixo = eu || m.titular || m.role === 'SuperAdmin';
+          const nivel = typeof nivelDoRole === 'function' ? nivelDoRole(m.role) : m.role;
+          const uid = escapeParaOnclick(m.uid);
+          return `<div class="eq-linha">
+            ${kbAvatar(m.uid)}
+            <div class="eq-quem"><strong>${escapeHtml(m.nome)}${m.titular ? ' <span class="srv-tag ativo">titular</span>' : ''}${eu ? ' <span class="srv-tag">você</span>' : ''}</strong><span>${escapeHtml(m.email || '')}</span></div>
+            <div class="eq-nivel">${gerir && !fixo ? `<select class="srv-select" aria-label="Nível de acesso de ${escapeHtml(m.nome)}" onchange="eqMudarNivel('${uid}', this.value, this)">${Object.keys(NIVEIS).map((r) => `<option value="${r}" ${nivel === (typeof nivelDoRole === 'function' ? nivelDoRole(r) : r) ? 'selected' : ''}>${r}</option>`).join('')}</select>` : `<span class="badge badge-blue">${escapeHtml(typeof traduzirRole === 'function' ? traduzirRole(m.role) : m.role)}</span>`}<small>${escapeHtml(NIVEIS[m.role] || '')}</small></div>
+            <div class="eq-num" title="Tarefas abertas no Kanban"><b>${st.abertas}</b><span>tarefas</span></div>
+            <div class="eq-num${st.atrasadas ? ' neg' : ''}" title="Tarefas atrasadas"><b>${st.atrasadas}</b><span>atrasadas</span></div>
+            <div class="eq-num" title="Conteúdos em produção"><b>${st.conteudos}</b><span>conteúdos</span></div>
+            <input type="tel" class="eq-whats" maxlength="30" placeholder="WhatsApp com DDD" aria-label="WhatsApp de ${escapeHtml(m.nome)}" value="${escapeHtml((atdMembro(m.uid) || {}).whatsapp || '')}" ${gerir || eu ? '' : 'disabled'} onchange="atdSalvarMembro('${uid}', 'whatsapp', this.value.trim()); setTimeout(eqRender, 300);">
+            <div class="eq-acoes">${gerir && !fixo ? `<button type="button" class="btn btn-small btn-ghost kb-btn-perigo" onclick="eqRemover('${uid}')">Remover</button>` : ''}</div>
+          </div>`;
+        }).join('') : '<p class="kb-vazio" style="padding:20px;">Carregando a equipe...</p>'}
+      </div>
+      ${logins.length ? `<div class="fin-painel">
+        <div class="fin-painel-cab"><div><strong>${ic('alerta', 'ic-herda')} Logins antigos de cliente (${logins.length})</strong><div class="kb-vazio-mini">O Portal do cliente agora abre por link, sem senha. Estes logins de teste ou antigos não são da equipe e podem ser apagados.</div></div><span class="kb-espaco"></span>
+          ${nivelPodeOperar() ? `<button type="button" class="btn btn-small" onclick="eqRemoverLoginsCliente()">Remover todos</button>` : ''}</div>
+        ${logins.map((l) => `<div class="eq-linha eq-linha-mini"><span class="kb-avatar p" style="background:#64748b;">${escapeHtml(kbIniciais(l.nome))}</span><div class="eq-quem"><strong>${escapeHtml(l.nome)}</strong><span>${escapeHtml(l.email)}${l.cliente ? ' · cliente ' + escapeHtml(l.cliente) : ''}</span></div>${nivelPodeOperar() ? `<button type="button" class="btn btn-small btn-ghost kb-btn-perigo" onclick="eqRemoverLoginCliente('${escapeParaOnclick(l.uid)}')">Remover</button>` : ''}</div>`).join('')}
+      </div>` : ''}
+    </div>`;
+}
+async function eqMudarNivel(uid, role, sel) {
+  if (typeof alterarNivelUsuario !== 'function') return;
+  if (!USUARIOS_TENANT_DATA.some((x) => x.uid === uid)) USUARIOS_TENANT_DATA.push(Object.assign({ uid }, KB_USUARIOS.find((x) => x.uid === uid) || {}));
+  await alterarNivelUsuario(uid, role, sel);
+}
+function eqRemover(uid) {
+  const m = KB_USUARIOS.find((x) => x.uid === uid);
+  if (!m || !eqPodeGerir()) return;
+  if (!USUARIOS_TENANT_DATA.some((x) => x.uid === uid)) USUARIOS_TENANT_DATA.push(Object.assign({ uid }, m));
+  const st = (typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS : []).filter((t) => !t.arquivada && t.responsavel === uid && !kbConcluida(t)).length;
+  if (st) avisar(`${m.nome} tem ${st} tarefa(s) em aberto no Kanban. Depois de remover, elas ficam sem responsável — vale passar para outra pessoa.`, 'Antes de remover');
+  removerAcessoUsuario(uid);
+}
+function eqRemoverLoginCliente(uid) {
+  const l = KB_LOGINS_CLIENTE.find((x) => x.uid === uid);
+  if (!l) return;
+  confirmarAcao(`Remover o login "${l.nome}"? Ele não acessa mais nada. O portal por link continua funcionando para o cliente.`, async () => {
+    try { await firestoreDb.collection('usuarios').doc(uid).delete(); } catch (e) { console.error(e); avisar('Não foi possível remover agora. Tente de novo.'); }
+  }, 'Remover login');
+}
+function eqRemoverLoginsCliente() {
+  const n = KB_LOGINS_CLIENTE.length;
+  confirmarAcao(`Remover os ${n} logins antigos de cliente? O portal por link continua funcionando.`, async () => {
+    try { const lote = firestoreDb.batch(); KB_LOGINS_CLIENTE.forEach((l) => lote.delete(firestoreDb.collection('usuarios').doc(l.uid))); await lote.commit(); }
+    catch (e) { console.error(e); avisar('Não foi possível remover agora. Tente de novo.'); }
+  }, 'Remover logins');
+}
+function eqAbrirNovo() {
+  if (!eqPodeGerir()) { avisarSemPermissaoNivel('adicionar pessoas na equipe'); return; }
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:480px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Novo membro da equipe</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="field full"><label>Nome</label><input type="text" id="eq-nome" maxlength="80"></div>
+    <div class="field full"><label>E-mail (é o login)</label><input type="email" id="eq-email" maxlength="120" autocomplete="off"></div>
+    <div class="field full"><label>Senha inicial (mínimo 8 caracteres)</label><input type="text" id="eq-senha" maxlength="60" autocomplete="new-password"></div>
+    <div class="field full"><label>Nível de acesso</label><select id="eq-role"><option>Administrativo</option><option>Financeiro</option><option>Diretor</option></select></div>
+    <div class="field full"><label>WhatsApp (opcional)</label><input type="tel" id="eq-whats" maxlength="30" placeholder="(11) 99999-9999"></div>
+    <p class="kb-vazio-mini">Passe o e-mail e a senha para a pessoa. Ela pode trocar a senha depois, no "Esqueci a senha" da tela de login.</p>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" id="eq-criar" onclick="eqCriar()">Criar acesso</button></div></div>`;
+  openModal('modal-srv');
+}
+async function eqCriar() {
+  const v = (id) => ((document.getElementById(id) || {}).value || '').trim();
+  const nome = v('eq-nome'), email = v('eq-email'), senha = (document.getElementById('eq-senha') || {}).value || '', role = v('eq-role'), whats = v('eq-whats');
+  if (!nome || !email || senha.length < 8) { avisar('Preencha nome, e-mail e uma senha com pelo menos 8 caracteres.'); return; }
+  if (!['Diretor', 'Administrativo', 'Financeiro'].includes(role)) return;
+  if (whats && !atdWaNumero(whats)) { avisar('O WhatsApp precisa ter DDD e número.'); return; }
+  if (!FIREBASE_PRONTO || !TENANT_ID) { avisar('Criar acesso precisa da conexão com a nuvem.'); return; }
+  const limite = limiteUsuariosEmpresa();
+  if (KB_USUARIOS.length >= limite) { avisar(`Seu plano permite ${limite} usuário(s). Para ampliar, fale com a Eagles Labz.`); return; }
+  const vaga = empresaTemLimiteDefinido() ? proximaVagaLivre() : null;
+  if (empresaTemLimiteDefinido() && !vaga) { avisar('Todas as vagas do plano estão ocupadas.'); return; }
+  const btn = document.getElementById('eq-criar'); if (btn) { btn.disabled = true; btn.textContent = 'Criando...'; }
+  let app2;
+  try {
+    app2 = firebase.initializeApp(FIREBASE_CONFIG, 'secundario-' + Date.now());
+    const cred = await app2.auth().createUserWithEmailAndPassword(email, senha);
+    try {
+      const lote = firestoreDb.batch();
+      const dados = { tenantId: TENANT_ID, role, nome, email, criadoEm: new Date().toISOString(), criadoPor: USUARIO_UID };
+      if (vaga) dados.vaga = vaga;
+      lote.set(firestoreDb.collection('usuarios').doc(cred.user.uid), dados);
+      if (vaga) lote.set(firestoreDb.collection('tenants').doc(TENANT_ID).collection('vagas').doc(String(vaga)), { uid: cred.user.uid, criadoEm: new Date().toISOString() });
+      await lote.commit();
+    } catch (e2) { await cred.user.delete().catch(() => {}); throw e2; }
+    if (whats) atdSalvarMembro(cred.user.uid, 'whatsapp', whats);
+    await app2.auth().signOut(); await app2.delete(); app2 = null;
+    srvFecharModal();
+    avisar(`${nome} entrou na equipe como ${role}. Ele já pode entrar com o e-mail e a senha cadastrados.`, 'Equipe');
+  } catch (err) {
+    console.error(err);
+    avisar('Não foi possível criar o acesso: ' + (typeof mensagemErroCriacaoConta === 'function' ? mensagemErroCriacaoConta(err.code) : (err.message || err)));
+    if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Criar acesso'; }
+  } finally { if (app2) { try { await app2.delete(); } catch (e) {} } }
 }
 
 function renderCrmEmConstrucao(secao) {
@@ -10353,6 +10542,7 @@ let KB_CARREGADO = false;
 let KB_ESCUTANDO = false;
 let KB_CONFIG = null;
 let KB_USUARIOS = [];
+let KB_LOGINS_CLIENTE = [];
 let KB_FILTROS = { cliente: '', tipo: 'todas', projeto: '', busca: '', responsavel: '', prioridade: '', prazo: '', etiqueta: '', arquivadas: false };
 let KB_TIMER = null;
 
@@ -10465,13 +10655,22 @@ function kbIniciarDados() {
       const el = document.getElementById('kb-conteudo');
       if (el) el.innerHTML = '<p class="kb-vazio">Não foi possível carregar as tarefas agora. Recarregue a página.</p>';
     });
-    firestoreDb.collection('usuarios').where('tenantId', '==', TENANT_ID).get().then((snap) => {
+    // Equipe da empresa (ao vivo: quem sai some na hora). Logins de cliente
+    // do portal antigo NÃO são equipe — não entram em responsável nem filtro.
+    firestoreDb.collection('usuarios').where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
       const u = [];
-      snap.forEach((doc) => { const d = doc.data() || {}; u.push({ uid: doc.id, nome: d.nome || d.email || 'Usuário', titular: !!d.titular, role: d.role || '' }); });
+      KB_LOGINS_CLIENTE = [];
+      snap.forEach((doc) => {
+        const d = doc.data() || {};
+        if (d.role === 'Cliente') { KB_LOGINS_CLIENTE.push({ uid: doc.id, nome: d.nome || d.email || 'Cliente', email: d.email || '', cliente: d.clienteNome || '' }); return; }
+        u.push({ uid: doc.id, nome: d.nome || d.email || 'Usuário', email: d.email || '', titular: !!d.titular, role: d.role || '', vaga: d.vaga || null, criadoEm: d.criadoEm || '' });
+      });
       KB_USUARIOS = u.sort((a, b) => a.nome.localeCompare(b.nome));
       renderKanbanFiltroResponsaveis();
       renderKanbanConteudo();
-    }).catch(() => {});
+      if (typeof eqRender === 'function') eqRender();
+      if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard();
+    }, () => {});
   } else {
     KB_TAREFAS = lsLoad(kbChaveLocal(), []);
     KB_CARREGADO = true;
@@ -16741,7 +16940,7 @@ function cntAtualizar(id, campos, registro) {
   const etapaAntes = c.etapa;
   Object.assign(c, m);
   if (cntNuvem()) cntRef().doc(id).set(finLimpar(m), { merge: true }).catch(cntErro); else cntGravarLocal();
-  if (m.etapa !== undefined && m.etapa !== etapaAntes && typeof prdAoMoverConteudo === 'function') prdAoMoverConteudo(c);
+  if ((m.etapa !== undefined || m.status !== undefined) && typeof prdAoMoverConteudo === 'function') prdAoMoverConteudo(c);
   if (typeof portalAgendarPublicacao === 'function') portalAgendarPublicacao();
   cntRender();
   return true;
@@ -17152,6 +17351,46 @@ async function cntSalvarEditor(manterAberto) {
 // O cliente abre aprovacao.html?c=<código>, vê o conteúdo e responde.
 // A resposta vem pelo próprio documento público; o CRM aplica no conteúdo.
 function cntLinkAprovacao(token) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'aprovacao.html?c=' + encodeURIComponent(token); }
+
+// ---------- compartilhar um link (copiar, WhatsApp, e-mail) ----------
+let LINK_COMP = null;
+function linkCompartilhar(o) {
+  LINK_COMP = Object.assign({ titulo: 'Link', texto: '', link: '', mensagem: '', telefone: '', email: '', assunto: '' }, o || {});
+  const ov = srvGarantirModal();
+  const L = LINK_COMP;
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:540px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${escapeHtml(L.titulo)}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    ${L.texto ? `<p class="cfg-modal-sub" style="white-space:pre-line;">${escapeHtml(L.texto)}</p>` : ''}
+    <div class="lk-linha"><input type="text" id="lk-link" readonly value="${escapeHtml(L.link)}" onclick="this.select()" aria-label="Link"><button type="button" class="btn btn-primary" id="lk-copiar" onclick="linkCopiar()">${ic('copiar', 'ic-herda')} Copiar link</button></div>
+    <div class="lk-rotulo">Compartilhar</div>
+    <div class="lk-opcoes">
+      <button type="button" class="lk-opcao lk-whats" onclick="linkPorWhatsApp()"><span>${ic('conversa', 'ic-herda')}</span><b>WhatsApp</b><small>${L.telefone && atdWaNumero(L.telefone) ? escapeHtml(atdTelBonito(L.telefone)) : 'escolher o contato'}</small></button>
+      <button type="button" class="lk-opcao lk-email" onclick="linkPorEmail()"><span>${ic('email', 'ic-herda')}</span><b>E-mail</b><small>${L.email ? escapeHtml(L.email) : 'escolher o destinatário'}</small></button>
+      ${navigator.share ? `<button type="button" class="lk-opcao" onclick="linkOutros()"><span>${ic('enviar', 'ic-herda')}</span><b>Outros</b><small>apps do aparelho</small></button>` : ''}
+    </div>
+    <div class="field full" style="margin-top:12px;"><label>Mensagem que vai junto</label><textarea id="lk-msg" rows="3" maxlength="1000">${escapeHtml(L.mensagem)}</textarea></div>
+  </div>`;
+  openModal('modal-srv');
+}
+function linkTexto() { const m = ((document.getElementById('lk-msg') || {}).value || '').trim(); return m.includes(LINK_COMP.link) ? m : (m ? m + '\n' : '') + LINK_COMP.link; }
+function linkCopiar() {
+  const b = document.getElementById('lk-copiar');
+  const ok = () => { if (b) { b.innerHTML = ic('aprovado', 'ic-herda') + ' Copiado!'; setTimeout(() => { if (b.isConnected) b.innerHTML = ic('copiar', 'ic-herda') + ' Copiar link'; }, 1800); } };
+  try { navigator.clipboard.writeText(LINK_COMP.link).then(ok, () => { const i = document.getElementById('lk-link'); i.select(); document.execCommand('copy'); ok(); }); }
+  catch (e) { const i = document.getElementById('lk-link'); if (i) { i.select(); try { document.execCommand('copy'); ok(); } catch (e2) {} } }
+}
+function linkPorWhatsApp() {
+  const num = atdWaNumero(LINK_COMP.telefone);
+  window.open(`https://wa.me/${num || ''}?text=${encodeURIComponent(linkTexto())}`, '_blank', 'noopener');
+}
+function linkPorEmail() {
+  location.href = `mailto:${encodeURIComponent(LINK_COMP.email || '')}?subject=${encodeURIComponent(LINK_COMP.assunto || LINK_COMP.titulo)}&body=${encodeURIComponent(linkTexto())}`;
+}
+function linkOutros() { try { navigator.share({ title: LINK_COMP.assunto || LINK_COMP.titulo, text: linkTexto() }).catch(() => {}); } catch (e) {} }
+function linkContatoCliente(nome) {
+  const c = (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : []).find((x) => x.nome === nome) || {};
+  return { telefone: c.telefone || (typeof atdTelefoneCliente === 'function' ? atdTelefoneCliente(nome) : ''), email: c.email || '' };
+}
 async function cntEnviarAprovacao(id) {
   const c = id && CNT.find((x) => x.id === id);
   if (!c || !cntPronto()) return;
@@ -17162,9 +17401,13 @@ async function cntEnviarAprovacao(id) {
   const usaPortal = c.cliente && typeof portalEfetivo === 'function' && portalEfetivo(portalPadrao(), portalCfgCliente(c.cliente)).link === 'portal' && portalGarantirToken(c.cliente);
   const link = usaPortal ? portalLinkCliente(c.cliente) : cntLinkAprovacao(token);
   if (usaPortal) portalAgendarPublicacao();
-  try { navigator.clipboard && navigator.clipboard.writeText(link); } catch (e) {}
   try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
-  avisar(`${ap.rodada > 1 ? `Versão ${ap.rodada} pronta. ` : ''}Link ${usaPortal ? 'do portal' : 'de aprovação'} copiado — mande para o cliente (ele abre sem login):\n${link}\n\nQuando ele responder, você recebe a notificação na hora e o cartão do Kanban anda sozinho: "Aprovados" ou "Alteração".`, 'Aprovação');
+  const contato = linkContatoCliente(c.cliente);
+  const tipo = ((CNT_TIPOS[c.tipo] || {}).nome || 'conteúdo').toLowerCase();
+  linkCompartilhar({ titulo: ap.rodada > 1 ? `Aprovação · versão ${ap.rodada}` : 'Aprovação', link, telefone: contato.telefone, email: contato.email,
+    texto: `Mande o link para o cliente (ele abre sem login). Quando ele responder, você recebe a notificação na hora e o cartão do Kanban anda sozinho: "Aprovados" ou "Alteração".`,
+    assunto: `${ap.rodada > 1 ? 'Nova versão para aprovação' : 'Para sua aprovação'}: ${c.titulo || 'conteúdo'}`,
+    mensagem: `Olá${c.cliente ? ', ' + atdPrimeiroNome(c.cliente) : ''}! ${ap.rodada > 1 ? `Fizemos as alterações no ${tipo} "${c.titulo || ''}".` : `Segue o ${tipo} "${c.titulo || ''}" para sua aprovação.`} É só abrir o link, aprovar ou pedir alteração:\n${link}` });
 }
 let CNT_APROV_ESCUTANDO = false;
 function cntEscutarAprovacoes() {
@@ -17935,6 +18178,7 @@ async function pcEnviarPedido(tipo) {
 let CRM_DASH_TIMER = null;
 function crmAvisarDashboard() {
   if (typeof atdAvisar === 'function' && ATD_INICIADO) atdAvisar();
+  if (typeof prdReconciliarTodos === 'function') prdReconciliarTodos();
   clearTimeout(CRM_DASH_TIMER);
   CRM_DASH_TIMER = setTimeout(() => {
     const s = document.getElementById('crm-secao-dashboard');
@@ -18833,6 +19077,8 @@ const CHATBOT_FAQ = [
         { p: 'Qual a diferença entre Conteúdos e Kanban?', r: 'Conteúdos é o planejamento: tipo, legenda, roteiro, mídia, datas e cliente. Quando clicar em "Iniciar produção", o conteúdo vira um cartão no Kanban, no projeto "Produção de Conteúdo" (A fazer → Em produção → Aprovação do cliente → Alteração → Aprovados → Entregue). A equipe trabalha no Kanban; o conteúdo acompanha sozinho e o Dashboard conta as entregas.' },
         { p: 'Como o cliente aprova um conteúdo?', r: 'No cartão do Kanban (ou no Conteúdos), clique em "Enviar para aprovação": o link é copiado e o cliente abre sem login. Se ele pedir alteração, o cartão volta para "Alteração" com o comentário; se aprovar, vai para "Aprovados". Você recebe a notificação na hora (sino no topo e aviso na tela). Depois da alteração, use "Reenviar ao cliente": é o mesmo link, com a nova versão.' },
         { p: 'Como funciona o Portal do cliente sem login?', r: 'Em Portal do cliente, clique em "Copiar link" ao lado do cliente. O cliente abre direto, sem senha: vê a produção, aprova ou pede alteração e manda ideias e pedidos. O botão ao lado gera um link novo (o antigo para de funcionar).' },
+        { p: 'Onde gerencio a equipe?', r: 'CRM → Operacional → Equipe. Ali o Diretor adiciona pessoas (nome, e-mail, senha e nível), muda o nível de acesso, remove quem saiu e cadastra o WhatsApp de cada um (o mesmo usado nas Automações). Também mostra quantas tarefas e conteúdos cada pessoa tem em aberto, e permite apagar os logins antigos de cliente do portal.' },
+        { p: 'Como compartilho o link de aprovação?', r: 'Clique no ícone de link do conteúdo (ou em "Enviar para aprovação" no cartão do Kanban). Abre uma janela com o link, o botão "Copiar link" e as opções de compartilhar por WhatsApp (já com o número do cliente, se estiver no cadastro) ou e-mail, com uma mensagem pronta que você pode editar.' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
@@ -22731,6 +22977,7 @@ function proximaVagaLivre() {
 }
 
 function renderUsuariosTenant() {
+  if (typeof eqRender === 'function') eqRender();
   const tbody = document.getElementById('tabela-usuarios-body');
   const contadorEl = document.getElementById('usuarios-contador');
   const limite = limiteUsuariosEmpresa();

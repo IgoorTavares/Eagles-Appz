@@ -904,7 +904,7 @@ const NIVEIS = {
   administrativo: { nome: 'Administrativo', desc: 'Tudo, menos o financeiro (Painel, Meu Negócio e Financeiro ficam bloqueados)' },
   financeiro: { nome: 'Financeiro', desc: 'Financeiro completo; o resto só visualiza (não cadastra nem edita)' },
 };
-const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1'];
+const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1'];
 const CHAVES_CONFIG_EMPRESA = ['eagles_ia_config_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'];
 
 function nivelDoRole(role) {
@@ -6374,6 +6374,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '09/10/2026 · ERP', itens: [
+    { titulo: 'Analista do negócio no ERP', badges: ['novo'], texto: 'Botão novo acima do robozinho em todas as telas do ERP. O Analista lê vendas, estoque, compras e notas, contratos, clientes e o financeiro dos últimos 90 dias e devolve: nota geral (com a evolução desde o diagnóstico anterior), nota de 0 a 10 por área, números principais, melhorias priorizadas pelo impacto (com caixinha de "feita") e o que vai bem. Tem "Pergunte ao Analista" e histórico.' },
+  ]},
   { data: '09/10/2026 · Equipe e links', itens: [
     { titulo: 'Equipe', badges: ['novo'], texto: 'Nova ferramenta em Operacional → Equipe: adicionar pessoas, mudar o nível de acesso, remover acesso, WhatsApp de cada um e o que cada pessoa tem em aberto (tarefas, atrasadas e conteúdos). Logins antigos de cliente do portal aparecem separados e podem ser apagados.' },
     { titulo: 'Compartilhar link por WhatsApp ou e-mail', badges: ['novo'], texto: 'O link de aprovação (e o do portal) agora abre numa janela com "Copiar link" e "Compartilhar": WhatsApp (já com o número do cliente) ou e-mail, com uma mensagem pronta e editável.' },
@@ -9502,6 +9505,226 @@ async function eqCriar() {
     avisar('Não foi possível criar o acesso: ' + (typeof mensagemErroCriacaoConta === 'function' ? mensagemErroCriacaoConta(err.code) : (err.message || err)));
     if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Criar acesso'; }
   } finally { if (app2) { try { await app2.delete(); } catch (e) {} } }
+}
+
+// =====================================================================
+// ---------- Analista do ERP (botão flutuante acima do robozinho) ----------
+// =====================================================================
+// Mesma ideia do Analista do CRM, mas lendo o ERP: vendas, estoque,
+// compras, notas, contratos, clientes e (para quem vê) o financeiro.
+// Os NÚMEROS são calculados aqui; a IA dá as notas por área e as
+// melhorias. Cada melhoria pode ser marcada como feita, e a nota de cada
+// diagnóstico fica guardada para ver a evolução.
+const ERPAN_PAGINAS = ['painel', 'meu-negocio', 'produtos', 'clientes-fornecedores', 'vendedores', 'funcionarios', 'pedidos-venda', 'objetos-postagem', 'contratos', 'pedido-compras', 'notas-fiscais-entrada', 'lancamentos-estoque', 'conferencia-estoque', 'financeiro'];
+const ERPAN_KEY = 'eagles_ia_analista_erp_v1';
+const ERPAN_KEY_FIN = 'eagles_fin_ia_analista_erp_v1';
+const ERPAN_AREAS = { vendas: 'Vendas', estoque: 'Estoque', compras: 'Compras', financeiro: 'Financeiro', clientes: 'Clientes', contratos: 'Contratos' };
+let ERPAN = { aberto: false, iniciado: false, carregando: '', erro: '', hist: [], histFin: [], verId: '', pergunta: '', resposta: '' };
+
+function erpanVeFin() { return !FIREBASE_PRONTO || !TENANT_ID || nivelVeFinanceiro(); }
+function erpanMontar(activeKey) {
+  if (!ERPAN_PAGINAS.includes(activeKey) || document.getElementById('erpan-launcher')) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.id = 'erpan-launcher'; b.className = 'erpan-launcher';
+  b.title = 'Analista do negócio (IA)'; b.setAttribute('aria-label', 'Abrir o Analista do negócio');
+  b.innerHTML = ic('grafico', 'ic-herda');
+  b.onclick = erpanAlternar;
+  document.body.appendChild(b);
+  const p = document.createElement('aside');
+  p.id = 'erpan-painel'; p.className = 'erpan-painel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Analista do negócio');
+  document.body.appendChild(p);
+}
+function erpanAlternar() {
+  // o ERP só aparece para planos com ERP
+  if (TENANT_PLANO === 'crm') return;
+  ERPAN.aberto = !ERPAN.aberto;
+  const p = document.getElementById('erpan-painel');
+  if (p) p.classList.toggle('aberto', ERPAN.aberto);
+  if (ERPAN.aberto) { erpanIniciar(); erpanRender(); }
+}
+function erpanIniciar() {
+  if (ERPAN.iniciado) return;
+  ERPAN.iniciado = true;
+  iaIniciar(() => erpanRender());
+  try { if (typeof finEscutar === 'function' && erpanVeFin()) finEscutar(() => {}); } catch (e) { console.error(e); }
+  cloudWatch(ERPAN_KEY, [], (d) => { ERPAN.hist = Array.isArray(d) ? d : []; erpanRender(); });
+  if (erpanVeFin()) cloudWatch(ERPAN_KEY_FIN, [], (d) => { ERPAN.histFin = Array.isArray(d) ? d : []; erpanRender(); });
+}
+function erpanHistorico() { return ERPAN.hist.concat(ERPAN.histFin).sort((a, b) => String(b.criadoEm).localeCompare(String(a.criadoEm))); }
+
+// ---------- números (últimos 90 dias) ----------
+async function erpanColetar() {
+  const hoje = kbHoje(), ini = atdMaisDias(hoje, -90), ini30 = atdMaisDias(hoje, -30);
+  const ler = async (k) => { try { const v = await cloudGetForce(k, []); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+  const [produtos, pedidos, compras, notas, contratos, movs, vendedores, contatos] = await Promise.all(['eagles_produtos_v1', 'eagles_pedidos_venda_v1', 'eagles_pedido_compras_v1', 'eagles_notas_fiscais_entrada_v1', 'eagles_contratos_v1', 'eagles_lancamentos_estoque_v1', 'eagles_vendedores_v1', CLIENTES_FORN_KEY].map(ler));
+  const d = { periodo: { de: ini, ate: hoje }, empresa: atdEmpresa() || '', modulos: [] };
+  const num = (v) => Number(v) || 0;
+  const dt = (x) => String(x || '').slice(0, 10);
+  const top = (mapa, n) => Object.entries(mapa).sort((a, b) => b[1] - a[1]).slice(0, n || 5).map(([nome, valor]) => ({ nome, valor: Math.round(valor * 100) / 100 }));
+  const soma = (l, f) => l.reduce((a, x) => a + num(f ? f(x) : x.valor), 0);
+  // vendas
+  if (pedidos.length) {
+    d.modulos.push('vendas');
+    const p90 = pedidos.filter((p) => dt(p.data) >= ini);
+    const fat = p90.filter((p) => p.status === 'faturado'), canc = p90.filter((p) => p.status === 'cancelado');
+    const meses = [finSomarMeses(hoje.slice(0, 7), -2), finSomarMeses(hoje.slice(0, 7), -1), hoje.slice(0, 7)];
+    const cli = {}, vend = {}, prod = {}, uf = {};
+    fat.forEach((p) => { cli[p.cliente || 'Sem cliente'] = (cli[p.cliente || 'Sem cliente'] || 0) + num(p.valor); vend[p.vendedor || 'Sem vendedor'] = (vend[p.vendedor || 'Sem vendedor'] || 0) + num(p.valor); if (p.produto) prod[p.produto] = (prod[p.produto] || 0) + num(p.valor); if (p.estado) uf[p.estado] = (uf[p.estado] || 0) + num(p.valor); });
+    const totFat = soma(fat);
+    d.vendas = {
+      pedidos90d: p90.length, faturados90d: fat.length, valorFaturado90d: totFat, cancelados90d: canc.length, taxaCancelamento: p90.length ? Math.round(canc.length / p90.length * 100) : 0,
+      ticketMedio: fat.length ? Math.round(totFat / fat.length) : 0, porMes: meses.map((m) => ({ mes: m, faturado: soma(fat.filter((p) => dt(p.data).startsWith(m))), pedidos: p90.filter((p) => dt(p.data).startsWith(m)).length })),
+      abertosHaMaisDe15Dias: pedidos.filter((p) => p.status === 'aberto' && dt(p.data) && anDias(dt(p.data), hoje) > 15).length,
+      maioresClientes: top(cli), concentracaoMaiorCliente: totFat ? Math.round((top(cli, 1)[0] || { valor: 0 }).valor / totFat * 100) : 0,
+      vendedores: top(vend), produtosMaisVendidos: top(prod), estados: top(uf),
+    };
+  }
+  // estoque
+  if (produtos.length) {
+    d.modulos.push('estoque');
+    const ativos = produtos.filter((p) => p.situacao !== 'inativo');
+    const vendidos = new Set(pedidos.filter((p) => dt(p.data) >= ini && p.status !== 'cancelado').map((p) => p.produto).filter(Boolean));
+    const abaixo = ativos.filter((p) => num(p.quantidadeMinima) > 0 && num(p.estoque) < num(p.quantidadeMinima));
+    const parados = ativos.filter((p) => num(p.estoque) > 0 && !vendidos.has(p.nome));
+    const vencendo = ativos.filter((p) => p.dataValidade && dt(p.dataValidade) >= hoje && dt(p.dataValidade) <= atdMaisDias(hoje, 30));
+    d.estoque = {
+      produtosAtivos: ativos.length, semEstoque: ativos.filter((p) => num(p.estoque) <= 0).length, abaixoDoMinimo: abaixo.length, exemplosAbaixoDoMinimo: abaixo.slice(0, 5).map((p) => p.nome),
+      valorEmEstoquePrecoVenda: Math.round(soma(ativos, (p) => num(p.estoque) * num(p.precoVenda))), semVendaEm90dComEstoque: parados.length,
+      valorParado: Math.round(soma(parados, (p) => num(p.estoque) * num(p.precoVenda))), exemplosParados: parados.sort((a, b) => num(b.estoque) * num(b.precoVenda) - num(a.estoque) * num(a.precoVenda)).slice(0, 5).map((p) => p.nome),
+      vencendoEm30d: vencendo.length, semEstoqueMinimoDefinido: ativos.filter((p) => !num(p.quantidadeMinima)).length,
+      movimentacoes90d: { entradas: movs.filter((m) => m.tipo === 'entrada' && dt(m.data) >= ini).length, saidas: movs.filter((m) => m.tipo === 'saida' && dt(m.data) >= ini).length },
+    };
+  }
+  // compras e notas
+  if (compras.length || notas.length) {
+    d.modulos.push('compras');
+    const c90 = compras.filter((c) => dt(c.data) >= ini);
+    const forn = {}; c90.filter((c) => c.status !== 'cancelado').forEach((c) => { forn[c.fornecedor || 'Sem fornecedor'] = (forn[c.fornecedor || 'Sem fornecedor'] || 0) + num(c.valor); });
+    d.compras = {
+      pedidos90d: c90.length, valor90d: soma(c90.filter((c) => c.status !== 'cancelado')), aguardandoRecebimentoHaMaisDe15Dias: compras.filter((c) => c.status === 'aberto' && dt(c.data) && anDias(dt(c.data), hoje) > 15).length,
+      maioresFornecedores: top(forn), notasPendentesDeLancamento: notas.filter((n) => n.status === 'pendente').length, valorNotasPendentes: soma(notas.filter((n) => n.status === 'pendente')),
+    };
+  }
+  // contratos
+  if (contratos.length) {
+    d.modulos.push('contratos');
+    const vig = contratos.filter((c) => c.status === 'vigente');
+    d.contratos = { vigentes: vig.length, valorVigentes: soma(vig), vencendoEm30d: vig.filter((c) => c.dataFim && dt(c.dataFim) >= hoje && dt(c.dataFim) <= atdMaisDias(hoje, 30)).length, vencidosAindaVigentes: vig.filter((c) => c.dataFim && dt(c.dataFim) < hoje).length, encerrados90d: contratos.filter((c) => c.status === 'encerrado' && dt(c.dataFim) >= ini).length };
+  }
+  // clientes
+  const clientes = contatos.filter((c) => c.tipoCadastro !== 'fornecedor');
+  if (clientes.length) {
+    d.modulos.push('clientes');
+    const ultima = {}; pedidos.filter((p) => p.status === 'faturado' && p.cliente).forEach((p) => { const x = dt(p.data); if (!ultima[p.cliente] || x > ultima[p.cliente]) ultima[p.cliente] = x; });
+    const nomes = clientes.map((c) => c.nome || c.razaoSocial || '').filter(Boolean);
+    const parados = nomes.filter((n) => ultima[n] && anDias(ultima[n], hoje) > 60);
+    d.clientes = { total: clientes.length, novos90d: clientes.filter((c) => dt(c.criadoEm) >= ini).length, compraram90d: nomes.filter((n) => ultima[n] && ultima[n] >= ini).length, nuncaCompraram: nomes.filter((n) => !ultima[n]).length, semComprarHaMaisDe60d: parados.length, exemplosParados: parados.slice(0, 5), fornecedores: contatos.length - clientes.length, vendedores: vendedores.length };
+  }
+  // financeiro (só quem vê)
+  if (erpanVeFin() && typeof FIN_LANC !== 'undefined' && FIN_LANC.length) {
+    d.modulos.push('financeiro');
+    const val = FIN_LANC.filter((l) => l.status !== 'cancelado');
+    const meses = [finSomarMeses(hoje.slice(0, 7), -2), finSomarMeses(hoje.slice(0, 7), -1), hoje.slice(0, 7)];
+    const rest = (l) => Math.max(0, num(l.valor) - num(l.valorPago));
+    const venc = val.filter((l) => l.tipo === 'receber' && (l.status === 'pendente' || l.status === 'parcial') && l.vencimento && l.vencimento < hoje);
+    d.financeiro = {
+      ultimos3Meses: meses.map((m) => { const r = soma(val.filter((l) => l.tipo === 'receber' && finCompetencia(l) === m)), p = soma(val.filter((l) => l.tipo === 'pagar' && finCompetencia(l) === m)); return { mes: m, receita: r, despesa: p, resultado: r - p }; }),
+      inadimplencia: { valor: soma(venc, rest), contas: venc.length },
+      aReceber30d: soma(val.filter((l) => l.tipo === 'receber' && l.status !== 'pago' && l.vencimento >= hoje && l.vencimento <= atdMaisDias(hoje, 30)), rest),
+      aPagar30d: soma(val.filter((l) => l.tipo === 'pagar' && l.status !== 'pago' && l.vencimento >= hoje && l.vencimento <= atdMaisDias(hoje, 30)), rest),
+      recebido30d: soma(val.filter((l) => l.tipo === 'receber' && dt(l.dataPagamento) >= ini30), (l) => num(l.valorPago)),
+    };
+  }
+  return d;
+}
+const ERPAN_SISTEMA = 'Você é um consultor de gestão sênior para pequenas empresas no Brasil (comércio, indústria e serviços que usam ERP). Recebe números reais dos últimos 90 dias e devolve um diagnóstico objetivo, em português simples, com notas por área e melhorias práticas, priorizadas pelo impacto em caixa e em vendas. Use SOMENTE os números recebidos — nunca invente valores, produtos ou nomes. Área sem dados não recebe nota. Seja honesto e específico.';
+async function erpanGerar() {
+  if (!iaPronta()) { iaAbrirChaves(erpanRender); return; }
+  ERPAN.carregando = 'gerar'; ERPAN.erro = ''; erpanRender();
+  try {
+    const dados = await erpanColetar();
+    if (!dados.modulos.length) throw new Error('Ainda não há dados no ERP para analisar. Cadastre produtos, pedidos de venda ou compras e volte aqui.');
+    const r = await iaGerarJson(ERPAN_SISTEMA, `Dados do ERP${dados.empresa ? ' de ' + dados.empresa : ''}, de ${dados.periodo.de} a ${dados.periodo.ate}:\n${JSON.stringify(dados)}\n\nDevolva: {"nota": 0 a 100 para a gestão geral, "resumo": "3 a 4 frases", "areas": [{"area": "vendas|estoque|compras|financeiro|clientes|contratos", "nota": 0 a 10, "motivo": "1 frase citando o número"}] (só das áreas com dados), "destaques": ["2 a 4 pontos fortes"], "melhorias": [{"titulo": "ação curta no imperativo", "como": "passo prático em 1 a 2 frases", "area": "...", "impacto": "alto|medio|baixo", "ganho": "o que melhora, em 1 frase (sem inventar valores)"}], "alerta": "risco urgente ou vazio"}. Entre 4 e 7 melhorias, da mais importante para a menos.`, { maxTokens: 2800, temperatura: 0.4 });
+    const s = (v, n) => String(v === undefined || v === null ? '' : v).slice(0, n || 500);
+    const rel = {
+      nota: Math.max(0, Math.min(100, Math.round(Number(r.nota) || 0))), resumo: s(r.resumo, 1500), alerta: s(r.alerta, 400),
+      areas: (Array.isArray(r.areas) ? r.areas : []).filter((a) => a && ERPAN_AREAS[a.area] && dados.modulos.includes(a.area)).map((a) => ({ area: a.area, nota: Math.max(0, Math.min(10, Math.round((Number(a.nota) || 0) * 10) / 10)), motivo: s(a.motivo, 300) })),
+      destaques: (Array.isArray(r.destaques) ? r.destaques : []).slice(0, 5).map((x) => s(x, 300)).filter(Boolean),
+      melhorias: (Array.isArray(r.melhorias) ? r.melhorias : []).slice(0, 8).map((m) => ({ titulo: s(m && m.titulo, 160), como: s(m && m.como, 500), area: s(m && m.area, 30), impacto: ['alto', 'medio', 'baixo'].includes(m && m.impacto) ? m.impacto : 'medio', ganho: s(m && m.ganho, 300), feita: false })).filter((m) => m.titulo),
+    };
+    if (!rel.resumo && !rel.melhorias.length) throw new Error('A IA devolveu um diagnóstico vazio. Tente de novo.');
+    const item = { id: genId('ea'), criadoEm: new Date().toISOString(), por: USUARIO_NOME || '', modulos: dados.modulos, kpis: erpanKpis(dados), relatorio: rel, temFinanceiro: !!dados.financeiro };
+    erpanGravar(item, true);
+    ERPAN.verId = item.id;
+  } catch (e) { ERPAN.erro = e.message; }
+  ERPAN.carregando = ''; erpanRender();
+}
+function erpanGravar(item, novo) {
+  if (item.temFinanceiro) { ERPAN.histFin = (novo ? [item].concat(ERPAN.histFin) : ERPAN.histFin.map((x) => (x.id === item.id ? item : x))).slice(0, 24); cloudSet(ERPAN_KEY_FIN, ERPAN.histFin); }
+  else { ERPAN.hist = (novo ? [item].concat(ERPAN.hist) : ERPAN.hist.map((x) => (x.id === item.id ? item : x))).slice(0, 24); cloudSet(ERPAN_KEY, ERPAN.hist); }
+}
+function erpanKpis(d) {
+  const k = [];
+  if (d.vendas) k.push({ r: 'Faturado (90 dias)', v: formatMoney(d.vendas.valorFaturado90d) }, { r: 'Ticket médio', v: formatMoney(d.vendas.ticketMedio) });
+  if (d.estoque) k.push({ r: 'Abaixo do mínimo', v: String(d.estoque.abaixoDoMinimo), cor: d.estoque.abaixoDoMinimo ? 'neg' : 'pos' }, { r: 'Estoque parado', v: formatMoney(d.estoque.valorParado), cor: d.estoque.valorParado ? 'neg' : '' });
+  if (d.compras) k.push({ r: 'Notas a lançar', v: String(d.compras.notasPendentesDeLancamento), cor: d.compras.notasPendentesDeLancamento ? 'neg' : '' });
+  if (d.financeiro) k.push({ r: 'Inadimplência', v: formatMoney(d.financeiro.inadimplencia.valor), cor: d.financeiro.inadimplencia.valor ? 'neg' : 'pos' });
+  if (d.clientes) k.push({ r: 'Clientes parados (+60d)', v: String(d.clientes.semComprarHaMaisDe60d) });
+  return k.slice(0, 6);
+}
+function erpanMarcar(id, i) {
+  const it = erpanHistorico().find((x) => x.id === id);
+  if (!it || !it.relatorio.melhorias[i]) return;
+  const m = it.relatorio.melhorias[i];
+  m.feita = !m.feita; m.feitaEm = m.feita ? new Date().toISOString() : '';
+  erpanGravar(it, false); erpanRender();
+}
+async function erpanPerguntar() {
+  const q = ((document.getElementById('erpan-pergunta') || {}).value || '').trim();
+  if (!q) return;
+  if (!iaPronta()) { iaAbrirChaves(erpanRender); return; }
+  ERPAN.pergunta = q; ERPAN.carregando = 'pergunta'; ERPAN.erro = ''; ERPAN.resposta = ''; erpanRender();
+  try {
+    const dados = await erpanColetar();
+    const r = await iaGerarJson(ERPAN_SISTEMA, `Dados do ERP de ${dados.periodo.de} a ${dados.periodo.ate}:\n${JSON.stringify(dados)}\n\nPergunta do dono: ${q}\n\nDevolva {"resposta": "resposta direta de 2 a 6 frases citando os números; se os dados não permitem responder, diga o que falta"}.`, { maxTokens: 900, temperatura: 0.4 });
+    ERPAN.resposta = String(r.resposta || '').slice(0, 3000) || 'A IA não respondeu. Tente reformular.';
+  } catch (e) { ERPAN.erro = e.message; }
+  ERPAN.carregando = ''; erpanRender();
+}
+function erpanRender() {
+  const el = document.getElementById('erpan-painel');
+  if (!el || !ERPAN.aberto) return;
+  const foco = document.activeElement;
+  if (foco && el.contains(foco) && foco.tagName === 'INPUT' && !ERPAN.carregando) { /* não apaga o que está sendo digitado */ }
+  const hist = erpanHistorico();
+  const it = hist.find((x) => x.id === ERPAN.verId) || hist[0];
+  const rel = it && it.relatorio;
+  const ant = it ? hist[hist.indexOf(it) + 1] : null;
+  const IMP = { alto: 'Impacto alto', medio: 'Impacto médio', baixo: 'Impacto baixo' };
+  const corNota = (n, max) => (n / max >= 0.7 ? 'pos' : n / max >= 0.45 ? 'med' : 'neg');
+  const feitas = rel ? rel.melhorias.filter((m) => m.feita).length : 0;
+  const valorPergunta = (document.getElementById('erpan-pergunta') || {}).value || ERPAN.pergunta;
+  el.innerHTML = `
+    <div class="erpan-cab"><span class="erpan-ic">${ic('grafico', 'ic-herda')}</span><div><strong>Analista do negócio</strong><small>Diagnóstico do ERP com IA · últimos 90 dias</small></div><span class="kb-espaco"></span><button type="button" class="close-btn" aria-label="Fechar" onclick="erpanAlternar()">✕</button></div>
+    <div class="erpan-corpo">
+      <div style="margin-bottom:10px;">${iaHtmlStatus('erpanRender')}</div>
+      ${iaPronta() ? '' : `<div class="atd-banner">${ic('cadeado', 'ic-herda')}<div><strong>Conecte uma IA para começar.</strong> Use a chave da OpenAI, do Gemini ou do Claude (a mesma dos agentes do CRM). <button type="button" class="btn btn-small btn-primary" style="margin-top:6px;" onclick="iaAbrirChaves(erpanRender)">Conectar IA</button></div></div>`}
+      ${ERPAN.erro ? `<div class="cw-erro">${ic('alerta', 'ic-herda')} ${escapeHtml(ERPAN.erro)}</div>` : ''}
+      ${!erpanVeFin() ? '<p class="kb-vazio-mini" style="margin:0 0 8px;">Seu nível não vê o Financeiro: a análise usa vendas, estoque, compras, contratos e clientes.</p>' : ''}
+      ${ERPAN.carregando === 'gerar' ? `<div class="atd-vazio">${ic('grafico')}<strong>Analisando o ERP...</strong><span>Lendo vendas, estoque, compras, contratos e clientes${erpanVeFin() ? ' e o financeiro' : ''}. Leva de 15 a 60 segundos.</span></div>`
+      : !rel ? `<div class="atd-vazio">${ic('grafico')}<strong>Nenhum diagnóstico ainda</strong><span>O Analista lê os dados do ERP, dá uma nota para cada área (vendas, estoque, compras...) e lista melhorias priorizadas pelo impacto.</span><button type="button" class="btn btn-primary" onclick="erpanGerar()">${ic('brilho', 'ic-herda')} Fazer diagnóstico</button></div>`
+      : `<div class="erpan-topo"><div class="an-nota ${corNota(rel.nota, 100)}"><b>${rel.nota}</b><span>de 100</span></div><div><div class="kb-vazio-mini">${escapeHtml(formatDatePt(it.criadoEm.slice(0, 10)))}${it.por ? ' · ' + escapeHtml(it.por) : ''}${ant ? ` · antes: ${ant.relatorio.nota} <b class="${rel.nota >= ant.relatorio.nota ? 'fin-verde' : 'fin-vermelho'}">${rel.nota >= ant.relatorio.nota ? '▲' : '▼'} ${Math.abs(rel.nota - ant.relatorio.nota)}</b>` : ''}</div><p>${escapeHtml(rel.resumo)}</p></div></div>
+        ${rel.alerta ? `<div class="cw-erro">${ic('alerta', 'ic-herda')} ${escapeHtml(rel.alerta)}</div>` : ''}
+        ${rel.areas.length ? `<div class="erpan-tit">Nota por área</div><div class="erpan-areas">${rel.areas.map((a) => `<div class="erpan-area"><div class="erpan-area-cab"><span>${ERPAN_AREAS[a.area]}</span><b class="${corNota(a.nota, 10)}">${String(a.nota).replace('.', ',')}</b></div><span class="cw-barra erpan-barra"><i class="${corNota(a.nota, 10)}" style="width:${a.nota * 10}%"></i></span><small>${escapeHtml(a.motivo)}</small></div>`).join('')}</div>` : ''}
+        ${it.kpis.length ? `<div class="an-kpis">${it.kpis.map((k) => `<div class="an-kpi ${k.cor || ''}"><span>${escapeHtml(k.r)}</span><b>${escapeHtml(k.v)}</b></div>`).join('')}</div>` : ''}
+        ${rel.melhorias.length ? `<div class="erpan-tit">Melhorias <span class="kb-vazio-mini">${feitas} de ${rel.melhorias.length} feitas</span></div>${rel.melhorias.map((m, i) => `<label class="erpan-melhoria${m.feita ? ' feita' : ''}"><input type="checkbox" ${m.feita ? 'checked' : ''} onchange="erpanMarcar('${escapeParaOnclick(it.id)}', ${i})"><div><b>${escapeHtml(m.titulo)}</b><p>${escapeHtml(m.como)}</p>${m.ganho ? `<p class="erpan-ganho">${escapeHtml(m.ganho)}</p>` : ''}<span class="erpan-tags"><span class="erpan-imp ${m.impacto}">${IMP[m.impacto]}</span>${ERPAN_AREAS[m.area] ? `<span class="an-area">${ERPAN_AREAS[m.area]}</span>` : ''}</span></div></label>`).join('')}` : ''}
+        ${rel.destaques.length ? `<div class="erpan-tit">O que vai bem</div><ul class="an-lista">${rel.destaques.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` : ''}
+        <button type="button" class="btn btn-primary" style="width:100%; margin-top:12px; justify-content:center;" onclick="erpanGerar()" ${ERPAN.carregando ? 'disabled' : ''}>${ic('repetir', 'ic-herda')} Novo diagnóstico</button>`}
+      <div class="erpan-tit">Pergunte ao Analista</div>
+      <div class="cw-ajuste" style="margin-top:0;"><input type="text" id="erpan-pergunta" maxlength="400" placeholder="Ex.: qual produto mais dá lucro? onde estou perdendo dinheiro?" value="${escapeHtml(valorPergunta)}" onkeydown="if (event.key === 'Enter') erpanPerguntar()"><button type="button" class="btn btn-small btn-primary" onclick="erpanPerguntar()" ${ERPAN.carregando ? 'disabled' : ''}>${ERPAN.carregando === 'pergunta' ? 'Pensando...' : 'Perguntar'}</button></div>
+      ${ERPAN.resposta ? `<div class="cw-texto" style="margin-top:8px;">${escapeHtml(ERPAN.resposta)}</div>` : ''}
+      ${hist.length > 1 ? `<div class="erpan-tit">Diagnósticos anteriores</div><div class="erpan-hist">${hist.map((h) => `<button type="button" class="${it && h.id === it.id ? 'ativo' : ''}" onclick="ERPAN.verId='${escapeParaOnclick(h.id)}'; erpanRender()"><b>${h.relatorio.nota}</b><span>${escapeHtml(formatDatePt(h.criadoEm.slice(0, 10)))}</span></button>`).join('')}</div>` : ''}
+    </div>`;
 }
 
 function renderCrmEmConstrucao(secao) {
@@ -19079,6 +19302,7 @@ const CHATBOT_FAQ = [
         { p: 'Como funciona o Portal do cliente sem login?', r: 'Em Portal do cliente, clique em "Copiar link" ao lado do cliente. O cliente abre direto, sem senha: vê a produção, aprova ou pede alteração e manda ideias e pedidos. O botão ao lado gera um link novo (o antigo para de funcionar).' },
         { p: 'Onde gerencio a equipe?', r: 'CRM → Operacional → Equipe. Ali o Diretor adiciona pessoas (nome, e-mail, senha e nível), muda o nível de acesso, remove quem saiu e cadastra o WhatsApp de cada um (o mesmo usado nas Automações). Também mostra quantas tarefas e conteúdos cada pessoa tem em aberto, e permite apagar os logins antigos de cliente do portal.' },
         { p: 'Como compartilho o link de aprovação?', r: 'Clique no ícone de link do conteúdo (ou em "Enviar para aprovação" no cartão do Kanban). Abre uma janela com o link, o botão "Copiar link" e as opções de compartilhar por WhatsApp (já com o número do cliente, se estiver no cadastro) ou e-mail, com uma mensagem pronta que você pode editar.' },
+        { p: 'O que é o botão do Analista no ERP?', r: 'É o botão com o ícone de gráfico, logo acima do robozinho, nas telas do ERP. Ele abre o Analista do negócio: lê vendas, estoque, compras, notas, contratos, clientes e (para quem vê) o financeiro dos últimos 90 dias e devolve uma nota geral, uma nota por área e uma lista de melhorias priorizadas pelo impacto. Você marca cada melhoria como feita e acompanha a nota subir a cada diagnóstico. Usa a mesma chave de IA dos agentes do CRM.' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
@@ -19256,6 +19480,7 @@ function initPaginaComum(activeKey) {
   renderTopbar(activeKey);
   initFirebase();
   montarChatbotWidget();
+  try { erpanMontar(activeKey); } catch (e) { console.error(e); }
   bloquearZoomMobile();
   // initPerfilWatch() e initBuscaGlobalWatch() NÃO entram aqui de propósito:
   // elas dependem de TENANT_ID, que só fica pronto depois que o login

@@ -225,11 +225,11 @@ service cloud.firestore {
       // todos leem e só quem opera grava.
       match /dados/{docId} {
         allow read: if souSuperAdmin() || (souMembroAtivo(tenantId) &&
-          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1']) || veFinanceiro()));
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1']) || veFinanceiro()));
         allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && (
-          (docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1'] && veFinanceiro()) ||
+          (docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1'] && veFinanceiro()) ||
           (docId in ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1', 'eagles_ia_config_v1'] && souDiretor()) ||
-          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1', 'eagles_ia_config_v1']) && podeOperar())
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1', 'eagles_ia_config_v1']) && podeOperar())
         ));
       }
 

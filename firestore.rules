@@ -225,11 +225,11 @@ service cloud.firestore {
       // todos leem e só quem opera grava.
       match /dados/{docId} {
         allow read: if souSuperAdmin() || (souMembroAtivo(tenantId) &&
-          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1']) || veFinanceiro()));
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1']) || veFinanceiro()));
         allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && (
-          (docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1'] && veFinanceiro()) ||
-          (docId in ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'] && souDiretor()) ||
-          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1']) && podeOperar())
+          (docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1'] && veFinanceiro()) ||
+          (docId in ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1', 'eagles_ia_config_v1'] && souDiretor()) ||
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1', 'eagles_ia_config_v1']) && podeOperar())
         ));
       }
 
@@ -329,6 +329,19 @@ service cloud.firestore {
         allow read: if souSuperAdmin() || souMembroAtivo(tenantId);
         allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
       }
+
+      // Atendimento → Automações (modo assistido): um documento por mensagem
+      // enviada ou pulada pela equipe. O id é fixo por envio, então duas
+      // pessoas marcando a mesma mensagem não criam registro repetido.
+      // O nível Financeiro também registra (ele envia as cobranças).
+      match /atend_envios/{envioId} {
+        allow read: if souSuperAdmin() || souMembroAtivo(tenantId);
+        allow create, update: if souSuperAdmin() || (souMembroAtivo(tenantId) && (podeOperar() || veFinanceiro()) &&
+          request.resource.data.keys().hasOnly(['chave', 'automacaoId', 'gatilho', 'nomeAutomacao', 'para', 'telefone', 'texto', 'status', 'por', 'uid', 'em', 'refTipo', 'refId']) &&
+          request.resource.data.status in ['enviado', 'ignorado'] &&
+          request.resource.data.texto is string && request.resource.data.texto.size() <= 4000);
+        allow delete: if souSuperAdmin() || (souMembroAtivo(tenantId) && (podeOperar() || veFinanceiro()));
+      }
     }
 
     // ---------- propostas_publicas/{propostaId} ----------
@@ -415,8 +428,48 @@ service cloud.firestore {
         (resource.data.resposta == '' &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resposta', 'comentario', 'respondidoEm']) &&
           request.resource.data.resposta in ['aprovado', 'ajustes'] &&
-          request.resource.data.comentario is string && request.resource.data.comentario.size() <= 1000);
+          request.resource.data.comentario is string && request.resource.data.comentario.size() <= 1000) ||
+        // depois de aprovar, o cliente pode marcar que já postou (pelo portal)
+        (resource.data.resposta == 'aprovado' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['postadoEm']) &&
+          request.resource.data.postadoEm is string && request.resource.data.postadoEm.size() <= 40);
       allow delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+    }
+
+    // ---------- portais_publicos/{token} ----------
+    // Portal do cliente SEM login: a equipe publica aqui um retrato dos
+    // conteúdos daquele cliente. Quem tem o link (token longo e aleatório)
+    // lê UM documento; ninguém lista. As respostas do cliente não passam
+    // por aqui: vão para conteudos_publicos (aprovação) e
+    // portal_pedidos_publicos (ideias e serviços).
+    match /portais_publicos/{token} {
+      allow get: if true;
+      allow list: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+      allow create: if estaLogado() && request.resource.data.tenantId == meuTenantId() && empresaAtiva(meuTenantId()) && podeOperar();
+      allow update: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar())) && request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+    }
+
+    // ---------- portal_pedidos_publicos/{pedidoId} ----------
+    // Ideias e pedidos de serviço mandados pelo portal sem login. Só cria
+    // quem tem um link de portal válido, e só para o cliente daquele link.
+    match /portal_pedidos_publicos/{pedidoId} {
+      allow create: if
+        request.resource.data.keys().hasOnly(['tenantId', 'cliente', 'portalToken', 'tipo', 'titulo', 'texto', 'links', 'prazo', 'criadoEm', 'processado']) &&
+        request.resource.data.portalToken is string && request.resource.data.portalToken.size() > 10 && request.resource.data.portalToken.size() < 80 &&
+        exists(/databases/$(database)/documents/portais_publicos/$(request.resource.data.portalToken)) &&
+        get(/databases/$(database)/documents/portais_publicos/$(request.resource.data.portalToken)).data.tenantId == request.resource.data.tenantId &&
+        get(/databases/$(database)/documents/portais_publicos/$(request.resource.data.portalToken)).data.cliente == request.resource.data.cliente &&
+        request.resource.data.processado == false &&
+        request.resource.data.tipo in ['ideia', 'servico'] &&
+        request.resource.data.titulo is string && request.resource.data.titulo.size() > 0 && request.resource.data.titulo.size() <= 100 &&
+        request.resource.data.texto is string && request.resource.data.texto.size() <= 2000 &&
+        request.resource.data.links is list && request.resource.data.links.size() <= 10 &&
+        request.resource.data.prazo is string && request.resource.data.prazo.size() <= 10 &&
+        request.resource.data.criadoEm is string && request.resource.data.criadoEm.size() <= 40;
+      allow get: if false;
+      allow list: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+      allow update, delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
     }
 
     // ---------- pix_publico/{tenantId} ----------

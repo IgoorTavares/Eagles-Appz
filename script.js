@@ -214,6 +214,7 @@ const ICONES_SISTEMA = {
   copiar: '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   lista: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
   mensagem: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  sino: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
   ajuda: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
   colunas: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
   computador: '<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
@@ -903,8 +904,8 @@ const NIVEIS = {
   administrativo: { nome: 'Administrativo', desc: 'Tudo, menos o financeiro (Painel, Meu Negócio e Financeiro ficam bloqueados)' },
   financeiro: { nome: 'Financeiro', desc: 'Financeiro completo; o resto só visualiza (não cadastra nem edita)' },
 };
-const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1'];
-const CHAVES_CONFIG_EMPRESA = ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'];
+const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1'];
+const CHAVES_CONFIG_EMPRESA = ['eagles_ia_config_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'];
 
 function nivelDoRole(role) {
   if (role === 'SuperAdmin') return 'superadmin';
@@ -6373,6 +6374,30 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '09/10/2026 · Produção e aprovação', itens: [
+    { titulo: 'Conteúdos planeja, Kanban produz', badges: ['novo'], texto: '"Iniciar produção" no Conteúdos cria o cartão no Kanban, no projeto Produção de Conteúdo (A fazer → Em produção → Aprovação do cliente → Alteração → Aprovados → Entregue). Cartão e conteúdo andam juntos nos dois sentidos, e o Dashboard continua contando as entregas.' },
+    { titulo: 'Aprovação com rodadas e notificação na hora', badges: ['novo'], texto: 'Do cartão do Kanban, "Enviar para aprovação" copia o link (sem login). Alteração volta o cartão para "Alteração" com o comentário do cliente; aprovação manda para "Aprovados". Chega aviso na tela, no sino do topo e, se permitido, no computador. Depois da alteração, "Reenviar ao cliente" usa o mesmo link com a versão nova. O cliente vê "Recebemos sua solicitação..." ou "Em breve te mandaremos o arquivo final", e o arquivo final aparece para ele quando o cartão chega em "Entregue".' },
+    { titulo: 'Portal do cliente sem login', badges: ['novo'], texto: 'Cada cliente tem um link próprio do portal, que abre sem senha: produção, aprovações, "já postei", ideias e pedidos de serviço. O portal se atualiza sozinho quando algo muda, e dá para gerar um link novo a qualquer momento.' },
+  ]},
+  { data: '08/10/2026 · Dashboard', itens: [
+    { titulo: 'Faturamento e meta pelo Financeiro', badges: ['corrigido'], texto: 'Meta de Receita, Faturamento do mês e o gráfico de 6 meses usavam só os negócios fechados no funil — quem lança tudo pelo Financeiro via zero. Agora vêm do Financeiro (o mesmo número de Relatórios → Receita por competência), com o recebido do mês ao lado. Quem não vê o Financeiro continua vendo pelo funil.' },
+    { titulo: 'Resumo financeiro igual ao Financeiro', badges: ['corrigido'], texto: 'MRR agora vem das assinaturas (Recorrentes); a receber/a pagar descontam o que já foi pago em parte; e o lucro líquido do mês é o mesmo da DRE (com tributos). O filtro de cliente do topo também vale para esses números.' },
+    { titulo: 'Kanban no Dashboard', badges: ['melhoria'], texto: 'O cartão "Projetos recentes" (que estava parado) virou "Kanban (visão rápida)": tarefas abertas, atrasadas, para hoje, da semana, sem prazo e feitas na semana, mais as mexidas por último. "Tarefas para hoje" também mostra os próximos 7 dias.' },
+  ]},
+  { data: '08/10/2026 · Agentes IA', itens: [
+    { titulo: 'Agente Analista', badges: ['novo'], texto: 'Diagnóstico do negócio com os dados dos últimos 90 dias: nota de 0 a 100, números principais, o que vai bem, gargalos e ações priorizadas — cada ação vira tarefa no Kanban com um clique. Tem "Pergunte ao Analista" e histórico. Diagnósticos com dados do Financeiro só aparecem para quem vê o Financeiro.' },
+    { titulo: 'Agente Designer', badges: ['novo'], texto: 'Carrosséis, posts e stories: texto do Copywriter, gerado pela IA ou digitado; 4 estilos (Editorial, Minimalista, Profile e Impacto); editor com cores, fontes, padrões, fundo por imagem (do computador, por link ou gerada pela IA com OpenAI ou Gemini) e escurecimento. Baixa em PNG (1080 px) ou PDF, guarda a identidade visual de cada cliente e manda a peça para Conteúdos.' },
+  ]},
+  { data: '08/10/2026 · Agentes IA', itens: [
+    { titulo: 'Agente Copywriter', badges: ['novo'], texto: 'Agentes IA → Copywriter saiu do "em breve". Perfil estratégico por cliente (com "IA sugerir"), temas sugeridos pela IA e temas salvos, 8 formatos (carrossel, post, reels/TikTok, stories, legenda, LinkedIn, anúncio com variações A/B e e-mail), objetivo e tom de voz, ajustes por pedido, histórico do que foi gerado e envio direto para o quadro de Conteúdos.' },
+    { titulo: 'Chaves de IA: OpenAI, Gemini e Claude', badges: ['novo'], texto: 'Use a chave da sua conta em um dos três provedores — o custo é cobrado direto por ele, por uso. O Diretor escolhe se a chave fica só no navegador de cada pessoa ou na empresa, valendo para toda a equipe. A chave é validada na hora e o sistema sugere um modelo, que você pode trocar.' },
+  ]},
+  { data: '08/10/2026 · Atendimento', itens: [
+    { titulo: 'Automações de WhatsApp (modo assistido)', badges: ['novo'], texto: 'Atendimento → Automações saiu do "em breve". Crie automações de cobrança (antes, no dia, atrasada, pagamento recebido), lembrete de compromisso, aniversário, novo lead, venda ganha, tarefa atribuída, prazo vencendo e reativação de cliente. O sistema monta as mensagens e coloca na Fila de hoje; você confere e envia pelo WhatsApp com um clique. Tem também respostas rápidas, mensagens programadas, o WhatsApp de cada pessoa da equipe, assinatura com o nome de quem enviou, previsão dos próximos 7 dias e histórico de envios. Quando o WhatsApp for conectado por API, as mesmas automações passam a enviar sozinhas.' },
+  ]},
+  { data: '07/10/2026 · Relatórios', itens: [
+    { titulo: 'Gráfico de evolução: receita, despesas e lucro', badges: ['novo'], texto: 'Financeiro → Relatórios (e Meu Negócio → Financeiro) ganhou de volta o gráfico de 3 linhas do relatório antigo: receita, despesas e lucro mês a mês, pelo período escolhido. Fica ótimo no "Últimos 12 meses" e no "Este ano".' },
+  ]},
   { data: '07/10/2026 · Meu Negócio (v92)', itens: [
     { titulo: 'Relatório do Financeiro garantido no Meu Negócio', badges: ['corrigido'], texto: 'Se o navegador ou a publicação ainda trouxer a página antiga do Meu Negócio, o sistema troca sozinho o relatório antigo pelo de Financeiro → Relatórios.' },
   ]},
@@ -6754,20 +6779,20 @@ const CRM_TAREFAS_KEY = 'eagles_crm_tarefas_v1';
 let CRM_TAREFAS_DATA = [];
 
 const CRM_EM_CONSTRUCAO_INFO = {
-  'agente-analista': { icone: 'grafico', titulo: 'Agente Analista', texto: 'Leitura automática dos seus dados e relatórios — precisa de acesso a uma IA (custo por uso).' },
-  'agente-copywriter': { icone: 'caneta', titulo: 'Agente Copywriter', texto: 'Geração de textos para anúncios, e-mails e landing pages — precisa de acesso a uma IA (custo por uso).' },
-  'agente-designer': { icone: 'paleta', titulo: 'Agente Designer', texto: 'Apoio na geração de briefings e criativos visuais — precisa de acesso a uma IA (custo por uso).' },
   agendamentos: { icone: 'enviar', titulo: 'Agendamento de posts', texto: 'Publicação automática nas redes sociais — precisa de app aprovado pela Meta/TikTok.' },
   'relatorios-redes': { icone: 'tendencia', titulo: 'Relatórios de redes', texto: 'Métricas de desempenho das suas redes sociais — precisa de acesso à API do Meta.' },
   'anuncios-meta': { icone: 'megafone', titulo: 'Anúncios Meta', texto: 'Acompanhamento de campanhas do Facebook/Instagram Ads — precisa de acesso à API do Meta Ads.' },
   whatsapp: { icone: 'conversa', titulo: 'Central de WhatsApp', texto: 'Histórico de conversas e dados do CRM lado a lado — precisa de WhatsApp Business API aprovada.' },
   atendentes: { icone: 'pessoas', titulo: 'Atendentes', texto: 'Vários atendentes usando o mesmo número de WhatsApp — precisa de WhatsApp Business API.' },
-  automacoes: { icone: 'engrenagem', titulo: 'Automações de mensagem', texto: 'Disparos automáticos por evento (novo lead, proposta aprovada, cobrança) — precisa de WhatsApp Business API.' },
   'monitor-grupos': { icone: 'megafone', titulo: 'Monitor de grupos', texto: 'Acompanhar interações em grupos e comunidades do WhatsApp — precisa de WhatsApp Business API.' },
   'paginas-captura': { icone: 'globo', titulo: 'Páginas de captura', texto: 'Páginas focadas 100% em converter visitante em lead.' },
 };
 
 function initCrmHub() {
+  setTimeout(() => { try { notifMontarSino(); } catch (e) { console.error(e); } }, 300);
+  // Automações: começa a olhar os dados um pouco depois de abrir, para
+  // mostrar o número de mensagens da fila no menu sem atrasar a tela.
+  setTimeout(() => { try { atdIniciar(); } catch (e) { console.error(e); } }, 2500);
   crmMontarMobile();
   aplicarPreferenciasMenuCrm();
   cloudWatch(CRM_NEGOCIOS_KEY, [], (data) => {
@@ -6896,6 +6921,10 @@ function mostrarSecaoCrm(secao, btn) {
   if (secao === 'conteudos') cntMontar(document.getElementById('crm-secao-conteudos'));
   if (secao === 'agenda') { agMontar(document.getElementById('crm-secao-agenda')); agGoogleBuscar(); }
   if (secao === 'portal-cliente') portalMontar(document.getElementById('crm-secao-portal-cliente'));
+  if (secao === 'automacoes') atdMontar(document.getElementById('crm-secao-automacoes'));
+  if (secao === 'agente-copywriter') cwMontar(document.getElementById('crm-secao-agente-copywriter'));
+  if (secao === 'agente-analista') anMontar(document.getElementById('crm-secao-agente-analista'));
+  if (secao === 'agente-designer') dsMontar(document.getElementById('crm-secao-agente-designer'));
   const abaPag = { 'paginas-landing': 'pagina', 'paginas-link-bio': 'linkbio', 'paginas-formularios': 'formularios', 'paginas-agendamento': 'agendamento', 'paginas-portfolio': 'portfolio' }[secao];
   if (abaPag) pagMontar(document.getElementById('crm-secao-' + secao), abaPag);
   if (secao.startsWith('fin-')) finMontar(document.getElementById('crm-secao-' + secao), { 'fin-receber': 'receber', 'fin-pagar': 'pagar', 'fin-recorrencias': 'recorrentes', 'fin-relatorios': 'relatorios', 'fin-caixa': 'caixa', 'fin-integracoes': 'pix' }[secao]);
@@ -6907,6 +6936,2383 @@ function mostrarSecaoCrm(secao, btn) {
     if (KB_TUTORIAL_PASSO >= 0) kbFecharTutorial();
   }
   if (CRM_EM_CONSTRUCAO_INFO[secao]) renderCrmEmConstrucao(secao);
+}
+
+// =====================================================================
+// ---------- Atendimento → Automações (modo assistido) ----------
+// =====================================================================
+// Sem API de WhatsApp e sem servidor, o sistema não consegue mandar nada
+// sozinho. Então ele faz a parte difícil: olha os dados (cobranças,
+// agenda, tarefas, funil, clientes), descobre quem precisa receber
+// mensagem hoje, escreve a mensagem e põe numa fila. A pessoa clica em
+// "Enviar" e o WhatsApp abre com o texto pronto.
+// A fila é CALCULADA a partir dos dados (não fica gravada). O que fica
+// gravado é só o que já foi enviado ou pulado (atend_envios), com id fixo
+// por mensagem — assim ninguém manda a mesma mensagem duas vezes.
+// Quando houver API, as mesmas automações passam a enviar sozinhas.
+const ATD_CFG_KEY = 'eagles_atend_config_v1';
+const ATD_PROG_KEY = 'eagles_atend_programadas_v1';
+const ATD_COLECAO = 'atend_envios';
+let ATD_CFG = { automacoes: [], respostas: [], membros: {}, assinar: false };
+let ATD_PROG = [];
+let ATD_ENVIOS = [];
+let ATD_INICIADO = false;
+let ATD_CARREGADO = false;
+let ATD_HOST = null;
+let ATD_ABA = 'fila';
+let ATD_FILTRO = { cat: '', hist: 7, histAuto: '' };
+let ATD_FILA_ATUAL = [];
+let ATD_TIMER = null;
+let ATD_RELOGIO = null;
+
+const ATD_CATS = [['financeiro', 'Financeiro'], ['lembretes', 'Reuniões & Lembretes'], ['equipe', 'Equipe & Tarefas'], ['leads', 'Leads'], ['reativacao', 'Reativação']];
+const ATD_GATILHOS = {
+  cobranca_antes: { cat: 'financeiro', nome: 'Lembrete antes do vencimento', icone: 'dinheiro', destino: 'cliente', fin: true, dias: 3, diasLabel: 'dias antes do vencimento', desc: 'Lembra o cliente alguns dias antes de uma conta a receber vencer.', texto: 'Olá, {primeiro_nome}! Passando para lembrar que {descricao}, no valor de {valor}, vence em {vencimento}. Qualquer dúvida, é só chamar. {empresa}' },
+  cobranca_dia: { cat: 'financeiro', nome: 'Vence hoje', icone: 'alarme', destino: 'cliente', fin: true, desc: 'Avisa o cliente no dia do vencimento.', texto: 'Olá, {primeiro_nome}! Hoje vence {descricao}, no valor de {valor}. Se já pagou, pode desconsiderar. {empresa}' },
+  cobranca_atraso: { cat: 'financeiro', nome: 'Cobrança atrasada', icone: 'alerta', destino: 'cliente', fin: true, dias: 1, diasLabel: 'dias depois do vencimento', desc: 'Cobra com gentileza quando a conta passa do vencimento.', texto: 'Olá, {primeiro_nome}, tudo bem? Não identificamos o pagamento de {descricao} ({valor}), que venceu em {vencimento}. Pode verificar para mim? {empresa}' },
+  pagamento_recebido: { cat: 'financeiro', nome: 'Pagamento recebido', icone: 'aprovado', destino: 'cliente', fin: true, evento: true, desc: 'Agradece o cliente quando um pagamento é confirmado.', texto: 'Olá, {primeiro_nome}! Recebemos o seu pagamento de {valor}. Muito obrigado! {empresa}' },
+  compromisso_lembrete: { cat: 'lembretes', nome: 'Lembrete de compromisso', icone: 'reuniao', destino: 'cliente', dias: 1, diasLabel: 'dias antes', desc: 'Lembra o cliente de um compromisso da Agenda que tenha o cliente preenchido.', texto: 'Olá, {primeiro_nome}! Lembrete do nosso compromisso "{titulo}" em {data}{hora}. Até lá! {empresa}' },
+  aniversario: { cat: 'lembretes', nome: 'Aniversário do cliente', icone: 'festa', destino: 'cliente', desc: 'Parabeniza o cliente no dia do aniversário (data de nascimento do cadastro).', texto: 'Feliz aniversário, {primeiro_nome}! Desejamos um ano incrível. Um abraço de toda a equipe {empresa}.' },
+  tarefa_atribuida: { cat: 'equipe', nome: 'Tarefa atribuída', icone: 'tarefas', destino: 'equipe', evento: true, desc: 'Avisa o responsável quando recebe uma tarefa no Kanban.', texto: 'Oi, {primeiro_nome}! Você recebeu a tarefa "{titulo}"{prazo}.' },
+  prazo_vencendo: { cat: 'equipe', nome: 'Prazo vencendo', icone: 'relogio', destino: 'equipe', dias: 1, diasLabel: 'dias antes do prazo', desc: 'Avisa o responsável sobre tarefas perto do prazo ou atrasadas.', texto: 'Oi, {primeiro_nome}! A tarefa "{titulo}" vence em {data}. Consegue dar uma olhada?' },
+  novo_lead: { cat: 'leads', nome: 'Boas-vindas ao lead', icone: 'sorriso', destino: 'cliente', evento: true, desc: 'Manda a primeira mensagem quando entra um lead novo no funil.', texto: 'Olá, {primeiro_nome}! Aqui é da {empresa}. Recebemos o seu contato e já vamos te atender. Como podemos ajudar?' },
+  novo_lead_equipe: { cat: 'leads', nome: 'Novo lead', icone: 'pessoas', destino: 'equipe', evento: true, desc: 'Avisa o time comercial quando entra um lead novo no funil.', texto: 'Novo lead no funil: {nome}{telefone_lead}. Bora atender!' },
+  venda_ganha: { cat: 'leads', nome: 'Venda ganha', icone: 'joinha', destino: 'cliente', evento: true, desc: 'Agradece o cliente quando o negócio é marcado como Fechado no funil.', texto: '{primeiro_nome}, que alegria ter você com a gente! Obrigado pela confiança. Em breve falamos dos próximos passos. {empresa}' },
+  reativacao: { cat: 'reativacao', nome: 'Reativar cliente parado', icone: 'repetir', destino: 'cliente', dias: 60, diasLabel: 'dias sem comprar', desc: 'Chama de volta clientes que não compram há um tempo.', texto: 'Oi, {primeiro_nome}! Faz um tempinho que não conversamos. Temos novidades que podem te interessar. Posso te mostrar? {empresa}' },
+};
+const ATD_TEMPLATES_RAPIDOS = ['venda_ganha', 'tarefa_atribuida', 'novo_lead_equipe', 'prazo_vencendo', 'cobranca_antes', 'cobranca_atraso'];
+const ATD_VARIAVEIS = {
+  cliente: ['nome', 'primeiro_nome', 'empresa', 'valor', 'vencimento', 'descricao', 'titulo', 'data', 'hora'],
+  equipe: ['nome', 'primeiro_nome', 'titulo', 'data', 'prazo', 'telefone_lead', 'empresa'],
+};
+
+function atdNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
+function atdRef() { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(ATD_COLECAO); }
+function atdPodeEnviar() { return !atdNuvem() || nivelPodeOperar() || nivelVeFinanceiro(); }
+function atdPodeEditar() { return !atdNuvem() || nivelPodeOperar(); }
+function atdMaisDias(iso, n) { const d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); if (isNaN(d)) return ''; d.setDate(d.getDate() + n); return agIso(d); }
+function atdAgoraLocal() { const d = new Date(); return `${agIso(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+function atdWaNumero(t) { const d = String(t || '').replace(/\D/g, ''); if (d.length < 10) return ''; return d.length <= 11 ? '55' + d : d; }
+function atdTelBonito(t) {
+  const d = String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return String(t || '');
+}
+function atdPrimeiroNome(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+function atdEmpresa() { try { return (typeof PERFIL_DATA !== 'undefined' && PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || ''; } catch (e) { return ''; } }
+function atdTelefoneCliente(nome) {
+  if (!nome) return '';
+  const c = (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : []).find((x) => x.nome === nome && x.telefone);
+  if (c) return c.telefone;
+  const n = (typeof CRM_NEGOCIOS_DATA !== 'undefined' ? CRM_NEGOCIOS_DATA : []).find((x) => (x.cliente || x.nome) === nome && x.telefone);
+  return n ? n.telefone : '';
+}
+function atdUsuarios() { return typeof KB_USUARIOS !== 'undefined' ? KB_USUARIOS : []; }
+function atdMembro(uid) { return (ATD_CFG.membros || {})[uid] || {}; }
+function atdNomeUsuario(uid) { const u = atdUsuarios().find((x) => x.uid === uid); return u ? u.nome : ''; }
+function atdMembrosAvisos() { return atdUsuarios().filter((u) => atdMembro(u.uid).avisos !== false && atdWaNumero(atdMembro(u.uid).whatsapp)); }
+function atdPreencher(texto, v) {
+  return String(texto || '').replace(/\{(\w+)\}/g, (m, k) => (v[k] !== undefined && v[k] !== null ? String(v[k]) : '')).replace(/[ \t]+$/gm, '').replace(/ {2,}/g, ' ').trim();
+}
+function atdHash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); }
+function atdDocId(chave) { return 'e_' + atdHash(chave) + '_' + String(chave).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 90); }
+function atdEnvioDe(chave) { return ATD_ENVIOS.find((e) => e.chave === chave); }
+
+// ---------- dados ----------
+function atdIniciar() {
+  if (ATD_INICIADO) return;
+  ATD_INICIADO = true;
+  try { if (typeof agIniciarDados === 'function') agIniciarDados(); } catch (e) { console.error(e); } // Agenda + Kanban + Conteúdos
+  try { if (typeof kbIniciarDados === 'function') kbIniciarDados(); } catch (e) { console.error(e); }
+  try { if (typeof finEscutar === 'function') finEscutar(() => atdAvisar()); } catch (e) { console.error(e); }
+  cloudWatch(ATD_CFG_KEY, { automacoes: [], respostas: [], membros: {}, assinar: false }, (d) => {
+    const v = d && typeof d === 'object' ? d : {};
+    ATD_CFG = { automacoes: Array.isArray(v.automacoes) ? v.automacoes : [], respostas: Array.isArray(v.respostas) ? v.respostas : [], membros: v.membros && typeof v.membros === 'object' ? v.membros : {}, assinar: !!v.assinar };
+    atdAvisar();
+  });
+  cloudWatch(ATD_PROG_KEY, [], (d) => { ATD_PROG = Array.isArray(d) ? d : []; atdAvisar(); });
+  if (atdNuvem()) {
+    try {
+      const desde = new Date(Date.now() - 90 * 86400000).toISOString();
+      atdRef().where('em', '>=', desde).onSnapshot((snap) => {
+        const l = []; snap.forEach((d) => l.push(Object.assign({}, d.data(), { _doc: d.id })));
+        ATD_ENVIOS = l; ATD_CARREGADO = true; atdAvisar();
+      }, (err) => { console.error('Automações: erro ao carregar os envios.', err); ATD_CARREGADO = true; atdAvisar(); });
+    } catch (e) { console.error(e); ATD_CARREGADO = true; }
+  } else {
+    ATD_ENVIOS = lsLoad(chaveLocalTenant('eagles_atend_envios_local_v1'), []);
+    ATD_CARREGADO = true;
+  }
+  // Programadas com hora marcada entram na fila na hora certa
+  if (!ATD_RELOGIO) ATD_RELOGIO = setInterval(() => atdAvisar(), 60000);
+  setTimeout(atdAvisar, 1500);
+}
+function atdSalvarCfg() {
+  if (!atdPodeEditar()) { avisarSemPermissaoNivel('editar automações'); return false; }
+  return cloudSet(ATD_CFG_KEY, ATD_CFG) !== false;
+}
+function atdSalvarProg() { return cloudSet(ATD_PROG_KEY, ATD_PROG) !== false; }
+// Redesenha quando algum dado muda (sem atrapalhar quem está digitando)
+function atdAvisar() {
+  clearTimeout(ATD_TIMER);
+  ATD_TIMER = setTimeout(() => {
+    atdAtualizarBadge();
+    if (!ATD_HOST || !ATD_HOST.isConnected || ATD_HOST.offsetParent === null) return;
+    const foco = document.activeElement;
+    if (foco && ATD_HOST.contains(foco) && /TEXTAREA|INPUT|SELECT/.test(foco.tagName)) return;
+    atdRender();
+  }, 250);
+}
+
+// ---------- quem precisa receber mensagem (calculado) ----------
+function atdCandidatos(a) {
+  const g = ATD_GATILHOS[a.gatilho];
+  if (!g) return [];
+  if (g.fin && atdNuvem() && !nivelVeFinanceiro()) return [];
+  const dias = a.dias === undefined || a.dias === null || a.dias === '' ? (g.dias || 0) : Math.max(0, Number(a.dias) || 0);
+  const inicio = String(a.criadoEm || '').slice(0, 10);
+  const hoje = kbHoje();
+  const empresa = atdEmpresa();
+  const out = [];
+  const add = (o) => { if (!o.dg) return; if (g.evento && inicio && o.dg < inicio) return; out.push(o); };
+  try {
+    if (g.fin && typeof FIN_LANC !== 'undefined') {
+      FIN_LANC.filter((l) => l.tipo === 'receber' && l.status !== 'cancelado' && l.cliente).forEach((l) => {
+        const aberto = l.status === 'pendente' || l.status === 'parcial';
+        const restante = Math.max(0, (Number(l.valor) || 0) - (Number(l.valorPago) || 0));
+        const vars = { nome: l.cliente, primeiro_nome: atdPrimeiroNome(l.cliente), empresa, descricao: l.descricao || 'a cobrança', valor: formatMoney(aberto ? restante : (Number(l.valorPago) || Number(l.valor) || 0)), vencimento: l.vencimento ? formatDatePt(l.vencimento) : '' };
+        const base = { para: l.cliente, telefone: atdTelefoneCliente(l.cliente), refTipo: 'lancamento', refId: l.id, info: l.vencimento ? 'vence ' + kbDataCurta(l.vencimento) : '' };
+        if (a.gatilho === 'cobranca_antes' && aberto && l.vencimento) add(Object.assign({}, base, { chave: `${a.id}_${l.id}_${l.vencimento}`, dg: atdMaisDias(l.vencimento, -dias), expira: dias > 0 ? atdMaisDias(l.vencimento, -1) : l.vencimento, vars }));
+        if (a.gatilho === 'cobranca_dia' && aberto && l.vencimento) add(Object.assign({}, base, { chave: `${a.id}_${l.id}_${l.vencimento}`, dg: l.vencimento, expira: l.vencimento, vars }));
+        if (a.gatilho === 'cobranca_atraso' && aberto && l.vencimento) { const dg = atdMaisDias(l.vencimento, Math.max(1, dias)); add(Object.assign({}, base, { chave: `${a.id}_${l.id}_${l.vencimento}`, dg, expira: atdMaisDias(dg, 30), vars, info: 'venceu ' + kbDataCurta(l.vencimento) })); }
+        if (a.gatilho === 'pagamento_recebido' && l.status === 'pago' && l.dataPagamento) { const dg = String(l.dataPagamento).slice(0, 10); add(Object.assign({}, base, { chave: `${a.id}_${l.id}`, dg, expira: atdMaisDias(dg, 3), vars, info: 'pago ' + kbDataCurta(dg) })); }
+      });
+    }
+    if (a.gatilho === 'compromisso_lembrete' && typeof AG !== 'undefined') {
+      const ate = atdMaisDias(hoje, 8 + dias);
+      AG.filter((c) => c.tipo !== 'bloqueio' && c.cliente).forEach((c) => {
+        (typeof agOcorrencias === 'function' ? agOcorrencias(c, atdMaisDias(hoje, -1), ate) : [Object.assign({}, c, { _ini: c.data })]).forEach((o) => {
+          if (!o._ini) return;
+          add({ chave: `${a.id}_${c.id}_${o._ini}`, dg: atdMaisDias(o._ini, -dias), expira: o._ini, para: c.cliente, telefone: atdTelefoneCliente(c.cliente), refTipo: 'agenda', refId: c.id, info: kbDataCurta(o._ini) + (c.hora ? ' às ' + c.hora : ''),
+            vars: { nome: c.cliente, primeiro_nome: atdPrimeiroNome(c.cliente), empresa, titulo: c.titulo || 'compromisso', data: formatDatePt(o._ini), hora: c.hora ? ' às ' + c.hora : '' } });
+        });
+      });
+    }
+    if (a.gatilho === 'aniversario' && typeof CRM_CLIENTES_INDEP_DATA !== 'undefined') {
+      const ano = Number(hoje.slice(0, 4));
+      CRM_CLIENTES_INDEP_DATA.filter((c) => /^\d{4}-\d{2}-\d{2}/.test(c.dataNascimento || '')).forEach((c) => {
+        [ano, ano + 1].forEach((y) => {
+          let md = c.dataNascimento.slice(5, 10);
+          if (md === '02-29' && !(y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0))) md = '02-28';
+          const dg = `${y}-${md}`;
+          add({ chave: `${a.id}_${c.id || c.nome}_${y}`, dg, expira: dg, para: c.nome, telefone: c.telefone || atdTelefoneCliente(c.nome), refTipo: 'cliente', refId: c.id || c.nome, info: 'aniversário ' + kbDataCurta(dg), vars: { nome: c.nome, primeiro_nome: atdPrimeiroNome(c.nome), empresa } });
+        });
+      });
+    }
+    if ((a.gatilho === 'tarefa_atribuida' || a.gatilho === 'prazo_vencendo') && typeof KB_TAREFAS !== 'undefined') {
+      KB_TAREFAS.filter((t) => !t.arquivada && t.responsavel).forEach((t) => {
+        let feita = false; try { feita = kbConcluida(t); } catch (e) {}
+        if (feita) return;
+        const nomeResp = atdNomeUsuario(t.responsavel) || 'Responsável';
+        const base = { para: nomeResp, telefone: atdMembro(t.responsavel).whatsapp || '', refTipo: 'tarefa', refId: t.id, membro: t.responsavel };
+        const vars = { nome: nomeResp, primeiro_nome: atdPrimeiroNome(nomeResp), empresa, titulo: t.titulo || 'tarefa', data: t.prazo ? formatDatePt(t.prazo) : '', prazo: t.prazo ? ' (prazo ' + formatDatePt(t.prazo) + ')' : '' };
+        if (a.gatilho === 'tarefa_atribuida') { const dg = String(t.atualizadoEm || t.criadoEm || '').slice(0, 10); add(Object.assign({}, base, { chave: `${a.id}_${t.id}_${t.responsavel}`, dg, expira: atdMaisDias(dg, 3), vars, info: t.titulo || '' })); }
+        if (a.gatilho === 'prazo_vencendo' && t.prazo) add(Object.assign({}, base, { chave: `${a.id}_${t.id}_${t.prazo}`, dg: atdMaisDias(t.prazo, -dias), expira: atdMaisDias(t.prazo, 3), vars, info: 'prazo ' + kbDataCurta(t.prazo) }));
+      });
+    }
+    if ((a.gatilho === 'novo_lead' || a.gatilho === 'novo_lead_equipe' || a.gatilho === 'venda_ganha') && typeof CRM_NEGOCIOS_DATA !== 'undefined') {
+      CRM_NEGOCIOS_DATA.forEach((n) => {
+        const nome = n.cliente || n.nome;
+        if (!nome || !n.id) return;
+        const vars = { nome, primeiro_nome: atdPrimeiroNome(nome), empresa, telefone_lead: n.telefone ? ' (' + n.telefone + ')' : '' };
+        if (a.gatilho === 'novo_lead' && ['lead', 'contato'].includes(n.etapa)) { const dg = String(n.criadoEm || '').slice(0, 10); add({ chave: `${a.id}_${n.id}`, dg, expira: atdMaisDias(dg, 3), para: nome, telefone: n.telefone || atdTelefoneCliente(nome), refTipo: 'negocio', refId: n.id, info: 'entrou ' + (dg ? kbDataCurta(dg) : ''), vars }); }
+        if (a.gatilho === 'novo_lead_equipe' && ['lead', 'contato'].includes(n.etapa)) {
+          const dg = String(n.criadoEm || '').slice(0, 10);
+          atdMembrosAvisos().forEach((u) => add({ chave: `${a.id}_${n.id}_${u.uid}`, dg, expira: atdMaisDias(dg, 3), para: u.nome, telefone: atdMembro(u.uid).whatsapp, refTipo: 'negocio', refId: n.id, membro: u.uid, info: 'lead ' + nome, vars: Object.assign({}, vars, { nome, primeiro_nome: atdPrimeiroNome(u.nome) }) }));
+        }
+        if (a.gatilho === 'venda_ganha' && n.etapa === 'fechado') { const dg = String(n.fechadoEm || n.atualizadoEm || n.criadoEm || '').slice(0, 10); add({ chave: `${a.id}_${n.id}`, dg, expira: atdMaisDias(dg, 3), para: nome, telefone: n.telefone || atdTelefoneCliente(nome), refTipo: 'negocio', refId: n.id, info: 'fechado ' + (dg ? kbDataCurta(dg) : ''), vars }); }
+      });
+    }
+    if (a.gatilho === 'reativacao' && typeof CRM_CLIENTES_INDEP_DATA !== 'undefined') {
+      const ultima = {};
+      const marca = (nome, d) => { if (nome && d && (!ultima[nome] || d > ultima[nome])) ultima[nome] = d; };
+      if (typeof FIN_LANC !== 'undefined') FIN_LANC.filter((l) => l.tipo === 'receber' && l.status === 'pago' && l.dataPagamento).forEach((l) => marca(l.cliente, String(l.dataPagamento).slice(0, 10)));
+      (typeof CRM_NEGOCIOS_DATA !== 'undefined' ? CRM_NEGOCIOS_DATA : []).filter((n) => n.etapa === 'fechado').forEach((n) => marca(n.cliente || n.nome, String(n.fechadoEm || n.atualizadoEm || n.criadoEm || '').slice(0, 10)));
+      CRM_CLIENTES_INDEP_DATA.forEach((c) => {
+        const L = ultima[c.nome];
+        if (!L) return;
+        const dg = atdMaisDias(L, Math.max(1, dias || 60));
+        add({ chave: `${a.id}_${c.id || c.nome}_${L}`, dg, expira: atdMaisDias(dg, 30), para: c.nome, telefone: c.telefone || atdTelefoneCliente(c.nome), refTipo: 'cliente', refId: c.id || c.nome, info: 'última compra ' + kbDataCurta(L), vars: { nome: c.nome, primeiro_nome: atdPrimeiroNome(c.nome), empresa } });
+      });
+    }
+  } catch (e) { console.error('Automações: erro ao calcular', a.gatilho, e); }
+  return out.map((o) => Object.assign(o, { automacaoId: a.id, gatilho: a.gatilho, nomeAutomacao: a.nome || g.nome, texto: atdPreencher(a.texto || g.texto, o.vars) }));
+}
+function atdProgramadasComoItens() {
+  return ATD_PROG.filter((p) => p.status === 'agendada' && p.quando).map((p) => ({
+    chave: 'prog_' + p.id, programada: p, dg: p.quando.slice(0, 10), quando: p.quando, expira: '9999-12-31', para: p.para || 'Contato', telefone: p.telefone || '', refTipo: 'programada', refId: p.id,
+    automacaoId: 'programada', gatilho: 'programada', nomeAutomacao: 'Mensagem programada', texto: p.texto || '', info: kbDataCurta(p.quando.slice(0, 10)) + ' às ' + p.quando.slice(11, 16),
+  }));
+}
+function atdFila() {
+  const hoje = kbHoje(), agora = atdAgoraLocal();
+  const itens = [];
+  ATD_CFG.automacoes.filter((a) => a.ativo !== false).forEach((a) => atdCandidatos(a).forEach((it) => { if (it.dg <= hoje && hoje <= it.expira && !atdEnvioDe(it.chave)) itens.push(it); }));
+  atdProgramadasComoItens().forEach((it) => { if (it.quando <= agora && !atdEnvioDe(it.chave)) itens.push(it); });
+  const vistos = new Set();
+  return itens.filter((it) => (vistos.has(it.chave) ? false : vistos.add(it.chave))).sort((a, b) => (a.dg || '').localeCompare(b.dg || '') || a.para.localeCompare(b.para));
+}
+function atdPrevia(diasFrente) {
+  const hoje = kbHoje(), ate = atdMaisDias(hoje, diasFrente || 7), agora = atdAgoraLocal();
+  const itens = [];
+  ATD_CFG.automacoes.filter((a) => a.ativo !== false).forEach((a) => atdCandidatos(a).forEach((it) => { if (it.dg > hoje && it.dg <= ate && !atdEnvioDe(it.chave)) itens.push(it); }));
+  atdProgramadasComoItens().forEach((it) => { if (it.quando > agora && it.dg <= ate) itens.push(it); });
+  return itens.sort((a, b) => (a.quando || a.dg).localeCompare(b.quando || b.dg));
+}
+function atdAtualizarBadge() {
+  const btn = document.querySelector('[data-menu-id="automacoes"]');
+  if (!btn) return;
+  const n = ATD_CARREGADO ? atdFila().length : 0;
+  let b = btn.querySelector('.atd-badge');
+  if (!n) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('span'); b.className = 'atd-badge'; btn.appendChild(b); }
+  b.textContent = n > 99 ? '99+' : String(n);
+  b.title = `${n} ${n === 1 ? 'mensagem' : 'mensagens'} na fila de hoje`;
+}
+
+// ---------- tela ----------
+function atdMontar(host) {
+  if (!host) return;
+  ATD_HOST = host;
+  atdIniciar();
+  atdRender();
+}
+function atdIrAba(aba) { ATD_ABA = aba; atdRender(); }
+function atdRender() {
+  const host = ATD_HOST;
+  if (!host || !host.isConnected) return;
+  const n = ATD_CARREGADO ? atdFila().length : 0;
+  const abas = [['fila', 'Fila de hoje', 'enviar'], ['automacoes', 'Automações', 'raio'], ['programadas', 'Programadas', 'calendario'], ['envio', 'Envio e destinatários', 'pessoas'], ['atividade', 'Atividade', 'lista']];
+  const corpo = !ATD_CARREGADO ? '<p class="kb-vazio">Carregando...</p>'
+    : ATD_ABA === 'automacoes' ? atdHtmlAutomacoes()
+    : ATD_ABA === 'programadas' ? atdHtmlProgramadas()
+    : ATD_ABA === 'envio' ? atdHtmlEnvio()
+    : ATD_ABA === 'atividade' ? atdHtmlAtividade()
+    : atdHtmlFila();
+  host.innerHTML = `
+    <div class="atd">
+      <div class="fin-cab"><div><h1 style="display:flex; align-items:center; gap:8px;">${ic('raio')} Automações</h1><p>Mensagens de WhatsApp prontas na hora certa — você só confere e envia.</p></div></div>
+      <div class="kb-segmento fin-abas aba-icones">${abas.map(([a, nome, i]) => `<button type="button" class="${ATD_ABA === a ? 'ativo' : ''}" title="${nome}" aria-label="${nome}" onclick="atdIrAba('${a}')">${ic(i, 'ic-herda')} <span class="aba-txt">${nome}</span>${a === 'fila' && n ? ` <span class="atd-badge atd-badge-aba">${n}</span>` : ''}</button>`).join('')}</div>
+      ${corpo}
+    </div>`;
+  atdAtualizarBadge();
+}
+
+function atdHtmlFila() {
+  const fila = atdFila();
+  ATD_FILA_ATUAL = fila;
+  const semAuto = !ATD_CFG.automacoes.length && !ATD_PROG.length;
+  const banner = `<div class="atd-banner">${ic('ajuda', 'ic-herda')}<div><strong>Modo assistido.</strong> O sistema monta as mensagens e você envia pelo seu WhatsApp com um clique. Quando o WhatsApp for conectado por API, estas mesmas automações passam a enviar sozinhas.</div></div>`;
+  if (semAuto) return `${banner}<div class="atd-vazio">${ic('raio')}<strong>Nenhuma automação criada ainda</strong><span>Comece por um modelo pronto, como "Lembrete antes do vencimento" ou "Novo lead".</span><button type="button" class="btn btn-primary" onclick="atdIrAba('automacoes')">${ic('mais', 'ic-herda')} Criar automação</button></div>`;
+  if (!fila.length) return `${banner}<div class="atd-vazio">${ic('aprovado')}<strong>Tudo em dia</strong><span>Nenhuma mensagem para enviar agora. As próximas aparecem em Atividade.</span></div>`;
+  const semTel = fila.filter((it) => !atdWaNumero(it.telefone)).length;
+  return `${banner}
+    <div class="atd-fila-cab"><strong>${fila.length} ${fila.length === 1 ? 'mensagem para enviar' : 'mensagens para enviar'}</strong>${semTel ? `<span class="kb-vazio-mini">${semTel} sem WhatsApp cadastrado</span>` : ''}</div>
+    <div class="atd-fila">${fila.map((it, i) => {
+      const g = ATD_GATILHOS[it.gatilho] || { icone: 'calendario' };
+      const num = atdWaNumero(it.telefone);
+      const destinoEquipe = g.destino === 'equipe';
+      return `<div class="atd-item${num ? '' : ' atd-sem-tel'}">
+        <div class="atd-item-cab">
+          <span class="atd-item-ic">${ic(g.icone || 'calendario', 'ic-herda')}</span>
+          <div class="atd-item-quem"><strong>${escapeHtml(it.para)}</strong><span>${escapeHtml(it.nomeAutomacao)}${it.info ? ' · ' + escapeHtml(it.info) : ''}</span></div>
+          <span class="atd-item-tel">${num ? escapeHtml(atdTelBonito(it.telefone)) : `<span class="atd-aviso-tel">${destinoEquipe ? 'Sem WhatsApp — cadastre em Envio e destinatários' : 'Sem WhatsApp no cadastro'}</span>`}</span>
+        </div>
+        <textarea id="atd-t-${i}" rows="3" maxlength="3500" aria-label="Mensagem para ${escapeHtml(it.para)}">${escapeHtml(atdComAssinatura(it.texto))}</textarea>
+        <div class="atd-item-acoes">
+          <button type="button" class="btn btn-small" onclick="atdPular(${i})" title="Não enviar esta mensagem">Pular</button>
+          <button type="button" class="btn btn-small" onclick="atdCopiar(${i})">${ic('copiar', 'ic-herda')} Copiar</button>
+          <button type="button" class="btn btn-small btn-primary" onclick="atdEnviar(${i})" ${num ? '' : 'disabled'}>${ic('enviar', 'ic-herda')} Enviar</button>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+}
+function atdComAssinatura(t) { return ATD_CFG.assinar && USUARIO_NOME ? `${t}\n\n— ${USUARIO_NOME}` : t; }
+function atdTextoDaTela(i) { const el = document.getElementById('atd-t-' + i); return el ? el.value.trim() : ''; }
+function atdEnviar(i) {
+  const it = ATD_FILA_ATUAL[i];
+  if (!it) return;
+  if (!atdPodeEnviar()) { avisarSemPermissaoNivel('enviar mensagens'); return; }
+  const num = atdWaNumero(it.telefone);
+  if (!num) { avisar('Este contato não tem WhatsApp cadastrado.'); return; }
+  const texto = atdTextoDaTela(i) || atdComAssinatura(it.texto);
+  window.open(`https://wa.me/${num}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
+  atdRegistrar(it, 'enviado', texto);
+}
+function atdCopiar(i) {
+  const texto = atdTextoDaTela(i);
+  if (!texto) return;
+  const ok = () => avisar('Mensagem copiada. Depois de enviar, clique em "Enviar" ou "Pular" para tirá-la da fila.', 'Copiar');
+  try { navigator.clipboard.writeText(texto).then(ok, () => avisar(texto, 'Copie a mensagem')); } catch (e) { avisar(texto, 'Copie a mensagem'); }
+}
+function atdPular(i) {
+  const it = ATD_FILA_ATUAL[i];
+  if (!it) return;
+  if (!atdPodeEnviar()) { avisarSemPermissaoNivel('mexer na fila'); return; }
+  atdRegistrar(it, 'ignorado', atdTextoDaTela(i) || it.texto);
+}
+function atdRegistrar(it, status, texto) {
+  const doc = {
+    chave: it.chave, automacaoId: it.automacaoId || '', gatilho: it.gatilho || '', nomeAutomacao: it.nomeAutomacao || '', para: String(it.para || '').slice(0, 200), telefone: String(it.telefone || '').slice(0, 40),
+    texto: String(texto || '').slice(0, 4000), status, por: USUARIO_NOME || '', uid: USUARIO_UID || '', em: new Date().toISOString(), refTipo: it.refTipo || '', refId: String(it.refId || '').slice(0, 200),
+  };
+  const id = atdDocId(it.chave);
+  ATD_ENVIOS = ATD_ENVIOS.filter((e) => e.chave !== it.chave).concat([Object.assign({ _doc: id }, doc)]);
+  if (it.programada && atdPodeEditar()) {
+    ATD_PROG = ATD_PROG.map((p) => (p.id === it.programada.id ? Object.assign({}, p, { status: status === 'enviado' ? 'enviada' : 'cancelada', enviadaEm: doc.em }) : p));
+    atdSalvarProg();
+  }
+  if (atdNuvem()) atdRef().doc(id).set(doc).catch((e) => { console.error(e); avisar('Não foi possível registrar o envio agora. Ele volta para a fila quando a conexão voltar.'); });
+  else lsSave(chaveLocalTenant('eagles_atend_envios_local_v1'), ATD_ENVIOS);
+  atdRender();
+}
+function atdDesfazer(chave) {
+  const e = atdEnvioDe(chave);
+  if (!e) return;
+  if (!atdPodeEnviar()) { avisarSemPermissaoNivel('mexer na fila'); return; }
+  ATD_ENVIOS = ATD_ENVIOS.filter((x) => x.chave !== chave);
+  if (chave.startsWith('prog_') && atdPodeEditar()) { const id = chave.slice(5); ATD_PROG = ATD_PROG.map((p) => (p.id === id ? Object.assign({}, p, { status: 'agendada', enviadaEm: '' }) : p)); atdSalvarProg(); }
+  if (atdNuvem()) atdRef().doc(e._doc || atdDocId(chave)).delete().catch((err) => console.error(err));
+  else lsSave(chaveLocalTenant('eagles_atend_envios_local_v1'), ATD_ENVIOS);
+  atdRender();
+}
+
+// ---------- Automações ----------
+function atdHtmlAutomacoes() {
+  const pode = atdPodeEditar();
+  const lista = ATD_CFG.automacoes.filter((a) => !ATD_FILTRO.cat || (ATD_GATILHOS[a.gatilho] || {}).cat === ATD_FILTRO.cat);
+  const usados = new Set(ATD_CFG.automacoes.map((a) => a.gatilho));
+  const modelos = ATD_TEMPLATES_RAPIDOS.concat(Object.keys(ATD_GATILHOS).filter((k) => !ATD_TEMPLATES_RAPIDOS.includes(k))).filter((k) => !usados.has(k) && (!ATD_FILTRO.cat || ATD_GATILHOS[k].cat === ATD_FILTRO.cat) && !(ATD_GATILHOS[k].fin && atdNuvem() && !nivelVeFinanceiro()));
+  return `
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong>Automações</strong><span class="kb-espaco"></span>${pode ? `<button type="button" class="btn btn-small" onclick="atdAbrirAutomacao()">${ic('mais', 'ic-herda')} Nova</button>` : ''}</div>
+      <div class="atd-chips"><button type="button" class="${!ATD_FILTRO.cat ? 'ativo' : ''}" onclick="ATD_FILTRO.cat=''; atdRender()">${ic('filtro', 'ic-herda')} Todas</button>${ATD_CATS.map(([k, nome]) => `<button type="button" class="${ATD_FILTRO.cat === k ? 'ativo' : ''}" onclick="ATD_FILTRO.cat='${k}'; atdRender()">${nome}</button>`).join('')}</div>
+      ${pode && modelos.length ? `<div class="atd-subtitulo"><span>Modelos rápidos</span><span>1 clique para criar</span></div>
+        <div class="atd-modelos">${modelos.slice(0, 6).map((k) => { const g = ATD_GATILHOS[k]; return `<button type="button" class="atd-modelo" onclick="atdCriarModelo('${k}')"><span class="atd-item-ic">${ic(g.icone, 'ic-herda')}</span><span><strong>${g.nome}</strong><small>${g.desc}</small></span></button>`; }).join('')}</div>` : ''}
+      ${lista.length ? `<div class="atd-lista">${lista.map((a) => {
+        const g = ATD_GATILHOS[a.gatilho] || { icone: 'raio', nome: a.gatilho };
+        const pend = a.ativo !== false ? atdCandidatos(a).filter((it) => it.dg <= kbHoje() && kbHoje() <= it.expira && !atdEnvioDe(it.chave)).length : 0;
+        const d = a.dias === undefined || a.dias === '' ? g.dias : a.dias;
+        return `<div class="atd-auto${a.ativo === false ? ' atd-pausada' : ''}">
+          <span class="atd-item-ic">${ic(g.icone, 'ic-herda')}</span>
+          <div class="atd-auto-txt"><strong>${escapeHtml(a.nome || g.nome)}</strong><span>${[(a.nome && a.nome !== g.nome) ? escapeHtml(g.nome) : '', g.diasLabel ? `${Number(d) || 0} ${Number(d) === 1 ? g.diasLabel.replace(/^dias/, 'dia') : g.diasLabel}` : '', 'para ' + (g.destino === 'equipe' ? 'a equipe' : 'o cliente'), pend ? `<b>${pend} na fila</b>` : ''].filter(Boolean).join(' · ')}</span></div>
+          ${pode ? `<label class="switch" title="${a.ativo === false ? 'Pausada' : 'Ativa'}"><input type="checkbox" ${a.ativo === false ? '' : 'checked'} onchange="atdAlternarAutomacao('${escapeParaOnclick(a.id)}', this.checked)"><span class="switch-slider"></span></label>
+          <button type="button" class="btn btn-small btn-ghost" aria-label="Editar" onclick="atdAbrirAutomacao('${escapeParaOnclick(a.id)}')">${ic('lapis', 'ic-herda')}</button>` : `<span class="kb-vazio-mini">${a.ativo === false ? 'Pausada' : 'Ativa'}</span>`}
+        </div>`;
+      }).join('')}</div>` : `<div class="atd-vazio">${ic('raio')}<strong>${ATD_CFG.automacoes.length ? 'Nenhuma automação nesta categoria' : 'Nenhuma automação criada'}</strong><span>Crie automações para montar as mensagens na hora certa.</span></div>`}
+    </div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong>${ic('raio', 'ic-herda')} Respostas rápidas</strong><span class="kb-espaco"></span>${pode ? `<button type="button" class="btn btn-small" onclick="atdAbrirResposta()">${ic('mais', 'ic-herda')} Nova</button>` : ''}</div>
+      ${ATD_CFG.respostas.length ? `<div class="atd-lista">${ATD_CFG.respostas.map((r) => `<div class="atd-auto">
+        <div class="atd-auto-txt"><strong>${escapeHtml(r.titulo)}</strong><span class="atd-resposta-txt">${escapeHtml(r.texto)}</span></div>
+        <button type="button" class="btn btn-small" onclick="atdCopiarResposta('${escapeParaOnclick(r.id)}')">${ic('copiar', 'ic-herda')} Copiar</button>
+        ${pode ? `<button type="button" class="btn btn-small btn-ghost" aria-label="Editar" onclick="atdAbrirResposta('${escapeParaOnclick(r.id)}')">${ic('lapis', 'ic-herda')}</button>` : ''}
+      </div>`).join('')}</div>` : `<div class="atd-vazio">${ic('mensagem')}<strong>Nenhuma resposta rápida</strong><span>Guarde mensagens que você manda sempre, para copiar com um clique.</span></div>`}
+    </div>`;
+}
+function atdCriarModelo(gatilho) {
+  const g = ATD_GATILHOS[gatilho];
+  if (!g || !atdPodeEditar()) { avisarSemPermissaoNivel('criar automações'); return; }
+  ATD_CFG.automacoes = ATD_CFG.automacoes.concat([{ id: genId('atd'), gatilho, nome: g.nome, texto: g.texto, dias: g.dias, ativo: true, criadoEm: new Date().toISOString() }]);
+  if (atdSalvarCfg()) { atdRender(); avisar(`Automação "${g.nome}" criada e ativa. Clique no lápis para mudar o texto.${g.destino === 'equipe' ? '\n\nPara a equipe receber, cadastre o WhatsApp de cada um em "Envio e destinatários".' : ''}`, 'Automações'); }
+}
+function atdAlternarAutomacao(id, ativo) {
+  ATD_CFG.automacoes = ATD_CFG.automacoes.map((a) => (a.id === id ? Object.assign({}, a, { ativo }) : a));
+  atdSalvarCfg(); atdRender();
+}
+function atdAbrirAutomacao(id) {
+  if (!atdPodeEditar()) { avisarSemPermissaoNivel('editar automações'); return; }
+  const a = ATD_CFG.automacoes.find((x) => x.id === id) || null;
+  const gat = a ? a.gatilho : (ATD_FILTRO.cat ? Object.keys(ATD_GATILHOS).find((k) => ATD_GATILHOS[k].cat === ATD_FILTRO.cat) : 'cobranca_antes');
+  const ov = srvGarantirModal();
+  const opcoes = ATD_CATS.map(([c, nome]) => `<optgroup label="${nome}">${Object.keys(ATD_GATILHOS).filter((k) => ATD_GATILHOS[k].cat === c && !(ATD_GATILHOS[k].fin && atdNuvem() && !nivelVeFinanceiro())).map((k) => `<option value="${k}" ${k === gat ? 'selected' : ''}>${ATD_GATILHOS[k].nome}</option>`).join('')}</optgroup>`).join('');
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:560px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${a ? 'Editar automação' : 'Nova automação'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="field full"><label>Quando</label><select id="atd-a-gatilho" onchange="atdAoTrocarGatilho()" ${a ? 'disabled' : ''}>${opcoes}</select><small id="atd-a-desc" class="kb-vazio-mini"></small></div>
+      <div class="field full"><label>Nome</label><input type="text" id="atd-a-nome" maxlength="80" value="${escapeHtml(a ? a.nome || '' : '')}"></div>
+      <div class="field full" id="atd-a-dias-campo"><label id="atd-a-dias-label">Dias</label><input type="number" id="atd-a-dias" min="0" max="365" value="${a && a.dias !== undefined ? escapeHtml(String(a.dias)) : ''}"></div>
+      <div class="field full"><label>Mensagem</label><textarea id="atd-a-texto" rows="5" maxlength="3500">${escapeHtml(a ? a.texto || '' : '')}</textarea>
+        <div class="atd-vars" id="atd-a-vars"></div></div>
+      <div class="cfg-modal-rodape">${a ? `<button type="button" class="btn" style="color:var(--danger); border-color:var(--danger);" onclick="atdExcluirAutomacao('${escapeParaOnclick(a.id)}')">Excluir</button>` : ''}<span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="atdSalvarAutomacao('${a ? escapeParaOnclick(a.id) : ''}')">Salvar</button></div>
+    </div>`;
+  openModal('modal-srv');
+  atdAoTrocarGatilho(!a);
+}
+function atdAoTrocarGatilho(preencher) {
+  const sel = document.getElementById('atd-a-gatilho');
+  if (!sel) return;
+  const g = ATD_GATILHOS[sel.value];
+  if (!g) return;
+  document.getElementById('atd-a-desc').textContent = g.desc + (g.destino === 'equipe' ? ' Vai para quem tem WhatsApp cadastrado em "Envio e destinatários".' : ' Usa o telefone do cadastro do cliente.');
+  document.getElementById('atd-a-dias-campo').style.display = g.diasLabel ? '' : 'none';
+  document.getElementById('atd-a-dias-label').textContent = g.diasLabel ? g.diasLabel.charAt(0).toUpperCase() + g.diasLabel.slice(1) : '';
+  const nome = document.getElementById('atd-a-nome'), texto = document.getElementById('atd-a-texto'), dias = document.getElementById('atd-a-dias');
+  if (preencher !== false && (preencher === true || !texto.value.trim())) { nome.value = g.nome; texto.value = g.texto; dias.value = g.dias !== undefined ? g.dias : ''; }
+  document.getElementById('atd-a-vars').innerHTML = '<span class="kb-vazio-mini">Toque para inserir:</span> ' + ATD_VARIAVEIS[g.destino === 'equipe' ? 'equipe' : 'cliente'].map((v) => `<button type="button" onclick="atdInserirVar('{${v}}')">{${v}}</button>`).join('');
+}
+function atdInserirVar(v) {
+  const t = document.getElementById('atd-a-texto') || document.getElementById('atd-p-texto');
+  if (!t) return;
+  const i = t.selectionStart || t.value.length;
+  t.value = t.value.slice(0, i) + v + t.value.slice(t.selectionEnd || i);
+  t.focus(); t.setSelectionRange(i + v.length, i + v.length);
+}
+function atdSalvarAutomacao(id) {
+  const gatilho = document.getElementById('atd-a-gatilho').value;
+  const g = ATD_GATILHOS[gatilho];
+  const texto = document.getElementById('atd-a-texto').value.trim();
+  if (!g) return;
+  if (!texto) { avisar('Escreva a mensagem.'); return; }
+  const dados = { gatilho, nome: document.getElementById('atd-a-nome').value.trim() || g.nome, texto, dias: g.diasLabel ? Math.max(0, Math.min(365, Number(document.getElementById('atd-a-dias').value) || 0)) : undefined };
+  if (dados.dias === undefined) delete dados.dias;
+  if (id) ATD_CFG.automacoes = ATD_CFG.automacoes.map((a) => (a.id === id ? Object.assign({}, a, dados) : a));
+  else ATD_CFG.automacoes = ATD_CFG.automacoes.concat([Object.assign({ id: genId('atd'), ativo: true, criadoEm: new Date().toISOString() }, dados)]);
+  if (atdSalvarCfg()) { srvFecharModal(); atdRender(); }
+}
+function atdExcluirAutomacao(id) {
+  confirmarAcao('Excluir esta automação? As mensagens dela saem da fila. O histórico do que já foi enviado continua.', () => {
+    ATD_CFG.automacoes = ATD_CFG.automacoes.filter((a) => a.id !== id);
+    if (atdSalvarCfg()) { srvFecharModal(); atdRender(); }
+  }, 'Excluir automação');
+}
+function atdAbrirResposta(id) {
+  if (!atdPodeEditar()) { avisarSemPermissaoNivel('editar respostas rápidas'); return; }
+  const r = ATD_CFG.respostas.find((x) => x.id === id) || null;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:520px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${r ? 'Editar resposta rápida' : 'Nova resposta rápida'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="field full"><label>Título</label><input type="text" id="atd-r-titulo" maxlength="60" placeholder="Ex.: Horário de atendimento" value="${escapeHtml(r ? r.titulo : '')}"></div>
+      <div class="field full"><label>Mensagem</label><textarea id="atd-r-texto" rows="5" maxlength="3500">${escapeHtml(r ? r.texto : '')}</textarea></div>
+      <div class="cfg-modal-rodape">${r ? `<button type="button" class="btn" style="color:var(--danger); border-color:var(--danger);" onclick="atdExcluirResposta('${escapeParaOnclick(r.id)}')">Excluir</button>` : ''}<span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="atdSalvarResposta('${r ? escapeParaOnclick(r.id) : ''}')">Salvar</button></div>
+    </div>`;
+  openModal('modal-srv');
+}
+function atdSalvarResposta(id) {
+  const titulo = document.getElementById('atd-r-titulo').value.trim(), texto = document.getElementById('atd-r-texto').value.trim();
+  if (!titulo || !texto) { avisar('Preencha o título e a mensagem.'); return; }
+  if (id) ATD_CFG.respostas = ATD_CFG.respostas.map((r) => (r.id === id ? Object.assign({}, r, { titulo, texto }) : r));
+  else ATD_CFG.respostas = ATD_CFG.respostas.concat([{ id: genId('atr'), titulo, texto }]);
+  if (atdSalvarCfg()) { srvFecharModal(); atdRender(); }
+}
+function atdExcluirResposta(id) {
+  ATD_CFG.respostas = ATD_CFG.respostas.filter((r) => r.id !== id);
+  if (atdSalvarCfg()) { srvFecharModal(); atdRender(); }
+}
+function atdCopiarResposta(id) {
+  const r = ATD_CFG.respostas.find((x) => x.id === id);
+  if (!r) return;
+  try { navigator.clipboard.writeText(r.texto).then(() => avisar('Resposta copiada.', 'Copiar'), () => avisar(r.texto, 'Copie a mensagem')); } catch (e) { avisar(r.texto, 'Copie a mensagem'); }
+}
+
+// ---------- Programadas ----------
+function atdHtmlProgramadas() {
+  const pode = atdPodeEditar();
+  const lista = ATD_PROG.slice().sort((a, b) => (b.status === 'agendada') - (a.status === 'agendada') || String(a.quando).localeCompare(String(b.quando)));
+  const rotulo = { agendada: 'Agendada', enviada: 'Enviada', cancelada: 'Cancelada' };
+  return `<div class="fin-painel">
+    <div class="fin-painel-cab"><div><strong>${ic('calendario', 'ic-herda')} Mensagens programadas</strong><div class="kb-vazio-mini">Agende uma mensagem para uma data e hora. Na hora marcada ela entra na Fila de hoje.</div></div><span class="kb-espaco"></span>${pode ? `<button type="button" class="btn btn-small btn-primary" onclick="atdAbrirProgramada()">${ic('mais', 'ic-herda')} Nova mensagem</button>` : ''}</div>
+    ${lista.length ? `<div class="atd-lista">${lista.map((p) => `<div class="atd-auto${p.status !== 'agendada' ? ' atd-pausada' : ''}">
+      <span class="atd-item-ic">${ic(p.status === 'enviada' ? 'aprovado' : p.status === 'cancelada' ? 'x' : 'relogio', 'ic-herda')}</span>
+      <div class="atd-auto-txt"><strong>${escapeHtml(p.para || 'Contato')}</strong><span>${p.quando ? escapeHtml(formatDatePt(p.quando.slice(0, 10)) + ' às ' + p.quando.slice(11, 16)) : ''} · ${rotulo[p.status] || p.status}${p.telefone ? '' : ' · <b>sem WhatsApp</b>'}</span><span class="atd-resposta-txt">${escapeHtml(p.texto || '')}</span></div>
+      ${pode && p.status === 'agendada' ? `<button type="button" class="btn btn-small btn-ghost" aria-label="Editar" onclick="atdAbrirProgramada('${escapeParaOnclick(p.id)}')">${ic('lapis', 'ic-herda')}</button>` : ''}
+      ${pode ? `<button type="button" class="btn btn-small btn-ghost" aria-label="Excluir" onclick="atdExcluirProgramada('${escapeParaOnclick(p.id)}')">${ic('lixeira', 'ic-herda')}</button>` : ''}
+    </div>`).join('')}</div>` : `<div class="atd-vazio">${ic('calendario')}<strong>Nenhuma mensagem programada ainda</strong><span>Útil para lembretes pontuais, retornos combinados e datas especiais.</span></div>`}
+  </div>`;
+}
+function atdAbrirProgramada(id) {
+  if (!atdPodeEditar()) { avisarSemPermissaoNivel('programar mensagens'); return; }
+  const p = ATD_PROG.find((x) => x.id === id) || null;
+  const amanha = atdMaisDias(kbHoje(), 1);
+  const clientes = (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : []).map((c) => c.nome).filter(Boolean);
+  const ov = srvGarantirModal();
+  ov.innerHTML = `
+    <div class="modal kb-modal" style="max-width:540px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${p ? 'Editar mensagem programada' : 'Nova mensagem programada'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="field full"><label>Para</label><input type="text" id="atd-p-para" list="atd-p-clientes" maxlength="120" placeholder="Nome do cliente ou contato" value="${escapeHtml(p ? p.para : '')}" onchange="const t = atdTelefoneCliente(this.value); if (t && !document.getElementById('atd-p-tel').value) document.getElementById('atd-p-tel').value = t;"><datalist id="atd-p-clientes">${clientes.map((n) => `<option value="${escapeHtml(n)}"></option>`).join('')}</datalist></div>
+      <div class="field full"><label>WhatsApp</label><input type="tel" id="atd-p-tel" maxlength="30" placeholder="(11) 99999-9999" value="${escapeHtml(p ? p.telefone || '' : '')}"></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="field"><label>Data</label><input type="date" id="atd-p-data" value="${escapeHtml(p && p.quando ? p.quando.slice(0, 10) : amanha)}"></div>
+        <div class="field"><label>Hora</label><input type="time" id="atd-p-hora" value="${escapeHtml(p && p.quando ? p.quando.slice(11, 16) : '09:00')}"></div>
+      </div>
+      <div class="field full"><label>Mensagem</label>${ATD_CFG.respostas.length ? `<select onchange="if (this.value) { const r = ATD_CFG.respostas.find((x) => x.id === this.value); if (r) document.getElementById('atd-p-texto').value = r.texto; this.value=''; }" style="margin-bottom:6px;"><option value="">Usar uma resposta rápida...</option>${ATD_CFG.respostas.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.titulo)}</option>`).join('')}</select>` : ''}<textarea id="atd-p-texto" rows="5" maxlength="3500">${escapeHtml(p ? p.texto : '')}</textarea></div>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="atdSalvarProgramada('${p ? escapeParaOnclick(p.id) : ''}')">Programar</button></div>
+    </div>`;
+  openModal('modal-srv');
+}
+function atdSalvarProgramada(id) {
+  const para = document.getElementById('atd-p-para').value.trim(), telefone = document.getElementById('atd-p-tel').value.trim();
+  const data = document.getElementById('atd-p-data').value, hora = document.getElementById('atd-p-hora').value || '09:00', texto = document.getElementById('atd-p-texto').value.trim();
+  if (!para || !texto || !data) { avisar('Preencha para quem, a data e a mensagem.'); return; }
+  if (telefone && !atdWaNumero(telefone)) { avisar('O WhatsApp precisa ter DDD e número, como (11) 99999-9999.'); return; }
+  const dados = { para, telefone, texto, quando: `${data}T${hora}`, status: 'agendada' };
+  if (id) ATD_PROG = ATD_PROG.map((p) => (p.id === id ? Object.assign({}, p, dados) : p));
+  else ATD_PROG = ATD_PROG.concat([Object.assign({ id: genId('atp'), criadoEm: new Date().toISOString(), criadoPor: USUARIO_NOME || '' }, dados)]);
+  if (atdSalvarProg()) { srvFecharModal(); atdRender(); }
+}
+function atdExcluirProgramada(id) {
+  confirmarAcao('Excluir esta mensagem programada?', () => { ATD_PROG = ATD_PROG.filter((p) => p.id !== id); if (atdSalvarProg()) atdRender(); }, 'Excluir');
+}
+
+// ---------- Envio e destinatários ----------
+function atdHtmlEnvio() {
+  const pode = atdPodeEditar();
+  const us = atdUsuarios();
+  return `<div class="fin-painel">
+      <div class="cfg-linha-toggle">
+        <div><strong>${ic('caneta', 'ic-herda')} Assinar com o nome de quem enviou</strong><span>Quando a equipe toda atende pelo mesmo número, o cliente sabe com quem está falando. Ex.: "— ${escapeHtml(USUARIO_NOME || 'Igor')}" no fim da mensagem.</span></div>
+        <label class="switch"><input type="checkbox" ${ATD_CFG.assinar ? 'checked' : ''} ${pode ? '' : 'disabled'} onchange="ATD_CFG.assinar = this.checked; atdSalvarCfg();"><span class="switch-slider"></span></label>
+      </div>
+    </div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><div><strong>${ic('pessoas', 'ic-herda')} Equipe</strong><div class="kb-vazio-mini">O WhatsApp de cada pessoa e se ela recebe os avisos da equipe (tarefas, prazos e novos leads).</div></div></div>
+      ${us.length ? `<div class="atd-lista">${us.map((u) => { const m = atdMembro(u.uid); const ok = !!atdWaNumero(m.whatsapp); return `<div class="atd-auto">
+        <span class="atd-item-ic">${ic('usuario', 'ic-herda')}</span>
+        <div class="atd-auto-txt"><strong>${escapeHtml(u.nome)}</strong><span>${escapeHtml(u.role || '')}${ok ? '' : ' · sem WhatsApp'}</span></div>
+        <input type="tel" class="atd-tel" maxlength="30" placeholder="WhatsApp com DDD" aria-label="WhatsApp de ${escapeHtml(u.nome)}" value="${escapeHtml(m.whatsapp || '')}" ${pode ? '' : 'disabled'} onchange="atdSalvarMembro('${escapeParaOnclick(u.uid)}', 'whatsapp', this.value.trim())">
+        <label class="switch" title="Recebe avisos"><input type="checkbox" ${m.avisos === false ? '' : 'checked'} ${pode ? '' : 'disabled'} onchange="atdSalvarMembro('${escapeParaOnclick(u.uid)}', 'avisos', this.checked)"><span class="switch-slider"></span></label>
+      </div>`; }).join('')}</div>` : '<p class="kb-vazio">Carregando a equipe...</p>'}
+    </div>`;
+}
+function atdSalvarMembro(uid, campo, valor) {
+  if (campo === 'whatsapp' && valor && !atdWaNumero(valor)) { avisar('O WhatsApp precisa ter DDD e número, como (11) 99999-9999.'); atdRender(); return; }
+  const m = Object.assign({}, atdMembro(uid), { [campo]: valor });
+  ATD_CFG.membros = Object.assign({}, ATD_CFG.membros, { [uid]: m });
+  atdSalvarCfg();
+  atdAvisar();
+}
+
+// ---------- Atividade ----------
+function atdHtmlAtividade() {
+  const prev = atdPrevia(7);
+  const desde = new Date(Date.now() - ATD_FILTRO.hist * 86400000).toISOString();
+  const hist = ATD_ENVIOS.filter((e) => e.em >= desde && (!ATD_FILTRO.histAuto || e.automacaoId === ATD_FILTRO.histAuto)).sort((a, b) => b.em.localeCompare(a.em));
+  const enviados = hist.filter((e) => e.status === 'enviado').length;
+  const porDia = {};
+  prev.forEach((it) => { (porDia[it.dg] = porDia[it.dg] || []).push(it); });
+  const autos = ATD_CFG.automacoes;
+  return `
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong>${ic('calendario', 'ic-herda')} Próximos 7 dias</strong><span class="kb-espaco"></span><span class="kb-vazio-mini">${prev.length} ${prev.length === 1 ? 'mensagem prevista' : 'mensagens previstas'}</span></div>
+      ${prev.length ? Object.keys(porDia).sort().map((d) => `<div class="atd-dia"><strong>${escapeHtml(formatDatePt(d))}</strong>${porDia[d].map((it) => `<div class="atd-prev"><span>${escapeHtml(it.para)}</span><span class="kb-vazio-mini">${escapeHtml(it.nomeAutomacao)}${it.info ? ' · ' + escapeHtml(it.info) : ''}${atdWaNumero(it.telefone) ? '' : ' · <b>sem WhatsApp</b>'}</span></div>`).join('')}</div>`).join('')
+        : '<p class="kb-vazio-mini" style="margin:6px 0 0;">Nada previsto para os próximos 7 dias. Isso acontece quando não há cobranças, compromissos ou prazos nas datas que suas automações cobrem.</p>'}
+      <p class="kb-vazio-mini" style="margin:10px 0 0;">Previsão feita com os dados de agora. Contas pagas, tarefas concluídas ou datas alteradas mudam esses números.</p>
+    </div>
+    <div class="fin-painel">
+      <div class="fin-painel-cab"><strong>${ic('lista', 'ic-herda')} Histórico de envios</strong><span class="kb-espaco"></span>
+        <select class="srv-select" onchange="ATD_FILTRO.histAuto = this.value; atdRender()"><option value="">Todas as automações</option>${autos.map((a) => `<option value="${escapeHtml(a.id)}" ${ATD_FILTRO.histAuto === a.id ? 'selected' : ''}>${escapeHtml(a.nome || (ATD_GATILHOS[a.gatilho] || {}).nome || '')}</option>`).join('')}<option value="programada" ${ATD_FILTRO.histAuto === 'programada' ? 'selected' : ''}>Mensagens programadas</option></select>
+      </div>
+      <div class="atd-chips">${[[1, '24h'], [7, '7 dias'], [30, '30 dias'], [90, '90 dias']].map(([d, n]) => `<button type="button" class="${ATD_FILTRO.hist === d ? 'ativo' : ''}" onclick="ATD_FILTRO.hist=${d}; atdRender()">${n}</button>`).join('')}<span class="kb-vazio-mini" style="margin-left:auto;">${enviados} ${enviados === 1 ? 'enviada' : 'enviadas'} · ${hist.length - enviados} ${hist.length - enviados === 1 ? 'pulada' : 'puladas'}</span></div>
+      ${hist.length ? `<div class="atd-lista">${hist.slice(0, 200).map((e) => `<div class="atd-auto">
+        <span class="atd-item-ic">${ic(e.status === 'enviado' ? 'aprovado' : 'x', 'ic-herda')}</span>
+        <div class="atd-auto-txt"><strong>${escapeHtml(e.para)}</strong><span>${escapeHtml(e.nomeAutomacao || '')} · ${e.status === 'enviado' ? 'enviada' : 'pulada'} por ${escapeHtml(e.por || '—')} · ${escapeHtml(formatDatePt(e.em.slice(0, 10)))} ${escapeHtml(new Date(e.em).toTimeString().slice(0, 5))}</span></div>
+        <button type="button" class="btn btn-small btn-ghost" title="Volta para a fila, se ainda estiver no prazo" onclick="atdDesfazer('${escapeParaOnclick(e.chave)}')">Desfazer</button>
+      </div>`).join('')}</div>` : '<div class="atd-vazio" style="padding:22px;"><span>Nenhum envio registrado neste período.</span></div>'}
+    </div>`;
+}
+
+// =====================================================================
+// ---------- IA: chaves e provedores (OpenAI, Gemini, Claude) ----------
+// =====================================================================
+// Sem servidor, o navegador conversa direto com o provedor usando a chave
+// da própria empresa (o custo cai na conta dela no provedor). A empresa
+// escolhe onde a chave fica:
+//  - "navegador": cada pessoa cola a sua; fica só neste navegador.
+//  - "empresa": o Diretor cola uma vez e vale para a equipe toda. Fica no
+//    banco da empresa: qualquer membro logado consegue, tecnicamente, ler.
+const IA_CFG_KEY = 'eagles_ia_config_v1';
+const IA_PROVEDORES = {
+  openai: { nome: 'OpenAI (ChatGPT)', prefixo: 'sk-', site: 'https://platform.openai.com/api-keys', siteNome: 'OpenAI Platform', passos: ['Entre em platform.openai.com e faça login', 'Abra "API keys" e clique em "Create new secret key"', 'Em "Billing", adicione créditos (a OpenAI cobra por uso)', 'Copie a chave (começa com sk-) e cole abaixo'] },
+  gemini: { nome: 'Google Gemini', prefixo: 'AIza', site: 'https://aistudio.google.com/app/apikey', siteNome: 'Google AI Studio', passos: ['Entre no Google AI Studio com sua conta Google', 'Clique em "Get API key" / "Create API key"', 'Escolha ou crie um projeto do Google Cloud', 'Copie a chave (começa com AIza) e cole abaixo'] },
+  anthropic: { nome: 'Anthropic Claude', prefixo: 'sk-ant-', site: 'https://console.anthropic.com/settings/keys', siteNome: 'Anthropic Console', passos: ['Entre em console.anthropic.com e faça login', 'Abra "API keys" e clique em "Create key"', 'Em "Billing", adicione créditos (a Anthropic cobra por uso)', 'Copie a chave (começa com sk-ant-) e cole abaixo'] },
+};
+let IA_CFG_EMPRESA = { modo: 'navegador', provedor: '', modelos: {}, chaves: {} };
+let IA_ESCUTANDO = false;
+let IA_MODELOS_CACHE = {};
+
+function iaChaveLocalKey() { return chaveLocalTenant('eagles_ia_local_v1'); }
+function iaLocal() { const v = lsLoad(iaChaveLocalKey(), null); return v && typeof v === 'object' ? { provedor: v.provedor || '', modelos: v.modelos || {}, chaves: v.chaves || {} } : { provedor: '', modelos: {}, chaves: {} }; }
+function iaSalvarLocal(v) { lsSave(iaChaveLocalKey(), v); }
+function iaIniciar(cb) {
+  if (cb) IA_OUVINTES.push(cb);
+  if (IA_ESCUTANDO) return;
+  IA_ESCUTANDO = true;
+  cloudWatch(IA_CFG_KEY, { modo: 'navegador', provedor: '', modelos: {}, chaves: {} }, (d) => {
+    const v = d && typeof d === 'object' ? d : {};
+    IA_CFG_EMPRESA = { modo: v.modo === 'empresa' ? 'empresa' : 'navegador', provedor: v.provedor || '', modelos: v.modelos || {}, chaves: v.chaves || {} };
+    IA_OUVINTES.forEach((f) => { try { f(); } catch (e) { console.error(e); } });
+  });
+}
+const IA_OUVINTES = [];
+// Configuração que vale agora (empresa ou este navegador)
+function iaAtual() {
+  const base = IA_CFG_EMPRESA.modo === 'empresa' ? IA_CFG_EMPRESA : iaLocal();
+  const chaves = base.chaves || {};
+  let provedor = base.provedor && chaves[base.provedor] ? base.provedor : Object.keys(IA_PROVEDORES).find((p) => chaves[p]) || '';
+  return { modo: IA_CFG_EMPRESA.modo, provedor, chave: provedor ? chaves[provedor] : '', modelo: provedor ? (base.modelos || {})[provedor] || '' : '', chaves, modelos: base.modelos || {} };
+}
+function iaPronta() { const a = iaAtual(); return !!(a.provedor && a.chave && a.modelo); }
+function iaMascara(k) { k = String(k || ''); return k.length > 10 ? k.slice(0, 5) + '…' + k.slice(-4) : (k ? '••••' : ''); }
+
+// ---------- chamadas ----------
+function iaComTempo(ms) { const c = new AbortController(); const t = setTimeout(() => c.abort(), ms); return { signal: c.signal, fim: () => clearTimeout(t) }; }
+async function iaErroHttp(resp, provedor) {
+  let msg = '';
+  try { const j = await resp.json(); msg = (j.error && (j.error.message || j.error.type)) || j.message || ''; } catch (e) {}
+  if (resp.status === 401 || resp.status === 403) return new Error(`A chave de ${IA_PROVEDORES[provedor].nome} foi recusada. Confira se ela está certa e ativa.${msg ? ' (' + msg + ')' : ''}`);
+  if (resp.status === 429) return new Error(`O provedor recusou por limite de uso ou falta de créditos na conta. Confira o saldo em ${IA_PROVEDORES[provedor].siteNome}.${msg ? ' (' + msg + ')' : ''}`);
+  if (resp.status === 404) return new Error(`O modelo escolhido não está disponível nesta chave. Troque o modelo em "Chaves de IA".${msg ? ' (' + msg + ')' : ''}`);
+  return new Error(`O provedor de IA respondeu com erro ${resp.status}.${msg ? ' ' + msg : ''}`);
+}
+async function iaListarModelos(provedor, chave) {
+  const t = iaComTempo(20000);
+  try {
+    let resp, ids = [];
+    if (provedor === 'openai') {
+      resp = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: 'Bearer ' + chave }, signal: t.signal });
+      if (!resp.ok) throw await iaErroHttp(resp, provedor);
+      ids = ((await resp.json()).data || []).map((m) => m.id).filter((id) => /^(gpt-|o\d|chatgpt-)/.test(id) && !/(audio|realtime|tts|transcribe|image|embedding|search|instruct|moderation|dall|whisper|codex)/.test(id));
+    } else if (provedor === 'gemini') {
+      resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': chave }, signal: t.signal });
+      if (!resp.ok) throw await iaErroHttp(resp, provedor);
+      ids = ((await resp.json()).models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini/.test(m.name) && !/(embedding|image|tts|audio|vision-only|aqa)/.test(m.name)).map((m) => m.name.replace(/^models\//, ''));
+    } else if (provedor === 'anthropic') {
+      resp = await fetch('https://api.anthropic.com/v1/models?limit=100', { headers: { 'x-api-key': chave, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, signal: t.signal });
+      if (!resp.ok) throw await iaErroHttp(resp, provedor);
+      ids = ((await resp.json()).data || []).map((m) => m.id);
+    }
+    return Array.from(new Set(ids)).sort().reverse();
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('O provedor demorou demais para responder. Tente de novo.');
+    if (e instanceof TypeError) throw new Error('Não foi possível falar com o provedor. Confira a internet (e se algum bloqueador do navegador está impedindo).');
+    throw e;
+  } finally { t.fim(); }
+}
+// Escolhe um modelo bom e de custo razoável para textos, entre os da chave
+function iaModeloSugerido(provedor, ids) {
+  const achar = (re, fora) => ids.find((i) => re.test(i) && !(fora && fora.test(i)));
+  if (provedor === 'openai') return achar(/^gpt-[\d.]+-mini$/) || achar(/^gpt-[\d.o]+-mini/, /(preview|\d{4}-\d{2})/) || achar(/^gpt-[\d.]+o?$/) || ids[0] || '';
+  if (provedor === 'gemini') return achar(/^gemini-[\d.]+-flash$/) || achar(/flash/, /(lite|preview|exp|thinking|\d{3}$)/) || achar(/flash/) || ids[0] || '';
+  if (provedor === 'anthropic') return achar(/sonnet/) || achar(/haiku/) || ids[0] || '';
+  return ids[0] || '';
+}
+// Pede um JSON à IA e devolve o objeto
+async function iaGerarJson(sistema, pedido, opcoes) {
+  const o = Object.assign({ maxTokens: 2500, temperatura: 0.8 }, opcoes || {});
+  const a = iaAtual();
+  if (!a.provedor || !a.chave) throw new Error('Nenhuma chave de IA configurada. Clique em "Chaves de IA" para conectar a OpenAI, o Gemini ou o Claude.');
+  if (!a.modelo) throw new Error('Escolha o modelo da IA em "Chaves de IA".');
+  const sis = sistema + '\n\nResponda SOMENTE com um objeto JSON válido, sem texto antes ou depois e sem blocos de código.';
+  const t = iaComTempo(120000);
+  try {
+    let resp, texto = '';
+    if (a.provedor === 'openai') {
+      resp = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', signal: t.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + a.chave },
+        body: JSON.stringify({ model: a.modelo, messages: [{ role: 'system', content: sis }, { role: 'user', content: pedido }], response_format: { type: 'json_object' }, max_completion_tokens: o.maxTokens + 4000 }) });
+      if (!resp.ok) throw await iaErroHttp(resp, a.provedor);
+      const j = await resp.json(); texto = ((j.choices || [])[0] || {}).message ? j.choices[0].message.content || '' : '';
+    } else if (a.provedor === 'gemini') {
+      resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(a.modelo)}:generateContent`, { method: 'POST', signal: t.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': a.chave },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: sis }] }, contents: [{ role: 'user', parts: [{ text: pedido }] }], generationConfig: { responseMimeType: 'application/json', temperature: o.temperatura, maxOutputTokens: o.maxTokens + 6000 } }) });
+      if (!resp.ok) throw await iaErroHttp(resp, a.provedor);
+      const j = await resp.json(); texto = (((((j.candidates || [])[0] || {}).content || {}).parts) || []).map((p) => p.text || '').join('');
+      if (!texto && j.promptFeedback && j.promptFeedback.blockReason) throw new Error('O Gemini bloqueou este pedido pelos filtros de segurança dele. Reformule o tema.');
+    } else if (a.provedor === 'anthropic') {
+      resp = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal: t.signal, headers: { 'Content-Type': 'application/json', 'x-api-key': a.chave, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: a.modelo, max_tokens: o.maxTokens, system: sis, messages: [{ role: 'user', content: pedido }] }) });
+      if (!resp.ok) throw await iaErroHttp(resp, a.provedor);
+      const j = await resp.json(); texto = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('');
+    }
+    return iaExtrairJson(texto);
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('A IA demorou demais para responder. Tente de novo.');
+    if (e instanceof TypeError) throw new Error('Não foi possível falar com o provedor de IA. Confira a internet.');
+    throw e;
+  } finally { t.fim(); }
+}
+function iaExtrairJson(texto) {
+  let s = String(texto || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  try { return JSON.parse(s); } catch (e) {}
+  const i = s.indexOf('{'), f = s.lastIndexOf('}');
+  if (i >= 0 && f > i) { try { return JSON.parse(s.slice(i, f + 1)); } catch (e) {} }
+  throw new Error('A IA respondeu num formato inesperado. Tente gerar de novo.');
+}
+
+// ---------- tela "Chaves de IA" ----------
+function iaAbrirChaves(aoSalvar) {
+  IA_AO_SALVAR = typeof aoSalvar === 'function' ? aoSalvar : null;
+  iaRenderChaves();
+  openModal('modal-srv');
+}
+let IA_AO_SALVAR = null;
+function iaRenderChaves() {
+  const ov = srvGarantirModal();
+  const diretor = !FIREBASE_PRONTO || !TENANT_ID || nivelEhDiretor();
+  const modoEmpresa = IA_CFG_EMPRESA.modo === 'empresa';
+  const base = modoEmpresa ? IA_CFG_EMPRESA : iaLocal();
+  const podeEditar = modoEmpresa ? diretor : true;
+  const a = iaAtual();
+  ov.innerHTML = `
+    <div class="modal kb-modal ia-modal" style="max-width:760px;" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>${ic('cadeado', 'ic-herda')} Chaves de IA</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub">Os agentes usam a sua própria conta no provedor de IA: o custo é cobrado direto por ele, por uso. O Eagles Labz não cobra nada a mais.</p>
+      <div class="fin-painel">
+        <strong>Onde a chave fica guardada</strong>
+        <div class="ia-modos">
+          <label class="ia-modo${!modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="navegador" ${!modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Só neste navegador</b><small>Cada pessoa cola a sua chave. Mais seguro: a chave não sai deste computador.</small></span></label>
+          <label class="ia-modo${modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="empresa" ${modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Na empresa</b><small>O Diretor cola uma vez e vale para a equipe toda. Atenção: qualquer pessoa logada da empresa consegue, tecnicamente, ver a chave.</small></span></label>
+        </div>
+        ${diretor ? '' : '<p class="kb-vazio-mini" style="margin:8px 0 0;">Só o Diretor muda onde a chave fica.</p>'}
+      </div>
+      ${modoEmpresa && !diretor ? `<div class="fin-painel"><p style="margin:0;">${a.provedor ? `A empresa está usando <b>${escapeHtml(IA_PROVEDORES[a.provedor].nome)}</b>${a.modelo ? ` (modelo ${escapeHtml(a.modelo)})` : ''}. Para trocar, fale com o Diretor.` : 'O Diretor ainda não cadastrou a chave da empresa.'}</p></div>` : `
+      <div class="ia-provedores">${Object.keys(IA_PROVEDORES).map((p) => {
+        const P = IA_PROVEDORES[p], tem = !!(base.chaves || {})[p], modelos = IA_MODELOS_CACHE[p] || [], modelo = (base.modelos || {})[p] || '';
+        return `<div class="fin-painel ia-prov${a.provedor === p ? ' ia-prov-ativo' : ''}">
+          <div class="fin-painel-cab"><strong>${escapeHtml(P.nome)}</strong><span class="kb-espaco"></span>${tem ? `<span class="badge badge-success" style="font-size:10.5px;">Conectado</span>` : ''}</div>
+          <details class="ia-passos"><summary>Como obter sua chave · <a href="${P.site}" target="_blank" rel="noopener">${P.siteNome}</a></summary><ol>${P.passos.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ol></details>
+          ${tem ? `<div class="ia-chave-salva"><code>${escapeHtml(iaMascara(base.chaves[p]))}</code>${podeEditar ? `<button type="button" class="btn btn-small btn-ghost" onclick="iaRemoverChave('${p}')">Remover</button>` : ''}</div>
+            <div class="field full" style="margin-top:8px;"><label>Modelo</label>${modelos.length ? `<select id="ia-m-${p}" ${podeEditar ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value)">${modelos.map((m) => `<option value="${escapeHtml(m)}" ${m === modelo ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select>` : `<div style="display:flex; gap:6px;"><input type="text" id="ia-m-${p}" value="${escapeHtml(modelo)}" ${podeEditar ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value.trim())"><button type="button" class="btn btn-small" onclick="iaRecarregarModelos('${p}')">Listar</button></div>`}</div>
+            ${podeEditar ? `<label class="ia-usar"><input type="radio" name="ia-prov" ${a.provedor === p ? 'checked' : ''} onchange="iaUsarProvedor('${p}')"> Usar este nos agentes</label>` : ''}`
+          : (podeEditar ? `<div class="field full"><label>Cole sua chave</label><input type="password" id="ia-k-${p}" autocomplete="off" spellcheck="false" placeholder="${P.prefixo}..."></div>
+            <button type="button" class="btn btn-small btn-primary" id="ia-b-${p}" onclick="iaValidarESalvar('${p}')">Validar e salvar</button>` : '<p class="kb-vazio-mini">Não conectado.</p>')}
+        </div>`;
+      }).join('')}</div>`}
+      <p class="kb-vazio-mini" style="margin:10px 2px 0;">${ic('cadeado', 'ic-herda')} A chave é usada só para falar com o provedor, direto do seu navegador. Os textos que você manda para a IA seguem a política de privacidade do provedor escolhido.</p>
+    </div>`;
+}
+function iaAlvo() { return IA_CFG_EMPRESA.modo === 'empresa' ? 'empresa' : 'local'; }
+function iaGravar(mut) {
+  if (iaAlvo() === 'empresa') {
+    if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) { avisarSemPermissaoNivel('mudar a chave de IA da empresa'); return false; }
+    const v = JSON.parse(JSON.stringify(IA_CFG_EMPRESA)); v.chaves = v.chaves || {}; v.modelos = v.modelos || {}; mut(v);
+    if (cloudSet(IA_CFG_KEY, v) === false) return false;
+    IA_CFG_EMPRESA = v;
+  } else { const v = iaLocal(); mut(v); iaSalvarLocal(v); }
+  return true;
+}
+function iaMudarModo(modo) {
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) { avisarSemPermissaoNivel(); iaRenderChaves(); return; }
+  const v = Object.assign({}, IA_CFG_EMPRESA, { modo });
+  if (modo === 'navegador') { v.chaves = {}; } // tirar a chave da empresa do banco
+  if (cloudSet(IA_CFG_KEY, v) === false) { iaRenderChaves(); return; }
+  IA_CFG_EMPRESA = v;
+  iaRenderChaves(); if (IA_AO_SALVAR) IA_AO_SALVAR();
+}
+async function iaValidarESalvar(p) {
+  const inp = document.getElementById('ia-k-' + p), btn = document.getElementById('ia-b-' + p);
+  const chave = (inp ? inp.value : '').trim();
+  if (!chave) { avisar('Cole a chave primeiro.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Validando...'; }
+  try {
+    const ids = await iaListarModelos(p, chave);
+    if (!ids.length) throw new Error('A chave funciona, mas não encontrei modelos de texto disponíveis nela.');
+    IA_MODELOS_CACHE[p] = ids;
+    const modelo = iaModeloSugerido(p, ids);
+    const ok = iaGravar((v) => { v.chaves[p] = chave; v.modelos[p] = v.modelos[p] && ids.includes(v.modelos[p]) ? v.modelos[p] : modelo; if (!v.provedor || !v.chaves[v.provedor]) v.provedor = p; });
+    if (ok) { iaRenderChaves(); if (IA_AO_SALVAR) IA_AO_SALVAR(); }
+  } catch (e) {
+    avisar(e.message || String(e), 'Chave de IA');
+    if (btn) { btn.disabled = false; btn.textContent = 'Validar e salvar'; }
+  }
+}
+async function iaRecarregarModelos(p) {
+  const a = iaAlvo() === 'empresa' ? IA_CFG_EMPRESA : iaLocal();
+  if (!(a.chaves || {})[p]) return;
+  try { IA_MODELOS_CACHE[p] = await iaListarModelos(p, a.chaves[p]); iaRenderChaves(); } catch (e) { avisar(e.message, 'Chave de IA'); }
+}
+function iaSalvarModelo(p, modelo) { if (iaGravar((v) => { v.modelos[p] = modelo; })) { iaRenderChaves(); if (IA_AO_SALVAR) IA_AO_SALVAR(); } }
+function iaUsarProvedor(p) { if (iaGravar((v) => { v.provedor = p; })) { iaRenderChaves(); if (IA_AO_SALVAR) IA_AO_SALVAR(); } }
+function iaRemoverChave(p) {
+  confirmarAcao(`Remover a chave de ${IA_PROVEDORES[p].nome}?`, () => {
+    if (iaGravar((v) => { delete v.chaves[p]; if (v.provedor === p) v.provedor = Object.keys(v.chaves).find((x) => v.chaves[x]) || ''; })) { iaRenderChaves(); if (IA_AO_SALVAR) IA_AO_SALVAR(); }
+  }, 'Remover chave');
+}
+function iaHtmlStatus(acaoAposSalvar) {
+  const a = iaAtual();
+  return `<button type="button" class="ia-status${a.provedor && a.modelo ? ' ok' : ''}" onclick="iaAbrirChaves(${acaoAposSalvar || 'null'})" title="Chaves de IA">${ic('cadeado', 'ic-herda')}<span>${a.provedor && a.modelo ? `${escapeHtml(IA_PROVEDORES[a.provedor].nome.split(' (')[0])} · ${escapeHtml(a.modelo)}` : 'Conectar IA'}</span></button>`;
+}
+
+// =====================================================================
+// ---------- Agente Copywriter ----------
+// =====================================================================
+const CW_KEY = 'eagles_ia_copy_v1';
+let CW_DADOS = { perfis: {}, temas: {}, historico: [] };
+let CW_INICIADO = false;
+let CW_HOST = null;
+let CW = { cliente: '', passo: 1, modoTema: '', sugestoes: [], tema: '', formato: 'carrossel', estilo: 'normal', det: { objetivo: 'Engajamento', tom: '', qtd: 7, cta: true, manter: false, publico: '', obs: '' }, resultado: null, carregando: '', erro: '', verHist: '' };
+const CW_FORMATOS = {
+  carrossel: { nome: 'Carrossel', icone: 'camadas', desc: '3 a 10 slides em sequência', cnt: 'carrossel', qtd: [3, 10, 7] },
+  post: { nome: 'Post único', icone: 'imagem', desc: '1 imagem com texto e legenda', cnt: 'imagem' },
+  reels: { nome: 'Reels / TikTok', icone: 'reuniao', desc: 'Roteiro de vídeo curto com gancho', cnt: 'reels' },
+  stories: { nome: 'Stories', icone: 'celular', desc: '2 a 5 telas rápidas (9:16)', cnt: 'stories', qtd: [2, 5, 4] },
+  legenda: { nome: 'Só legenda', icone: 'mensagem', desc: 'Legenda e hashtags para um post', cnt: 'imagem' },
+  linkedin: { nome: 'LinkedIn', icone: 'usuario', desc: 'Post profissional em texto', cnt: 'linkedin' },
+  anuncio: { nome: 'Anúncio', icone: 'megafone', desc: 'Título, texto e variações para teste A/B', cnt: 'copy' },
+  email: { nome: 'E-mail', icone: 'email', desc: 'Assunto, pré-cabeçalho e corpo', cnt: 'copy' },
+};
+const CW_OBJETIVOS = ['Engajamento', 'Educar', 'Vender', 'Autoridade', 'Storytelling'];
+const CW_TONS = ['Amigável', 'Profissional', 'Provocador', 'Inspirador', 'Direto'];
+
+function cwIniciar() {
+  if (CW_INICIADO) return;
+  CW_INICIADO = true;
+  iaIniciar(() => cwRender());
+  try { if (typeof cntIniciarDados === 'function') cntIniciarDados(); } catch (e) { console.error(e); }
+  cloudWatch(CW_KEY, { perfis: {}, temas: {}, historico: [] }, (d) => {
+    const v = d && typeof d === 'object' ? d : {};
+    CW_DADOS = { perfis: v.perfis && typeof v.perfis === 'object' ? v.perfis : {}, temas: v.temas && typeof v.temas === 'object' ? v.temas : {}, historico: Array.isArray(v.historico) ? v.historico : [] };
+    const f = document.activeElement;
+    if (!(f && CW_HOST && CW_HOST.contains(f) && /TEXTAREA|INPUT|SELECT/.test(f.tagName))) cwRender();
+  });
+}
+function cwSalvar() { return cloudSet(CW_KEY, CW_DADOS) !== false; }
+function cwMontar(host) { CW_HOST = host; cwIniciar(); cwRender(); }
+function cwClientes() { return (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : []).map((c) => c.nome).filter(Boolean).sort((a, b) => a.localeCompare(b)); }
+function cwPerfil(cli) { return (CW_DADOS.perfis || {})[cli || CW.cliente] || {}; }
+function cwPerfilPct(p) { const campos = ['nicho', 'publico', 'tom', 'temas', 'notas']; return Math.round(campos.filter((k) => String(p[k] || '').trim()).length / campos.length * 100); }
+function cwPerfilOk(p) { return !!(String(p.nicho || '').trim() && String(p.publico || '').trim()); }
+function cwTemasSalvos() { return ((CW_DADOS.temas || {})[CW.cliente || '_geral'] || []); }
+function cwEscolherCliente(nome) {
+  CW.cliente = nome; CW.resultado = null; CW.erro = ''; CW.sugestoes = []; CW.tema = ''; CW.modoTema = ''; CW.verHist = '';
+  CW.passo = nome && !cwPerfilOk(cwPerfil(nome)) ? 1 : 2;
+  CW.det.tom = cwPerfil(nome).tom || '';
+  cwRender();
+}
+function cwIr(passo) { CW.passo = passo; CW.erro = ''; cwRender(); }
+
+function cwRender() {
+  const host = CW_HOST;
+  if (!host || !host.isConnected) return;
+  const passos = [['Perfil'], ['Tema'], ['Formato'], ['Detalhes'], ['Gerar']];
+  const p = cwPerfil(), pct = cwPerfilPct(p);
+  const hist = (CW_DADOS.historico || []).filter((h) => !CW.cliente || h.cliente === CW.cliente).slice(0, 30);
+  host.innerHTML = `
+    <div class="cw">
+      <div class="fin-cab"><div><h1 style="display:flex; align-items:center; gap:8px;">${ic('caneta')} Copywriter <span class="badge badge-neutral" style="font-size:10.5px;">Beta</span></h1><p>Textos prontos para postar, no tom de voz de cada cliente.</p></div><span class="kb-espaco"></span>${iaHtmlStatus('cwRender')}</div>
+      ${iaPronta() ? '' : `<div class="atd-banner">${ic('cadeado', 'ic-herda')}<div><strong>Conecte uma IA para começar.</strong> Use a sua chave da OpenAI, do Google Gemini ou da Anthropic (Claude). O custo é cobrado direto pelo provedor, por uso — um texto costuma custar centavos. <button type="button" class="btn btn-small btn-primary" style="margin-left:6px;" onclick="iaAbrirChaves(cwRender)">Conectar IA</button></div></div>`}
+      <div class="cw-layout">
+        <aside class="cw-lado">
+          <div class="fin-painel">
+            <div class="cw-rotulo">Cliente</div>
+            <select class="srv-select" style="width:100%;" onchange="cwEscolherCliente(this.value)" aria-label="Cliente"><option value="">Sem cliente (genérico)</option>${cwClientes().map((n) => `<option value="${escapeHtml(n)}" ${n === CW.cliente ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>
+            ${CW.cliente ? `<div class="cw-perfil-barra"><span class="cw-barra"><i style="width:${pct}%"></i></span><span>${pct}%</span><button type="button" class="btn btn-small btn-ghost" onclick="cwIr(1)">${ic('lapis', 'ic-herda')} Editar perfil</button></div>` : '<p class="kb-vazio-mini" style="margin:8px 0 0;">Escolha um cliente para a IA usar o nicho, o público e o tom de voz dele.</p>'}
+          </div>
+          <div class="fin-painel">
+            <div class="cw-rotulo">${ic('alfinete', 'ic-herda')} Temas salvos <span class="cw-num">${cwTemasSalvos().length}</span></div>
+            ${cwTemasSalvos().length ? `<div class="cw-mini-lista">${cwTemasSalvos().map((t, i) => `<div class="cw-mini"><button type="button" onclick="cwUsarTema(${i})">${escapeHtml(t)}</button><button type="button" class="cw-x" aria-label="Remover tema" onclick="cwRemoverTema(${i})">${ic('x', 'ic-herda')}</button></div>`).join('')}</div>` : '<p class="kb-vazio-mini" style="margin:0;">Nenhum tema salvo.</p>'}
+          </div>
+          <div class="fin-painel">
+            <div class="cw-rotulo">${ic('relogio', 'ic-herda')} Conteúdos gerados</div>
+            ${hist.length ? `<div class="cw-mini-lista">${hist.map((h) => `<div class="cw-mini"><button type="button" onclick="cwAbrirHistorico('${escapeParaOnclick(h.id)}')"><b>${escapeHtml((CW_FORMATOS[h.formato] || {}).nome || h.formato)}</b> · ${escapeHtml(h.tema || '')}<small>${escapeHtml(formatDatePt(String(h.criadoEm).slice(0, 10)))}${h.cliente && !CW.cliente ? ' · ' + escapeHtml(h.cliente) : ''}</small></button></div>`).join('')}</div>` : '<p class="kb-vazio-mini" style="margin:0;">Nenhum conteúdo gerado.</p>'}
+          </div>
+        </aside>
+        <section class="cw-principal">
+          <div class="cw-passos">${passos.map(([n], i) => `<button type="button" class="${CW.passo === i + 1 ? 'ativo' : ''}${CW.passo > i + 1 ? ' feito' : ''}" onclick="cwIrPasso(${i + 1})" ${i + 1 > cwPassoMaximo() ? 'disabled' : ''}><span>${i + 1}</span>${n}</button>`).join('')}</div>
+          ${CW.erro ? `<div class="cw-erro">${ic('alerta', 'ic-herda')} ${escapeHtml(CW.erro)}</div>` : ''}
+          ${CW.passo === 1 ? cwHtmlPerfil() : CW.passo === 2 ? cwHtmlTema() : CW.passo === 3 ? cwHtmlFormato() : CW.passo === 4 ? cwHtmlDetalhes() : cwHtmlGerar()}
+        </section>
+      </div>
+    </div>`;
+}
+function cwPassoMaximo() { if (CW.resultado) return 5; if (CW.tema) return 5; return 2; }
+function cwIrPasso(n) { if (n <= cwPassoMaximo()) cwIr(n); }
+function cwNavegacao(voltar, avancar, rotuloAvancar, desab) {
+  return `<div class="cw-nav">${voltar ? `<button type="button" class="btn" onclick="cwIr(${voltar})">← Voltar</button>` : '<span></span>'}${avancar ? `<button type="button" class="btn btn-primary" onclick="${avancar}" ${desab ? 'disabled' : ''}>${rotuloAvancar || 'Continuar'}</button>` : ''}</div>`;
+}
+
+// ---------- 1. Perfil ----------
+function cwHtmlPerfil() {
+  if (!CW.cliente) return `<div class="fin-painel"><div class="atd-vazio">${ic('usuario')}<strong>Sem cliente escolhido</strong><span>O perfil estratégico é por cliente. Sem cliente, a IA escreve de forma genérica.</span><button type="button" class="btn btn-primary" onclick="cwIr(2)">Seguir sem cliente</button></div></div>`;
+  const p = cwPerfil(), pct = cwPerfilPct(p);
+  const campo = (k, rot, ph, obrig, area) => `<div class="field${area ? ' full' : ''}"><label>${rot}${obrig ? ' *' : ''}</label>${area ? `<textarea id="cw-p-${k}" rows="3" maxlength="800" placeholder="${ph}">${escapeHtml(p[k] || '')}</textarea>` : `<input type="text" id="cw-p-${k}" maxlength="200" placeholder="${ph}" value="${escapeHtml(p[k] || '')}">`}</div>`;
+  return `<div class="fin-painel">
+    <div class="fin-painel-cab"><div><strong>Perfil estratégico</strong><div class="cw-perfil-barra" style="margin:6px 0 0;"><span class="cw-barra"><i style="width:${pct}%"></i></span><span>${pct}%</span>${pct < 40 ? '<span class="cw-min">(mín. 40%)</span>' : ''}</div></div><span class="kb-espaco"></span><button type="button" class="btn btn-small" onclick="cwSugerirPerfil()" ${CW.carregando ? 'disabled' : ''}>${ic('brilho', 'ic-herda')} ${CW.carregando === 'perfil' ? 'Pensando...' : 'IA sugerir'}</button></div>
+    <div class="cw-grade2">
+      ${campo('nicho', 'Nicho', 'Ex.: Nutrição esportiva', true)}
+      ${campo('publico', 'Público-alvo', 'Ex.: Mulheres 25-40, mães ocupadas', true)}
+      ${campo('tom', 'Tom de voz', 'Ex.: Profissional e acolhedor')}
+      ${campo('temas', 'Temas de conteúdo', 'Ex.: Emagrecimento, receitas, rotina')}
+    </div>
+    ${campo('notas', 'Notas estratégicas', 'Ex.: evitar promessas de cura; sempre incluir CTA de WhatsApp; foco no verão', false, true)}
+    <div class="cw-nav"><span></span><button type="button" class="btn btn-primary" onclick="cwSalvarPerfil()">${ic('aprovado', 'ic-herda')} Salvar perfil e continuar</button></div>
+  </div>`;
+}
+function cwLerPerfilTela() { const v = (k) => ((document.getElementById('cw-p-' + k) || {}).value || '').trim(); return { nicho: v('nicho'), publico: v('publico'), tom: v('tom'), temas: v('temas'), notas: v('notas') }; }
+function cwSalvarPerfil() {
+  const p = cwLerPerfilTela();
+  if (!p.nicho || !p.publico) { CW.erro = 'Preencha pelo menos o nicho e o público-alvo.'; cwRender(); return; }
+  CW_DADOS.perfis = Object.assign({}, CW_DADOS.perfis, { [CW.cliente]: Object.assign({}, p, { atualizadoEm: new Date().toISOString() }) });
+  if (!cwSalvar()) return;
+  CW.det.tom = p.tom || CW.det.tom;
+  cwIr(2);
+}
+function cwContextoCliente(nome) {
+  const c = (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : []).find((x) => x.nome === nome) || {};
+  const linhas = [`Cliente: ${nome}`];
+  if (c.projetoInteresse) linhas.push('Serviço de interesse: ' + c.projetoInteresse);
+  if (c.tags) linhas.push('Tags: ' + c.tags);
+  if (c.observacoes) linhas.push('Observações do cadastro: ' + String(c.observacoes).slice(0, 600));
+  if (c.cidade) linhas.push('Cidade: ' + c.cidade + (c.estado ? '/' + c.estado : ''));
+  return linhas.join('\n');
+}
+async function cwSugerirPerfil() {
+  if (!iaPronta()) { iaAbrirChaves(cwRender); return; }
+  const atual = cwLerPerfilTela();
+  CW.carregando = 'perfil'; CW.erro = ''; cwRender();
+  try {
+    const r = await iaGerarJson('Você é um estrategista de marketing digital brasileiro. Monte o perfil estratégico de conteúdo de um cliente de uma agência, em português do Brasil, de forma específica e prática.',
+      `${cwContextoCliente(CW.cliente)}\nCampos já preenchidos (respeite e complete): ${JSON.stringify(atual)}\n\nDevolva {"nicho": "...", "publico": "...", "tom": "...", "temas": "4 a 6 temas separados por vírgula", "notas": "2 a 3 diretrizes curtas"}. Se faltar informação, faça a suposição mais provável pelo nome e pelos dados.`, { maxTokens: 700 });
+    const p = Object.assign({}, cwPerfil());
+    ['nicho', 'publico', 'tom', 'temas', 'notas'].forEach((k) => { p[k] = atual[k] || String(r[k] || '').slice(0, k === 'notas' ? 800 : 200); });
+    CW_DADOS.perfis = Object.assign({}, CW_DADOS.perfis, { [CW.cliente]: p });
+    cwSalvar();
+  } catch (e) { CW.erro = e.message; }
+  CW.carregando = ''; cwRender();
+}
+
+// ---------- 2. Tema ----------
+function cwHtmlTema() {
+  const salvos = cwTemasSalvos();
+  if (CW.modoTema === 'sugestoes') {
+    return `<div class="fin-painel">
+      <div class="fin-painel-cab"><div><strong>Sugestões de tema</strong><div class="kb-vazio-mini">Escolha um tema. O alfinete guarda o tema na lista do cliente.</div></div><span class="kb-espaco"></span><button type="button" class="btn btn-small btn-ghost" onclick="CW.modoTema=''; cwRender()">Trocar</button></div>
+      ${CW.carregando === 'temas' ? '<p class="kb-vazio">A IA está pensando nos temas...</p>' : CW.sugestoes.length ? `<div class="cw-temas">${CW.sugestoes.map((t, i) => `<div class="cw-tema${CW.tema === t ? ' ativo' : ''}"><button type="button" class="cw-tema-txt" onclick="cwEscolherTema(${i})"><span class="cw-radio"></span>${escapeHtml(t)}</button><button type="button" class="cw-x" title="Salvar tema" aria-label="Salvar tema" onclick="cwSalvarTema(${i})">${ic(salvos.includes(t) ? 'aprovado' : 'alfinete', 'ic-herda')}</button></div>`).join('')}</div>` : '<p class="kb-vazio">Nenhuma sugestão ainda.</p>'}
+      <button type="button" class="btn btn-small" style="margin-top:10px;" onclick="cwSugerirTemas()" ${CW.carregando ? 'disabled' : ''}>${ic('brilho', 'ic-herda')} Novos temas</button>
+      ${cwNavegacao(CW.cliente ? 1 : 0, 'cwIr(3)', 'Continuar', !CW.tema)}
+    </div>`;
+  }
+  if (CW.modoTema === 'proprio' || CW.modoTema === 'salvos') {
+    return `<div class="fin-painel">
+      <div class="fin-painel-cab"><strong>${CW.modoTema === 'salvos' ? 'Temas salvos' : 'Qual é o tema?'}</strong><span class="kb-espaco"></span><button type="button" class="btn btn-small btn-ghost" onclick="CW.modoTema=''; cwRender()">Trocar</button></div>
+      ${CW.modoTema === 'salvos' ? (salvos.length ? `<div class="cw-temas">${salvos.map((t, i) => `<div class="cw-tema${CW.tema === t ? ' ativo' : ''}"><button type="button" class="cw-tema-txt" onclick="cwUsarTema(${i})"><span class="cw-radio"></span>${escapeHtml(t)}</button></div>`).join('')}</div>` : '<p class="kb-vazio">Nenhum tema salvo para este cliente ainda.</p>')
+        : `<div class="field full"><textarea id="cw-tema-proprio" rows="3" maxlength="400" placeholder="Ex.: 5 erros que travam quem está começando a investir">${escapeHtml(CW.tema)}</textarea></div>`}
+      ${cwNavegacao(CW.cliente ? 1 : 0, CW.modoTema === 'proprio' ? 'cwTemaProprio()' : 'cwIr(3)', 'Continuar', CW.modoTema === 'salvos' && !CW.tema)}
+    </div>`;
+  }
+  return `<div class="fin-painel">
+    <strong>Definir tema</strong><div class="kb-vazio-mini" style="margin-bottom:12px;">Escolha como definir o tema do conteúdo.</div>
+    <div class="cw-opcoes">
+      <button type="button" class="cw-opcao" onclick="CW.modoTema='sugestoes'; cwRender(); if (!CW.sugestoes.length) cwSugerirTemas();">${ic('brilho')}<strong>Gerar sugestões</strong><span>A IA sugere a partir do perfil</span></button>
+      <button type="button" class="cw-opcao" onclick="CW.modoTema='salvos'; cwRender()">${ic('alfinete')}<strong>Temas salvos</strong><span>${salvos.length} ${salvos.length === 1 ? 'tema disponível' : 'temas disponíveis'}</span></button>
+      <button type="button" class="cw-opcao" onclick="CW.modoTema='proprio'; cwRender()">${ic('lapis')}<strong>Já tenho meu tema</strong><span>Escrever manualmente</span></button>
+    </div>
+    ${CW.cliente ? cwNavegacao(1, '', '') : ''}
+  </div>`;
+}
+function cwTemaProprio() { const v = ((document.getElementById('cw-tema-proprio') || {}).value || '').trim(); if (!v) { CW.erro = 'Escreva o tema.'; cwRender(); return; } CW.tema = v; cwIr(3); }
+function cwEscolherTema(i) { CW.tema = CW.sugestoes[i] || ''; cwRender(); }
+function cwUsarTema(i) { CW.tema = cwTemasSalvos()[i] || ''; CW.modoTema = 'salvos'; CW.passo = 2; cwRender(); }
+function cwSalvarTema(i) {
+  const t = CW.sugestoes[i]; if (!t) return;
+  const k = CW.cliente || '_geral', l = cwTemasSalvos();
+  CW_DADOS.temas = Object.assign({}, CW_DADOS.temas, { [k]: l.includes(t) ? l.filter((x) => x !== t) : [t].concat(l).slice(0, 60) });
+  cwSalvar(); cwRender();
+}
+function cwRemoverTema(i) {
+  const k = CW.cliente || '_geral';
+  CW_DADOS.temas = Object.assign({}, CW_DADOS.temas, { [k]: cwTemasSalvos().filter((x, j) => j !== i) });
+  cwSalvar(); cwRender();
+}
+function cwPerfilTexto() {
+  const p = cwPerfil();
+  if (!CW.cliente) return 'Sem cliente definido: escreva para um negócio genérico de serviços.';
+  return [cwContextoCliente(CW.cliente), p.nicho && 'Nicho: ' + p.nicho, p.publico && 'Público-alvo: ' + p.publico, p.tom && 'Tom de voz: ' + p.tom, p.temas && 'Temas de conteúdo: ' + p.temas, p.notas && 'Notas estratégicas (obrigatório seguir): ' + p.notas].filter(Boolean).join('\n');
+}
+async function cwSugerirTemas() {
+  if (!iaPronta()) { iaAbrirChaves(cwRender); return; }
+  CW.carregando = 'temas'; CW.erro = ''; cwRender();
+  try {
+    const ja = CW.sugestoes.concat(cwTemasSalvos()).slice(0, 30);
+    const r = await iaGerarJson('Você é um estrategista de conteúdo para redes sociais no Brasil. Sugira temas específicos, variados e atraentes (nada genérico).',
+      `${cwPerfilTexto()}\nEmpresa que produz o conteúdo: ${atdEmpresa() || '—'}\nNão repita estes temas: ${JSON.stringify(ja)}\n\nDevolva {"temas": [8 temas curtos, cada um com até 90 caracteres]}. Misture formatos de ideia: bastidores, erro comum, dica prática, mito x verdade, prova/resultado, pergunta para engajar, história.`, { maxTokens: 800 });
+    const l = (Array.isArray(r.temas) ? r.temas : []).map((t) => String(t || '').trim().slice(0, 140)).filter(Boolean);
+    if (!l.length) throw new Error('A IA não sugeriu temas. Tente de novo.');
+    CW.sugestoes = l;
+  } catch (e) { CW.erro = e.message; }
+  CW.carregando = ''; cwRender();
+}
+
+// ---------- 3. Formato ----------
+function cwHtmlFormato() {
+  return `<div class="fin-painel">
+    <strong>O que você quer criar?</strong><div class="kb-vazio-mini" style="margin-bottom:12px;">Tema: ${escapeHtml(CW.tema)}</div>
+    <div class="cw-opcoes cw-opcoes-4">${Object.keys(CW_FORMATOS).map((k) => { const f = CW_FORMATOS[k]; return `<button type="button" class="cw-opcao${CW.formato === k ? ' ativo' : ''}" onclick="CW.formato='${k}'; if (CW_FORMATOS['${k}'].qtd) CW.det.qtd = CW_FORMATOS['${k}'].qtd[2]; cwRender()">${ic(f.icone)}<strong>${f.nome}</strong><span>${f.desc}</span></button>`; }).join('')}</div>
+    ${CW.formato === 'carrossel' ? `<div class="cw-rotulo" style="margin-top:14px;">Estilo do carrossel</div><div class="cw-opcoes">
+      <button type="button" class="cw-opcao${CW.estilo === 'normal' ? ' ativo' : ''}" onclick="CW.estilo='normal'; cwRender()">${ic('camadas')}<strong>Carrossel normal</strong><span>Capa magnética, slides de desenvolvimento e CTA</span></button>
+      <button type="button" class="cw-opcao${CW.estilo === 'profile' ? ' ativo' : ''}" onclick="CW.estilo='profile'; cwRender()">${ic('mensagem')}<strong>Estilo "tweet"</strong><span>Cada slide é um texto curto, voz pessoal, como uma thread</span></button>
+    </div>` : ''}
+    ${cwNavegacao(2, 'cwIr(4)')}
+  </div>`;
+}
+
+// ---------- 4. Detalhes ----------
+function cwHtmlDetalhes() {
+  const f = CW_FORMATOS[CW.formato], d = CW.det;
+  const chips = (lista, campo) => `<div class="atd-chips">${lista.map((x) => `<button type="button" class="${d[campo] === x ? 'ativo' : ''}" onclick="CW.det.${campo} = ${d[campo] === x && campo === 'tom' ? "''" : `'${x}'`}; cwRender()">${x}</button>`).join('')}</div>`;
+  return `<div class="fin-painel">
+    <strong>Detalhes</strong><div class="kb-vazio-mini" style="margin-bottom:10px;">${escapeHtml(f.nome)} · ${escapeHtml(CW.tema)}</div>
+    <div class="cw-rotulo">Objetivo</div>${chips(CW_OBJETIVOS, 'objetivo')}
+    <div class="cw-rotulo">Tom de voz ${cwPerfil().tom ? `<span class="kb-vazio-mini">(perfil: ${escapeHtml(cwPerfil().tom)})</span>` : ''}</div>${chips(CW_TONS, 'tom')}
+    ${f.qtd ? `<div class="field" style="max-width:220px;"><label>Quantidade de ${CW.formato === 'stories' ? 'telas' : 'slides'}</label><input type="number" min="${f.qtd[0]}" max="${f.qtd[1]}" value="${Number(d.qtd) || f.qtd[2]}" onchange="CW.det.qtd = Math.max(${f.qtd[0]}, Math.min(${f.qtd[1]}, Number(this.value) || ${f.qtd[2]}))"></div>` : ''}
+    <label class="cfg-linha-toggle"><div><strong>Incluir chamada para ação (CTA)</strong><span>Fecha com um convite claro: comentar, chamar no WhatsApp, comprar...</span></div><span class="switch"><input type="checkbox" ${d.cta ? 'checked' : ''} onchange="CW.det.cta = this.checked"><span class="switch-slider"></span></span></label>
+    ${CW.modoTema === 'proprio' ? `<label class="cfg-linha-toggle"><div><strong>Manter meu texto exato</strong><span>Não reescreve: só organiza o que você escreveu no formato escolhido.</span></div><span class="switch"><input type="checkbox" ${d.manter ? 'checked' : ''} onchange="CW.det.manter = this.checked"><span class="switch-slider"></span></span></label>` : ''}
+    <div class="field full"><label>Público específico (opcional)</label><input type="text" maxlength="200" placeholder="Ex.: empreendedores iniciantes" value="${escapeHtml(d.publico)}" oninput="CW.det.publico = this.value"></div>
+    <div class="field full"><label>Instruções extras (opcional)</label><textarea rows="2" maxlength="600" placeholder="Ex.: citar a promoção de novembro; não usar emojis" oninput="CW.det.obs = this.value">${escapeHtml(d.obs)}</textarea></div>
+    ${cwNavegacao(3, 'cwGerar()', `${ic('brilho', 'ic-herda')} Gerar copy`, !!CW.carregando)}
+  </div>`;
+}
+
+// ---------- 5. Gerar ----------
+function cwInstrucaoFormato() {
+  const d = CW.det, f = CW.formato;
+  const base = {
+    carrossel: `Carrossel de Instagram com exatamente ${d.qtd} slides. ${CW.estilo === 'profile' ? 'Estilo "tweet": cada slide é um texto curto em primeira pessoa (até 280 caracteres), sem título; preencha slides[].texto e deixe slides[].titulo vazio.' : 'Slide 1 = capa magnética (título curto e forte, até 8 palavras, com subtítulo); slides do meio desenvolvem uma ideia cada (título curto + texto de até 220 caracteres); último slide = fechamento.'} Preencha "slides", "legenda" e "hashtags".`,
+    post: 'Post único de Instagram. "titulo" = frase da arte (até 10 palavras), "subtitulo" = apoio curto da arte, mais "legenda" e "hashtags".',
+    reels: 'Roteiro de Reels/TikTok de 30 a 60 segundos. "gancho" = frase dos 3 primeiros segundos; "roteiro" = lista de cenas com {tempo, cena (o que aparece), fala (o que é dito)}; mais "legenda" e "hashtags".',
+    stories: `Sequência de ${d.qtd} stories. "slides" = lista com {titulo: texto grande da tela, texto: complemento curto, acao: sugestão de interação como enquete, caixa de pergunta, link ou figurinha}.`,
+    legenda: 'Só a legenda de um post de Instagram: "legenda" (com quebras de linha e parágrafos curtos) e "hashtags".',
+    linkedin: 'Post de LinkedIn em texto: "gancho" (primeira linha forte) e "legenda" (o post completo, parágrafos curtos, sem hashtags no meio), mais "hashtags" (3 a 5).',
+    anuncio: 'Anúncio para Meta Ads: "titulo" (até 40 caracteres), "legenda" = texto principal (até 300 caracteres), "subtitulo" = descrição (até 30 caracteres), "cta" = botão sugerido e "variacoes" = 3 variações alternativas do texto principal para teste A/B.',
+    email: 'E-mail marketing: "assunto" (até 60 caracteres), "preheader" (até 90), "corpo" (texto completo com saudação, parágrafos curtos e fechamento) e "cta" (texto do botão).',
+  }[f];
+  return base;
+}
+function cwPedido(extra) {
+  const d = CW.det;
+  return `${cwPerfilTexto()}
+Empresa que produz o conteúdo: ${atdEmpresa() || '—'}
+Tema: ${CW.tema}
+Formato: ${cwInstrucaoFormato()}
+Objetivo: ${d.objetivo}
+Tom de voz: ${d.tom || cwPerfil().tom || 'adequado ao público'}
+${d.publico ? 'Público específico desta peça: ' + d.publico + '\n' : ''}${d.cta ? 'Inclua uma chamada para ação clara no final (campo "cta" e no texto).' : 'Não inclua chamada para ação.'}
+${d.manter ? 'IMPORTANTE: mantenha o texto do tema exatamente como foi escrito; apenas divida e organize no formato, sem reescrever.' : ''}
+${d.obs ? 'Instruções extras: ' + d.obs : ''}
+${extra || ''}
+Devolva o JSON com estas chaves (deixe vazio o que não se aplica ao formato): {"titulo": "", "subtitulo": "", "gancho": "", "slides": [{"titulo": "", "texto": "", "acao": ""}], "roteiro": [{"tempo": "", "cena": "", "fala": ""}], "legenda": "", "hashtags": [], "cta": "", "assunto": "", "preheader": "", "corpo": "", "variacoes": []}`;
+}
+const CW_SISTEMA = 'Você é um copywriter brasileiro sênior especializado em redes sociais e marketing de resposta direta. Escreve em português do Brasil natural, com frases curtas, ritmo, especificidade e zero clichê de IA (evite "no mundo de hoje", "descubra", "desbloqueie", excesso de emojis). Respeite as notas estratégicas do cliente. Nunca invente números, depoimentos ou promessas que não foram informados.';
+async function cwGerar(ajuste) {
+  if (!iaPronta()) { iaAbrirChaves(cwRender); return; }
+  CW.carregando = 'gerar'; CW.erro = ''; CW.passo = 5; cwRender();
+  try {
+    const extra = ajuste && CW.resultado ? `Esta é a versão anterior: ${JSON.stringify(CW.resultado)}\nRefaça aplicando este ajuste pedido pela equipe: ${ajuste}` : '';
+    const r = await iaGerarJson(CW_SISTEMA, cwPedido(extra), { maxTokens: 3000 });
+    const res = cwNormalizar(r);
+    if (!cwTemConteudo(res)) throw new Error('A IA devolveu um texto vazio. Tente gerar de novo.');
+    CW.resultado = res;
+    const item = { id: genId('cwh'), cliente: CW.cliente, formato: CW.formato, estilo: CW.estilo, tema: CW.tema.slice(0, 200), objetivo: CW.det.objetivo, resultado: res, criadoEm: new Date().toISOString(), por: USUARIO_NOME || '' };
+    CW.verHist = item.id;
+    CW_DADOS.historico = [item].concat(CW_DADOS.historico || []).slice(0, 80);
+    cwSalvar();
+  } catch (e) { CW.erro = e.message; }
+  CW.carregando = ''; cwRender();
+}
+function cwNormalizar(r) {
+  const s = (v, n) => String(v === undefined || v === null ? '' : v).slice(0, n || 4000);
+  const lista = (v) => (Array.isArray(v) ? v : []);
+  return {
+    titulo: s(r.titulo, 300), subtitulo: s(r.subtitulo, 300), gancho: s(r.gancho, 400), legenda: s(r.legenda), cta: s(r.cta, 300), assunto: s(r.assunto, 200), preheader: s(r.preheader, 300), corpo: s(r.corpo, 8000),
+    slides: lista(r.slides).slice(0, 12).map((x) => ({ titulo: s(x && x.titulo, 300), texto: s(x && x.texto, 1200), acao: s(x && x.acao, 200) })).filter((x) => x.titulo || x.texto),
+    roteiro: lista(r.roteiro).slice(0, 20).map((x) => ({ tempo: s(x && x.tempo, 40), cena: s(x && x.cena, 600), fala: s(x && x.fala, 1200) })).filter((x) => x.cena || x.fala),
+    hashtags: lista(r.hashtags).slice(0, 30).map((h) => s(h, 60).replace(/\s+/g, '')).filter(Boolean).map((h) => (h.startsWith('#') ? h : '#' + h)),
+    variacoes: lista(r.variacoes).slice(0, 5).map((v) => s(typeof v === 'string' ? v : (v && (v.texto || v.legenda)) || '', 1200)).filter(Boolean),
+  };
+}
+function cwTemConteudo(r) { return !!(r && (r.legenda || r.corpo || r.slides.length || r.roteiro.length || r.titulo)); }
+// Texto corrido de um resultado (para copiar e para o Conteúdo)
+function cwComoTexto(r, parte) {
+  const l = [];
+  if (parte !== 'legenda') {
+    if (r.assunto) l.push('Assunto: ' + r.assunto);
+    if (r.preheader) l.push('Pré-cabeçalho: ' + r.preheader);
+    if (r.titulo) l.push(r.titulo);
+    if (r.subtitulo) l.push(r.subtitulo);
+    if (r.gancho) l.push('Gancho: ' + r.gancho);
+    r.slides.forEach((x, i) => l.push(`\n[${i + 1}] ${x.titulo}${x.titulo && x.texto ? '\n' : ''}${x.texto}${x.acao ? '\n(' + x.acao + ')' : ''}`));
+    r.roteiro.forEach((x) => l.push(`\n${x.tempo ? x.tempo + ' — ' : ''}${x.cena}${x.fala ? '\nFala: ' + x.fala : ''}`));
+    if (r.corpo) l.push('\n' + r.corpo);
+    if (r.cta && !r.legenda) l.push('\nCTA: ' + r.cta);
+    if (r.variacoes.length) l.push('\nVariações:\n' + r.variacoes.map((v, i) => `${i + 1}. ${v}`).join('\n'));
+    if (parte === 'roteiro') return l.join('\n').trim();
+  }
+  if (r.legenda) l.push((parte === 'legenda' ? '' : '\nLegenda:\n') + r.legenda);
+  if (r.hashtags.length) l.push('\n' + r.hashtags.join(' '));
+  return l.join('\n').trim();
+}
+function cwHtmlGerar() {
+  if (CW.carregando === 'gerar') return `<div class="fin-painel"><div class="atd-vazio">${ic('brilho')}<strong>Escrevendo...</strong><span>A IA está montando o texto. Costuma levar de 10 a 40 segundos.</span></div></div>`;
+  const r = CW.resultado;
+  if (!r) return `<div class="fin-painel"><div class="atd-vazio">${ic('brilho')}<strong>Pronto para gerar</strong><span>${escapeHtml(CW_FORMATOS[CW.formato].nome)} · ${escapeHtml(CW.tema)}</span><button type="button" class="btn btn-primary" onclick="cwGerar()">${ic('brilho', 'ic-herda')} Gerar copy</button></div></div>`;
+  const bloco = (rot, txt, cls) => (txt ? `<div class="cw-bloco ${cls || ''}"><div class="cw-rotulo">${rot}</div><div class="cw-texto">${escapeHtml(txt)}</div></div>` : '');
+  const f = CW_FORMATOS[CW.formato] || CW_FORMATOS.legenda;
+  return `<div class="fin-painel">
+    <div class="fin-painel-cab"><div><strong>${escapeHtml(f.nome)}</strong><div class="kb-vazio-mini">${escapeHtml(CW.tema)}${CW.cliente ? ' · ' + escapeHtml(CW.cliente) : ''}</div></div><span class="kb-espaco"></span>
+      <button type="button" class="btn btn-small" onclick="cwCopiar()">${ic('copiar', 'ic-herda')} Copiar tudo</button></div>
+    ${bloco('Assunto', r.assunto)}${bloco('Pré-cabeçalho', r.preheader)}${bloco(CW.formato === 'anuncio' ? 'Título' : 'Texto da arte', r.titulo)}${bloco(CW.formato === 'anuncio' ? 'Descrição' : 'Subtítulo', r.subtitulo)}${bloco('Gancho', r.gancho)}
+    ${r.slides.length ? `<div class="cw-slides">${r.slides.map((x, i) => `<div class="cw-slide"><span class="cw-slide-n">${i + 1}</span>${x.titulo ? `<strong>${escapeHtml(x.titulo)}</strong>` : ''}${x.texto ? `<p>${escapeHtml(x.texto)}</p>` : ''}${x.acao ? `<small>${escapeHtml(x.acao)}</small>` : ''}</div>`).join('')}</div>` : ''}
+    ${r.roteiro.length ? `<div class="cw-roteiro">${r.roteiro.map((x) => `<div class="cw-cena"><span>${escapeHtml(x.tempo || '')}</span><div><b>${escapeHtml(x.cena)}</b>${x.fala ? `<p>${escapeHtml(x.fala)}</p>` : ''}</div></div>`).join('')}</div>` : ''}
+    ${bloco('Corpo', r.corpo)}${bloco(CW.formato === 'anuncio' ? 'Texto principal' : 'Legenda', r.legenda)}
+    ${r.hashtags.length ? `<div class="cw-bloco"><div class="cw-rotulo">Hashtags</div><div class="cw-texto cw-hashtags">${escapeHtml(r.hashtags.join(' '))}</div></div>` : ''}
+    ${bloco('Chamada para ação', r.cta)}
+    ${r.variacoes.length ? `<div class="cw-bloco"><div class="cw-rotulo">Variações para teste A/B</div>${r.variacoes.map((v, i) => `<div class="cw-texto" style="margin-bottom:6px;"><b>${i + 1}.</b> ${escapeHtml(v)}</div>`).join('')}</div>` : ''}
+    <div class="cw-ajuste"><input type="text" id="cw-ajuste" maxlength="400" placeholder="Pedir um ajuste: ex. mais curto, mais provocador, trocar o CTA para WhatsApp" onkeydown="if (event.key === 'Enter') cwPedirAjuste()"><button type="button" class="btn btn-small" onclick="cwPedirAjuste()" ${CW.carregando ? 'disabled' : ''}>${ic('brilho', 'ic-herda')} Ajustar</button><button type="button" class="btn btn-small" onclick="cwGerar()" ${CW.carregando ? 'disabled' : ''}>${ic('repetir', 'ic-herda')} Gerar outra</button></div>
+    <div class="cw-enviar">
+      <div class="field"><label>Publicação (opcional)</label><input type="date" id="cw-pub"></div>
+      <button type="button" class="btn btn-primary" onclick="cwEnviarConteudo()">${ic('enviar', 'ic-herda')} Enviar para Conteúdos</button>
+    </div>
+    <p class="kb-vazio-mini" style="margin:8px 0 0;">Revise antes de publicar: a IA pode errar fatos. O texto vai para o quadro de Conteúdos, na coluna Copy, com o cliente e o tipo já preenchidos.</p>
+  </div>`;
+}
+function cwPedirAjuste() { const v = ((document.getElementById('cw-ajuste') || {}).value || '').trim(); if (!v) return; cwGerar(v); }
+function cwCopiar() {
+  if (!CW.resultado) return;
+  const t = cwComoTexto(CW.resultado);
+  try { navigator.clipboard.writeText(t).then(() => avisar('Texto copiado.', 'Copiar'), () => avisar(t, 'Copie o texto')); } catch (e) { avisar(t, 'Copie o texto'); }
+}
+function cwAbrirHistorico(id) {
+  const h = (CW_DADOS.historico || []).find((x) => x.id === id);
+  if (!h) return;
+  CW.cliente = h.cliente || ''; CW.formato = CW_FORMATOS[h.formato] ? h.formato : 'legenda'; CW.estilo = h.estilo || 'normal'; CW.tema = h.tema || ''; CW.det.objetivo = h.objetivo || CW.det.objetivo;
+  CW.resultado = cwNormalizar(h.resultado || {}); CW.verHist = id; CW.passo = 5; CW.erro = '';
+  cwRender();
+}
+function cwEnviarConteudo() {
+  const r = CW.resultado;
+  if (!r) return;
+  if (typeof cntCriar !== 'function') { avisar('O módulo de Conteúdos não está disponível nesta tela.'); return; }
+  if (typeof cntPronto === 'function' && !cntPronto()) { avisar('Os Conteúdos ainda estão carregando. Tente de novo em alguns segundos.'); return; }
+  const f = CW_FORMATOS[CW.formato] || CW_FORMATOS.legenda;
+  const pub = (document.getElementById('cw-pub') || {}).value || '';
+  const colunas = typeof cntColunas === 'function' ? cntColunas() : [];
+  const etapa = (colunas.find((c) => c.id === 'copy') || colunas[0] || {}).id;
+  const legenda = cwComoTexto(r, 'legenda');
+  const roteiro = cwComoTexto(Object.assign({}, r, { legenda: '', hashtags: [] }), 'roteiro');
+  const titulo = (r.titulo || r.assunto || r.gancho || CW.tema).slice(0, 140);
+  const c = cntCriar(Object.assign({ tipo: f.cnt, titulo, cliente: CW.cliente || '', legenda, roteiro, briefing: `Tema: ${CW.tema}\nObjetivo: ${CW.det.objetivo}\nGerado pelo Copywriter (IA) — revise antes de publicar.`, tags: ['copywriter-ia'], publicacao: pub }, etapa ? { etapa } : {}));
+  if (c) avisar(`"${titulo}" foi para o quadro de Conteúdos${etapa ? ', na coluna ' + ((colunas.find((x) => x.id === etapa) || {}).nome || etapa) : ''}.`, 'Enviado para Conteúdos');
+}
+
+// =====================================================================
+// ---------- Agente Analista ----------
+// =====================================================================
+// Os NÚMEROS são calculados aqui, com os dados do sistema (nada inventado).
+// A IA recebe esse resumo e devolve a leitura: o que vai bem, onde está o
+// gargalo e o que fazer. Diagnósticos com dados do Financeiro ficam numa
+// chave financeira (só quem vê o Financeiro lê); os demais, na chave comum.
+const AN_KEY = 'eagles_ia_analista_v1';
+const AN_KEY_FIN = 'eagles_fin_ia_analista_v1';
+let AN_HIST = [];
+let AN_HIST_FIN = [];
+let AN_INICIADO = false;
+let AN_HOST = null;
+let AN = { carregando: '', erro: '', verId: '', pergunta: '', resposta: '' };
+
+function anIniciar() {
+  if (AN_INICIADO) return;
+  AN_INICIADO = true;
+  iaIniciar(() => anRender());
+  try { if (typeof agIniciarDados === 'function') agIniciarDados(); } catch (e) { console.error(e); }
+  try { if (typeof kbIniciarDados === 'function') kbIniciarDados(); } catch (e) { console.error(e); }
+  try { if (typeof finEscutar === 'function') finEscutar(() => {}); } catch (e) { console.error(e); }
+  cloudWatch(AN_KEY, [], (d) => { AN_HIST = Array.isArray(d) ? d : []; anRender(); });
+  if (!FIREBASE_PRONTO || !TENANT_ID || nivelVeFinanceiro()) cloudWatch(AN_KEY_FIN, [], (d) => { AN_HIST_FIN = Array.isArray(d) ? d : []; anRender(); });
+}
+function anMontar(host) { AN_HOST = host; anIniciar(); anRender(); }
+function anHistorico() { return AN_HIST.concat(AN_HIST_FIN).sort((a, b) => String(b.criadoEm).localeCompare(String(a.criadoEm))); }
+function anVeFin() { return !FIREBASE_PRONTO || !TENANT_ID || nivelVeFinanceiro(); }
+function anDias(isoA, isoB) { return Math.round((new Date(isoB + 'T12:00:00') - new Date(isoA + 'T12:00:00')) / 86400000); }
+
+// ---------- números do negócio (últimos 90 dias) ----------
+function anColetar() {
+  const hoje = kbHoje(), ini = atdMaisDias(hoje, -90), ini30 = atdMaisDias(hoje, -30);
+  const d = { periodo: { de: ini, ate: hoje }, empresa: atdEmpresa() || '', modulos: [] };
+  const top = (mapa, n) => Object.entries(mapa).sort((a, b) => b[1] - a[1]).slice(0, n || 5).map(([nome, v]) => ({ nome, valor: Math.round(v * 100) / 100 }));
+  const data = (x) => String(x || '').slice(0, 10);
+  try {
+    const neg = typeof CRM_NEGOCIOS_DATA !== 'undefined' ? CRM_NEGOCIOS_DATA : [];
+    if (neg.length) {
+      d.modulos.push('funil');
+      const abertos = neg.filter((n) => !['fechado', 'perdido'].includes(n.etapa));
+      const porEtapa = {}; abertos.forEach((n) => { const e = (CRM_ETAPAS.find((x) => x.key === n.etapa) || {}).label || n.etapa || '—'; porEtapa[e] = (porEtapa[e] || 0) + 1; });
+      const fech = neg.filter((n) => n.etapa === 'fechado' && data(n.fechadoEm || n.atualizadoEm || n.criadoEm) >= ini);
+      const perd = neg.filter((n) => n.etapa === 'perdido' && data(n.atualizadoEm || n.criadoEm) >= ini);
+      const origem = {}; neg.filter((n) => data(n.criadoEm) >= ini).forEach((n) => { const o = n.origem || 'Não informada'; origem[o] = (origem[o] || 0) + 1; });
+      const parados = abertos.filter((n) => data(n.atualizadoEm || n.criadoEm) && anDias(data(n.atualizadoEm || n.criadoEm), hoje) > 14);
+      d.funil = {
+        negociosAbertos: abertos.length, valorEmAberto: abertos.reduce((a, n) => a + (Number(n.valor) || 0), 0), porEtapa,
+        novos90d: neg.filter((n) => data(n.criadoEm) >= ini).length, novos30d: neg.filter((n) => data(n.criadoEm) >= ini30).length,
+        fechados90d: fech.length, valorFechado90d: fech.reduce((a, n) => a + (Number(n.valor) || 0), 0), perdidos90d: perd.length,
+        taxaConversao90d: fech.length + perd.length ? Math.round(fech.length / (fech.length + perd.length) * 100) : null,
+        origensDosNovos: origem, paradosHaMaisDe14Dias: parados.length, exemplosParados: parados.slice(0, 5).map((n) => n.cliente || n.nome),
+      };
+    }
+  } catch (e) { console.error('Analista/funil', e); }
+  try {
+    if (anVeFin() && typeof FIN_LANC !== 'undefined' && FIN_LANC.length) {
+      d.modulos.push('financeiro');
+      const meses = [finSomarMeses(hoje.slice(0, 7), -2), finSomarMeses(hoje.slice(0, 7), -1), hoje.slice(0, 7)];
+      const comp = (l) => (typeof finCompetencia === 'function' ? finCompetencia(l) : String(l.competencia || l.vencimento || '').slice(0, 7));
+      const val = FIN_LANC.filter((l) => l.status !== 'cancelado');
+      const porMes = meses.map((m) => {
+        const r = val.filter((l) => l.tipo === 'receber' && comp(l) === m), p = val.filter((l) => l.tipo === 'pagar' && comp(l) === m);
+        const soma = (l) => l.reduce((a, x) => a + (Number(x.valor) || 0), 0);
+        return { mes: m, receita: soma(r), despesa: soma(p), resultado: soma(r) - soma(p), recebido: val.filter((l) => l.tipo === 'receber' && String(l.dataPagamento || '').slice(0, 7) === m).reduce((a, x) => a + (Number(x.valorPago) || 0), 0) };
+      });
+      const vencidas = val.filter((l) => l.tipo === 'receber' && (l.status === 'pendente' || l.status === 'parcial') && l.vencimento && l.vencimento < hoje);
+      const restante = (l) => Math.max(0, (Number(l.valor) || 0) - (Number(l.valorPago) || 0));
+      const devedores = {}; vencidas.forEach((l) => { devedores[l.cliente || 'Sem cliente'] = (devedores[l.cliente || 'Sem cliente'] || 0) + restante(l); });
+      const rec90 = val.filter((l) => l.tipo === 'receber' && comp(l) >= ini.slice(0, 7));
+      const porCliente = {}; rec90.forEach((l) => { porCliente[l.cliente || 'Sem cliente'] = (porCliente[l.cliente || 'Sem cliente'] || 0) + (Number(l.valor) || 0); });
+      const porCat = {}; val.filter((l) => l.tipo === 'pagar' && comp(l) >= ini.slice(0, 7)).forEach((l) => { const c = (typeof finCategoria === 'function' ? finCategoria('pagar', l.categoriaId).nome : '') || 'Sem categoria'; porCat[c] = (porCat[c] || 0) + (Number(l.valor) || 0); });
+      const receitaTotal = rec90.reduce((a, l) => a + (Number(l.valor) || 0), 0);
+      d.financeiro = {
+        ultimos3Meses: porMes, inadimplencia: { valor: vencidas.reduce((a, l) => a + restante(l), 0), contas: vencidas.length, maioresDevedores: top(devedores, 5) },
+        aReceberProximos30d: val.filter((l) => l.tipo === 'receber' && (l.status === 'pendente' || l.status === 'parcial') && l.vencimento >= hoje && l.vencimento <= atdMaisDias(hoje, 30)).reduce((a, l) => a + restante(l), 0),
+        aPagarProximos30d: val.filter((l) => l.tipo === 'pagar' && l.status !== 'pago' && l.vencimento >= hoje && l.vencimento <= atdMaisDias(hoje, 30)).reduce((a, l) => a + Math.max(0, (Number(l.valor) || 0) - (Number(l.valorPago) || 0)), 0),
+        receita90d: receitaTotal, clientesQueGeraramReceita90d: Object.keys(porCliente).length,
+        ticketMedioPorCliente90d: Object.keys(porCliente).length ? Math.round(receitaTotal / Object.keys(porCliente).length) : 0,
+        maioresClientes90d: top(porCliente, 5), concentracaoMaiorCliente: receitaTotal ? Math.round((top(porCliente, 1)[0] || { valor: 0 }).valor / receitaTotal * 100) : 0,
+        maioresDespesas90d: top(porCat, 5),
+      };
+    }
+  } catch (e) { console.error('Analista/financeiro', e); }
+  try {
+    if (typeof KB_TAREFAS !== 'undefined' && KB_TAREFAS.length) {
+      d.modulos.push('tarefas');
+      const ativas = KB_TAREFAS.filter((t) => !t.arquivada);
+      const feita = (t) => { try { return kbConcluida(t); } catch (e) { return false; } };
+      const abertas = ativas.filter((t) => !feita(t));
+      const atras = abertas.filter((t) => t.prazo && t.prazo < hoje);
+      const porResp = {};
+      abertas.forEach((t) => { const n = atdNomeUsuario(t.responsavel) || (t.responsavel ? 'Outro' : 'Sem responsável'); porResp[n] = porResp[n] || { abertas: 0, atrasadas: 0 }; porResp[n].abertas++; if (t.prazo && t.prazo < hoje) porResp[n].atrasadas++; });
+      d.tarefas = { abertas: abertas.length, atrasadas: atras.length, semPrazo: abertas.filter((t) => !t.prazo).length, semResponsavel: abertas.filter((t) => !t.responsavel).length,
+        concluidas30d: ativas.filter((t) => feita(t) && data(t.atualizadoEm) >= ini30).length, criadas30d: ativas.filter((t) => data(t.criadoEm) >= ini30).length, porResponsavel: porResp,
+        exemplosAtrasadas: atras.sort((a, b) => a.prazo.localeCompare(b.prazo)).slice(0, 5).map((t) => ({ titulo: String(t.titulo || '').slice(0, 80), prazo: t.prazo, cliente: t.cliente || '' })) };
+    }
+  } catch (e) { console.error('Analista/tarefas', e); }
+  try {
+    if (typeof CNT !== 'undefined' && CNT.length) {
+      d.modulos.push('conteudos');
+      const cols = typeof cntColunas === 'function' ? cntColunas() : [];
+      const porEtapa = {}; CNT.filter((c) => !cntFinalizado(c)).forEach((c) => { const n = (cols.find((x) => x.id === c.etapa) || {}).nome || c.etapa; porEtapa[n] = (porEtapa[n] || 0) + 1; });
+      const atras = CNT.filter((c) => cntAtrasoDias(c) > 0);
+      const porCli = {}; CNT.filter((c) => c.publicacao && c.publicacao >= ini30 && c.publicacao <= hoje).forEach((c) => { porCli[c.cliente || 'Sem cliente'] = (porCli[c.cliente || 'Sem cliente'] || 0) + 1; });
+      d.conteudos = { emProducao: CNT.filter((c) => !cntFinalizado(c)).length, porEtapa, atrasados: atras.length, publicados30d: CNT.filter((c) => cntFinalizado(c) && c.publicacao && c.publicacao >= ini30 && c.publicacao <= hoje).length,
+        programadosProximos14d: CNT.filter((c) => c.publicacao && c.publicacao > hoje && c.publicacao <= atdMaisDias(hoje, 14)).length, publicacoesPorCliente30d: porCli };
+    }
+  } catch (e) { console.error('Analista/conteudos', e); }
+  try {
+    const cli = typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : [];
+    if (cli.length) {
+      d.modulos.push('clientes');
+      const ultima = {};
+      if (typeof FIN_LANC !== 'undefined' && anVeFin()) FIN_LANC.filter((l) => l.tipo === 'receber' && l.status === 'pago' && l.dataPagamento).forEach((l) => { const x = data(l.dataPagamento); if (!ultima[l.cliente] || x > ultima[l.cliente]) ultima[l.cliente] = x; });
+      (typeof CRM_NEGOCIOS_DATA !== 'undefined' ? CRM_NEGOCIOS_DATA : []).filter((n) => n.etapa === 'fechado').forEach((n) => { const c = n.cliente || n.nome, x = data(n.fechadoEm || n.atualizadoEm || n.criadoEm); if (c && (!ultima[c] || x > ultima[c])) ultima[c] = x; });
+      const parados = cli.filter((c) => ultima[c.nome] && anDias(ultima[c.nome], hoje) > 60);
+      d.clientes = { total: cli.length, novos90d: cli.filter((c) => data(c.criadoEm) >= ini).length, semComprarHaMaisDe60d: parados.length, exemplosParados: parados.slice(0, 5).map((c) => c.nome), semTelefone: cli.filter((c) => !c.telefone).length };
+    }
+  } catch (e) { console.error('Analista/clientes', e); }
+  try {
+    if (typeof AG !== 'undefined' && AG.length && typeof agOcorrencias === 'function') {
+      d.modulos.push('agenda');
+      const conta = (de, ate) => AG.filter((c) => c.tipo !== 'bloqueio').reduce((a, c) => a + agOcorrencias(c, de, ate).length, 0);
+      d.agenda = { compromissos30dPassados: conta(ini30, hoje), compromissosProximos14d: conta(hoje, atdMaisDias(hoje, 14)) };
+    }
+  } catch (e) { console.error('Analista/agenda', e); }
+  return d;
+}
+function anKpis(d) {
+  const k = [];
+  if (d.financeiro) {
+    const m = d.financeiro.ultimos3Meses[2];
+    k.push({ r: 'Receita do mês', v: formatMoney(m.receita) }, { r: 'Resultado do mês', v: formatMoney(m.resultado), cor: m.resultado < 0 ? 'neg' : 'pos' }, { r: 'Inadimplência', v: formatMoney(d.financeiro.inadimplencia.valor), cor: d.financeiro.inadimplencia.valor > 0 ? 'neg' : '' });
+  }
+  if (d.funil) k.push({ r: 'Conversão (90 dias)', v: d.funil.taxaConversao90d === null ? '—' : d.funil.taxaConversao90d + '%' }, { r: 'Negócios parados', v: String(d.funil.paradosHaMaisDe14Dias), cor: d.funil.paradosHaMaisDe14Dias ? 'neg' : '' });
+  if (d.tarefas) k.push({ r: 'Tarefas atrasadas', v: String(d.tarefas.atrasadas), cor: d.tarefas.atrasadas ? 'neg' : 'pos' });
+  if (d.conteudos) k.push({ r: 'Conteúdos atrasados', v: String(d.conteudos.atrasados), cor: d.conteudos.atrasados ? 'neg' : 'pos' });
+  if (d.clientes) k.push({ r: 'Clientes parados (+60 dias)', v: String(d.clientes.semComprarHaMaisDe60d) });
+  return k.slice(0, 8);
+}
+const AN_SISTEMA = 'Você é um analista de negócios sênior que atende pequenas empresas e agências no Brasil. Recebe um resumo numérico dos últimos 90 dias e escreve um diagnóstico direto, específico e acionável, em português do Brasil simples (o dono do negócio não é da área de finanças). Use SOMENTE os números recebidos — nunca invente dados, valores ou nomes. Quando um módulo não vier nos dados, não comente sobre ele. Valores em reais. Seja honesto: se algo está ruim, diga.';
+async function anGerar() {
+  if (!iaPronta()) { iaAbrirChaves(anRender); return; }
+  const dados = anColetar();
+  if (!dados.modulos.length) { AN.erro = 'Ainda não há dados suficientes para analisar. Use o funil, as tarefas, os conteúdos ou o financeiro por um tempo e volte aqui.'; anRender(); return; }
+  AN.carregando = 'gerar'; AN.erro = ''; anRender();
+  try {
+    const r = await iaGerarJson(AN_SISTEMA, `Dados do negócio${dados.empresa ? ' (' + dados.empresa + ')' : ''}, de ${dados.periodo.de} a ${dados.periodo.ate}:\n${JSON.stringify(dados)}\n\nDevolva: {"nota": número de 0 a 100 para a saúde geral do negócio, "resumo": "3 a 4 frases com a leitura geral", "destaques": ["2 a 4 pontos positivos, cada um citando o número"], "gargalos": [{"area": "funil|financeiro|tarefas|conteudos|clientes|agenda", "titulo": "curto", "evidencia": "o número que mostra o problema", "impacto": "por que importa"}], "acoes": [{"titulo": "ação curta no imperativo", "como": "passo prático em 1 a 2 frases", "area": "...", "prioridade": "alta|media|baixa", "prazo_dias": número}], "alerta": "um risco urgente, ou vazio"}. Entre 3 e 6 ações, da mais importante para a menos.`, { maxTokens: 2500, temperatura: 0.4 });
+    const s = (v, n) => String(v === undefined || v === null ? '' : v).slice(0, n || 600);
+    const rel = {
+      nota: Math.max(0, Math.min(100, Math.round(Number(r.nota) || 0))), resumo: s(r.resumo, 1500), alerta: s(r.alerta, 400),
+      destaques: (Array.isArray(r.destaques) ? r.destaques : []).slice(0, 6).map((x) => s(x, 400)).filter(Boolean),
+      gargalos: (Array.isArray(r.gargalos) ? r.gargalos : []).slice(0, 8).map((g) => ({ area: s(g && g.area, 30), titulo: s(g && g.titulo, 160), evidencia: s(g && g.evidencia, 400), impacto: s(g && g.impacto, 400) })).filter((g) => g.titulo),
+      acoes: (Array.isArray(r.acoes) ? r.acoes : []).slice(0, 8).map((a) => ({ titulo: s(a && a.titulo, 160), como: s(a && a.como, 500), area: s(a && a.area, 30), prioridade: ['alta', 'media', 'baixa'].includes(a && a.prioridade) ? a.prioridade : 'media', prazo: Math.max(1, Math.min(60, Number(a && a.prazo_dias) || 7)) })).filter((a) => a.titulo),
+    };
+    if (!rel.resumo && !rel.acoes.length) throw new Error('A IA devolveu um diagnóstico vazio. Tente de novo.');
+    const item = { id: genId('an'), criadoEm: new Date().toISOString(), por: USUARIO_NOME || '', modulos: dados.modulos, kpis: anKpis(dados), relatorio: rel, temFinanceiro: !!dados.financeiro };
+    if (item.temFinanceiro) { AN_HIST_FIN = [item].concat(AN_HIST_FIN).slice(0, 24); cloudSet(AN_KEY_FIN, AN_HIST_FIN); }
+    else { AN_HIST = [item].concat(AN_HIST).slice(0, 24); cloudSet(AN_KEY, AN_HIST); }
+    AN.verId = item.id;
+  } catch (e) { AN.erro = e.message; }
+  AN.carregando = ''; anRender();
+}
+async function anPerguntar() {
+  const q = ((document.getElementById('an-pergunta') || {}).value || '').trim();
+  if (!q) return;
+  if (!iaPronta()) { iaAbrirChaves(anRender); return; }
+  AN.pergunta = q; AN.carregando = 'pergunta'; AN.erro = ''; AN.resposta = ''; anRender();
+  try {
+    const r = await iaGerarJson(AN_SISTEMA, `Dados do negócio de ${atdMaisDias(kbHoje(), -90)} a ${kbHoje()}:\n${JSON.stringify(anColetar())}\n\nPergunta do dono do negócio: ${q}\n\nDevolva {"resposta": "resposta direta, de 2 a 6 frases, citando os números quando houver; se os dados não permitem responder, diga o que falta"}.`, { maxTokens: 900, temperatura: 0.4 });
+    AN.resposta = String(r.resposta || '').slice(0, 3000) || 'A IA não respondeu. Tente reformular.';
+  } catch (e) { AN.erro = e.message; }
+  AN.carregando = ''; anRender();
+}
+function anCriarTarefa(itemId, i) {
+  const it = anHistorico().find((x) => x.id === itemId);
+  const a = it && it.relatorio.acoes[i];
+  if (!a || typeof kbCriarTarefa !== 'function') return;
+  const t = kbCriarTarefa({ titulo: a.titulo.slice(0, 140), descricao: `${a.como}\n\nSugerido pelo Analista (IA) em ${formatDatePt(it.criadoEm.slice(0, 10))}.`, prioridade: a.prioridade === 'alta' ? 'alta' : a.prioridade === 'baixa' ? 'baixa' : 'media', prazo: atdMaisDias(kbHoje(), a.prazo), etiquetas: ['analista-ia'] });
+  if (t) avisar(`Tarefa "${a.titulo}" criada no Kanban, com prazo em ${formatDatePt(t.prazo)}.`, 'Tarefa criada');
+}
+function anExcluir(id) {
+  confirmarAcao('Excluir este diagnóstico do histórico?', () => {
+    if (AN_HIST.some((x) => x.id === id)) { AN_HIST = AN_HIST.filter((x) => x.id !== id); cloudSet(AN_KEY, AN_HIST); }
+    else { AN_HIST_FIN = AN_HIST_FIN.filter((x) => x.id !== id); cloudSet(AN_KEY_FIN, AN_HIST_FIN); }
+    if (AN.verId === id) AN.verId = '';
+    anRender();
+  }, 'Excluir diagnóstico');
+}
+function anRender() {
+  const host = AN_HOST;
+  if (!host || !host.isConnected) return;
+  const hist = anHistorico();
+  const it = hist.find((x) => x.id === AN.verId) || hist[0];
+  const diasUltimo = hist[0] ? anDias(hist[0].criadoEm.slice(0, 10), kbHoje()) : null;
+  const AREA = { funil: 'Funil', financeiro: 'Financeiro', tarefas: 'Tarefas', conteudos: 'Conteúdos', clientes: 'Clientes', agenda: 'Agenda' };
+  const PRIO = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
+  const rel = it && it.relatorio;
+  const corNota = rel ? (rel.nota >= 70 ? 'pos' : rel.nota >= 45 ? 'med' : 'neg') : '';
+  host.innerHTML = `
+    <div class="an">
+      <div class="fin-cab"><div><h1 style="display:flex; align-items:center; gap:8px;">${ic('grafico')} Analista <span class="badge badge-neutral" style="font-size:10.5px;">Beta</span></h1><p>Diagnóstico do seu negócio com os dados do sistema dos últimos 90 dias.</p></div><span class="kb-espaco"></span>${iaHtmlStatus('anRender')}</div>
+      ${iaPronta() ? '' : `<div class="atd-banner">${ic('cadeado', 'ic-herda')}<div><strong>Conecte uma IA para começar.</strong> O Analista usa a mesma chave do Copywriter. <button type="button" class="btn btn-small btn-primary" style="margin-left:6px;" onclick="iaAbrirChaves(anRender)">Conectar IA</button></div></div>`}
+      ${diasUltimo !== null && diasUltimo >= 15 ? `<div class="atd-banner">${ic('relogio', 'ic-herda')}<div>O último diagnóstico tem ${diasUltimo} dias. O ideal é refazer a cada 15 dias para acompanhar a evolução.</div></div>` : ''}
+      ${!anVeFin() ? `<p class="kb-vazio-mini" style="margin:0 0 10px;">Seu nível de acesso não vê o Financeiro: o diagnóstico usa funil, tarefas, conteúdos, clientes e agenda.</p>` : ''}
+      ${AN.erro ? `<div class="cw-erro">${ic('alerta', 'ic-herda')} ${escapeHtml(AN.erro)}</div>` : ''}
+      <div class="an-layout">
+        <section>
+          ${AN.carregando === 'gerar' ? `<div class="fin-painel"><div class="atd-vazio">${ic('grafico')}<strong>Analisando...</strong><span>Lendo funil, tarefas, conteúdos, clientes${anVeFin() ? ' e financeiro' : ''}. Costuma levar de 15 a 60 segundos.</span></div></div>`
+          : !rel ? `<div class="fin-painel"><div class="atd-vazio">${ic('grafico')}<strong>Nenhum diagnóstico ainda</strong><span>O Analista lê os dados do sistema, aponta gargalos e sugere ações priorizadas — que viram tarefas no Kanban com um clique.</span><button type="button" class="btn btn-primary" onclick="anGerar()" ${AN.carregando ? 'disabled' : ''}>${ic('brilho', 'ic-herda')} Fazer diagnóstico</button></div></div>`
+          : `<div class="fin-painel">
+              <div class="an-topo"><div class="an-nota ${corNota}"><b>${rel.nota}</b><span>de 100</span></div><div class="an-resumo"><div class="kb-vazio-mini">${escapeHtml(formatDatePt(it.criadoEm.slice(0, 10)))}${it.por ? ' · por ' + escapeHtml(it.por) : ''} · ${it.modulos.map((m) => AREA[m] || m).join(', ')}</div><p>${escapeHtml(rel.resumo)}</p></div></div>
+              ${it.kpis.length ? `<div class="an-kpis">${it.kpis.map((k) => `<div class="an-kpi ${k.cor || ''}"><span>${escapeHtml(k.r)}</span><b>${escapeHtml(k.v)}</b></div>`).join('')}</div>` : ''}
+              ${rel.alerta ? `<div class="cw-erro" style="margin-top:12px;">${ic('alerta', 'ic-herda')} ${escapeHtml(rel.alerta)}</div>` : ''}
+            </div>
+            ${rel.destaques.length ? `<div class="fin-painel"><strong>${ic('aprovado', 'ic-herda')} O que vai bem</strong><ul class="an-lista">${rel.destaques.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul></div>` : ''}
+            ${rel.gargalos.length ? `<div class="fin-painel"><strong>${ic('alerta', 'ic-herda')} Gargalos</strong>${rel.gargalos.map((g) => `<div class="an-garg"><span class="an-area">${escapeHtml(AREA[g.area] || g.area || '')}</span><b>${escapeHtml(g.titulo)}</b>${g.evidencia ? `<p>${escapeHtml(g.evidencia)}</p>` : ''}${g.impacto ? `<p class="kb-vazio-mini">${escapeHtml(g.impacto)}</p>` : ''}</div>`).join('')}</div>` : ''}
+            ${rel.acoes.length ? `<div class="fin-painel"><strong>${ic('tarefas', 'ic-herda')} Ações priorizadas</strong>${rel.acoes.map((a, i) => `<div class="an-acao"><span class="an-n">${i + 1}</span><div><b>${escapeHtml(a.titulo)}</b><p>${escapeHtml(a.como)}</p><span class="kb-vazio-mini">${escapeHtml(AREA[a.area] || a.area || '')}${a.area ? ' · ' : ''}prioridade ${PRIO[a.prioridade]} · prazo sugerido ${a.prazo} ${a.prazo === 1 ? 'dia' : 'dias'}</span></div><button type="button" class="btn btn-small" onclick="anCriarTarefa('${escapeParaOnclick(it.id)}', ${i})">${ic('mais', 'ic-herda')} Criar tarefa</button></div>`).join('')}</div>` : ''}
+            <div class="cw-nav" style="margin:0 0 12px;"><span class="kb-vazio-mini">A IA lê os números do sistema; confira antes de decidir.</span><button type="button" class="btn btn-primary" onclick="anGerar()" ${AN.carregando ? 'disabled' : ''}>${ic('repetir', 'ic-herda')} Novo diagnóstico</button></div>`}
+          <div class="fin-painel">
+            <strong>${ic('conversa', 'ic-herda')} Pergunte ao Analista</strong>
+            <div class="cw-ajuste"><input type="text" id="an-pergunta" maxlength="400" placeholder="Ex.: qual cliente me dá mais retorno? por que o resultado caiu este mês?" value="${escapeHtml(AN.pergunta)}" onkeydown="if (event.key === 'Enter') anPerguntar()"><button type="button" class="btn btn-small btn-primary" onclick="anPerguntar()" ${AN.carregando ? 'disabled' : ''}>${AN.carregando === 'pergunta' ? 'Pensando...' : 'Perguntar'}</button></div>
+            ${AN.resposta ? `<div class="cw-texto" style="margin-top:10px;">${escapeHtml(AN.resposta)}</div>` : ''}
+          </div>
+        </section>
+        <aside class="fin-painel">
+          <div class="cw-rotulo">${ic('relogio', 'ic-herda')} Diagnósticos anteriores</div>
+          ${hist.length ? `<div class="cw-mini-lista">${hist.map((h) => `<div class="cw-mini"><button type="button" class="${it && h.id === it.id ? 'ativo' : ''}" onclick="AN.verId='${escapeParaOnclick(h.id)}'; anRender()"><b>${h.relatorio.nota}/100</b> · ${escapeHtml(formatDatePt(h.criadoEm.slice(0, 10)))}<small>${escapeHtml(h.por || '')}</small></button><button type="button" class="cw-x" aria-label="Excluir" onclick="anExcluir('${escapeParaOnclick(h.id)}')">${ic('x', 'ic-herda')}</button></div>`).join('')}</div>` : '<p class="kb-vazio-mini" style="margin:0;">Nenhum ainda.</p>'}
+        </aside>
+      </div>
+    </div>`;
+}
+
+// =====================================================================
+// ---------- Agente Designer ----------
+// =====================================================================
+// Carrossel, post e story desenhados num <canvas> (o mesmo desenho serve
+// para a prévia e para o arquivo baixado, então o que se vê é o que sai).
+// O texto vem do Copywriter, da IA ou é digitado. Imagens: enviadas do
+// computador, por link ou geradas pela IA (OpenAI ou Gemini). Como o envio
+// de arquivos para a nuvem ainda não existe (plano Blaze), as imagens ficam
+// guardadas NESTE aparelho (IndexedDB); o projeto (textos, cores, estilo)
+// fica na nuvem e abre em qualquer lugar.
+const DS_KEY = 'eagles_ia_design_v1';
+let DS_DADOS = { projetos: [], marcas: {} };
+let DS_INICIADO = false;
+let DS_HOST = null;
+let DS = { tela: 'galeria', passo: 1, proj: null, slide: 0, busca: '', filtroCli: '', carregando: '', erro: '', sujo: false, gerar: { tema: '', objetivo: 'Engajamento', tom: 'Amigável', qtd: 6, cta: true, publico: '' } };
+const DS_IMG = {}; // cache das imagens já carregadas: chave -> HTMLImageElement
+const DS_FORMATOS = { carrossel: { nome: 'Carrossel', desc: '3 a 10 slides em sequência', icone: 'camadas', prop: '4:5' }, post: { nome: 'Post único', desc: '1 imagem com texto', icone: 'imagem', prop: '4:5' }, story: { nome: 'Stories', desc: '2 a 5 telas (9:16)', icone: 'celular', prop: '9:16' } };
+const DS_PROP = { '4:5': [1080, 1350], '1:1': [1080, 1080], '9:16': [1080, 1920] };
+const DS_ESTILOS = {
+  editorial: { nome: 'Editorial', cores: { fundo: '#0e0f0d', texto: '#ffffff', destaque: '#a3e635' } },
+  minimalista: { nome: 'Minimalista', cores: { fundo: '#f4f1ea', texto: '#1c1c1a', destaque: '#c2410c' } },
+  profile: { nome: 'Profile', cores: { fundo: '#ffffff', texto: '#0f1419', destaque: '#1d9bf0' } },
+  impacto: { nome: 'Impacto', cores: { fundo: '#5b21b6', texto: '#ffffff', destaque: '#facc15' } },
+};
+const DS_FONTES = ['Inter', 'Montserrat', 'Playfair Display', 'Bebas Neue', 'Poppins'];
+
+function dsIniciar() {
+  if (DS_INICIADO) return;
+  DS_INICIADO = true;
+  iaIniciar(() => dsRender());
+  try { if (typeof cntIniciarDados === 'function') cntIniciarDados(); } catch (e) { console.error(e); }
+  try { if (typeof cwIniciar === 'function') cwIniciar(); } catch (e) { console.error(e); }
+  cloudWatch(DS_KEY, { projetos: [], marcas: {} }, (d) => {
+    const v = d && typeof d === 'object' ? d : {};
+    DS_DADOS = { projetos: Array.isArray(v.projetos) ? v.projetos : [], marcas: v.marcas && typeof v.marcas === 'object' ? v.marcas : {} };
+    if (DS.tela === 'galeria') dsRender();
+  });
+  dsCarregarFontes();
+}
+function dsMontar(host) { DS_HOST = host; dsIniciar(); dsRender(); }
+function dsSalvarDados() { return cloudSet(DS_KEY, DS_DADOS) !== false; }
+function dsCarregarFontes() {
+  if (document.getElementById('ds-fontes')) return;
+  const l = document.createElement('link');
+  l.id = 'ds-fontes'; l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&family=Playfair+Display:wght@600;800&family=Bebas+Neue&family=Poppins:wght@500;700;800&display=swap';
+  l.onload = () => setTimeout(() => dsRedesenhar(), 300);
+  document.head.appendChild(l);
+}
+
+// ---------- imagens neste aparelho (IndexedDB) ----------
+let DS_IDB = null;
+function dsIdb() {
+  if (DS_IDB) return DS_IDB;
+  DS_IDB = new Promise((ok, erro) => {
+    try {
+      const r = indexedDB.open('eagles_designer', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('imagens');
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => erro(r.error);
+    } catch (e) { erro(e); }
+  });
+  return DS_IDB;
+}
+async function dsGuardarImagem(dataUrl) {
+  const chave = 'img_' + (TENANT_ID || 'local') + '_' + genId('i');
+  try { const db = await dsIdb(); await new Promise((ok, erro) => { const t = db.transaction('imagens', 'readwrite'); t.objectStore('imagens').put(dataUrl, chave); t.oncomplete = ok; t.onerror = () => erro(t.error); }); } catch (e) { console.error('Designer: não guardou a imagem no aparelho', e); }
+  return chave;
+}
+async function dsLerImagem(chave) {
+  try { const db = await dsIdb(); return await new Promise((ok) => { const r = db.transaction('imagens').objectStore('imagens').get(chave); r.onsuccess = () => ok(r.result || ''); r.onerror = () => ok(''); }); } catch (e) { return ''; }
+}
+// devolve a imagem pronta para desenhar (ou null enquanto carrega)
+function dsImagem(ref) {
+  if (!ref) return null;
+  const k = ref.url || ref.chave;
+  if (!k) return null;
+  const c = DS_IMG[k];
+  if (c && c !== 'carregando' && c !== 'erro') return c;
+  if (c) return null;
+  DS_IMG[k] = 'carregando';
+  const carregar = (src, cruzado) => { const img = new Image(); if (cruzado) img.crossOrigin = 'anonymous'; img.onload = () => { DS_IMG[k] = img; dsRedesenhar(); }; img.onerror = () => { DS_IMG[k] = 'erro'; dsRedesenhar(); }; img.src = src; };
+  if (ref.url) carregar(ref.url, true);
+  else dsLerImagem(ref.chave).then((src) => { if (src) carregar(src, false); else { DS_IMG[k] = 'erro'; dsRedesenhar(); } });
+  return null;
+}
+function dsImagemFalhou(ref) { const k = ref && (ref.url || ref.chave); return !!k && DS_IMG[k] === 'erro'; }
+
+// ---------- projeto ----------
+function dsNovoProjeto(formato, origem) {
+  const est = 'editorial';
+  const marca = (DS_DADOS.marcas || {})[''] || {};
+  const p = {
+    id: genId('ds'), nome: '', cliente: '', formato, proporcao: DS_FORMATOS[formato].prop, estilo: est,
+    cores: Object.assign({}, DS_ESTILOS[est].cores), fonte: 'Inter', handle: marca.handle || '@seuperfil', marca: marca.marca || atdEmpresa() || 'Sua marca',
+    padrao: 'nenhum', slides: [], legenda: '', origem: origem || '', criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString(),
+  };
+  return p;
+}
+function dsSlideVazio(titulo, texto) { return { titulo: titulo || '', texto: texto || '', alinhar: 'esquerda', escala: 1, fundo: null, escurecer: 45 }; }
+function dsAplicarMarcaCliente(p) {
+  const m = (DS_DADOS.marcas || {})[p.cliente];
+  if (!m) return;
+  if (m.cores) p.cores = Object.assign({}, m.cores);
+  if (m.fonte) p.fonte = m.fonte;
+  if (m.estilo && DS_ESTILOS[m.estilo]) p.estilo = m.estilo;
+  if (m.handle) p.handle = m.handle;
+  if (m.marca) p.marca = m.marca;
+}
+
+// ---------- desenho ----------
+function dsTamanho(p) { return DS_PROP[p.proporcao] || DS_PROP['4:5']; }
+function dsQuebrar(ctx, texto, largura) {
+  const linhas = [];
+  String(texto || '').split('\n').forEach((par) => {
+    const palavras = par.split(/\s+/).filter(Boolean);
+    if (!palavras.length) { linhas.push(''); return; }
+    let atual = '';
+    palavras.forEach((w) => {
+      const teste = atual ? atual + ' ' + w : w;
+      if (ctx.measureText(teste).width <= largura || !atual) atual = teste;
+      else { linhas.push(atual); atual = w; }
+    });
+    if (atual) linhas.push(atual);
+  });
+  return linhas;
+}
+// encaixa o texto na caixa diminuindo a fonte se precisar; devolve as linhas e a altura
+function dsEncaixar(ctx, texto, fonteFn, tam, largura, alturaMax, entrelinha) {
+  let t = tam, linhas = [];
+  for (let i = 0; i < 30; i++) {
+    ctx.font = fonteFn(t);
+    linhas = dsQuebrar(ctx, texto, largura);
+    if (linhas.length * t * entrelinha <= alturaMax || t <= 18) break;
+    t = Math.floor(t * 0.92);
+  }
+  return { linhas, tam: t, altura: linhas.length * t * entrelinha };
+}
+function dsEscreverLinhas(ctx, linhas, x, y, tam, entrelinha, alinhar, largura) {
+  ctx.textAlign = alinhar === 'centro' ? 'center' : 'left';
+  const xx = alinhar === 'centro' ? x + largura / 2 : x;
+  linhas.forEach((l, i) => ctx.fillText(l, xx, y + i * tam * entrelinha));
+}
+function dsCorClara(hex) { const h = String(hex || '').replace('#', ''); if (h.length < 6) return false; const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 150; }
+function dsFonte(p, peso, tam) { const f = p.fonte || 'Inter'; const pesoReal = f === 'Bebas Neue' ? 400 : peso; return `${pesoReal} ${tam}px "${f}", Inter, system-ui, sans-serif`; }
+function dsDesenhar(canvas, p, i, escalaTela) {
+  const [W, H] = dsTamanho(p);
+  const esc = escalaTela || 1;
+  canvas.width = Math.round(W * esc); canvas.height = Math.round(H * esc);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(esc, 0, 0, esc, 0, 0);
+  const s = p.slides[i] || dsSlideVazio();
+  const total = p.slides.length;
+  const c = p.cores || DS_ESTILOS.editorial.cores;
+  const est = p.estilo;
+  const M = 84; // margem
+  // fundo
+  ctx.fillStyle = c.fundo; ctx.fillRect(0, 0, W, H);
+  const img = s.fundo ? dsImagem(s.fundo) : null;
+  if (img) {
+    const r = Math.max(W / img.width, H / img.height), w = img.width * r, h = img.height * r;
+    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+    const a = Math.max(0, Math.min(90, Number(s.escurecer) || 0)) / 100;
+    if (a) { const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, `rgba(0,0,0,${a * 0.55})`); g.addColorStop(0.45, `rgba(0,0,0,${a * 0.65})`); g.addColorStop(1, `rgba(0,0,0,${Math.min(0.95, a * 1.25)})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+  }
+  const fundoClaro = !img && dsCorClara(c.fundo);
+  const corTexto = img ? '#ffffff' : c.texto;
+  // padrão
+  if (!img && p.padrao && p.padrao !== 'nenhum') {
+    ctx.save(); ctx.strokeStyle = ctx.fillStyle = fundoClaro ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.06)'; ctx.lineWidth = 2;
+    if (p.padrao === 'grade') { for (let x = 0; x <= W; x += 90) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); } for (let y = 0; y <= H; y += 90) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+    if (p.padrao === 'pontos') for (let x = 45; x < W; x += 60) for (let y = 45; y < H; y += 60) { ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); }
+    if (p.padrao === 'linhas') for (let y = 0; y <= H; y += 48) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    ctx.restore();
+  }
+  ctx.textBaseline = 'top';
+  const alinhar = s.alinhar === 'centro' ? 'centro' : 'esquerda';
+  const largura = W - M * 2;
+  const escala = Math.max(0.6, Math.min(1.6, Number(s.escala) || 1));
+  const capa = i === 0 && p.formato !== 'post';
+  const ultimo = i === total - 1;
+  // cabeçalho e rodapé (marca, @, página, "arrasta")
+  const rodape = (cor) => {
+    ctx.font = dsFonte(p, 600, 28); ctx.fillStyle = cor; ctx.textAlign = 'left';
+    if (est !== 'profile') { ctx.fillText(p.handle || '', M, 64); ctx.textAlign = 'right'; ctx.fillText(p.marca || '', W - M, 64); }
+    ctx.textAlign = 'left'; ctx.font = dsFonte(p, 600, 26);
+    if (total > 1) ctx.fillText(`${i + 1}/${total}`, M, H - 64 - 26);
+    if (p.formato === 'carrossel' && !ultimo && total > 1) { ctx.textAlign = 'right'; ctx.fillText('Arrasta →', W - M, H - 64 - 26); }
+    ctx.textAlign = 'left';
+  };
+  const corSuave = img ? 'rgba(255,255,255,.85)' : (fundoClaro ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.7)');
+  if (est === 'profile') {
+    // cartão estilo post de rede social
+    const iniciais = String(p.marca || 'M').trim().split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase();
+    const topo = H * 0.18;
+    ctx.fillStyle = c.destaque; ctx.beginPath(); ctx.arc(M + 48, topo + 48, 48, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = dsCorClara(c.destaque) ? '#111' : '#fff'; ctx.font = dsFonte(p, 700, 36); ctx.textAlign = 'center'; ctx.fillText(iniciais, M + 48, topo + 30);
+    ctx.textAlign = 'left'; ctx.fillStyle = corTexto; ctx.font = dsFonte(p, 700, 38); ctx.fillText(p.marca || '', M + 120, topo + 18);
+    ctx.fillStyle = corSuave; ctx.font = dsFonte(p, 500, 32); ctx.fillText(p.handle || '', M + 120, topo + 62);
+    const corpo = [s.titulo, s.texto].filter(Boolean).join('\n\n');
+    const r = dsEncaixar(ctx, corpo, (t) => dsFonte(p, 500, t), Math.round(54 * escala), largura, H * 0.55, 1.35);
+    ctx.fillStyle = corTexto; dsEscreverLinhas(ctx, r.linhas, M, topo + 150, r.tam, 1.35, alinhar, largura);
+    rodape(corSuave);
+    return;
+  }
+  if (est === 'impacto') {
+    const tt = dsEncaixar(ctx, s.titulo, (t) => dsFonte(p, 800, t), Math.round((capa ? 118 : 92) * escala), largura, H * 0.5, 1.05);
+    ctx.font = dsFonte(p, 500, Math.round(40 * escala));
+    const tx = s.texto ? dsEncaixar(ctx, s.texto, (t) => dsFonte(p, 500, t), Math.round(40 * escala), largura, H * 0.3, 1.35) : { linhas: [], altura: 0, tam: 40 };
+    const alturaTotal = tt.altura + (tx.altura ? 40 + tx.altura : 0);
+    let y = (H - alturaTotal) / 2;
+    ctx.fillStyle = img ? '#fff' : c.texto; ctx.font = dsFonte(p, 800, tt.tam); dsEscreverLinhas(ctx, tt.linhas, M, y, tt.tam, 1.05, 'centro', largura);
+    y += tt.altura + 40;
+    ctx.fillStyle = img ? '#fff' : c.destaque; ctx.font = dsFonte(p, 500, tx.tam); dsEscreverLinhas(ctx, tx.linhas, M, y, tx.tam, 1.35, 'centro', largura);
+    rodape(corSuave);
+    return;
+  }
+  // editorial e minimalista
+  const tamTitulo = Math.round((capa || p.formato === 'post' ? 104 : 76) * escala);
+  const tamTexto = Math.round((capa ? 40 : 42) * escala);
+  const tt = dsEncaixar(ctx, s.titulo, (t) => dsFonte(p, est === 'minimalista' ? 700 : 800, t), tamTitulo, largura, H * (s.texto ? 0.42 : 0.6), 1.08);
+  const tx = s.texto ? dsEncaixar(ctx, s.texto, (t) => dsFonte(p, 500, t), tamTexto, largura, H * 0.38, 1.4) : { linhas: [], altura: 0, tam: tamTexto };
+  const gap = tt.altura && tx.altura ? 36 : 0;
+  const bloco = tt.altura + gap + tx.altura;
+  let y = est === 'minimalista' ? Math.max(170, (H - bloco) / 2) : Math.max(170, H - 150 - bloco);
+  if (est === 'minimalista' && tt.altura) { ctx.fillStyle = c.destaque; ctx.fillRect(alinhar === 'centro' ? W / 2 - 50 : M, y - 44, 100, 10); }
+  ctx.fillStyle = corTexto; ctx.font = dsFonte(p, est === 'minimalista' ? 700 : 800, tt.tam); dsEscreverLinhas(ctx, tt.linhas, M, y, tt.tam, 1.08, alinhar, largura);
+  y += tt.altura + gap;
+  ctx.fillStyle = est === 'editorial' && capa ? c.destaque : (img ? 'rgba(255,255,255,.92)' : (est === 'editorial' ? (fundoClaro ? 'rgba(0,0,0,.75)' : 'rgba(255,255,255,.82)') : corTexto));
+  ctx.font = dsFonte(p, 500, tx.tam); dsEscreverLinhas(ctx, tx.linhas, M, y, tx.tam, 1.4, alinhar, largura);
+  rodape(corSuave);
+}
+let DS_TIMER_DESENHO = null;
+function dsRedesenhar() {
+  clearTimeout(DS_TIMER_DESENHO);
+  DS_TIMER_DESENHO = setTimeout(() => {
+    document.querySelectorAll('canvas[data-ds]').forEach((cv) => {
+      const [tipo, id, i] = cv.dataset.ds.split('|');
+      let p = tipo === 'edit' ? DS.proj : tipo === 'estilo' ? null : DS_DADOS.projetos.find((x) => x.id === id);
+      if (tipo === 'estilo' && DS.previaEstilo && DS_ESTILOS[id]) { const b = DS.previaEstilo; p = Object.assign({}, b, { estilo: id, cores: b.estilo === id ? b.cores : DS_ESTILOS[id].cores, slides: b.slides.slice(0, 1) }); }
+      if (!p || !p.slides.length) return;
+      const largura = cv.clientWidth || cv.parentElement.clientWidth || 300;
+      dsDesenhar(cv, p, Number(i) || 0, Math.min(1, (largura * (window.devicePixelRatio || 1)) / dsTamanho(p)[0]));
+    });
+  }, 30);
+}
+
+// ---------- telas ----------
+function dsRender() {
+  const host = DS_HOST;
+  if (!host || !host.isConnected) return;
+  const f = document.activeElement;
+  const foco = f && host.contains(f) && f.id ? f.id : '';
+  const pos = foco && typeof f.selectionStart === 'number' ? f.selectionStart : null;
+  host.innerHTML = `<div class="ds">${DS.tela === 'editor' ? dsHtmlEditor() : DS.tela === 'criar' ? dsHtmlCriar() : dsHtmlGaleria()}</div>`;
+  if (foco) { const el = document.getElementById(foco); if (el) { el.focus(); if (pos !== null) try { el.setSelectionRange(pos, pos); } catch (e) {} } }
+  dsRedesenhar();
+}
+function dsHtmlGaleria() {
+  const q = DS.busca.trim().toLowerCase();
+  const lista = DS_DADOS.projetos.filter((p) => (!DS.filtroCli || p.cliente === DS.filtroCli) && (!q || String(p.nome || '').toLowerCase().includes(q))).sort((a, b) => String(b.atualizadoEm).localeCompare(String(a.atualizadoEm)));
+  const clientes = Array.from(new Set(DS_DADOS.projetos.map((p) => p.cliente).filter(Boolean))).sort();
+  return `
+    <div class="fin-cab"><div><h1 style="display:flex; align-items:center; gap:8px;">${ic('paleta')} Designer <span class="badge badge-neutral" style="font-size:10.5px;">Beta</span></h1><p>Carrosséis, posts e stories prontos para baixar — com o texto da IA ou o seu.</p></div><span class="kb-espaco"></span>${iaHtmlStatus('dsRender')}</div>
+    ${DS.erro ? `<div class="cw-erro">${ic('alerta', 'ic-herda')} ${escapeHtml(DS.erro)}</div>` : ''}
+    <div class="cw-opcoes" style="grid-template-columns:repeat(2, minmax(0, 1fr)); margin-bottom:18px;">
+      <button type="button" class="cw-opcao" onclick="dsComecar()">${ic('brilho')}<strong>Criar uma peça</strong><span>Carrossel, post ou story. Você escolhe o texto, o formato e o estilo nos próximos passos.</span></button>
+      <button type="button" class="cw-opcao" onclick="dsAbrirEmBranco()">${ic('lapis')}<strong>Abrir o editor em branco</strong><span>Vai direto para o editor e monta do zero, sem perguntas.</span></button>
+    </div>
+    <div class="fin-painel-cab" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;"><div class="cw-rotulo" style="margin:0;">Peças criadas</div><span class="kb-espaco"></span>
+      <input type="search" class="ds-busca" id="ds-busca" placeholder="Buscar por título..." value="${escapeHtml(DS.busca)}" oninput="DS.busca = this.value; dsRender()">
+      <select class="srv-select" onchange="DS.filtroCli = this.value; dsRender()"><option value="">Cliente: todos</option>${clientes.map((c) => `<option value="${escapeHtml(c)}" ${DS.filtroCli === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select></div>
+    ${lista.length ? `<div class="ds-galeria">${lista.map((p) => `<button type="button" class="ds-card" onclick="dsAbrirProjeto('${escapeParaOnclick(p.id)}')">
+        <div class="ds-thumb" style="aspect-ratio:${p.proporcao.replace(':', ' / ')};">${p.slides.length ? `<canvas data-ds="galeria|${escapeHtml(p.id)}|0"></canvas>` : ''}<span class="ds-qtd">${p.slides.length}</span></div>
+        <strong>${escapeHtml(p.nome || 'Sem título')}</strong><span>${escapeHtml(p.cliente || 'Sem cliente')} · ${escapeHtml(DS_FORMATOS[p.formato] ? DS_FORMATOS[p.formato].nome : p.formato)} · ${escapeHtml(typeof dshQuando === 'function' ? dshQuando(p.atualizadoEm) : '')}</span>
+      </button>`).join('')}</div>`
+    : `<div class="fin-painel"><div class="atd-vazio">${ic('brilho')}<strong>Nenhuma peça ainda</strong><span>Crie a primeira com a IA ou do zero, usando os cartões acima.</span></div></div>`}`;
+}
+function dsComecar() { DS.proj = dsNovoProjeto('carrossel', 'ia'); DS.tela = 'criar'; DS.passo = 1; DS.erro = ''; dsRender(); }
+function dsAbrirEmBranco() { const p = dsNovoProjeto('carrossel', 'branco'); p.slides = [dsSlideVazio('Título em destaque', 'Subtítulo ou texto de apoio')]; DS.proj = p; DS.slide = 0; DS.tela = 'editor'; DS.sujo = true; dsRender(); }
+function dsAbrirProjeto(id) { const p = DS_DADOS.projetos.find((x) => x.id === id); if (!p) return; DS.proj = JSON.parse(JSON.stringify(p)); DS.slide = 0; DS.tela = 'editor'; DS.sujo = false; DS.erro = ''; dsRender(); }
+function dsVoltarGaleria() {
+  const sair = () => { DS.tela = 'galeria'; DS.proj = null; DS.erro = ''; dsRender(); };
+  if (DS.sujo && DS.tela === 'editor') confirmarAcao('Sair sem salvar as mudanças?', sair, 'Sair do editor'); else sair();
+}
+
+// ---------- criar: formato → texto → estilo ----------
+function dsHtmlCriar() {
+  const p = DS.proj;
+  const passos = ['Formato', 'Texto', 'Estilo'];
+  let corpo = '';
+  if (DS.passo === 1) {
+    corpo = `<strong>O que você quer criar?</strong>
+      <div class="cw-opcoes" style="margin-top:10px;">${Object.keys(DS_FORMATOS).map((k) => `<button type="button" class="cw-opcao${p.formato === k ? ' ativo' : ''}" onclick="DS.proj.formato='${k}'; DS.proj.proporcao=DS_FORMATOS['${k}'].prop; dsRender()">${ic(DS_FORMATOS[k].icone)}<strong>${DS_FORMATOS[k].nome}</strong><span>${DS_FORMATOS[k].desc}</span></button>`).join('')}</div>
+      <div class="cw-rotulo" style="margin-top:14px;">Cliente (opcional)</div>
+      <select class="srv-select" style="max-width:360px;" onchange="DS.proj.cliente = this.value; dsAplicarMarcaCliente(DS.proj); dsRender()"><option value="">Sem cliente</option>${cwClientes().map((n) => `<option value="${escapeHtml(n)}" ${p.cliente === n ? 'selected' : ''}>${escapeHtml(n)}${(DS_DADOS.marcas || {})[n] ? ' · identidade salva' : ''}</option>`).join('')}</select>
+      <div class="cw-nav"><button type="button" class="btn" onclick="dsVoltarGaleria()">← Voltar</button><button type="button" class="btn btn-primary" onclick="DS.passo=2; dsRender()">Continuar</button></div>`;
+  } else if (DS.passo === 2) {
+    const g = DS.gerar;
+    const hist = (CW_DADOS.historico || []).filter((h) => (!p.cliente || h.cliente === p.cliente) && h.resultado && ((h.resultado.slides || []).length || h.resultado.titulo || h.resultado.legenda)).slice(0, 12);
+    if (DS.modoTexto === 'ia') {
+      corpo = `<strong>Gerar o texto com IA</strong>
+        <div class="field full" style="margin-top:10px;"><label>Sobre o que é o conteúdo? *</label><textarea id="ds-g-tema" rows="3" maxlength="400" placeholder="Ex.: 5 erros que travam quem está começando a investir" oninput="DS.gerar.tema = this.value">${escapeHtml(g.tema)}</textarea></div>
+        <div class="cw-rotulo">Objetivo</div><div class="atd-chips">${CW_OBJETIVOS.map((x) => `<button type="button" class="${g.objetivo === x ? 'ativo' : ''}" onclick="DS.gerar.objetivo='${x}'; dsRender()">${x}</button>`).join('')}</div>
+        <div class="cw-rotulo">Tom de voz</div><div class="atd-chips">${CW_TONS.map((x) => `<button type="button" class="${g.tom === x ? 'ativo' : ''}" onclick="DS.gerar.tom='${x}'; dsRender()">${x}</button>`).join('')}</div>
+        ${p.formato !== 'post' ? `<div class="field" style="max-width:220px;"><label>Quantidade de ${p.formato === 'story' ? 'telas' : 'slides'}</label><input type="number" min="2" max="10" value="${g.qtd}" onchange="DS.gerar.qtd = Math.max(2, Math.min(10, Number(this.value) || 6))"></div>` : ''}
+        <label class="cfg-linha-toggle"><div><strong>Incluir CTA no último slide</strong><span>Fecha com uma chamada para ação.</span></div><span class="switch"><input type="checkbox" ${g.cta ? 'checked' : ''} onchange="DS.gerar.cta = this.checked"><span class="switch-slider"></span></span></label>
+        <div class="field full"><label>Público-alvo (opcional)</label><input type="text" id="ds-g-pub" maxlength="200" value="${escapeHtml(g.publico)}" oninput="DS.gerar.publico = this.value" placeholder="Ex.: empreendedores iniciantes"></div>
+        <div class="cw-nav"><button type="button" class="btn" onclick="DS.modoTexto=''; dsRender()">← Voltar</button><button type="button" class="btn btn-primary" onclick="dsGerarTexto()" ${DS.carregando ? 'disabled' : ''}>${ic('brilho', 'ic-herda')} ${DS.carregando === 'texto' ? 'Escrevendo...' : 'Gerar copy'}</button></div>`;
+    } else if (DS.modoTexto === 'importar') {
+      corpo = `<strong>Importar do Copywriter</strong><div class="kb-vazio-mini" style="margin-bottom:10px;">${p.cliente ? 'Textos gerados para ' + escapeHtml(p.cliente) : 'Últimos textos gerados'}</div>
+        ${hist.length ? `<div class="cw-temas">${hist.map((h) => `<div class="cw-tema"><button type="button" class="cw-tema-txt" onclick="dsImportarCopy('${escapeParaOnclick(h.id)}')"><span class="cw-radio"></span><span><b>${escapeHtml((CW_FORMATOS[h.formato] || {}).nome || h.formato)}</b> · ${escapeHtml(h.tema || '')}<br><small class="kb-vazio-mini">${escapeHtml(formatDatePt(String(h.criadoEm).slice(0, 10)))}${h.cliente ? ' · ' + escapeHtml(h.cliente) : ''}</small></span></button></div>`).join('')}</div>` : '<p class="kb-vazio">Nenhum texto do Copywriter ainda.</p>'}
+        <div class="cw-nav"><button type="button" class="btn" onclick="DS.modoTexto=''; dsRender()">← Voltar</button><span></span></div>`;
+    } else if (DS.modoTexto === 'digitar') {
+      corpo = `<strong>Digitar o texto</strong><div class="kb-vazio-mini" style="margin-bottom:10px;">Uma linha em branco separa os slides. A primeira linha de cada bloco vira o título.</div>
+        <div class="field full"><textarea id="ds-digitar" rows="10" maxlength="6000" placeholder="5 erros que travam seu treino&#10;E como corrigir hoje&#10;&#10;1. Pular o aquecimento&#10;Aquecer evita lesão e melhora a força.">${escapeHtml(DS.digitado || '')}</textarea></div>
+        <div class="cw-nav"><button type="button" class="btn" onclick="DS.modoTexto=''; dsRender()">← Voltar</button><button type="button" class="btn btn-primary" onclick="dsUsarDigitado()">Continuar</button></div>`;
+    } else {
+      corpo = `<strong>De onde vem o texto?</strong><div class="kb-vazio-mini" style="margin-bottom:10px;">Dá para trazer uma copy pronta, gerar com IA ou escrever agora.</div>
+        <div class="cw-opcoes" style="grid-template-columns:repeat(2, minmax(0, 1fr));">
+          <button type="button" class="cw-opcao" onclick="DS.modoTexto='importar'; dsRender()">${ic('documento')}<strong>Importar uma copy</strong><span>Do Copywriter. ${hist.length} ${hist.length === 1 ? 'texto disponível' : 'textos disponíveis'}.</span></button>
+          <button type="button" class="cw-opcao" onclick="DS.modoTexto='ia'; dsRender()">${ic('brilho')}<strong>Gerar com IA</strong><span>Diz o tema e o objetivo, e a IA escreve o texto de cada página.</span></button>
+          <button type="button" class="cw-opcao" onclick="DS.modoTexto='digitar'; dsRender()">${ic('lapis')}<strong>Digitar o texto</strong><span>Escreve o título e o corpo você mesmo.</span></button>
+          <button type="button" class="cw-opcao" onclick="dsSemTexto()">${ic('camadas')}<strong>Sem texto por enquanto</strong><span>Vai para o estilo e o texto entra depois.</span></button>
+        </div>
+        <div class="cw-nav"><button type="button" class="btn" onclick="DS.passo=1; dsRender()">← Voltar</button><span></span></div>`;
+    }
+  } else {
+    const prev = p.slides.length ? p : Object.assign({}, p, { slides: [dsSlideVazio('Título em destaque', 'Subtítulo de apoio')] });
+    DS.previaEstilo = prev;
+    corpo = `<strong>Formato e estilo</strong>
+      <div class="cw-rotulo" style="margin-top:10px;">Proporção</div>
+      <div class="atd-chips">${Object.keys(DS_PROP).map((k) => `<button type="button" class="${p.proporcao === k ? 'ativo' : ''}" onclick="DS.proj.proporcao='${k}'; dsRender()">${k} (${DS_PROP[k].join('×')})</button>`).join('')}</div>
+      <div class="cw-rotulo">Estilo visual</div>
+      <div class="ds-estilos">${Object.keys(DS_ESTILOS).map((k) => `<button type="button" class="ds-estilo${p.estilo === k ? ' ativo' : ''}" onclick="dsTrocarEstilo('${k}')"><div class="ds-thumb" style="aspect-ratio:${p.proporcao.replace(':', ' / ')};"><canvas data-ds="estilo|${k}|0"></canvas></div><span>${DS_ESTILOS[k].nome}</span></button>`).join('')}</div>
+      <div class="cw-nav"><button type="button" class="btn" onclick="DS.passo=2; dsRender()">← Voltar</button><button type="button" class="btn btn-primary" onclick="dsAbrirEditor()">Abrir editor →</button></div>`;
+  }
+  return `<div class="ds-criar">
+    <div class="cw-passos">${passos.map((n, i) => `<button type="button" class="${DS.passo === i + 1 ? 'ativo' : ''}${DS.passo > i + 1 ? ' feito' : ''}" onclick="if (${i + 1} < DS.passo) { DS.passo=${i + 1}; dsRender(); }"><span>${i + 1}</span>${n}</button>`).join('')}</div>
+    ${DS.erro ? `<div class="cw-erro">${ic('alerta', 'ic-herda')} ${escapeHtml(DS.erro)}</div>` : ''}
+    <div class="fin-painel">${corpo}</div></div>`;
+}
+function dsTrocarEstilo(k) { const p = DS.proj; p.estilo = k; const m = (DS_DADOS.marcas || {})[p.cliente]; p.cores = Object.assign({}, m && m.estilo === k && m.cores ? m.cores : DS_ESTILOS[k].cores); dsRender(); }
+function dsSemTexto() { const p = DS.proj; const n = p.formato === 'post' ? 1 : p.formato === 'story' ? 3 : 5; p.slides = Array.from({ length: n }, (x, i) => dsSlideVazio(i === 0 ? 'Título em destaque' : 'Título do slide', i === 0 ? 'Subtítulo de apoio' : 'Texto do slide')); DS.passo = 3; dsRender(); }
+function dsUsarDigitado() {
+  const t = ((document.getElementById('ds-digitar') || {}).value || '').trim();
+  DS.digitado = t;
+  if (!t) { DS.erro = 'Digite o texto ou volte e escolha "Sem texto por enquanto".'; dsRender(); return; }
+  const blocos = t.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean).slice(0, 10);
+  DS.proj.slides = blocos.map((b) => { const l = b.split('\n'); return dsSlideVazio(l[0], l.slice(1).join('\n')); });
+  if (DS.proj.formato === 'post') DS.proj.slides = DS.proj.slides.slice(0, 1);
+  DS.erro = ''; DS.passo = 3; dsRender();
+}
+function dsImportarCopy(id) {
+  const h = (CW_DADOS.historico || []).find((x) => x.id === id);
+  if (!h) return;
+  const r = cwNormalizar(h.resultado || {});
+  let slides = r.slides.map((s) => dsSlideVazio(s.titulo, s.texto));
+  if (!slides.length) slides = [dsSlideVazio(r.titulo || r.gancho || h.tema, r.subtitulo || '')];
+  const p = DS.proj;
+  if (p.formato === 'post') slides = slides.slice(0, 1);
+  p.slides = slides.slice(0, 10);
+  p.legenda = [r.legenda, r.hashtags.join(' ')].filter(Boolean).join('\n\n');
+  p.nome = (h.tema || r.titulo || '').slice(0, 80);
+  if (!p.cliente && h.cliente) { p.cliente = h.cliente; dsAplicarMarcaCliente(p); }
+  DS.erro = ''; DS.passo = 3; dsRender();
+}
+async function dsGerarTexto() {
+  const g = DS.gerar, p = DS.proj;
+  if (!String(g.tema || '').trim()) { DS.erro = 'Diga sobre o que é o conteúdo.'; dsRender(); return; }
+  if (!iaPronta()) { iaAbrirChaves(dsRender); return; }
+  DS.carregando = 'texto'; DS.erro = ''; dsRender();
+  try {
+    const qtd = p.formato === 'post' ? 1 : g.qtd;
+    const perfil = p.cliente ? (CW_DADOS.perfis || {})[p.cliente] || {} : {};
+    const r = await iaGerarJson(CW_SISTEMA, `${p.cliente ? cwContextoCliente(p.cliente) + '\n' + ['nicho', 'publico', 'tom', 'notas'].filter((k) => perfil[k]).map((k) => k + ': ' + perfil[k]).join('\n') : 'Sem cliente definido.'}
+Tema: ${g.tema}
+Formato: ${p.formato === 'post' ? 'post único: 1 slide com título curto (até 10 palavras) e um subtítulo de apoio' : p.formato === 'story' ? `${qtd} telas de stories, cada uma com título curto e texto de até 120 caracteres` : `carrossel com exatamente ${qtd} slides: slide 1 é a capa (título de até 8 palavras + subtítulo curto), os do meio desenvolvem uma ideia cada (título de até 7 palavras + texto de até 200 caracteres)`}.
+Os textos vão DENTRO da arte: curtos, fortes, fáceis de ler no celular.
+Objetivo: ${g.objetivo}. Tom de voz: ${g.tom}.${g.publico ? ' Público: ' + g.publico + '.' : ''}
+${g.cta ? 'O último slide fecha com uma chamada para ação.' : 'Sem chamada para ação.'}
+Devolva {"titulo_projeto": "", "slides": [{"titulo": "", "texto": ""}], "legenda": "", "hashtags": []}`, { maxTokens: 2200 });
+    const n = cwNormalizar(r);
+    if (!n.slides.length) throw new Error('A IA não devolveu os slides. Tente de novo.');
+    p.slides = n.slides.slice(0, p.formato === 'post' ? 1 : 10).map((s) => dsSlideVazio(s.titulo, s.texto));
+    p.legenda = [n.legenda, n.hashtags.join(' ')].filter(Boolean).join('\n\n');
+    p.nome = String(r.titulo_projeto || g.tema).slice(0, 80);
+    DS.passo = 3;
+  } catch (e) { DS.erro = e.message; }
+  DS.carregando = ''; dsRender();
+}
+function dsAbrirEditor() { if (!DS.proj.slides.length) DS.proj.slides = [dsSlideVazio('Título em destaque', '')]; DS.slide = 0; DS.tela = 'editor'; DS.sujo = true; dsRender(); }
+
+// ---------- editor ----------
+function dsHtmlEditor() {
+  const p = DS.proj, s = p.slides[DS.slide] || p.slides[0];
+  const i = DS.slide;
+  const img = s && s.fundo;
+  const iaImg = iaPodeImagem();
+  return `
+    <div class="ds-barra">
+      <button type="button" class="btn btn-small" onclick="dsVoltarGaleria()">← Sair</button>
+      <input type="text" class="ds-nome" id="ds-nome" maxlength="80" placeholder="Nome da peça" value="${escapeHtml(p.nome)}" oninput="DS.proj.nome = this.value; DS.sujo = true">
+      <span class="kb-espaco"></span>
+      ${DS_DADOS.projetos.some((x) => x.id === p.id) ? `<button type="button" class="btn btn-small btn-ghost" title="Excluir peça" aria-label="Excluir peça" onclick="dsExcluirProjeto('${escapeParaOnclick(p.id)}')">${ic('lixeira', 'ic-herda')}</button>` : ''}
+      <button type="button" class="btn btn-small" onclick="dsSalvarProjeto()">${ic('aprovado', 'ic-herda')} Salvar${DS.sujo ? ' •' : ''}</button>
+      <button type="button" class="btn btn-small" onclick="dsEnviarConteudo()">${ic('enviar', 'ic-herda')} Conteúdos</button>
+      <button type="button" class="btn btn-small btn-primary" onclick="dsExportar('png')">${ic('baixar', 'ic-herda')} ${p.slides.length > 1 ? 'Baixar PNGs' : 'Baixar PNG'}</button>
+      ${p.slides.length > 1 ? `<button type="button" class="btn btn-small" onclick="dsExportar('pdf')">PDF</button>` : ''}
+    </div>
+    ${DS.erro ? `<div class="cw-erro">${ic('alerta', 'ic-herda')} ${escapeHtml(DS.erro)}</div>` : ''}
+    <div class="ds-editor">
+      <div class="ds-centro">
+        <div class="ds-palco" style="aspect-ratio:${p.proporcao.replace(':', ' / ')};"><canvas data-ds="edit||${i}"></canvas>${DS.carregando === 'imagem' ? '<div class="ds-carregando">Gerando imagem...</div>' : ''}</div>
+        <div class="ds-tira">${p.slides.map((x, j) => `<button type="button" class="ds-mini${j === i ? ' ativo' : ''}" onclick="DS.slide=${j}; dsRender()" style="aspect-ratio:${p.proporcao.replace(':', ' / ')};" aria-label="Slide ${j + 1}"><canvas data-ds="edit||${j}"></canvas><span>${j + 1}</span></button>`).join('')}
+          ${p.formato === 'post' && p.slides.length >= 1 ? '' : `<button type="button" class="ds-mini ds-mais" onclick="dsAddSlide()" style="aspect-ratio:${p.proporcao.replace(':', ' / ')};" aria-label="Adicionar slide">${ic('mais')}</button>`}</div>
+      </div>
+      <aside class="ds-lado">
+        <div class="fin-painel">
+          <div class="cw-rotulo">Slide ${i + 1} de ${p.slides.length}<span class="kb-espaco"></span>
+            <button type="button" class="cw-x" title="Mover para a esquerda" onclick="dsMoverSlide(-1)" ${i === 0 ? 'disabled' : ''}>‹</button><button type="button" class="cw-x" title="Mover para a direita" onclick="dsMoverSlide(1)" ${i === p.slides.length - 1 ? 'disabled' : ''}>›</button>
+            <button type="button" class="cw-x" title="Duplicar slide" onclick="dsDuplicarSlide()">${ic('copiar', 'ic-herda')}</button><button type="button" class="cw-x" title="Excluir slide" onclick="dsExcluirSlide()" ${p.slides.length <= 1 ? 'disabled' : ''}>${ic('lixeira', 'ic-herda')}</button></div>
+          <div class="field full"><label>${p.estilo === 'profile' ? 'Primeira linha' : 'Título'}</label><textarea id="ds-titulo" rows="2" maxlength="300" oninput="dsCampo('titulo', this.value)">${escapeHtml(s.titulo)}</textarea></div>
+          <div class="field full"><label>Texto</label><textarea id="ds-texto" rows="4" maxlength="1200" oninput="dsCampo('texto', this.value)">${escapeHtml(s.texto)}</textarea></div>
+          <div class="ds-linha"><span>Alinhar</span><div class="atd-chips" style="margin:0;"><button type="button" class="${s.alinhar !== 'centro' ? 'ativo' : ''}" onclick="dsCampo('alinhar','esquerda', true)">Esquerda</button><button type="button" class="${s.alinhar === 'centro' ? 'ativo' : ''}" onclick="dsCampo('alinhar','centro', true)">Centro</button></div></div>
+          <div class="ds-linha"><span>Tamanho do texto</span><input type="range" min="0.6" max="1.6" step="0.05" value="${Number(s.escala) || 1}" oninput="dsCampo('escala', Number(this.value))"></div>
+        </div>
+        <div class="fin-painel">
+          <div class="cw-rotulo">Fundo do slide</div>
+          ${img ? `<div class="ds-linha"><span>${img.url ? 'Imagem por link' : 'Imagem neste aparelho'}${dsImagemFalhou(img) ? ' · <b style="color:var(--danger);">não carregou</b>' : ''}</span><button type="button" class="btn btn-small btn-ghost" onclick="dsTirarImagem()">Remover</button></div>
+            <div class="ds-linha"><span>Escurecer</span><input type="range" min="0" max="90" step="5" value="${Number(s.escurecer) || 0}" oninput="dsCampo('escurecer', Number(this.value))"></div>` : ''}
+          <div class="ds-botoes">
+            <label class="btn btn-small">${ic('subir', 'ic-herda')} Enviar imagem<input type="file" accept="image/*" hidden onchange="dsEnviarImagem(this)"></label>
+            <button type="button" class="btn btn-small" onclick="dsImagemLink()">${ic('link', 'ic-herda')} Por link</button>
+            <button type="button" class="btn btn-small" onclick="dsAbrirImagemIa()" ${iaImg ? '' : 'disabled title="Precisa de uma chave da OpenAI ou do Gemini"'}>${ic('brilho', 'ic-herda')} Gerar com IA</button>
+          </div>
+          ${iaImg ? '' : '<p class="kb-vazio-mini" style="margin:6px 0 0;">Gerar imagem precisa de uma chave da OpenAI ou do Google Gemini (o Claude não gera imagens).</p>'}
+          ${img ? `<button type="button" class="btn btn-small btn-ghost" style="margin-top:6px;" onclick="dsImagemEmTodos()">Usar esta imagem em todos os slides</button>` : ''}
+        </div>
+        <div class="fin-painel">
+          <div class="cw-rotulo">Estilo e marca</div>
+          <div class="atd-chips">${Object.keys(DS_ESTILOS).map((k) => `<button type="button" class="${p.estilo === k ? 'ativo' : ''}" onclick="dsTrocarEstilo('${k}'); DS.sujo = true">${DS_ESTILOS[k].nome}</button>`).join('')}</div>
+          <div class="ds-cores">${[['fundo', 'Fundo'], ['texto', 'Texto'], ['destaque', 'Destaque']].map(([k, n]) => `<label><input type="color" value="${escapeHtml(p.cores[k])}" oninput="DS.proj.cores.${k} = this.value; DS.sujo = true; dsRedesenhar()"><span>${n}</span></label>`).join('')}</div>
+          <div class="ds-linha"><span>Fonte</span><select class="srv-select" onchange="DS.proj.fonte = this.value; DS.sujo = true; dsRender()">${DS_FONTES.map((f) => `<option ${p.fonte === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
+          <div class="ds-linha"><span>Padrão de fundo</span><select class="srv-select" onchange="DS.proj.padrao = this.value; DS.sujo = true; dsRedesenhar()">${[['nenhum', 'Nenhum'], ['grade', 'Grade'], ['pontos', 'Bolinhas'], ['linhas', 'Linhas']].map(([k, n]) => `<option value="${k}" ${p.padrao === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+          <div class="cw-grade2" style="margin-top:6px;"><div class="field"><label>@ do perfil</label><input type="text" id="ds-handle" maxlength="40" value="${escapeHtml(p.handle)}" oninput="DS.proj.handle = this.value; DS.sujo = true; dsRedesenhar()"></div><div class="field"><label>Marca</label><input type="text" id="ds-marca" maxlength="40" value="${escapeHtml(p.marca)}" oninput="DS.proj.marca = this.value; DS.sujo = true; dsRedesenhar()"></div></div>
+          <div class="ds-linha"><span>Cliente</span><select class="srv-select" onchange="DS.proj.cliente = this.value; DS.sujo = true; dsRender()"><option value="">Sem cliente</option>${cwClientes().map((n) => `<option value="${escapeHtml(n)}" ${p.cliente === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></div>
+          ${p.cliente ? `<p class="kb-vazio-mini" style="margin:4px 0 0;">Ao salvar, cores, fonte, estilo, @ e marca ficam guardados como a identidade de ${escapeHtml(p.cliente)} para as próximas peças.</p>` : ''}
+        </div>
+        <div class="fin-painel">
+          <div class="cw-rotulo">Legenda do post</div>
+          <textarea id="ds-legenda" rows="4" maxlength="4000" style="width:100%;" oninput="DS.proj.legenda = this.value; DS.sujo = true">${escapeHtml(p.legenda)}</textarea>
+        </div>
+      </aside>
+    </div>`;
+}
+function dsCampo(k, v, redesenharTudo) {
+  const s = DS.proj.slides[DS.slide]; if (!s) return;
+  s[k] = v; DS.sujo = true;
+  if (redesenharTudo) dsRender(); else dsRedesenhar();
+}
+function dsAddSlide() { const p = DS.proj; if (p.slides.length >= 10) { avisar('O máximo é 10 slides.'); return; } p.slides.splice(DS.slide + 1, 0, dsSlideVazio('Título do slide', 'Texto do slide')); DS.slide++; DS.sujo = true; dsRender(); }
+function dsDuplicarSlide() { const p = DS.proj; if (p.slides.length >= 10) { avisar('O máximo é 10 slides.'); return; } p.slides.splice(DS.slide + 1, 0, JSON.parse(JSON.stringify(p.slides[DS.slide]))); DS.slide++; DS.sujo = true; dsRender(); }
+function dsExcluirSlide() { const p = DS.proj; if (p.slides.length <= 1) return; p.slides.splice(DS.slide, 1); DS.slide = Math.min(DS.slide, p.slides.length - 1); DS.sujo = true; dsRender(); }
+function dsMoverSlide(d) { const p = DS.proj, j = DS.slide + d; if (j < 0 || j >= p.slides.length) return; const t = p.slides[j]; p.slides[j] = p.slides[DS.slide]; p.slides[DS.slide] = t; DS.slide = j; DS.sujo = true; dsRender(); }
+function dsTirarImagem() { const s = DS.proj.slides[DS.slide]; s.fundo = null; DS.sujo = true; dsRender(); }
+function dsImagemEmTodos() { const s = DS.proj.slides[DS.slide]; DS.proj.slides.forEach((x) => { x.fundo = s.fundo ? Object.assign({}, s.fundo) : null; x.escurecer = s.escurecer; }); DS.sujo = true; dsRender(); }
+// reduz a imagem (para caber no aparelho e desenhar rápido)
+function dsReduzir(dataUrl, max) {
+  return new Promise((ok) => {
+    const img = new Image();
+    img.onload = () => { const r = Math.min(1, (max || 1600) / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', 0.88)); };
+    img.onerror = () => ok('');
+    img.src = dataUrl;
+  });
+}
+async function dsColocarImagem(dataUrl) {
+  const red = await dsReduzir(dataUrl, 1800);
+  if (!red) { DS.erro = 'Não consegui abrir essa imagem.'; dsRender(); return; }
+  const chave = await dsGuardarImagem(red);
+  const img = new Image(); img.src = red; await new Promise((ok) => { img.onload = ok; img.onerror = ok; });
+  DS_IMG[chave] = img;
+  const s = DS.proj.slides[DS.slide];
+  s.fundo = { chave }; if (s.escurecer === undefined) s.escurecer = 45;
+  DS.sujo = true; DS.erro = ''; dsRender();
+}
+function dsEnviarImagem(inp) {
+  const f = inp.files && inp.files[0];
+  if (!f) return;
+  if (f.size > 15 * 1024 * 1024) { avisar('Imagem muito grande (máximo 15 MB).'); return; }
+  const r = new FileReader();
+  r.onload = () => dsColocarImagem(r.result);
+  r.readAsDataURL(f);
+}
+function dsImagemLink() {
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:480px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Imagem por link</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="field full"><label>Endereço da imagem (https://...)</label><input type="url" id="ds-link" maxlength="1000" placeholder="https://..."></div>
+    <p class="kb-vazio-mini">Alguns sites não deixam usar a imagem fora deles — nesse caso ela aparece, mas não sai no arquivo baixado. Se acontecer, baixe a imagem e use "Enviar imagem".</p>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="dsUsarLink()">Usar</button></div></div>`;
+  openModal('modal-srv');
+}
+function dsUsarLink() {
+  const u = ((document.getElementById('ds-link') || {}).value || '').trim();
+  if (!/^https:\/\/\S+$/i.test(u)) { avisar('Use um endereço que comece com https://'); return; }
+  const s = DS.proj.slides[DS.slide]; s.fundo = { url: u }; if (s.escurecer === undefined) s.escurecer = 45;
+  srvFecharModal(); DS.sujo = true; dsRender();
+}
+
+// ---------- imagem por IA (OpenAI ou Gemini) ----------
+function iaPodeImagem() { const a = iaAtual(); return !!(a.chaves && (a.chaves.openai || a.chaves.gemini)); }
+function dsAbrirImagemIa() {
+  const s = DS.proj.slides[DS.slide];
+  const a = iaAtual();
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:520px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Gerar imagem com IA</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="field full"><label>Descreva a imagem</label><textarea id="ds-ia-prompt" rows="4" maxlength="800" placeholder="Ex.: mesa de trabalho com notebook e café, luz natural, tons quentes">${escapeHtml(s.titulo ? 'Fundo para um post sobre: ' + s.titulo : '')}</textarea></div>
+    <div class="field full"><label>Provedor</label><select id="ds-ia-prov">${a.chaves.openai ? '<option value="openai">OpenAI</option>' : ''}${a.chaves.gemini ? `<option value="gemini" ${a.provedor === 'gemini' ? 'selected' : ''}>Google Gemini</option>` : ''}</select></div>
+    <p class="kb-vazio-mini">Uma imagem custa bem mais que um texto (normalmente alguns centavos de dólar, cobrados pelo provedor). O sistema pede a imagem sem textos escritos, porque o texto vem do slide.</p>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="dsGerarImagemIa()">${ic('brilho', 'ic-herda')} Gerar</button></div></div>`;
+  openModal('modal-srv');
+}
+async function dsGerarImagemIa() {
+  const prompt = ((document.getElementById('ds-ia-prompt') || {}).value || '').trim();
+  const prov = (document.getElementById('ds-ia-prov') || {}).value;
+  if (!prompt) { avisar('Descreva a imagem.'); return; }
+  srvFecharModal();
+  DS.carregando = 'imagem'; DS.erro = ''; dsRender();
+  try {
+    const p = DS.proj;
+    const dataUrl = await iaGerarImagem(prov, `${prompt}. Fotografia ou ilustração de alta qualidade para fundo de post de rede social, composição com espaço livre para texto, SEM nenhum texto, letra, logotipo ou marca d'água na imagem.`, p.proporcao);
+    await dsColocarImagem(dataUrl);
+  } catch (e) { DS.erro = e.message; }
+  DS.carregando = ''; dsRender();
+}
+async function iaGerarImagem(provedor, prompt, proporcao) {
+  const a = iaAtual();
+  const chave = a.chaves[provedor];
+  if (!chave) throw new Error('Sem chave para este provedor.');
+  const t = iaComTempo(180000);
+  try {
+    if (provedor === 'openai') {
+      const tamanhos = { '9:16': ['1024x1536', '1024x1792'], '4:5': ['1024x1536', '1024x1792'], '1:1': ['1024x1024', '1024x1024'] }[proporcao] || ['1024x1536', '1024x1792'];
+      const tentativas = [{ model: 'gpt-image-1', prompt, size: tamanhos[0], n: 1 }, { model: 'dall-e-3', prompt, size: tamanhos[1], n: 1, response_format: 'b64_json' }];
+      let ultimoErro = null;
+      for (const corpo of tentativas) {
+        const resp = await fetch('https://api.openai.com/v1/images/generations', { method: 'POST', signal: t.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + chave }, body: JSON.stringify(corpo) });
+        if (resp.ok) { const j = await resp.json(); const b = ((j.data || [])[0] || {}).b64_json; if (b) return 'data:image/png;base64,' + b; ultimoErro = new Error('A OpenAI não devolveu a imagem.'); continue; }
+        ultimoErro = await iaErroHttp(resp, 'openai');
+        if (![400, 403, 404].includes(resp.status)) break; // só tenta o outro modelo se este não estiver liberado
+      }
+      throw ultimoErro || new Error('Não foi possível gerar a imagem.');
+    }
+    if (provedor === 'gemini') {
+      let modelos = (IA_MODELOS_CACHE.gemini_img || []);
+      if (!modelos.length) {
+        const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': chave }, signal: t.signal });
+        if (!r.ok) throw await iaErroHttp(r, 'gemini');
+        modelos = ((await r.json()).models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini.*image/.test(m.name)).map((m) => m.name.replace(/^models\//, '')).sort().reverse();
+        IA_MODELOS_CACHE.gemini_img = modelos;
+      }
+      const modelo = modelos.find((m) => !/preview/.test(m)) || modelos[0];
+      if (!modelo) throw new Error('Sua chave do Gemini não tem um modelo de imagem liberado. Use a OpenAI ou ative a geração de imagens no Google AI Studio.');
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, { method: 'POST', signal: t.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: `${prompt} Proporção ${proporcao} (vertical).` }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }) });
+      if (!resp.ok) throw await iaErroHttp(resp, 'gemini');
+      const j = await resp.json();
+      const parte = (((((j.candidates || [])[0] || {}).content || {}).parts) || []).find((x) => x.inlineData || x.inline_data);
+      const dado = parte && (parte.inlineData || parte.inline_data);
+      if (!dado || !dado.data) throw new Error('O Gemini não devolveu uma imagem. Tente descrever de outro jeito.');
+      return `data:${dado.mimeType || dado.mime_type || 'image/png'};base64,${dado.data}`;
+    }
+    throw new Error('Este provedor não gera imagens.');
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('A geração da imagem demorou demais. Tente de novo.');
+    if (e instanceof TypeError) throw new Error('Não foi possível falar com o provedor de IA. Confira a internet.');
+    throw e;
+  } finally { t.fim(); }
+}
+
+// ---------- salvar, exportar, mandar para Conteúdos ----------
+function dsSalvarProjeto(silencioso) {
+  const p = DS.proj;
+  if (!p) return false;
+  if (!p.nome.trim()) p.nome = (p.slides[0] && p.slides[0].titulo ? p.slides[0].titulo : 'Peça sem título').slice(0, 80);
+  p.atualizadoEm = new Date().toISOString();
+  const copia = JSON.parse(JSON.stringify(p));
+  const lista = DS_DADOS.projetos.filter((x) => x.id !== p.id);
+  DS_DADOS.projetos = [copia].concat(lista).slice(0, 80);
+  if (p.cliente) DS_DADOS.marcas = Object.assign({}, DS_DADOS.marcas, { [p.cliente]: { cores: Object.assign({}, p.cores), fonte: p.fonte, estilo: p.estilo, handle: p.handle, marca: p.marca } });
+  if (!dsSalvarDados()) return false;
+  DS.sujo = false;
+  if (!silencioso) { dsRender(); avisar(`"${p.nome}" salvo.${p.slides.some((s) => s.fundo && s.fundo.chave) ? '\n\nAs imagens enviadas ou geradas ficam guardadas neste aparelho. Em outro computador, a peça abre com os textos e as cores; baixe os arquivos para ter as imagens.' : ''}`, 'Designer'); }
+  return true;
+}
+function dsCanvasFinal(i) {
+  const cv = document.createElement('canvas');
+  dsDesenhar(cv, DS.proj, i, 1);
+  return cv;
+}
+function dsNomeArquivo(i) { return `${String(DS.proj.nome || 'peca').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'peca'}${DS.proj.slides.length > 1 ? '-' + String(i + 1).padStart(2, '0') : ''}`; }
+function dsPendentes() { return DS.proj.slides.some((s) => s.fundo && !dsImagem(s.fundo) && !dsImagemFalhou(s.fundo)); }
+async function dsExportar(tipo) {
+  const p = DS.proj;
+  if (dsPendentes()) { avisar('As imagens ainda estão carregando. Tente de novo em alguns segundos.'); return; }
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
+  try {
+    const telas = p.slides.map((s, i) => dsCanvasFinal(i));
+    if (tipo === 'pdf') {
+      if (typeof window.jspdf === 'undefined') { avisar('A biblioteca de PDF ainda não carregou. Tente de novo em alguns segundos.'); return; }
+      const [W, H] = dsTamanho(p);
+      const pdf = new window.jspdf.jsPDF({ orientation: W > H ? 'l' : 'p', unit: 'px', format: [W, H], compress: true });
+      telas.forEach((cv, i) => { if (i) pdf.addPage([W, H], W > H ? 'l' : 'p'); pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, W, H); });
+      pdf.save(dsNomeArquivo(0).replace(/-01$/, '') + '.pdf');
+      return;
+    }
+    for (let i = 0; i < telas.length; i++) {
+      const blob = await new Promise((ok) => telas[i].toBlob(ok, 'image/png'));
+      if (!blob) throw new Error('blob');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = dsNomeArquivo(i) + '.png'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      if (telas.length > 1) await new Promise((ok) => setTimeout(ok, 350));
+    }
+  } catch (e) {
+    console.error(e);
+    avisar('Não consegui gerar o arquivo. Se algum slide usa imagem por link, o site dela pode estar bloqueando o uso: baixe a imagem e use "Enviar imagem".', 'Baixar');
+  }
+}
+function dsEnviarConteudo() {
+  const p = DS.proj;
+  if (typeof cntCriar !== 'function' || (typeof cntPronto === 'function' && !cntPronto())) { avisar('Os Conteúdos ainda estão carregando. Tente de novo em alguns segundos.'); return; }
+  dsSalvarProjeto(true);
+  const tipo = p.formato === 'story' ? 'stories' : p.formato === 'post' ? 'imagem' : 'carrossel';
+  const colunas = typeof cntColunas === 'function' ? cntColunas() : [];
+  const etapa = (colunas.find((c) => c.id === 'design') || colunas[0] || {}).id;
+  const roteiro = p.slides.map((s, i) => `[${i + 1}] ${s.titulo}${s.titulo && s.texto ? '\n' : ''}${s.texto}`).join('\n\n');
+  const c = cntCriar(Object.assign({ tipo, titulo: (p.nome || 'Peça do Designer').slice(0, 140), cliente: p.cliente || '', legenda: p.legenda || '', roteiro, briefing: `Peça montada no Designer (${DS_ESTILOS[p.estilo] ? DS_ESTILOS[p.estilo].nome : p.estilo}, ${p.proporcao}). Baixe os PNGs no Designer e anexe por link.`, tags: ['designer-ia'], midia: { url: '', capaUrl: '', paginas: [], formato: p.proporcao } }, etapa ? { etapa } : {}));
+  if (c) avisar(`"${c.titulo}" foi para o quadro de Conteúdos${etapa ? ', na coluna ' + ((colunas.find((x) => x.id === etapa) || {}).nome || etapa) : ''}. Os arquivos de imagem você baixa aqui no Designer.`, 'Enviado para Conteúdos');
+}
+function dsExcluirProjeto(id) {
+  confirmarAcao('Excluir esta peça?', () => { DS_DADOS.projetos = DS_DADOS.projetos.filter((x) => x.id !== id); dsSalvarDados(); DS.tela = 'galeria'; DS.proj = null; dsRender(); }, 'Excluir peça');
+}
+
+// =====================================================================
+// ---------- Produção: Conteúdos (planejamento) → Kanban (execução) ----------
+// =====================================================================
+// O Conteúdos guarda o planejamento (tipo, legenda, roteiro, mídia,
+// datas). "Iniciar produção" cria o cartão no projeto "Produção de
+// Conteúdo" do Kanban, e a partir daí a equipe trabalha lá. Os dois ficam
+// ligados: mover o cartão atualiza a etapa do conteúdo (e o Dashboard), e
+// a resposta do cliente no link de aprovação move o cartão.
+const PRD_PJ_ID = 'pj_producao_conteudo';
+const PRD_COLUNAS = [
+  { id: 'prd_afazer', nome: 'A fazer', cor: '#06b6d4' },
+  { id: 'prd_producao', nome: 'Em produção', cor: '#a855f7' },
+  { id: 'prd_aprovacao', nome: 'Aprovação do cliente', cor: '#f59e0b' },
+  { id: 'prd_alteracao', nome: 'Alteração', cor: '#f97316' },
+  { id: 'prd_aprovado', nome: 'Aprovados', cor: '#22c55e' },
+  { id: 'prd_entregue', nome: 'Entregue', cor: '#16a34a', final: true },
+];
+let PRD_SINC = false; // evita ida e volta infinita entre cartão e conteúdo
+
+function prdProjeto() { return typeof kbProjeto === 'function' ? kbProjeto(PRD_PJ_ID) : null; }
+function prdGarantirProjeto() {
+  const pj = prdProjeto();
+  if (pj) return pj;
+  if (!KB_PROJETOS_CARREGADO) return null;
+  const agora = new Date().toISOString();
+  const ok = kbGravarProjeto(Object.assign({
+    id: PRD_PJ_ID, nome: 'Produção de Conteúdo', descricao: 'Conteúdos em produção. Os cartões chegam pelo botão "Iniciar produção" do Conteúdos e andam sozinhos com as respostas do cliente.',
+    cliente: '', responsavel: '', colunas: PRD_COLUNAS.map((c) => Object.assign({}, c)), cor: '#a855f7', arquivado: false, ordem: 0, criadoEm: agora, criadoPor: kbMeuUid(),
+    ultimaRenovacao: kbHoje().slice(0, 7), prazo: '', dataInicio: '', valor: 0, recorrente: false, recorrencia: '',
+  }, kbCamposDaEtapa('col:progresso')));
+  return ok ? prdProjeto() : null;
+}
+// a coluna do projeto de produção que cumpre um papel (pelo id; se a
+// equipe renomeou ou recriou, procura pelo nome)
+function prdColuna(papel) {
+  const cols = (prdProjeto() || {}).colunas || PRD_COLUNAS;
+  const nomes = { prd_afazer: /fazer|backlog/, prd_producao: /produ|andamento|progresso/, prd_aprovacao: /aprova[çc][aã]o|cliente/, prd_alteracao: /altera|ajuste|revis/, prd_aprovado: /aprovad/, prd_entregue: /entreg|conclu|final/ };
+  return (cols.find((c) => c.id === papel) || cols.find((c) => nomes[papel] && nomes[papel].test(kbNomeNorm(c.nome))) || {}).id || '';
+}
+function prdPapelDaColuna(colId) {
+  if (!colId) return '';
+  const direto = PRD_COLUNAS.find((c) => c.id === colId);
+  if (direto) return direto.id;
+  return PRD_COLUNAS.map((c) => c.id).find((papel) => prdColuna(papel) === colId) || '';
+}
+function prdTarefaDoConteudo(c) { return c && c.tarefaId && typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS.find((t) => t.id === c.tarefaId && t.projetoId === PRD_PJ_ID) : null; }
+function prdEtapaCnt(id, reserva) { return typeof cntColunas === 'function' && cntColunas().some((x) => x.id === id) ? id : reserva; }
+
+// cartão do Kanban mudou de coluna → conteúdo acompanha
+function prdAoMoverCartao(t) {
+  if (PRD_SINC || !t || !t.conteudoId || t.projetoId !== PRD_PJ_ID || typeof CNT === 'undefined') return;
+  const c = CNT.find((x) => x.id === t.conteudoId);
+  if (!c) return;
+  const papel = prdPapelDaColuna(t.status);
+  const cols = cntColunas(), ultima = cols[cols.length - 1].id;
+  const mapa = {
+    prd_afazer: { etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' }, prd_producao: { etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' },
+    prd_aprovacao: { etapa: prdEtapaCnt('aprovacao', c.etapa), status: 'aguardando' }, prd_alteracao: { etapa: prdEtapaCnt('revisao', c.etapa), status: 'andamento' },
+    prd_aprovado: { etapa: prdEtapaCnt('aprovado', c.etapa), status: 'aprovado' }, prd_entregue: { etapa: ultima, status: 'aprovado' },
+  }[papel];
+  if (!mapa || (c.etapa === mapa.etapa && c.status === mapa.status)) return;
+  PRD_SINC = true;
+  try { cntAtualizar(c.id, mapa, `Kanban: cartão foi para "${(((prdProjeto() || {}).colunas || PRD_COLUNAS).find((x) => x.id === t.status) || {}).nome || t.status}"`); }
+  finally { PRD_SINC = false; }
+  if (papel === 'prd_entregue' || papel === 'prd_aprovado') aprAtualizarFase(c, papel === 'prd_entregue' ? 'entregue' : 'aprovado');
+}
+// conteúdo mudou de etapa (no quadro de Conteúdos ou pela resposta do cliente) → cartão acompanha
+function prdAoMoverConteudo(c) {
+  if (PRD_SINC) return;
+  const t = prdTarefaDoConteudo(c);
+  if (!t) return;
+  const cols = cntColunas(), ultima = cols[cols.length - 1].id;
+  const papel = c.etapa === ultima ? 'prd_entregue' : { aprovacao: 'prd_aprovacao', revisao: 'prd_alteracao', aprovado: 'prd_aprovado', design: 'prd_producao', copy: 'prd_producao' }[c.etapa];
+  const destino = papel && prdColuna(papel);
+  if (!destino || t.status === destino) return;
+  PRD_SINC = true;
+  try { kbAtualizar(t.id, papel === 'prd_entregue' ? { status: destino, concluidaEm: new Date().toISOString() } : { status: destino }); }
+  finally { PRD_SINC = false; }
+}
+function prdDescricao(c) {
+  const t = CNT_TIPOS[c.tipo] || {};
+  return [
+    `Conteúdo: ${t.nome || c.tipo}${c.publicacao ? ' · publicar em ' + formatDatePt(c.publicacao) : ''}${(c.redes || []).length ? ' · ' + (c.redes || []).map((r) => CNT_REDES[r]).filter(Boolean).join(', ') : ''}`,
+    c.briefing ? 'Briefing:\n' + c.briefing : '', c.roteiro ? 'Roteiro:\n' + c.roteiro : '', c.legenda ? 'Legenda:\n' + c.legenda : '',
+    'O planejamento completo fica em Conteúdos. Para mandar ao cliente, use "Enviar para aprovação" neste cartão.',
+  ].filter(Boolean).join('\n\n').slice(0, 5000);
+}
+// "Iniciar produção": manda o conteúdo para o Kanban
+function prdIniciar(conteudoId, silencioso) {
+  const c = CNT.find((x) => x.id === conteudoId);
+  if (!c) return null;
+  const ja = prdTarefaDoConteudo(c);
+  if (ja) { if (!silencioso) prdAbrirNoKanban(ja.id); return ja; }
+  if (typeof kbCriarTarefa !== 'function' || !KB_CARREGADO) { avisar('O Kanban ainda está carregando. Tente de novo em alguns segundos.'); return null; }
+  if (!prdGarantirProjeto()) { avisar('Os projetos do Kanban ainda estão carregando. Tente de novo em alguns segundos.'); return null; }
+  const prio = { urgente: 'urgente', alta: 'alta', baixa: 'baixa' }[c.prioridade] || 'media';
+  const t = kbCriarTarefa({ titulo: (c.titulo || 'Conteúdo').slice(0, 140), descricao: prdDescricao(c), cliente: c.cliente || '', responsavel: c.responsavel || '', prazo: c.entrega || '', prazoHora: c.entregaHora || '',
+    projetoId: PRD_PJ_ID, status: prdColuna('prd_producao') || prdColuna('prd_afazer'), prioridade: KB_PRIORIDADES[prio] ? prio : 'media', etiquetas: ['conteúdo', (CNT_TIPOS[c.tipo] || {}).nome || c.tipo].filter(Boolean), conteudoId: c.id });
+  if (!t) return null;
+  PRD_SINC = true;
+  try { cntAtualizar(c.id, { tarefaId: t.id, etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' }, 'Iniciou a produção: foi para o Kanban'); }
+  finally { PRD_SINC = false; }
+  if (!silencioso) confirmarAcao(`"${c.titulo || 'Conteúdo'}" foi para o Kanban, no projeto Produção de Conteúdo, coluna "Em produção".\n\nAbrir o cartão agora?`, () => prdAbrirNoKanban(t.id), 'Produção iniciada');
+  return t;
+}
+function prdAbrirNoKanban(tarefaId) {
+  if (typeof KB_FILTROS !== 'undefined') KB_FILTROS.projeto = PRD_PJ_ID;
+  dshIrKanban(tarefaId);
+}
+// botões que entram no cartão do Kanban ligado a um conteúdo
+function prdHtmlBotoesTarefa(t) {
+  if (!t || !t.conteudoId || typeof CNT === 'undefined') return '';
+  const c = CNT.find((x) => x.id === t.conteudoId);
+  if (!c) return '';
+  const ap = c.aprovacao || {};
+  const estado = ap.status === 'aprovado' ? 'Cliente aprovou' : ap.status === 'ajustes' ? 'Cliente pediu alteração' : ap.token ? 'Esperando o cliente' : '';
+  return `<div class="prd-caixa">
+    <div><strong>${ic('brilho', 'ic-herda')} Conteúdo ligado</strong><span>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}${c.publicacao ? ' · publica ' + kbDataCurta(c.publicacao) : ''}${estado ? ' · ' + estado + (ap.rodada > 1 ? ` (versão ${ap.rodada})` : '') : ''}</span>
+      ${ap.status === 'ajustes' && ap.comentario ? `<p class="prd-comentario">“${escapeHtml(ap.comentario)}”</p>` : ''}</div>
+    <div class="prd-botoes"><button type="button" class="btn btn-small" onclick="fecharModalKb(); dshIrConteudo('${escapeParaOnclick(c.id)}')">${ic('abrir', 'ic-herda')} Abrir conteúdo</button>
+      <button type="button" class="btn btn-small btn-primary" onclick="cntEnviarAprovacao('${escapeParaOnclick(c.id)}')">${ic('link', 'ic-herda')} ${ap.token ? 'Reenviar ao cliente' : 'Enviar para aprovação'}</button></div>
+  </div>`;
+}
+
+// =====================================================================
+// ---------- Aprovação pelo cliente: rodadas, fase e avisos ----------
+// =====================================================================
+// O documento público (conteudos_publicos/{token}) é o mesmo link do
+// começo ao fim. A cada reenvio a equipe zera a resposta e sobe a rodada;
+// quando aprovado, ou entregue, a "fase" muda e a página do cliente mostra
+// a mensagem certa sozinha (ela fica ouvindo o documento).
+function aprPublicoDoConteudo(c, token, rodada) {
+  const empresa = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '';
+  return { tenantId: TENANT_ID || 'local', conteudoId: c.id, empresaNome: empresa, titulo: c.titulo || '', tipo: (CNT_TIPOS[c.tipo] || {}).nome || '', legenda: c.legenda || '', midia: c.midia || {}, cliente: c.cliente || '',
+    publicacao: c.publicacao || '', redes: (c.redes || []).map((r) => CNT_REDES[r]).filter(Boolean), download: c.download === 'bloqueado' ? 'bloqueado' : 'pode',
+    resposta: '', comentario: '', respondidoEm: '', enviadoEm: new Date().toISOString(), rodada, fase: 'aguardando', aplicado: false };
+}
+// cria (ou renova) o link de aprovação de um conteúdo; devolve o token
+async function aprPrepararLink(c, renovar) {
+  const ap = c.aprovacao || {};
+  const token = ap.token || (genId('ap') + Math.random().toString(36).slice(2, 10));
+  const rodada = ap.token ? (renovar && (ap.status === 'aprovado' || ap.status === 'ajustes') ? (Number(ap.rodada) || 1) + 1 : (Number(ap.rodada) || 1)) : 1;
+  if (ap.token && !renovar) return token;
+  const pub = aprPublicoDoConteudo(c, token, rodada);
+  if (cntNuvem()) await firestoreDb.collection(CNT_PUB_COLECAO).doc(token).set(finLimpar(pub));
+  else { const l = lsLoad(chaveLocalTenant('eagles_aprov_local_v1'), {}); l[token] = pub; lsSave(chaveLocalTenant('eagles_aprov_local_v1'), l); }
+  PRD_SINC = false;
+  cntAtualizar(c.id, { aprovacao: { token, status: 'pendente', enviadoEm: pub.enviadoEm, rodada, comentario: '' }, etapa: prdEtapaCnt('aprovacao', c.etapa), status: 'aguardando' },
+    rodada > 1 ? `Reenviou para aprovação do cliente (versão ${rodada})` : 'Enviou para aprovação do cliente');
+  prdAoMoverConteudo(CNT.find((x) => x.id === c.id));
+  return token;
+}
+function aprAtualizarFase(c, fase) {
+  const token = c && c.aprovacao && c.aprovacao.token;
+  if (!token || !cntNuvem()) return;
+  firestoreDb.collection(CNT_PUB_COLECAO).doc(token).set({ fase, faseEm: new Date().toISOString(), midia: c.midia || {}, download: c.download === 'bloqueado' ? 'bloqueado' : 'pode' }, { merge: true }).catch((e) => console.error(e));
+}
+
+// ---------- notificações (sino no topo + aviso na tela + aviso do sistema) ----------
+let NOTIF = [];
+const NOTIF_INICIO = new Date().toISOString();
+function notifChaveVisto() { return chaveLocalTenant('eagles_notif_visto_v1'); }
+function notifVistoEm() { return localStorage.getItem(notifChaveVisto()) || ''; }
+function notifRegistrar(n) {
+  if (NOTIF.some((x) => x.id === n.id)) return;
+  NOTIF = [n].concat(NOTIF).sort((a, b) => b.em.localeCompare(a.em)).slice(0, 40);
+  notifRenderSino();
+  // só "toca" o que chegou depois que a tela abriu (o resto entra calado no sino)
+  if (n.em > NOTIF_INICIO) {
+    notifToast(n);
+    try { if ('Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification(n.titulo, { body: n.texto, icon: 'assets/favicon-eagles.png', tag: n.id }); } catch (e) {}
+  }
+}
+function notifMontarSino() {
+  if (document.getElementById('notif-topbar-item')) return;
+  const ref = document.getElementById('tarefas-topbar-item');
+  if (!ref) return;
+  const div = document.createElement('div');
+  div.className = 'topbar-item'; div.id = 'notif-topbar-item';
+  div.innerHTML = `<button type="button" class="topbar-help-btn" title="Notificações" aria-label="Notificações" style="position:relative;" onclick="toggleDropdown('notif-dropdown-menu'); notifAbrir();">${ic('sino', 'ic-herda')}<span id="notif-topbar-badge" class="crm-badge-contador" style="display:none;">0</span></button>
+    <div class="mega-menu mega-menu-right" id="notif-dropdown-menu" style="width:330px; padding:14px;"></div>`;
+  ref.parentNode.insertBefore(div, ref);
+  notifRenderSino();
+}
+function notifRenderSino() {
+  const visto = notifVistoEm();
+  const nao = NOTIF.filter((n) => n.em > visto).length;
+  const b = document.getElementById('notif-topbar-badge');
+  if (b) { b.style.display = nao ? '' : 'none'; b.textContent = nao > 9 ? '9+' : String(nao); }
+  const m = document.getElementById('notif-dropdown-menu');
+  if (m) m.innerHTML = `<div style="display:flex; align-items:center; margin-bottom:8px;"><strong style="font-size:13.5px;">Notificações</strong><span class="kb-espaco"></span>${'Notification' in window && Notification.permission === 'default' ? '<button type="button" class="kb-link" onclick="notifPedirPermissao()">Avisar no computador</button>' : ''}</div>
+    ${NOTIF.length ? NOTIF.map((n) => `<button type="button" class="notif-item${n.em > visto ? ' nova' : ''}" onclick="toggleDropdown('notif-dropdown-menu'); ${n.acao || ''}"><span class="notif-ic ${n.tipo}">${ic(n.tipo === 'ok' ? 'aprovado' : n.tipo === 'alerta' ? 'alerta' : 'mensagem', 'ic-herda')}</span><span><b>${escapeHtml(n.titulo)}</b><small>${escapeHtml(n.texto)}</small><em>${escapeHtml(notifQuando(n.em))}</em></span></button>`).join('')
+      : '<p class="kb-vazio-mini" style="margin:4px 0;">Nada por aqui. As respostas dos clientes aparecem na hora.</p>'}`;
+}
+function notifQuando(iso) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return 'agora'; if (s < 3600) return `há ${Math.floor(s / 60)} min`; if (s < 86400) return `há ${Math.floor(s / 3600)} h`;
+  return formatDatePt(String(iso).slice(0, 10));
+}
+function notifAbrir() { setTimeout(() => { try { localStorage.setItem(notifChaveVisto(), new Date().toISOString()); } catch (e) {} notifRenderSino(); }, 1500); }
+function notifPedirPermissao() { try { Notification.requestPermission().then(() => notifRenderSino()); } catch (e) {} }
+function notifToast(n) {
+  let box = document.getElementById('notif-toasts');
+  if (!box) { box = document.createElement('div'); box.id = 'notif-toasts'; document.body.appendChild(box); }
+  const el = document.createElement('div');
+  el.className = 'notif-toast ' + (n.tipo || '');
+  el.innerHTML = `<span class="notif-ic ${n.tipo}">${ic(n.tipo === 'ok' ? 'aprovado' : 'alerta', 'ic-herda')}</span><div><b>${escapeHtml(n.titulo)}</b><span>${escapeHtml(n.texto)}</span></div><button type="button" aria-label="Fechar" onclick="this.parentNode.remove()">✕</button>`;
+  if (n.acao) el.querySelector('div').onclick = () => { el.remove(); new Function(n.acao)(); };
+  box.appendChild(el);
+  try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(), g = a.createGain(); o.connect(g); g.connect(a.destination); o.frequency.value = n.tipo === 'ok' ? 880 : 520; g.gain.value = 0.04; o.start(); o.stop(a.currentTime + 0.15); } catch (e) {}
+  setTimeout(() => { el.classList.add('saindo'); setTimeout(() => el.remove(), 400); }, 9000);
+}
+// recebe uma resposta do cliente (do link ou do portal)
+function aprAoResponder(p, docId) {
+  const c = CNT.find((x) => x.id === p.conteudoId);
+  const titulo = (c && c.titulo) || p.titulo || 'Conteúdo';
+  const aprovou = p.resposta === 'aprovado';
+  const t = c && prdTarefaDoConteudo(c);
+  notifRegistrar({ id: 'apr_' + docId + '_' + (p.rodada || 1) + '_' + p.resposta, em: p.respondidoEm || new Date().toISOString(), tipo: aprovou ? 'ok' : 'alerta',
+    titulo: aprovou ? `${p.cliente || 'Cliente'} aprovou` : `${p.cliente || 'Cliente'} pediu alteração`, texto: aprovou ? titulo : `${titulo}${p.comentario ? ': “' + String(p.comentario).slice(0, 120) + '”' : ''}`,
+    acao: t ? `prdAbrirNoKanban('${escapeParaOnclick(t.id)}')` : (c ? `dshIrConteudo('${escapeParaOnclick(c.id)}')` : '') });
+}
+
+// processa as respostas guardadas (também quando o Conteúdos/Kanban
+// terminam de carregar depois que a resposta já tinha chegado)
+let APR_DOCS = [];
+function aprProcessar() {
+  if (!CNT_CARREGADO || (typeof KB_CARREGADO !== 'undefined' && !KB_CARREGADO)) return;
+  APR_DOCS.forEach(({ id, ref, p }) => {
+    if (!p.resposta && !p.postadoEm) return;
+    if (p.resposta) aprAoResponder(p, id);
+    const c = CNT.find((x) => x.id === p.conteudoId);
+    if (!c) return;
+    const ap = c.aprovacao || {};
+    // cliente marcou como postado (pelo portal)
+    if (p.postadoEm && !p.postadoAplicado) {
+      const cols = cntColunas();
+      cntAtualizar(c.id, { portalPostadoEm: p.postadoEm, status: 'publicado', etapa: cols[cols.length - 1].id }, 'Cliente marcou como postado');
+      ref.set({ postadoAplicado: true }, { merge: true }).catch(() => {});
+      p.postadoAplicado = true;
+    }
+    if (!p.resposta || p.aplicado) return;
+    // resposta de uma versão antiga (já reenviaram outra): só marca
+    if (ap.token === id && (Number(p.rodada) || 1) < (Number(ap.rodada) || 1)) { ref.set({ aplicado: true }, { merge: true }).catch(() => {}); p.aplicado = true; return; }
+    const aprovou = p.resposta === 'aprovado';
+    cntAtualizar(c.id, { aprovacao: Object.assign({}, ap, { token: id, status: p.resposta, comentario: p.comentario || '', respondidoEm: p.respondidoEm, rodada: Number(p.rodada) || ap.rodada || 1 }),
+      status: aprovou ? 'aprovado' : 'andamento', etapa: prdEtapaCnt(aprovou ? 'aprovado' : 'revisao', c.etapa) },
+      aprovou ? `Cliente aprovou${(p.rodada || 1) > 1 ? ' a versão ' + p.rodada : ''}` : `Cliente pediu alteração: "${String(p.comentario || '').slice(0, 150)}"`);
+    const t = prdTarefaDoConteudo(c);
+    if (t && !aprovou && p.comentario) {
+      PRD_SINC = true;
+      try { kbAtualizar(t.id, { descricao: (`Alteração pedida pelo cliente${(p.rodada || 1) > 1 ? ' (versão ' + p.rodada + ')' : ''} em ${formatDatePt(String(p.respondidoEm || '').slice(0, 10))}:\n“${String(p.comentario).slice(0, 1000)}”\n\n` + (t.descricao || '')).slice(0, 5000), etiquetas: Array.from(new Set((t.etiquetas || []).concat(['alteração']))) }); }
+      finally { PRD_SINC = false; }
+    }
+    ref.set({ aplicado: true, fase: aprovou ? 'aprovado' : 'alteracao' }, { merge: true }).catch(() => {});
+    p.aplicado = true;
+  });
+}
+
+// =====================================================================
+// ---------- Portal do cliente sem login (link por cliente) ----------
+// =====================================================================
+// Cada cliente ganha um link próprio (portal.html?p=<token>). A equipe
+// publica em portais_publicos/{token} um retrato só com os conteúdos que
+// o cliente pode ver; o cliente responde pelo mesmo caminho do link de
+// aprovação. O retrato é refeito sozinho quando algo muda.
+const PORTAL_LINKS_KEY = 'eagles_portal_links_v1';
+let PORTAL_LINKS = {};
+let PORTAL_LINKS_CARREGADO = false;
+const PORTAL_PUB_FEITO = {};
+let PORTAL_PUB_TIMER = null;
+function portalTokenNovo() { return 'pt' + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 12) + Date.now().toString(36); }
+function portalLinkCliente(nome) { const t = PORTAL_LINKS[nome]; return t ? location.origin + location.pathname.replace(/[^/]*$/, '') + 'portal.html?p=' + encodeURIComponent(t) : ''; }
+function portalGarantirToken(nome) {
+  if (!nome) return '';
+  if (PORTAL_LINKS[nome]) return PORTAL_LINKS[nome];
+  if (!nivelPodeOperar()) return '';
+  PORTAL_LINKS = Object.assign({}, PORTAL_LINKS, { [nome]: portalTokenNovo() });
+  cloudSet(PORTAL_LINKS_KEY, PORTAL_LINKS);
+  portalPublicarCliente(nome, true);
+  return PORTAL_LINKS[nome];
+}
+function portalCopiarLink(nome) {
+  if (!PORTAL_LINKS_CARREGADO) { avisar('Carregando os links do portal. Tente de novo em alguns segundos.'); return; }
+  if (!portalGarantirToken(nome)) { avisarSemPermissaoNivel('criar o link do portal'); return; }
+  const link = portalLinkCliente(nome);
+  try { navigator.clipboard && navigator.clipboard.writeText(link); } catch (e) {}
+  avisar(`Link do portal de ${nome} copiado:\n${link}\n\nO cliente abre direto, sem login. Ali ele vê a produção, aprova ou pede alteração, e manda ideias e pedidos.`, 'Portal do cliente');
+  portalRender();
+}
+function portalNovoLink(nome) {
+  confirmarAcao(`Gerar um link novo para ${nome}? O link antigo para de funcionar na hora.`, () => {
+    const antigo = PORTAL_LINKS[nome];
+    if (antigo && FIREBASE_PRONTO && firestoreDb) firestoreDb.collection('portais_publicos').doc(antigo).delete().catch(() => {});
+    PORTAL_LINKS = Object.assign({}, PORTAL_LINKS); delete PORTAL_LINKS[nome];
+    delete PORTAL_PUB_FEITO[nome];
+    cloudSet(PORTAL_LINKS_KEY, PORTAL_LINKS);
+    portalCopiarLink(nome);
+  }, 'Novo link do portal');
+}
+function portalItemPublico(c) {
+  const ap = c.aprovacao || {};
+  return {
+    id: c.id, titulo: String(c.titulo || '').slice(0, 140), tipo: c.tipo || '', etapa: c.etapa || '', status: c.status || '', categoria: c.categoria || '',
+    publicacao: c.publicacao || '', publicacaoHora: c.publicacaoHora || '', entrega: c.entrega || '', redes: c.redes || [], legenda: String(c.legenda || '').slice(0, 2200),
+    midia: c.midia || {}, download: c.download === 'bloqueado' ? 'bloqueado' : 'pode', portalPostadoEm: c.portalPostadoEm || '',
+    portalResposta: ap.token && (ap.status === 'aprovado' || ap.status === 'ajustes') ? ap.status : '', portalComentario: ap.status === 'ajustes' ? String(ap.comentario || '').slice(0, 1000) : '',
+    aprovToken: ap.token || '', rodada: Number(ap.rodada) || 1,
+  };
+}
+function portalPublicarCliente(nome, forcar) {
+  const token = PORTAL_LINKS[nome];
+  if (!token || !FIREBASE_PRONTO || !TENANT_ID || !firestoreDb || !nivelPodeOperar() || !CNT_CARREGADO) return;
+  const cfg = portalEfetivo(portalPadrao(), portalCfgCliente(nome));
+  const visiveis = CNT.filter((c) => c.cliente === nome && cfg.visiveis[pcCategoria(c)])
+    .sort((a, b) => String(b.publicacao || b.atualizadoEm || '').localeCompare(String(a.publicacao || a.atualizadoEm || ''))).slice(0, 80);
+  // quem está esperando aprovação precisa de um link de resposta
+  visiveis.filter((c) => pcCategoria(c) === 'aguardando' && !(c.aprovacao && c.aprovacao.token)).forEach((c) => { aprPrepararLink(c, false).catch((e) => console.error(e)); });
+  const doc = { tenantId: TENANT_ID, cliente: nome, cfg: Object.assign({}, cfg, { perm: Object.assign({}, cfg.perm, { postado: !!cfg.perm.postado }) }), conteudos: visiveis.map(portalItemPublico) };
+  const assinatura = JSON.stringify(doc);
+  if (!forcar && PORTAL_PUB_FEITO[nome] === assinatura) return;
+  PORTAL_PUB_FEITO[nome] = assinatura;
+  firestoreDb.collection('portais_publicos').doc(token).set(finLimpar(Object.assign(doc, { atualizadoEm: new Date().toISOString() }))).catch((e) => { delete PORTAL_PUB_FEITO[nome]; console.error('Portal: não publicou', e); });
+}
+function portalAgendarPublicacao() {
+  clearTimeout(PORTAL_PUB_TIMER);
+  PORTAL_PUB_TIMER = setTimeout(() => { Object.keys(PORTAL_LINKS).forEach((n) => portalPublicarCliente(n)); }, 1500);
 }
 
 function renderCrmEmConstrucao(secao) {
@@ -6949,6 +9355,7 @@ function renderCrmDashboard() {
   renderCrmDashEstoque();
   renderCrmDashConteudosDia();
   renderCrmDashProjetos();
+  renderCrmDashKanbanResumo();
   renderCrmDashVencimentos();
   renderCrmDashSaudeRelacionamento();
   renderCrmDashNps();
@@ -6962,12 +9369,29 @@ function clientesComSaudeCrm() {
   return CRM_CLIENTES_INDEP_DATA.map((c) => ({ nome: c.nome, ultimaReuniao: c.ultimaReuniao, nps: c.nps }));
 }
 
+// O faturamento do Dashboard vem do Financeiro (mesmo número de
+// Financeiro → Relatórios → Receita por competência). Quem não vê o
+// Financeiro continua vendo o valor dos negócios fechados no funil.
+function dshUsaFinanceiro() { return nivelVeFinanceiro() && typeof FIN_LANC !== 'undefined' && (typeof FIN_CARREGADO === 'undefined' || FIN_CARREGADO); }
+function dshLancMes(tipo, mes, moeda) {
+  return (typeof FIN_LANC !== 'undefined' ? FIN_LANC : []).filter((l) => l.tipo === tipo && l.status !== 'cancelado' && finCompetencia(l) === mes && dshDoCliente(tipo === 'receber' ? l.cliente : (l.cliente || '')) && (!moeda || (l.moeda || 'BRL') === moeda));
+}
+function dshFaturamentoMes(mes, moeda) {
+  if (dshUsaFinanceiro()) return dshLancMes('receber', mes, moeda).reduce((a, l) => a + (Number(l.valor) || 0), 0);
+  return CRM_NEGOCIOS_DATA.filter((n) => n.etapa === 'fechado' && dshDoCliente(n.cliente) && (n.atualizadoEm || '').slice(0, 7) === mes && (!moeda || (n.moeda || 'BRL') === moeda)).reduce((a, n) => a + Number(n.valor || 0), 0);
+}
+function dshRecebidoMes(mes) {
+  return (typeof FIN_LANC !== 'undefined' ? FIN_LANC : []).filter((l) => l.tipo === 'receber' && l.status !== 'cancelado' && String(l.dataPagamento || '').slice(0, 7) === mes && dshDoCliente(l.cliente)).reduce((a, l) => a + (Number(l.valorPago) || 0), 0);
+}
+
 function renderCrmDashTopo() {
   const el = document.getElementById('crm-dash-topo');
   if (!el) return;
   const negocios = CRM_CLIENTE_FILTRO ? CRM_NEGOCIOS_DATA.filter((n) => n.cliente === CRM_CLIENTE_FILTRO) : CRM_NEGOCIOS_DATA;
   const mesAtual = isoHoje().slice(0, 7);
-  const fat = negocios.filter((n) => n.etapa === 'fechado' && (n.atualizadoEm || '').slice(0, 7) === mesAtual).reduce((a, n) => a + Number(n.valor || 0), 0);
+  const usaFin = dshUsaFinanceiro();
+  const fat = dshFaturamentoMes(mesAtual);
+  const recebido = usaFin ? dshRecebidoMes(mesAtual) : 0;
   const meta = Number(CRM_METAS_DATA.metaReceitaMensal || 0);
   const pctMeta = meta > 0 ? Math.min(100, Math.round((fat / meta) * 100)) : 0;
   const faltam = Math.max(0, meta - fat);
@@ -6977,7 +9401,7 @@ function renderCrmDashTopo() {
   el.innerHTML = `
     <div class="stat-card">
       <div class="stat-label" style="display:flex; justify-content:space-between; align-items:center;">Meta de Receita <button type="button" onclick="abrirEditarMetaReceitaCrm()" style="background:none; border:none; color:var(--danger); cursor:pointer; padding:0;" title="Editar meta"><svg viewBox="0 0 24 24" style="width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button></div>
-      <p style="font-size:11.5px; color:var(--text-soft); margin:2px 0 10px;">Progresso do mês atual</p>
+      <p style="font-size:11.5px; color:var(--text-soft); margin:2px 0 10px;">Progresso do mês atual · ${usaFin ? 'receitas do Financeiro' : 'negócios fechados'}</p>
       <div style="display:flex; justify-content:space-between; font-size:13px; margin:6px 0 4px;"><span style="color:var(--text);">${formatMoney(fat)}</span><span style="color:var(--danger); font-weight:700;">${formatMoney(meta)}</span></div>
       <div style="height:6px; background:var(--bg-soft); border-radius:100px; overflow:hidden;"><div style="height:100%; width:${pctMeta}%; background:var(--success);"></div></div>
       <div style="font-size:11px; color:var(--text-soft); margin-top:6px;">${pctMeta}% alcançado · Faltam ${formatMoney(faltam)}</div>
@@ -6985,7 +9409,7 @@ function renderCrmDashTopo() {
     <div class="stat-card">
       <div class="crm-stat-icone-badge">${iconeDashboardTopo('cifrao')}</div>
       <div class="stat-value" style="color:var(--success);">${formatMoney(fat)}</div>
-      <p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Faturamento do mês</p>
+      <p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Faturamento do mês${usaFin ? ` · recebido ${formatMoney(recebido)}` : ' (negócios fechados no funil)'}</p>
     </div>
     <div class="stat-card">
       <div class="crm-stat-icone-badge">${iconeDashboardTopo('pessoas')}</div>
@@ -7062,12 +9486,14 @@ function renderCrmDashChartFinanceiro() {
 // Faturamento do mes filtrando por moeda do negocio (BRL por padrao
 // quando o negocio nao tem moeda definida, pra nao sumir com dado antigo).
 function faturamentoCrmDoMesPorMoeda(mesKey, moeda) {
+  if (dshUsaFinanceiro()) return dshFaturamentoMes(mesKey, moeda);
   return CRM_NEGOCIOS_DATA
     .filter((n) => n.etapa === 'fechado' && (n.atualizadoEm || '').slice(0, 7) === mesKey && (n.moeda || 'BRL') === moeda)
     .reduce((a, n) => a + Number(n.valor || 0), 0);
 }
 
 function despesasDoMesCrm(mesKey) {
+  if (dshUsaFinanceiro()) return dshLancMes('pagar', mesKey).reduce((a, l) => a + (Number(l.valor) || 0), 0);
   const ciclo = getCicloDoMes(mesKey);
   return (ciclo.pagamentos || []).reduce((a, p) => a + Number(p.valor || 0), 0);
 }
@@ -7110,28 +9536,30 @@ function renderCrmDashNps() {
 function renderCrmFinanceiroResumo() {
   const el = document.getElementById('crm-financeiro-resumo');
   if (!el) return;
-
-  const contratos = CADASTROS_DATA['contrato'] || [];
-  const mrr = contratos.filter((c) => c.status === 'vigente').reduce((a, c) => a + Number(c.valor || 0), 0);
-  const mesAtual = isoHoje().slice(0, 7);
-  const churnMes = contratos.filter((c) => c.status === 'encerrado' && (c.dataFim || '').slice(0, 7) === mesAtual).length;
-
-  const ciclo = FINANCE_CICLO || { receitas: [], pagamentos: [] };
-  const hojeNum = Number(isoHoje().slice(8, 10));
-  const receitasPendentes = (ciclo.receitas || []).filter((r) => r.status !== 'pago');
-  const receitasVencidas = receitasPendentes.filter((r) => Number(r.diaAcerto) < hojeNum);
-  const pagamentosPendentes = (ciclo.pagamentos || []).filter((p) => p.status !== 'pago');
-  const totalReceberPendente = receitasPendentes.reduce((a, r) => a + Number(r.valor || 0), 0);
-  const totalPagarPendente = pagamentosPendentes.reduce((a, p) => a + Number(p.valor || 0), 0);
-
-  const receitaTotalMes = (ciclo.receitas || []).reduce((a, r) => a + Number(r.valor || 0), 0);
-  const despesaTotalMes = ['pagamentos', 'adiantamentos', 'variaveis'].reduce((soma, chave) => soma + (ciclo[chave] || []).reduce((a, i) => a + Number(i.valor || 0), 0), 0);
-  const lucroLiquido = receitaTotalMes - despesaTotalMes;
-
+  const mesAtual = isoHoje().slice(0, 7), hoje = isoHoje();
+  // MRR e churn: assinaturas do Financeiro (Recorrentes) + contratos vigentes antigos
+  const recs = (typeof FIN_REC !== 'undefined' ? FIN_REC : []).filter((r) => r.tipo === 'receber' && dshDoCliente(r.cliente));
+  const recAtivas = recs.filter((r) => r.ativa !== false && (!r.fim || r.fim >= mesAtual));
+  const contratos = (CADASTROS_DATA['contrato'] || []).filter((c) => dshDoCliente(c.cliente));
+  const mrr = recAtivas.reduce((a, r) => a + (Number(r.valor) || 0), 0) + (recs.length ? 0 : contratos.filter((c) => c.status === 'vigente').reduce((a, c) => a + Number(c.valor || 0), 0));
+  const churnMes = recs.filter((r) => (r.fim && r.fim.slice(0, 7) === mesAtual) || (r.ativa === false && String(r.atualizadoEm || '').slice(0, 7) === mesAtual)).length
+    + contratos.filter((c) => c.status === 'encerrado' && (c.dataFim || '').slice(0, 7) === mesAtual).length;
+  const aberto = (l) => l.status === 'pendente' || l.status === 'parcial';
+  const rec = dshLancMes('receber', mesAtual).filter(aberto), pag = dshLancMes('pagar', mesAtual).filter(aberto);
+  const vencidas = rec.filter((l) => l.vencimento && l.vencimento < hoje).length;
+  const totalReceberPendente = rec.reduce((a, l) => a + finRestante(l), 0);
+  const totalPagarPendente = pag.reduce((a, l) => a + finRestante(l), 0);
+  // lucro líquido do mês: o mesmo cálculo da DRE de Financeiro → Relatórios
+  let lucroLiquido = 0;
+  if (typeof finDadosRelatorio === 'function' && typeof FIN_REL !== 'undefined') {
+    const antes = Object.assign({}, FIN_REL);
+    try { FIN_REL.periodo = 'mes'; FIN_REL.cliente = CRM_CLIENTE_FILTRO || ''; lucroLiquido = finDadosRelatorio().dreComp.liquido; } catch (e) { console.error(e); }
+    Object.assign(FIN_REL, antes);
+  }
   el.innerHTML = `
-    <div class="stat-card"><div class="stat-label">MRR (receita recorrente)</div><div class="stat-value" style="font-size:20px;">${formatMoney(mrr)}</div></div>
+    <div class="stat-card"><div class="stat-label">MRR (receita recorrente)</div><div class="stat-value" style="font-size:20px;">${formatMoney(mrr)}</div><div style="font-size:11px; color:var(--text-soft);">${recAtivas.length} ${recAtivas.length === 1 ? 'assinatura ativa' : 'assinaturas ativas'}</div></div>
     <div class="stat-card${churnMes > 0 ? ' danger' : ''}"><div class="stat-label">Churn este mês</div><div class="stat-value">${churnMes}</div></div>
-    <div class="stat-card"><div class="stat-label">A receber (pendente)</div><div class="stat-value" style="font-size:18px;">${formatMoney(totalReceberPendente)}</div><div style="font-size:11px; color:${receitasVencidas.length ? 'var(--danger)' : 'var(--text-soft)'}; margin-top:2px;">${receitasVencidas.length} vencida(s)</div></div>
+    <div class="stat-card"><div class="stat-label">A receber (pendente)</div><div class="stat-value" style="font-size:18px;">${formatMoney(totalReceberPendente)}</div><div style="font-size:11px; color:${vencidas ? 'var(--danger)' : 'var(--text-soft)'};">${vencidas} vencida(s)</div></div>
     <div class="stat-card"><div class="stat-label">A pagar (pendente)</div><div class="stat-value" style="font-size:18px;">${formatMoney(totalPagarPendente)}</div></div>
     <div class="stat-card"><div class="stat-label">Lucro líquido do mês (DRE)</div><div class="stat-value" style="font-size:18px; color:${lucroLiquido >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatMoney(lucroLiquido)}</div></div>`;
 }
@@ -8069,7 +10497,7 @@ function kbNomeUsuario(uid) {
 // ---------- gravação (uma tarefa por vez) ----------
 function kbLimpar(obj) { return JSON.parse(JSON.stringify(obj)); } // tira undefined (o Firestore recusa)
 
-function kbGravarLocal() { lsSave(kbChaveLocal(), KB_TAREFAS); }
+function kbGravarLocal() { lsSave(kbChaveLocal(), KB_TAREFAS); if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard(); }
 
 function kbCriarTarefa(dados) {
   if (!exigirPodeOperar('criar tarefas')) return null;
@@ -8100,6 +10528,7 @@ function kbAtualizar(id, campos) {
   Object.assign(t, mudancas);
   if (kbNuvem()) kbColecaoRef().doc(id).set(kbLimpar(mudancas), { merge: true }).catch(kbErroGravar);
   else kbGravarLocal();
+  if (campos.status !== undefined && campos.status !== antes.status && typeof prdAoMoverCartao === 'function') prdAoMoverCartao(t);
   if (!estavaConcluida && kbConcluida(t) && t.recorrencia) kbGerarProximaRecorrencia(t);
   kbRodarAutomacoes('atualizada', t, antes);
   renderKanbanConteudo(true);
@@ -9046,6 +11475,7 @@ function kbAbrirTarefa(id, padrao) {
           </div>` : ''}
         </div>
       </div>
+      ${existente && typeof prdHtmlBotoesTarefa === 'function' ? prdHtmlBotoesTarefa(existente) : ''}
       <div class="cfg-modal-rodape kb-modal-rodape">
         ${existente ? `<button type="button" class="btn btn-ghost kb-btn-perigo" onclick="kbConfirmarExcluir('${escapeParaOnclick(existente.id)}')">${kbIc('lixeira')} Excluir</button>
         <button type="button" class="btn btn-ghost" onclick="kbAtualizar('${escapeParaOnclick(existente.id)}', { arquivada: ${existente.arquivada ? 'false' : 'true'} }); fecharModalKb();">${kbIc('arquivo')} ${existente.arquivada ? 'Desarquivar' : 'Arquivar'}</button>
@@ -12981,6 +15411,7 @@ function finHtmlRelatorios() {
       </tbody></table></div>
       <p class="kb-vazio-mini" style="margin:6px 0 0;">Classificação automática pelo nome da categoria (impostos → deduções; fornecedores/produtos → custos; juros/tarifas → financeiras; o resto → operacionais). Revise as categorias para melhor precisão.</p>
     </div>
+    <div class="fin-painel"><strong>Evolução no período</strong><span class="kb-vazio-mini" style="margin-left:8px;">receita, despesas e lucro mês a mês</span><div class="fin-grafico fin-grafico-evolucao"><canvas id="fin-g-evolucao"></canvas></div></div>
     <div class="fin-graficos">
       <div class="fin-painel"><strong>Receita vs Despesa</strong><div class="fin-grafico"><canvas id="fin-g-recdesp"></canvas></div></div>
       <div class="fin-painel"><strong>Evolução do Saldo</strong><div class="fin-grafico"><canvas id="fin-g-saldo"></canvas></div></div>
@@ -13020,6 +15451,16 @@ function finDesenharGraficos() {
   const opc = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: cTexto, boxWidth: 12 } } }, scales: { x: { ticks: { color: cTexto } }, y: { ticks: { color: cTexto } } } };
   const novo = (id, cfg) => { const el = document.getElementById(id); if (el) try { FIN_GRAFICOS.push(new Chart(el, cfg)); } catch (e) { console.error(e); } };
   novo('fin-g-recdesp', { type: 'bar', data: { labels: rot, datasets: [{ label: 'Faturamento', data: meses.map((m) => doMes(m, 'receber')), backgroundColor: '#3b82f6' }, { label: 'Despesas', data: meses.map((m) => doMes(m, 'pagar')), backgroundColor: '#f97316' }] }, options: opc });
+  // Evolução: as 3 linhas do relatório antigo do Meu Negócio (competência)
+  const recM = meses.map((m) => doMes(m, 'receber'));
+  const despM = meses.map((m) => doMes(m, 'pagar'));
+  novo('fin-g-evolucao', { type: 'line', data: { labels: rot, datasets: [
+    { label: 'Receita', data: recM, borderColor: '#3f9a5c', backgroundColor: 'rgba(63,154,92,0.12)', fill: true, tension: 0.3 },
+    { label: 'Despesas', data: despM, borderColor: '#d0554f', backgroundColor: 'rgba(208,85,79,0.10)', fill: true, tension: 0.3 },
+    { label: 'Lucro', data: recM.map((v, i) => v - despM[i]), borderColor: '#3fae12', backgroundColor: 'rgba(63,174,18,0.14)', fill: true, tension: 0.3 },
+  ] }, options: { ...opc, interaction: { mode: 'index', intersect: false },
+    plugins: { ...opc.plugins, legend: { position: 'bottom', labels: { color: cTexto, boxWidth: 12 } }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${formatMoney(c.parsed.y)}` } } },
+    scales: { x: { ticks: { color: cTexto } }, y: { ticks: { color: cTexto, callback: (v) => formatMoney(v) } } } } });
   let saldo = 0;
   const pagosAte = (m, tipo) => FIN_LANC.filter((l) => l.tipo === tipo && l.status !== 'cancelado' && (l.dataPagamento || '').slice(0, 7) === m).reduce((a, l) => a + (Number(l.valorPago) || 0), 0);
   const antes = FIN_LANC.filter((l) => l.status !== 'cancelado' && l.dataPagamento && l.dataPagamento.slice(0, 7) < meses[0]).reduce((a, l) => a + (l.tipo === 'receber' ? 1 : -1) * (Number(l.valorPago) || 0), 0);
@@ -14259,7 +16700,7 @@ function cntIniciarDados() {
     try {
       cntRef().onSnapshot((snap) => {
         const l = []; snap.forEach((d) => l.push(Object.assign({}, d.data(), { id: d.id })));
-        CNT = l; CNT_CARREGADO = true; cntRender(); crmAvisarDashboard();
+        CNT = l; CNT_CARREGADO = true; cntRender(); crmAvisarDashboard(); if (typeof aprProcessar === 'function') aprProcessar(); if (typeof portalAgendarPublicacao === 'function') portalAgendarPublicacao();
       }, (err) => console.error('Erro ao carregar conteúdos:', err));
       cntEscutarAprovacoes();
     } catch (err) { console.error('Não foi possível carregar os conteúdos:', err); }
@@ -14297,8 +16738,11 @@ function cntAtualizar(id, campos, registro) {
   if (!c) return false;
   const m = Object.assign({}, campos, { atualizadoEm: new Date().toISOString() });
   if (registro) m.historico = (c.historico || []).concat([cntHist(registro)]).slice(-60);
+  const etapaAntes = c.etapa;
   Object.assign(c, m);
   if (cntNuvem()) cntRef().doc(id).set(finLimpar(m), { merge: true }).catch(cntErro); else cntGravarLocal();
+  if (m.etapa !== undefined && m.etapa !== etapaAntes && typeof prdAoMoverConteudo === 'function') prdAoMoverConteudo(c);
+  if (typeof portalAgendarPublicacao === 'function') portalAgendarPublicacao();
   cntRender();
   return true;
 }
@@ -14428,7 +16872,8 @@ function cntCardHtml(c) {
       <button type="button" class="kb-btn-ic" title="Link de aprovação" aria-label="Link de aprovação" onclick="cntEnviarAprovacao('${id}')">${ic('link', 'ic-herda')}</button>
       <button type="button" class="kb-btn-ic" title="Duplicar" aria-label="Duplicar" onclick="cntDuplicar('${id}')">${ic('copiar', 'ic-herda')}</button>
       <button type="button" class="kb-btn-ic kb-btn-perigo" title="Excluir" aria-label="Excluir" onclick="cntExcluir('${id}')">${ic('lixeira', 'ic-herda')}</button>
-      <button type="button" class="btn btn-small" onclick="cntAlternarTempo('${id}')">${c.tempo && c.tempo.inicio ? `⏸ <span data-cnt-tempo="${escapeHtml(c.id)}">${kbFormatarTempo(cntTempoSeg(c))}</span>` : `▶ ${cntTempoSeg(c) ? kbFormatarTempo(cntTempoSeg(c)) : 'Iniciar'}`}</button>
+      ${c.tempo && c.tempo.inicio ? `<button type="button" class="btn btn-small" onclick="cntAlternarTempo('${id}')">⏸ <span data-cnt-tempo="${escapeHtml(c.id)}">${kbFormatarTempo(cntTempoSeg(c))}</span></button>` : ''}
+      ${(() => { const tk = prdTarefaDoConteudo(c); return tk ? `<button type="button" class="btn btn-small prd-no-kanban" title="Abrir o cartão no Kanban" onclick="prdAbrirNoKanban('${escapeParaOnclick(tk.id)}')">${ic('kanban', 'ic-herda')} ${escapeHtml(((((prdProjeto() || {}).colunas) || PRD_COLUNAS).find((x) => x.id === tk.status) || {}).nome || 'Kanban')}</button>` : (cntFinalizado(c) ? '' : `<button type="button" class="btn btn-small btn-primary" onclick="prdIniciar('${id}')">▶ Iniciar produção</button>`); })()}
     </div>
     <button type="button" class="cnt-detalhes-btn" onclick="CNT_FILTRO.abertos['${id}'] = !CNT_FILTRO.abertos['${id}']; cntRender();">${kbIc(aberto ? 'setaCima' : 'setaBaixo')} Detalhes</button>
     ${aberto ? `<div class="cnt-detalhes">${c.cliente ? `<div><b>Cliente:</b> ${escapeHtml(c.cliente)}</div>` : ''}${c.legenda ? `<p>${escapeHtml(c.legenda).slice(0, 220)}</p>` : ''}<div><b>Publicar em:</b> ${(c.redes || []).map((r) => CNT_REDES[r]).filter(Boolean).join(', ') || '—'}</div>
@@ -14646,7 +17091,7 @@ function cntRenderEditor() {
         ${lado('relogio', 'Horário', `<input type="time" value="${escapeHtml(e.entregaHora || '')}" onchange="CNT_ED.entregaHora = this.value">`)}
         ${lado('tag', 'Categoria', `<select onchange="CNT_ED.categoria = this.value">${opts(cntCategorias().map((n) => [n, n]), e.categoria)}</select>`)}
         ${lado('documento', 'Tipo', `<select onchange="CNT_ED.tipo = this.value; cntRenderEditor();">${opts(Object.entries(CNT_TIPOS).map(([k, x]) => [k, x.nome]), e.tipo)}</select>`)}
-        <div class="kb-wiz-caixa kb-linha-switch"><div><strong>${ic('tarefas')} Tarefa vinculada</strong><span>${e.tarefaId ? 'Ligada a uma tarefa no Kanban' : 'Cria uma tarefa no Kanban pra esse conteúdo'}</span></div><label class="switch"><input type="checkbox" ${e.tarefaId || e.__criarTarefa ? 'checked' : ''} ${e.tarefaId ? 'disabled' : ''} onchange="CNT_ED.__criarTarefa = this.checked"><span class="switch-slider"></span></label></div>
+        <div class="kb-wiz-caixa kb-linha-switch"><div><strong>${ic('tarefas')} Iniciar produção no Kanban</strong><span>${prdTarefaDoConteudo(e) ? 'Já está no Kanban (Produção de Conteúdo)' : 'Ao salvar, cria o cartão no Kanban, na coluna "Em produção"'}</span></div><label class="switch"><input type="checkbox" ${e.tarefaId || e.__criarTarefa ? 'checked' : ''} ${e.tarefaId ? 'disabled' : ''} onchange="CNT_ED.__criarTarefa = this.checked"><span class="switch-slider"></span></label></div>
         <div class="kb-wiz-caixa kb-linha-switch"><div><strong>Usar em campanha de tráfego pago</strong><span>Marca o conteúdo pra equipe de tráfego</span></div><label class="switch"><input type="checkbox" ${e.trafego ? 'checked' : ''} onchange="CNT_ED.trafego = this.checked"><span class="switch-slider"></span></label></div>
         <div class="cnt-lado-campo"><label>${ic('tag', 'ic-herda')} Tags</label>
           <div class="kb-m-check-add"><input type="text" id="cnt-tag-nova" maxlength="30" placeholder="Adicionar tag..." onkeydown="if(event.key==='Enter'){ event.preventDefault(); cntAddTag(this.value); }"><button type="button" class="btn btn-small btn-primary" aria-label="Adicionar tag" onclick="cntAddTag(document.getElementById('cnt-tag-nova').value)">${ic('mais', 'ic-herda')}</button></div>
@@ -14696,11 +17141,8 @@ async function cntSalvarEditor(manterAberto) {
     if (!cntAtualizar(e.id, dados, mudouEtapa ? `Moveu de "${cntColuna(antes.etapa).nome}" para "${cntColuna(dados.etapa).nome}"` : 'Editou o conteúdo')) return false;
     salvo = CNT.find((x) => x.id === e.id);
   }
-  // tarefa vinculada no Kanban
-  if (e.__criarTarefa && !salvo.tarefaId && typeof kbCriarTarefa === 'function' && KB_CARREGADO) {
-    const t = kbCriarTarefa({ titulo: 'Conteúdo: ' + dados.titulo, cliente: dados.cliente, responsavel: dados.responsavel, prazo: dados.entrega, projetoId: dados.projetoId, etiquetas: ['conteúdo'] });
-    if (t) cntAtualizar(salvo.id, { tarefaId: t.id }, 'Criou a tarefa vinculada no Kanban');
-  }
+  // iniciar produção no Kanban
+  if (e.__criarTarefa && !prdTarefaDoConteudo(salvo)) prdIniciar(salvo.id, true);
   if (manterAberto) { CNT_ED = Object.assign(finLimpar(salvo), { __novo: false }); cntRenderEditor(); }
   else { srvFecharModal(); CNT_ED = null; }
   return true;
@@ -14713,40 +17155,24 @@ function cntLinkAprovacao(token) { return location.origin + location.pathname.re
 async function cntEnviarAprovacao(id) {
   const c = id && CNT.find((x) => x.id === id);
   if (!c || !cntPronto()) return;
-  if (c.cliente && typeof portalEfetivo === 'function' && portalEfetivo(portalPadrao(), portalCfgCliente(c.cliente)).link === 'portal') {
-    cntAtualizar(c.id, { etapa: cntColunas().some((x) => x.id === 'aprovacao') ? 'aprovacao' : c.etapa, status: 'aguardando' }, 'Enviou para aprovação no portal do cliente');
-    avisar(`"${c.titulo || 'Conteúdo'}" está esperando a aprovação de ${c.cliente} no portal (${portalLink()}).`, 'Aprovação');
-    return;
-  }
-  const token = (c.aprovacao && c.aprovacao.token) || (genId('ap') + Math.random().toString(36).slice(2, 10));
-  const empresa = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '';
-  const pub = { tenantId: TENANT_ID || 'local', conteudoId: c.id, empresaNome: empresa, titulo: c.titulo, tipo: (CNT_TIPOS[c.tipo] || {}).nome || '', legenda: c.legenda || '', midia: c.midia || {}, cliente: c.cliente || '',
-    publicacao: c.publicacao || '', redes: (c.redes || []).map((r) => CNT_REDES[r]).filter(Boolean), download: c.download === 'bloqueado' ? 'bloqueado' : 'pode', resposta: '', comentario: '', respondidoEm: '', enviadoEm: new Date().toISOString() };
-  if (cntNuvem()) {
-    try { await firestoreDb.collection(CNT_PUB_COLECAO).doc(token).set(finLimpar(pub)); }
-    catch (err) { cntErro(err); return; }
-  }
-  const link = cntLinkAprovacao(token);
-  cntAtualizar(c.id, { aprovacao: { token, status: 'pendente', enviadoEm: pub.enviadoEm }, etapa: cntColunas().some((x) => x.id === 'aprovacao') ? 'aprovacao' : c.etapa, status: 'aguardando' }, 'Enviou para aprovação do cliente');
+  if (!nivelPodeOperar()) { avisarSemPermissaoNivel('enviar para aprovação'); return; }
+  let token;
+  try { token = await aprPrepararLink(c, true); } catch (err) { cntErro(err); return; }
+  const ap = (CNT.find((x) => x.id === id) || {}).aprovacao || {};
+  const usaPortal = c.cliente && typeof portalEfetivo === 'function' && portalEfetivo(portalPadrao(), portalCfgCliente(c.cliente)).link === 'portal' && portalGarantirToken(c.cliente);
+  const link = usaPortal ? portalLinkCliente(c.cliente) : cntLinkAprovacao(token);
+  if (usaPortal) portalAgendarPublicacao();
   try { navigator.clipboard && navigator.clipboard.writeText(link); } catch (e) {}
-  avisar(`Link de aprovação copiado — mande pro cliente:\n${link}\n\nQuando ele responder, o conteúdo vai sozinho pra "Aprovado" ou "Revisão".`, 'Aprovação');
+  try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
+  avisar(`${ap.rodada > 1 ? `Versão ${ap.rodada} pronta. ` : ''}Link ${usaPortal ? 'do portal' : 'de aprovação'} copiado — mande para o cliente (ele abre sem login):\n${link}\n\nQuando ele responder, você recebe a notificação na hora e o cartão do Kanban anda sozinho: "Aprovados" ou "Alteração".`, 'Aprovação');
 }
 let CNT_APROV_ESCUTANDO = false;
 function cntEscutarAprovacoes() {
   if (CNT_APROV_ESCUTANDO || !cntNuvem() || !nivelPodeOperar()) return;
   CNT_APROV_ESCUTANDO = true;
   firestoreDb.collection(CNT_PUB_COLECAO).where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
-    snap.forEach((d) => {
-      const p = d.data();
-      if (!p.resposta || p.aplicado || !CNT_CARREGADO) return;
-      const c = CNT.find((x) => x.id === p.conteudoId);
-      if (!c) return;
-      const aprovou = p.resposta === 'aprovado';
-      const destino = aprovou ? 'aprovado' : 'revisao';
-      cntAtualizar(c.id, { aprovacao: Object.assign({}, c.aprovacao, { status: p.resposta, comentario: p.comentario || '', respondidoEm: p.respondidoEm }), status: aprovou ? 'aprovado' : 'andamento', etapa: cntColunas().some((x) => x.id === destino) ? destino : c.etapa },
-        aprovou ? 'Cliente aprovou pelo link' : `Cliente pediu ajustes: "${String(p.comentario || '').slice(0, 150)}"`);
-      d.ref.set({ aplicado: true }, { merge: true }).catch(() => {});
-    });
+    APR_DOCS = []; snap.forEach((d) => APR_DOCS.push({ id: d.id, ref: d.ref, p: d.data() }));
+    aprProcessar();
   }, (err) => console.error('Erro ao acompanhar aprovações:', err));
 }
 
@@ -14758,39 +17184,49 @@ async function carregarAprovacaoConteudo() {
   const el = document.getElementById('ap-conteudo');
   const msg = (t, s) => { el.innerHTML = `<div class="ap-caixa"><h1>${escapeHtml(t)}</h1><p>${escapeHtml(s || '')}</p></div>`; };
   if (!token || !firestoreDb) { msg('Link inválido', 'Confira o endereço com quem te enviou.'); return; }
-  try {
-    const snap = await firestoreDb.collection(CNT_PUB_COLECAO).doc(token).get();
+  // fica ouvindo: quando a agência manda uma nova versão ou entrega o
+  // arquivo final, a página se atualiza sozinha
+  firestoreDb.collection(CNT_PUB_COLECAO).doc(token).onSnapshot((snap) => {
     if (!snap.exists) { msg('Conteúdo não encontrado', 'O link pode ter expirado.'); return; }
     CNT_PUB = Object.assign({ token }, snap.data());
     cntRenderAprovacaoPublica();
-  } catch (e) { msg('Conteúdo não encontrado', 'O link pode ter expirado.'); }
+  }, () => msg('Conteúdo não encontrado', 'O link pode ter expirado.'));
 }
+const APR_MSG_AJUSTE = 'Recebemos sua solicitação, vamos produzir e logo te mandaremos o resultado.';
+const APR_MSG_APROVADO = 'Conteúdo aprovado! Em breve te mandaremos o arquivo final.';
 function cntRenderAprovacaoPublica() {
   const p = CNT_PUB, el = document.getElementById('ap-conteudo'), m = p.midia || {};
   const imgs = [m.capaUrl, m.url].concat(m.paginas || []).map(urlImagemSegura).filter(Boolean);
   const links = [m.url].concat(m.paginas || []).filter((u) => /^https:\/\//i.test(u || '') && !urlImagemSegura(u));
+  const entregue = p.fase === 'entregue';
+  const podeBaixar = p.download !== 'bloqueado' && (entregue || p.resposta === 'aprovado');
+  let estado = '';
+  if (entregue) estado = `<div class="ap-resp ok"><strong>Arquivo final entregue ✓</strong><p>${podeBaixar && (imgs.length || links.length) ? 'Os arquivos estão logo acima para baixar.' : 'A agência já te mandou o arquivo final.'}</p></div>`;
+  else if (p.resposta === 'aprovado') estado = `<div class="ap-resp ok"><strong>${escapeHtml(APR_MSG_APROVADO)}</strong></div>`;
+  else if (p.resposta === 'ajustes') estado = `<div class="ap-resp"><strong>${escapeHtml(APR_MSG_AJUSTE)}</strong>${p.comentario ? `<p>Seu pedido: “${escapeHtml(p.comentario)}”</p>` : ''}</div>`;
   el.innerHTML = `<div class="ap-caixa">
     ${p.empresaNome ? `<div class="ap-empresa">${escapeHtml(p.empresaNome)}</div>` : ''}
-    <span class="ap-tipo">${escapeHtml(p.tipo)}</span><h1>${escapeHtml(p.titulo || 'Conteúdo')}</h1>
+    <span class="ap-tipo">${escapeHtml(p.tipo)}${(Number(p.rodada) || 1) > 1 ? ` · versão ${Number(p.rodada)}` : ''}</span><h1>${escapeHtml(p.titulo || 'Conteúdo')}</h1>
     ${p.publicacao ? `<p class="ap-sub">Publicação prevista: ${escapeHtml(formatDatePt(p.publicacao))}${p.redes && p.redes.length ? ' · ' + escapeHtml(p.redes.join(', ')) : ''}</p>` : ''}
     ${imgs.length ? `<div class="ap-midia">${imgs.map((u) => `<img src="${escapeHtml(u)}" alt="" oncontextmenu="${p.download === 'bloqueado' ? 'return false;' : ''}">`).join('')}</div>` : ''}
-    ${links.length ? `<div class="ap-links">${links.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener">${p.download === 'bloqueado' ? 'Ver' : 'Abrir / baixar'} arquivo ${links.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
-    ${p.download !== 'bloqueado' && imgs.length ? `<div class="ap-links">${imgs.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" download>Baixar imagem ${imgs.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
+    ${links.length ? `<div class="ap-links">${links.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener">${podeBaixar ? 'Abrir / baixar' : 'Ver'} arquivo ${links.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
+    ${podeBaixar && imgs.length ? `<div class="ap-links">${imgs.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" download>Baixar imagem ${imgs.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
     ${p.legenda ? `<div class="ap-legenda">${escapeHtml(p.legenda).replace(/\n/g, '<br>')}</div>` : ''}
-    ${p.resposta ? `<div class="ap-resp ${p.resposta === 'aprovado' ? 'ok' : ''}">${p.resposta === 'aprovado' ? '✓ Você aprovou este conteúdo. Obrigado!' : 'Você pediu ajustes. A equipe já foi avisada.'}${p.comentario ? `<p>${escapeHtml(p.comentario)}</p>` : ''}</div>`
-      : `<div class="ap-acoes"><textarea id="ap-comentario" maxlength="1000" rows="3" placeholder="Comentário (obrigatório se pedir ajustes)"></textarea>
-        <div class="ap-botoes"><button type="button" class="ap-btn ajuste" onclick="cntResponderAprovacao('ajustes')">Pedir ajustes</button><button type="button" class="ap-btn ok" onclick="cntResponderAprovacao('aprovado')">Aprovar</button></div><p class="ap-erro" id="ap-erro"></p></div>`}
+    ${estado || `<div class="ap-acoes"><textarea id="ap-comentario" maxlength="1000" rows="3" placeholder="O que precisa mudar? (obrigatório para pedir alteração)"></textarea>
+        <div class="ap-botoes"><button type="button" class="ap-btn ajuste" onclick="cntResponderAprovacao('ajustes')">Pedir alteração</button><button type="button" class="ap-btn ok" onclick="cntResponderAprovacao('aprovado')">Aprovar</button></div>
+        <p class="ap-erro" id="ap-erro"></p></div>`}
   </div>`;
 }
 async function cntResponderAprovacao(resposta) {
   const com = (document.getElementById('ap-comentario').value || '').trim().slice(0, 1000);
-  if (resposta === 'ajustes' && !com) { document.getElementById('ap-erro').textContent = 'Conte o que precisa ajustar.'; return; }
+  if (resposta === 'ajustes' && !com) { document.getElementById('ap-erro').textContent = 'Conte o que precisa mudar.'; return; }
   const dados = { resposta: resposta === 'aprovado' ? 'aprovado' : 'ajustes', comentario: com, respondidoEm: new Date().toISOString() };
+  document.querySelectorAll('.ap-btn').forEach((b) => { b.disabled = true; });
   try {
     await firestoreDb.collection(CNT_PUB_COLECAO).doc(CNT_PUB.token).set(dados, { merge: true });
     Object.assign(CNT_PUB, dados);
     cntRenderAprovacaoPublica();
-  } catch (e) { document.getElementById('ap-erro').textContent = 'Não foi possível enviar agora. Tente de novo.'; }
+  } catch (e) { document.querySelectorAll('.ap-btn').forEach((b) => { b.disabled = false; }); document.getElementById('ap-erro').textContent = 'Não foi possível enviar agora. Tente de novo.'; }
 }
 
 // tutorial
@@ -14798,7 +17234,7 @@ if (typeof TOURS_CRM !== 'undefined') TOURS_CRM.conteudos = [
   { alvo: '.cnt-cab h1', titulo: 'Produção de Conteúdos', texto: 'Aqui a equipe produz os posts, vídeos e peças de cada cliente, etapa por etapa.' },
   { alvo: '.cnt-cab .btn-primary', titulo: 'Novo Conteúdo', texto: 'Escolha o tipo (Reels, Carrossel, Stories...) e preencha: mídia por link, legenda, roteiro, datas e responsável.' },
   { alvo: '.cnt-filtros', titulo: 'Filtros', texto: 'Filtre por cliente, projeto, tipo, período e veja só os seus ou os atrasados.' },
-  { alvo: '.cnt-quadro', titulo: 'Quadro', texto: 'Arraste os cartões entre as etapas. "Iniciar" conta o tempo de trabalho e "Ver histórico" mostra tudo o que aconteceu.' },
+  { alvo: '.cnt-quadro', titulo: 'Quadro', texto: 'Aqui fica o planejamento. "Iniciar produção" manda o conteúdo para o Kanban (projeto Produção de Conteúdo), onde a equipe trabalha; o cartão e o conteúdo andam juntos. "Ver histórico" mostra tudo o que aconteceu.' },
   { alvo: '#cnt-btn-mais', titulo: 'Gerar dos planos', texto: 'Os planos de conteúdo dos projetos (e os pacotes dos serviços) viram rascunhos aqui, com as datas já distribuídas.' },
 ];
 
@@ -15044,8 +17480,9 @@ function portalEfetivo(padrao, cfg) {
 function portalIniciarDados() {
   if (PORTAL_INICIADO) return;
   PORTAL_INICIADO = true;
-  cloudWatch(CFG_PORTAL_KEY, portalConfigPadrao(), (d) => { CFG_PORTAL_DATA = d; CFG_PORTAL_CARREGADO = true; portalRender(); });
-  cloudWatch(PORTAL_CLIENTES_KEY, {}, (d) => { PORTAL_CLIENTES = d && typeof d === 'object' ? d : {}; portalRender(); });
+  cloudWatch(CFG_PORTAL_KEY, portalConfigPadrao(), (d) => { CFG_PORTAL_DATA = d; CFG_PORTAL_CARREGADO = true; portalRender(); portalAgendarPublicacao(); });
+  cloudWatch(PORTAL_CLIENTES_KEY, {}, (d) => { PORTAL_CLIENTES = d && typeof d === 'object' ? d : {}; portalRender(); portalAgendarPublicacao(); });
+  cloudWatch(PORTAL_LINKS_KEY, {}, (d) => { PORTAL_LINKS = d && typeof d === 'object' ? d : {}; PORTAL_LINKS_CARREGADO = true; portalRender(); portalAgendarPublicacao(); });
   if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
     try {
       firestoreDb.collection('usuarios').where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
@@ -15070,21 +17507,21 @@ function portalRender() {
   const comLogin = new Set(PORTAL_LOGINS.map((l) => l.clienteNome));
   const personalizados = clientes.filter((n) => Object.keys(portalCfgCliente(n)).length);
   const b = kbNomeNorm(PORTAL_FILTRO.busca);
-  const lista = clientes.filter((n) => (!b || kbNomeNorm(n).includes(b)) && (PORTAL_FILTRO.tipo === 'todos' || (PORTAL_FILTRO.tipo === 'login' && comLogin.has(n)) || (PORTAL_FILTRO.tipo === 'personalizados' && personalizados.includes(n))));
+  const lista = clientes.filter((n) => (!b || kbNomeNorm(n).includes(b)) && (PORTAL_FILTRO.tipo === 'todos' || (PORTAL_FILTRO.tipo === 'login' && !!PORTAL_LINKS[n]) || (PORTAL_FILTRO.tipo === 'personalizados' && personalizados.includes(n))));
   host.innerHTML = `<div class="portal-equipe">
     <div class="fin-cab"><div><h1 style="display:flex; align-items:center; gap:8px;">${ic('globo')} Portal do cliente</h1><p>Onde seus clientes aprovam, acompanham a produção e mandam material.</p></div><span class="kb-espaco"></span>
-      <button type="button" class="btn" onclick="navigator.clipboard && navigator.clipboard.writeText(portalLink()); avisar('Link do portal copiado: ' + portalLink() + '\\n\\nO cliente entra com o e-mail e a senha do login dele.', 'Portal')">${ic('copiar', 'ic-herda')} Copiar link</button>
+      <span class="kb-vazio-mini" style="align-self:center;">Cada cliente tem o próprio link, sem login</span>
       <button type="button" class="btn" onclick="portalAbrirPrevia()">${ic('abrir', 'ic-herda')} Abrir portal</button>
       <button type="button" class="btn btn-primary" onclick="PORTAL_ABA = 'aparencia'; portalRender();">${ic('paleta', 'ic-herda')} Aparência e padrões</button></div>
     <div class="kb-segmento" style="margin-bottom:12px;">${[['clientes', 'Clientes'], ['aparencia', 'Aparência e padrões']].map(([a, t]) => `<button type="button" class="${PORTAL_ABA === a ? 'ativo' : ''}" onclick="PORTAL_ABA = '${a}'; portalRender();">${t}</button>`).join('')}</div>
     ${PORTAL_ABA === 'aparencia' ? portalHtmlPadroes() : `
-    <div class="portal-resumo"><span><b>${clientes.length}</b> clientes</span><span><b>${comLogin.size}</b> com login no portal</span><span><b>${personalizados.length}</b> com configuração própria</span><small>"Aparência e padrões" vale para todos; cada cliente pode ter o próprio ajuste.</small></div>
+    <div class="portal-resumo"><span><b>${clientes.length}</b> clientes</span><span><b>${clientes.filter((n) => PORTAL_LINKS[n]).length}</b> com link criado</span><span><b>${personalizados.length}</b> com configuração própria</span><small>"Aparência e padrões" vale para todos; cada cliente pode ter o próprio ajuste.</small></div>
     <div class="srv-acoes"><label class="kb-busca" style="flex:1; max-width:none;">${kbIc('busca')}<input type="search" id="portal-busca" placeholder="Buscar cliente..." value="${escapeHtml(PORTAL_FILTRO.busca)}" oninput="PORTAL_FILTRO.busca = this.value; portalRender();"></label>
-      ${[['todos', 'Todos'], ['login', 'Com login'], ['personalizados', 'Personalizados']].map(([v, t]) => `<button type="button" class="btn${PORTAL_FILTRO.tipo === v ? ' btn-primary' : ''}" onclick="PORTAL_FILTRO.tipo = '${v}'; portalRender();">${t}</button>`).join('')}</div>
+      ${[['todos', 'Todos'], ['login', 'Com link'], ['personalizados', 'Personalizados']].map(([v, t]) => `<button type="button" class="btn${PORTAL_FILTRO.tipo === v ? ' btn-primary' : ''}" onclick="PORTAL_FILTRO.tipo = '${v}'; portalRender();">${t}</button>`).join('')}</div>
     <div class="fin-painel" style="padding:0;">${lista.map((n) => { const nn = escapeHtml(JSON.stringify(n)); const nl = PORTAL_LOGINS.filter((l) => l.clienteNome === n).length; return `<div class="portal-linha">
-      <span class="cnt-fixado-av">${escapeHtml(initials(n))}</span><div style="flex:1; min-width:0;"><strong>${escapeHtml(n)}</strong><div><span class="srv-tag">${nl ? nl + ' login(s)' : 'Sem login'}</span>${Object.keys(portalCfgCliente(n)).length ? ' <span class="srv-tag ativo">Personalizado</span>' : ''}</div></div>
+      <span class="cnt-fixado-av">${escapeHtml(initials(n))}</span><div style="flex:1; min-width:0;"><strong>${escapeHtml(n)}</strong><div><span class="srv-tag${PORTAL_LINKS[n] ? ' ativo' : ''}">${PORTAL_LINKS[n] ? 'Link criado' : 'Sem link ainda'}</span>${Object.keys(portalCfgCliente(n)).length ? ' <span class="srv-tag ativo">Personalizado</span>' : ''}</div></div>
       <button type="button" class="btn btn-small" onclick="portalAbrirConfig(${nn})">${ic('configuracoes', 'ic-herda')} Configurar</button>
-      <button type="button" class="btn btn-small" onclick="portalAbrirLogins(${nn})">${ic('usuario', 'ic-herda')} Logins</button></div>`; }).join('') || '<p class="kb-vazio" style="padding:20px;">Nenhum cliente encontrado. Os clientes vêm de CRM → Clientes.</p>'}</div>`}
+      <button type="button" class="btn btn-small btn-primary" onclick="portalCopiarLink(${nn})">${ic('link', 'ic-herda')} Copiar link</button>${PORTAL_LINKS[n] ? `<button type="button" class="btn btn-small btn-ghost" title="Gerar um link novo (o antigo para de funcionar)" onclick="portalNovoLink(${nn})">${ic('repetir', 'ic-herda')}</button>` : ''}</div>`; }).join('') || '<p class="kb-vazio" style="padding:20px;">Nenhum cliente encontrado. Os clientes vêm de CRM → Clientes.</p>'}</div>`}
   </div>`;
   if (foco) { const i = document.getElementById(foco); if (i) { i.focus(); try { i.setSelectionRange(i.value.length, i.value.length); } catch (e) {} } }
 }
@@ -15254,7 +17691,7 @@ function portalIniciarProcessamento() {
       if (acao) m.historico = (c.historico || []).concat([{ em: new Date().toISOString(), por: c.cliente || 'Cliente', acao }]).slice(-60);
       d.ref.set(m, { merge: true }).catch((e) => console.error(e));
     }), () => {});
-    base.collection('portal_pedidos').where('processado', '==', false).onSnapshot((snap) => snap.forEach((d) => {
+    const processar = (d) => {
       const p = d.data();
       if (!p.cliente) return;
       const destino = portalEfetivo(portalPadrao(), portalCfgCliente(p.cliente)).pedidos;
@@ -15271,6 +17708,13 @@ function portalIniciarProcessamento() {
       }
       lote.set(d.ref, { processado: true, destino }, { merge: true });
       lote.commit().catch((e) => console.error('Erro ao processar pedido do portal:', e));
+    };
+    base.collection('portal_pedidos').where('processado', '==', false).onSnapshot((snap) => snap.forEach(processar), () => {});
+    firestoreDb.collection('portal_pedidos_publicos').where('tenantId', '==', TENANT_ID).where('processado', '==', false).onSnapshot((snap) => snap.forEach((d) => {
+      const p = d.data();
+      if (!p.portalToken || PORTAL_LINKS_CARREGADO && Object.values(PORTAL_LINKS).indexOf(p.portalToken) < 0) { d.ref.set({ processado: true, destino: 'ignorado' }, { merge: true }).catch(() => {}); return; }
+      processar(d);
+      notifRegistrar({ id: 'ped_' + d.id, em: p.criadoEm || new Date().toISOString(), tipo: 'info', titulo: `${p.cliente} mandou ${p.tipo === 'servico' ? 'um pedido de serviço' : 'uma ideia'}`, texto: String(p.titulo || '').slice(0, 100), acao: "mostrarSecaoCrm('kanban', document.querySelector('[data-menu-id=&quot;kanban&quot;]'))" });
     }), () => {});
   } catch (e) { console.error('Não foi possível acompanhar o portal:', e); }
 }
@@ -15286,6 +17730,25 @@ function initPortalCliente() {
   const el = document.getElementById('pc-app');
   const msg = (t, s) => { el.innerHTML = `<div class="ap-caixa"><h1>${escapeHtml(t)}</h1><p>${escapeHtml(s || '')}</p><p><a href="login.html" style="color:#22c55e;">Ir para o login</a></p></div>`; };
   if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) { msg('Portal indisponível', 'Não foi possível conectar agora. Verifique a internet e recarregue a página.'); return; }
+  // Portal sem login: o link do cliente (portal.html?p=...) abre direto
+  const tokenPublico = String(new URLSearchParams(location.search).get('p') || '').replace(/[^\w-]/g, '');
+  if (tokenPublico) {
+    const aviso = (t, s2) => { el.innerHTML = `<div class="ap-caixa"><h1>${escapeHtml(t)}</h1><p>${escapeHtml(s2 || '')}</p></div>`; };
+    PC.publico = true; PC.token = tokenPublico;
+    firestoreDb.collection('portais_publicos').doc(tokenPublico).onSnapshot((snap) => {
+      if (!snap.exists) { aviso('Link desativado', 'Peça um link novo para a agência.'); return; }
+      const d = snap.data();
+      TENANT_ID = d.tenantId; PC.cliente = d.cliente; PC.cfg = d.cfg;
+      if (!PC.aba || !PC.cfg.abas[PC.aba]) PC.aba = Object.keys(PC.cfg.abas).find((k) => PC.cfg.abas[k]) || 'producao';
+      PC.mes = PC.mes || finMesAtual();
+      // mantém na tela a resposta que o cliente acabou de dar até a agência processar
+      const locais = PC.respostasLocais || {};
+      PC.conteudos = (d.conteudos || []).map((c) => (locais[c.id] && locais[c.id].rodada === c.rodada && !c.portalResposta ? Object.assign({}, c, locais[c.id].campos) : c));
+      document.title = (PC.cfg.marca ? PC.cfg.marca + ' · ' : '') + 'Portal do cliente';
+      pcRender();
+    }, () => aviso('Portal indisponível', 'Não foi possível abrir agora. Tente de novo em instantes.'));
+    return;
+  }
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) { location.replace('login.html'); return; }
     try {
@@ -15332,7 +17795,7 @@ function pcRender() {
       <span class="pc-cliente">${escapeHtml(PC.cliente)}</span><span class="kb-espaco"></span>
       ${cfg.perm.sugerir ? '<button type="button" class="pc-btn" onclick="pcAbrirPedido(\'ideia\')">Sugerir ideia</button>' : ''}
       ${cfg.perm.servicos ? '<button type="button" class="pc-btn" onclick="pcAbrirPedido(\'servico\')">Solicitar serviço</button>' : ''}
-      <button type="button" class="pc-btn pc-sair" onclick="firebase.auth().signOut().then(() => location.replace('login.html'))">Sair</button></header>
+      ${PC.publico ? '' : `<button type="button" class="pc-btn pc-sair" onclick="firebase.auth().signOut().then(() => location.replace('login.html'))">Sair</button>`}</header>
     ${cfg.recado ? `<div class="pc-recado">${escapeHtml(cfg.recado)}</div>` : ''}
     ${pend ? `<div class="pc-aviso"><b>${pend}</b> conteúdo(s) esperando a sua aprovação.</div>` : ''}
     <nav class="pc-abas">${abas.map((k) => `<button type="button" class="${PC.aba === k ? 'ativo' : ''}" onclick="PC.aba = '${k}'; pcRender();">${ABAS[k]}</button>`).join('')}</nav>
@@ -15343,7 +17806,7 @@ function pcAcoes(c, compacto) {
   const cfg = PC.cfg, cat = pcCategoria(c), id = escapeParaOnclick(c.id);
   const m = c.midia || {}, links = [m.url, m.capaUrl].concat(m.paginas || []).filter((u) => /^https:\/\//i.test(u || ''));
   let h = '';
-  if (cat === 'aguardando') h += c.portalResposta ? `<span class="pc-estado">${c.portalResposta === 'aprovado' ? 'Você aprovou ✓' : 'Você pediu ajustes'}</span>` : `<button type="button" class="pc-btn pc-ok" onclick="pcResponder('${id}', 'aprovado')">Aprovar</button><button type="button" class="pc-btn" onclick="pcResponder('${id}', 'ajustes')">Pedir ajustes</button>`;
+  if (cat === 'aguardando') h += c.portalResposta ? `<span class="pc-estado">${c.portalResposta === 'aprovado' ? APR_MSG_APROVADO : APR_MSG_AJUSTE}</span>` : `<button type="button" class="pc-btn pc-ok" onclick="pcResponder('${id}', 'aprovado')">Aprovar</button><button type="button" class="pc-btn" onclick="pcResponder('${id}', 'ajustes')">Pedir ajustes</button>`;
   if (cfg.perm.postado && cat === 'aprovado') h += c.portalPostadoEm ? '<span class="pc-estado">Marcado como postado ✓</span>' : `<button type="button" class="pc-btn" onclick="pcPostado('${id}')">Marcar como postado</button>`;
   if (cfg.perm.baixar && c.download !== 'bloqueado' && links.length && !compacto) h += links.map((u, i) => `<a class="pc-link" href="${escapeHtml(u)}" target="_blank" rel="noopener" download>Baixar${links.length > 1 ? ' ' + (i + 1) : ''}</a>`).join('');
   return h ? `<div class="pc-acoes">${h}</div>` : '';
@@ -15400,12 +17863,37 @@ function pcSoCliente() { if (PC.previa) { alert('Na pré-visualização as açõ
 async function pcResponder(id, resposta) {
   if (!pcSoCliente()) return;
   let comentario = '';
-  if (resposta === 'ajustes') { comentario = (prompt('O que precisa ajustar?') || '').trim().slice(0, 1000); if (!comentario) return; }
+  if (resposta === 'ajustes') { comentario = (prompt('O que precisa mudar?') || '').trim().slice(0, 1000); if (!comentario) return; }
+  if (PC.publico) {
+    const c = PC.conteudos.find((x) => x.id === id);
+    if (!c || !c.aprovToken) { alert('Este conteúdo ainda não está liberado para aprovação. Tente de novo em alguns minutos.'); return; }
+    const dados = { resposta: resposta === 'aprovado' ? 'aprovado' : 'ajustes', comentario, respondidoEm: new Date().toISOString() };
+    try {
+      await firestoreDb.collection(CNT_PUB_COLECAO).doc(c.aprovToken).set(dados, { merge: true });
+      PC.respostasLocais = Object.assign({}, PC.respostasLocais, { [id]: { rodada: c.rodada, campos: { portalResposta: dados.resposta, portalComentario: comentario } } });
+      Object.assign(c, { portalResposta: dados.resposta, portalComentario: comentario });
+      pcRender();
+      pcMensagem(dados.resposta === 'aprovado' ? 'Aprovado ✓' : 'Pedido enviado ✓', dados.resposta === 'aprovado' ? APR_MSG_APROVADO : APR_MSG_AJUSTE);
+    } catch (e) { console.error(e); alert('Não foi possível enviar agora. Tente de novo.'); }
+    return;
+  }
   try { await firestoreDb.collection('tenants').doc(TENANT_ID).collection('conteudos').doc(id).set({ portalResposta: resposta, portalComentario: comentario, portalRespondidoEm: new Date().toISOString(), portalPendente: true }, { merge: true }); }
   catch (e) { console.error(e); alert('Não foi possível enviar agora. Tente de novo.'); }
 }
+function pcMensagem(titulo, texto) {
+  const el = document.getElementById('pc-modal');
+  if (!el) { alert(texto); return; }
+  el.innerHTML = `<div class="pc-modal-caixa"><h2>${escapeHtml(titulo)}</h2><p>${escapeHtml(texto)}</p><div class="ap-botoes"><button type="button" class="ap-btn ok" onclick="document.getElementById('pc-modal').innerHTML = ''">Fechar</button></div></div>`;
+}
 async function pcPostado(id) {
   if (!pcSoCliente() || !confirm('Confirmar que esse conteúdo já foi postado?')) return;
+  if (PC.publico) {
+    const c = PC.conteudos.find((x) => x.id === id);
+    if (!c || !c.aprovToken) { alert('Não foi possível marcar agora.'); return; }
+    try { await firestoreDb.collection(CNT_PUB_COLECAO).doc(c.aprovToken).set({ postadoEm: new Date().toISOString() }, { merge: true }); c.portalPostadoEm = new Date().toISOString(); pcRender(); }
+    catch (e) { console.error(e); alert('Não foi possível enviar agora.'); }
+    return;
+  }
   try { await firestoreDb.collection('tenants').doc(TENANT_ID).collection('conteudos').doc(id).set({ portalPostadoEm: new Date().toISOString(), portalPendente: true }, { merge: true }); }
   catch (e) { console.error(e); alert('Não foi possível enviar agora.'); }
 }
@@ -15424,6 +17912,13 @@ async function pcEnviarPedido(tipo) {
   const v = (id) => ((document.getElementById(id) || {}).value || '').trim();
   if (!v('pcp-titulo')) { document.getElementById('pcp-erro').textContent = 'Dê um título.'; return; }
   const links = v('pcp-links').split('\n').map((x) => x.trim()).filter((x) => /^https:\/\//i.test(x)).slice(0, 10).map((x) => x.slice(0, 500));
+  if (PC.publico) {
+    try {
+      await firestoreDb.collection('portal_pedidos_publicos').add({ tenantId: TENANT_ID, cliente: PC.cliente, portalToken: PC.token, tipo, titulo: v('pcp-titulo').slice(0, 100), texto: v('pcp-texto').slice(0, 2000), links, prazo: v('pcp-prazo').slice(0, 10), criadoEm: new Date().toISOString(), processado: false });
+      pcMensagem('Enviado ✓', APR_MSG_AJUSTE);
+    } catch (e) { console.error(e); document.getElementById('pcp-erro').textContent = 'Não foi possível enviar agora.'; }
+    return;
+  }
   try {
     await firestoreDb.collection('tenants').doc(TENANT_ID).collection('portal_pedidos').add({ cliente: PC.cliente, tipo, titulo: v('pcp-titulo').slice(0, 100), texto: v('pcp-texto').slice(0, 2000), links, prazo: v('pcp-prazo').slice(0, 10), criadoEm: new Date().toISOString(), processado: false, autorUid: USUARIO_UID });
     document.getElementById('pc-modal').innerHTML = `<div class="pc-modal-caixa"><h2>Enviado! ✓</h2><p>A agência já recebeu o seu ${tipo === 'servico' ? 'pedido' : 'sugestão'}.</p><div class="ap-botoes"><button type="button" class="ap-btn ok" onclick="document.getElementById('pc-modal').innerHTML = ''">Fechar</button></div></div>`;
@@ -15439,6 +17934,7 @@ async function pcEnviarPedido(tipo) {
 // Produtos (estoque), Pipeline/Página Pública (leads), Briefings e Portal.
 let CRM_DASH_TIMER = null;
 function crmAvisarDashboard() {
+  if (typeof atdAvisar === 'function' && ATD_INICIADO) atdAvisar();
   clearTimeout(CRM_DASH_TIMER);
   CRM_DASH_TIMER = setTimeout(() => {
     const s = document.getElementById('crm-secao-dashboard');
@@ -15462,6 +17958,26 @@ function dshLinha(texto, sub, origem, acao, cor) {
 }
 
 // ---------- tarefas atrasadas e de hoje (lista do dia + Kanban + Conteúdos) ----------
+function renderCrmDashKanbanResumo() {
+  const el = document.getElementById('crm-dash-kanban-resumo');
+  if (!el) return;
+  if (typeof KB_TAREFAS === 'undefined') { el.innerHTML = ''; return; }
+  const hoje = isoHoje(), em7 = atdMaisDias(hoje, 7), sem7 = atdMaisDias(hoje, -7);
+  const todas = dshKb();
+  const feita = (t) => { try { return kbConcluida(t); } catch (e) { return false; } };
+  const abertas = todas.filter((t) => !feita(t));
+  const atrasadas = abertas.filter((t) => t.prazo && t.prazo < hoje).length;
+  const deHoje = abertas.filter((t) => t.prazo === hoje).length;
+  const semana = abertas.filter((t) => t.prazo && t.prazo > hoje && t.prazo <= em7).length;
+  const semPrazo = abertas.filter((t) => !t.prazo).length;
+  const concluidas = todas.filter((t) => feita(t) && String(t.atualizadoEm || '').slice(0, 10) >= sem7).length;
+  const recentes = abertas.slice().sort((a, b) => String(b.atualizadoEm || b.criadoEm || '').localeCompare(String(a.atualizadoEm || a.criadoEm || ''))).slice(0, 4);
+  const num = (v, rot, cls) => `<div class="dsh-kb-num${cls ? ' ' + cls : ''}"><b>${v}</b><span>${rot}</span></div>`;
+  el.innerHTML = todas.length ? `<div class="dsh-kb-nums">${num(abertas.length, 'abertas')}${num(atrasadas, 'atrasadas', atrasadas ? 'neg' : '')}${num(deHoje, 'para hoje')}${num(semana, 'próx. 7 dias')}${num(semPrazo, 'sem prazo')}${num(concluidas, 'feitas na semana', 'pos')}</div>
+    ${recentes.length ? `<div class="cw-rotulo" style="margin:12px 0 4px;">Mexidas por último</div>${recentes.map((t) => dshLinha(t.titulo || 'Sem título', `${t.prazo ? (t.prazo < hoje ? '<b style="color:var(--danger);">Atrasada · ' + formatDatePt(t.prazo) + '</b>' : 'Prazo ' + formatDatePt(t.prazo)) : 'Sem prazo'}${t.cliente ? ' · ' + escapeHtml(t.cliente) : ''}${t.responsavel && typeof atdNomeUsuario === 'function' && atdNomeUsuario(t.responsavel) ? ' · ' + escapeHtml(atdNomeUsuario(t.responsavel)) : ''}`, 'Kanban', `dshIrKanban('${escapeParaOnclick(t.id)}')`)).join('')}` : ''}`
+    : '<div class="crm-dash-vazio"><p>Nenhuma tarefa no Kanban</p><span>As tarefas abertas, atrasadas e da semana aparecem aqui</span></div>';
+}
+
 function renderCrmDashTarefasFiltradas() {
   const hoje = isoHoje();
   const elAt = document.getElementById('crm-dash-tarefas-atrasadas'), elHoje = document.getElementById('crm-dash-tarefas-hoje');
@@ -15475,6 +17991,10 @@ function renderCrmDashTarefasFiltradas() {
   kb.filter((t) => t.prazo === hoje).forEach((t) => dia.push(dshLinha(t.titulo || 'Sem título', t.cliente ? escapeHtml(t.cliente) : '', 'Kanban', `dshIrKanban('${escapeParaOnclick(t.id)}')`)));
   cnt.filter((c) => c.entrega === hoje).forEach((c) => dia.push(dshLinha(c.titulo || 'Sem título', `Entrega${c.cliente ? ' · ' + escapeHtml(c.cliente) : ''}`, 'Conteúdo', `dshIrConteudo('${escapeParaOnclick(c.id)}')`)));
   if (elAt) elAt.innerHTML = at.length ? at.sort((a, b) => a.data.localeCompare(b.data)).slice(0, 8).map((x) => x.h).join('') + (at.length > 8 ? `<p class="kb-vazio-mini">+ ${at.length - 8} atrasada(s)</p>` : '') : '<div class="crm-dash-vazio"><p>Nenhuma tarefa atrasada ' + ic('festa') + '</p></div>';
+  // próximos 7 dias, para nenhuma tarefa com prazo ficar escondida
+  const em7 = atdMaisDias(hoje, 7);
+  const prox = kb.filter((t) => t.prazo > hoje && t.prazo <= em7).sort((a, b) => a.prazo.localeCompare(b.prazo));
+  if (prox.length) dia.push(`<div class="cw-rotulo" style="margin:10px 0 2px;">Próximos 7 dias</div>` + prox.slice(0, 4).map((t) => dshLinha(t.titulo || 'Sem título', `${formatDatePt(t.prazo)}${t.cliente ? ' · ' + escapeHtml(t.cliente) : ''}`, 'Kanban', `dshIrKanban('${escapeParaOnclick(t.id)}')`)).join('') + (prox.length > 4 ? `<p class="kb-vazio-mini">+ ${prox.length - 4} na semana</p>` : ''));
   if (elHoje) elHoje.innerHTML = dia.length ? dia.slice(0, 8).join('') + (dia.length > 8 ? `<p class="kb-vazio-mini">+ ${dia.length - 8} para hoje</p>` : '') : '<div class="crm-dash-vazio"><p>Nenhuma tarefa para hoje</p></div>';
 }
 
@@ -15520,7 +18040,7 @@ function renderCrmDashReunioes() {
     .map((t) => ({ data: t.prazo, hora: t.prazoHora || '', titulo: t.titulo, cliente: t.cliente, acao: `dshIrKanban('${escapeParaOnclick(t.id)}')` }));
   const todas = daAgenda.concat(doKanban).sort((a, b) => (a.data + (a.hora || '')).localeCompare(b.data + (b.hora || ''))).slice(0, 5);
   el.innerHTML = todas.length ? todas.map((r) => dshLinha(r.titulo, `${r.data === hoje ? '<b>Hoje</b>' : formatDatePt(r.data)}${r.hora ? ' · ' + escapeHtml(r.hora) : ''}${r.cliente ? ' · ' + escapeHtml(r.cliente) : ''}`, '', r.acao)).join('')
-    : '<div class="crm-dash-vazio"><p>Nenhuma reunião marcada</p><span>Tarefas do Kanban com "Reunião" no título aparecem aqui (e os compromissos da Agenda, quando ela chegar)</span></div>';
+    : '<div class="crm-dash-vazio"><p>Nenhuma reunião marcada</p><span>Os compromissos da Agenda e as tarefas do Kanban com "Reunião" no título aparecem aqui</span></div>';
 }
 
 // ---------- estoque (Produtos do CRM ou do ERP) ----------
@@ -16044,7 +18564,7 @@ function agComoConfigurarGoogle() {
 // apaga o que foi criado depois do backup. Antes de restaurar, baixa um
 // backup do estado atual. Logins não entram (contas não se recriam).
 const BKP_META_KEY = 'eagles_backup_meta_v1';
-const BKP_SUBCOLECOES = ['dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'agenda', 'portal', 'portal_pedidos', 'receitas_pendentes'];
+const BKP_SUBCOLECOES = ['dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'agenda', 'portal', 'portal_pedidos', 'receitas_pendentes', 'atend_envios'];
 const BKP_PUBLICAS = ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'conteudos_publicos', 'leads_publicos'];
 const BKP_LEMBRETE_DIAS = 30;
 const BKP_NOMES = { dados: 'Cadastros, CRM e configurações', kanban_tarefas: 'Tarefas do Kanban', kanban_projetos: 'Projetos', fin_lancamentos: 'Lançamentos financeiros', fin_recorrencias: 'Contas recorrentes', fin_meta: 'Controle do Financeiro', conteudos: 'Conteúdos', agenda: 'Compromissos', portal: 'Portal do Cliente', portal_pedidos: 'Pedidos do portal', receitas_pendentes: 'Receitas pendentes', propostas_publicas: 'Propostas', briefings_publicos: 'Briefings', planos_publicos: 'Planos publicados', paginas_publicas: 'Página pública', conteudos_publicos: 'Links de aprovação', leads_publicos: 'Leads do site', pix_publico: 'PIX' };
@@ -16304,6 +18824,15 @@ const CHATBOT_FAQ = [
         { p: 'Onde estão a Política de Privacidade e os Termos?', r: 'Na tela de login, embaixo do botão Entrar, e nos endereços eagleslabz.com.br/privacidade.html e eagleslabz.com.br/termos.html. A política explica o que o sistema faz com os dados, incluindo o Google Agenda, e quais são seus direitos pela LGPD.' },
         { p: 'Como copio as contas de um mês para o seguinte?', r: 'Financeiro → Receber ou Pagar → escolha o mês no filtro → "Duplicar". Marque as contas que quer copiar: elas vão para o mês seguinte como pendentes, com o vencimento no mesmo dia. Recorrentes e parcelas ficam de fora (o sistema já cria o mês seguinte delas), e duplicar de novo não cria cópia repetida.' },
         { p: 'O relatório do Meu Negócio é o mesmo do Financeiro?', r: 'Sim. Meu Negócio → Financeiro mostra exatamente o relatório de Financeiro → Relatórios: mesmo período, mesmos números, mesma DRE e mesmos gráficos. O período e o filtro de cliente escolhidos valem para os dois. Lembre: a coluna "Competência" conta cada conta no mês dela, paga ou não; a "Caixa" conta só o que entrou ou saiu de fato.' },
+        { p: 'Como funcionam as Automações do Atendimento?', r: 'Em Atendimento → Automações você cria automações (lembrete de cobrança, cobrança atrasada, novo lead, venda ganha, tarefa atribuída, prazo vencendo, aniversário, reativação...). Todo dia o sistema monta as mensagens de quem precisa receber e põe na "Fila de hoje". Você confere o texto e clica em Enviar: o WhatsApp abre com a mensagem pronta. Por enquanto o envio é assistido (você clica); quando o WhatsApp for conectado por API, as mesmas automações passam a enviar sozinhas.' },
+        { p: 'Por que uma mensagem da fila está "sem WhatsApp"?', r: 'Mensagens para clientes usam o telefone do cadastro do cliente no CRM (ou do negócio no funil). Mensagens para a equipe usam o WhatsApp cadastrado em Automações → Envio e destinatários. Preencha o número com DDD e a mensagem libera o botão Enviar.' },
+        { p: 'Como uso o Copywriter (IA)?', r: 'Agentes IA → Copywriter. Primeiro conecte uma IA em "Conectar IA" (chave da OpenAI, do Google Gemini ou da Anthropic Claude — o custo é cobrado direto pelo provedor). Depois escolha o cliente, preencha o perfil (nicho e público), escolha o tema (a IA sugere), o formato (carrossel, post, reels, stories, legenda, LinkedIn, anúncio ou e-mail) e os detalhes, e clique em Gerar. Dá para pedir ajustes e mandar o texto direto para o quadro de Conteúdos.' },
+        { p: 'Onde fica a chave de IA? É seguro?', r: 'O Diretor escolhe em "Chaves de IA": só neste navegador (cada pessoa cola a sua; a chave não sai do computador) ou na empresa (cola uma vez e vale para todos, mas qualquer pessoa logada da empresa consegue, tecnicamente, ver a chave). A chave só é usada para falar direto com o provedor. Dica: no painel do provedor, coloque um limite de gasto mensal na chave.' },
+        { p: 'O que faz o Analista (IA)?', r: 'Agentes IA → Analista lê os dados do sistema dos últimos 90 dias (funil, tarefas, conteúdos, clientes, agenda e, para quem vê o Financeiro, o financeiro), calcula os números e pede à IA um diagnóstico: nota de 0 a 100, o que vai bem, gargalos e ações priorizadas. Cada ação vira tarefa no Kanban com um clique. Dá para fazer perguntas também. O ideal é refazer a cada 15 dias.' },
+        { p: 'Como uso o Designer (IA)?', r: 'Agentes IA → Designer → Criar uma peça: escolha carrossel, post ou story; traga o texto do Copywriter, gere com IA ou digite; escolha o estilo (Editorial, Minimalista, Profile ou Impacto) e abra o editor. No editor você muda textos, cores, fonte, fundo (imagem do computador, por link ou gerada pela IA) e baixa os PNGs ou o PDF. As imagens ficam guardadas neste aparelho; os textos e cores ficam na nuvem.' },
+        { p: 'Qual a diferença entre Conteúdos e Kanban?', r: 'Conteúdos é o planejamento: tipo, legenda, roteiro, mídia, datas e cliente. Quando clicar em "Iniciar produção", o conteúdo vira um cartão no Kanban, no projeto "Produção de Conteúdo" (A fazer → Em produção → Aprovação do cliente → Alteração → Aprovados → Entregue). A equipe trabalha no Kanban; o conteúdo acompanha sozinho e o Dashboard conta as entregas.' },
+        { p: 'Como o cliente aprova um conteúdo?', r: 'No cartão do Kanban (ou no Conteúdos), clique em "Enviar para aprovação": o link é copiado e o cliente abre sem login. Se ele pedir alteração, o cartão volta para "Alteração" com o comentário; se aprovar, vai para "Aprovados". Você recebe a notificação na hora (sino no topo e aviso na tela). Depois da alteração, use "Reenviar ao cliente": é o mesmo link, com a nova versão.' },
+        { p: 'Como funciona o Portal do cliente sem login?', r: 'Em Portal do cliente, clique em "Copiar link" ao lado do cliente. O cliente abre direto, sem senha: vê a produção, aprova ou pede alteração e manda ideias e pedidos. O botão ao lado gera um link novo (o antigo para de funcionar).' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
@@ -20535,7 +23064,7 @@ async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
 
     // todas as subcoleções da empresa (antes só "dados" era apagada e as
     // tarefas/projetos do Kanban ficavam órfãos no banco)
-    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'portal', 'portal_pedidos', 'agenda']) {
+    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'portal', 'portal_pedidos', 'agenda', 'atend_envios']) {
       const snap = await firestoreDb.collection('tenants').doc(tenantId).collection(sub).get();
       const docs = []; snap.forEach((d) => docs.push(d.ref));
       for (let i = 0; i < docs.length; i += 400) { // limite de 500 operações por lote
@@ -20547,7 +23076,7 @@ async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
 
     // Páginas e links PÚBLICOS da empresa (site, propostas, briefings,
     // planos, aprovações, leads e PIX): antes ficavam no ar depois da exclusão.
-    for (const col of ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'leads_publicos', 'conteudos_publicos']) {
+    for (const col of ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'leads_publicos', 'conteudos_publicos', 'portais_publicos', 'portal_pedidos_publicos']) {
       const snap = await firestoreDb.collection(col).where('tenantId', '==', tenantId).get();
       const docs = []; snap.forEach((d) => docs.push(d.ref));
       for (let i = 0; i < docs.length; i += 400) { const lote = firestoreDb.batch(); docs.slice(i, i + 400).forEach((ref) => lote.delete(ref)); await lote.commit(); }

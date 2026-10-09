@@ -1,5 +1,5 @@
 // ---------- Service Worker · Eagles Labz ----------
-const CACHE_NAME = 'eagles-cache-v92';
+const CACHE_NAME = 'eagles-cache-v98';
 
 const APP_SHELL = [
   './',
@@ -39,7 +39,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  if (url.hostname.includes('firestore.googleapis.com') || url.hostname.includes('identitytoolkit.googleapis.com') || url.hostname.includes('securetoken.googleapis.com')) {
+  if (url.hostname.includes('firestore.googleapis.com') || url.hostname.includes('identitytoolkit.googleapis.com') || url.hostname.includes('securetoken.googleapis.com') ||
+      url.hostname === 'api.openai.com' || url.hostname === 'api.anthropic.com' || url.hostname === 'generativelanguage.googleapis.com') {
     return;
   }
 

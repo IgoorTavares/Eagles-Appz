@@ -4935,3 +4935,72 @@ body.sis-wiz-aberto { overflow: hidden; }
 .sis-passo.feito { color: var(--text-soft); text-decoration: line-through; }
 @media (max-width: 560px) { .sis-caixa { border-radius: 16px; } .sis-corpo, .sis-topo { padding-left: 16px; padding-right: 16px; } .sis-rodape { padding: 10px 16px 14px; flex-wrap: wrap; } .sis-opcoes { grid-template-columns: minmax(0, 1fr); } .sis-pergunta .sis-opcoes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .sis-rodape .btn-primary { margin-left: auto; }
+.tt-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.tt-campos .field { margin: 0; }
+.tt-campos select, .tt-campos input { width: 100%; font-size: 15px; }
+.tt-prev small { display: block; font-size: 11.5px; color: var(--text-soft); }
+.tt-prev-resp { max-width: 120px; font-size: 12.5px; padding: 4px 6px; }
+@media (max-width: 420px) { .tt-campos { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- ERP no celular: mesmo visual do CRM ---------- */
+.erp-gaveta, .erp-gaveta-fundo, .erp-tabbar { display: none; }
+@media (max-width: 860px) {
+  .pagina-erp-mob .erp-gaveta {
+    display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: 0; width: min(310px, 86vw); z-index: 420; overflow-y: auto;
+    background: var(--bg-elevated); border-right: 1px solid var(--border); border-radius: 0 18px 18px 0; padding: calc(16px + env(safe-area-inset-top, 0px)) 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-105%); transition: transform .25s ease; box-shadow: 0 0 40px rgba(0,0,0,.45);
+  }
+  .pagina-erp-mob.erp-gaveta-aberta .erp-gaveta { transform: none; }
+  .pagina-erp-mob .erp-gaveta-fundo { display: block; position: fixed; inset: 0; z-index: 410; background: rgba(0,0,0,.5); opacity: 0; pointer-events: none; transition: opacity .25s; }
+  .pagina-erp-mob.erp-gaveta-aberta .erp-gaveta-fundo { opacity: 1; pointer-events: auto; }
+  .pagina-erp-mob.erp-gaveta-aberta { overflow: hidden; }
+  .pagina-erp-mob .erp-gaveta-fechar { display: inline-flex; align-self: flex-start; margin: 0 0 12px; width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-soft); color: var(--text); align-items: center; justify-content: center; cursor: pointer; }
+  .erp-gaveta-novo { justify-content: center; padding: 13px; font-size: 15px; margin-bottom: 14px; text-decoration: none; }
+  .erp-gaveta-nav { display: flex; flex-direction: column; gap: 2px; }
+  .erp-gaveta-nav .mn-nav-item, .erp-gaveta-nav .mn-nav-sublink { display: flex; align-items: center; gap: 12px; width: 100%; text-decoration: none; border: 0; background: transparent; font: inherit; cursor: pointer; text-align: left; }
+  .erp-gaveta-nav .mn-nav-item { padding: 13px 12px; font-size: 16px; color: var(--text); border-radius: 12px; }
+  .erp-gaveta-nav .mn-nav-item .ic { width: 20px; height: 20px; color: var(--blue-strong); }
+  .erp-gaveta-nav .mn-nav-item.active { background: var(--blue-tint); color: var(--blue-text); box-shadow: inset 3px 0 0 var(--blue-strong); }
+  .erp-gaveta-grupo { border-bottom: 1px solid var(--border); padding: 2px 0; }
+  .erp-gaveta-cab .chevron { color: var(--text-soft); font-size: 12px; }
+  .erp-gaveta-sub { display: flex; flex-direction: column; padding: 0 0 8px 14px; }
+  .erp-gaveta-nav .mn-nav-sublink { padding: 10px 10px; font-size: 14.5px; color: var(--text-soft); border-radius: 10px; }
+  .erp-gaveta-nav .mn-nav-sublink .ic { width: 17px; height: 17px; color: var(--blue-strong); }
+  .erp-gaveta-nav .mn-nav-sublink.active { color: var(--blue-text); background: var(--blue-tint); }
+  .erp-gaveta-sep { height: 1px; background: var(--border); margin: 8px 0; }
+  /* barra de cima enxuta (o menu vira a gaveta) */
+  .pagina-erp-mob .topbar-mobile-toggle { border: none; background: none; padding: 0 6px; }
+  .pagina-erp-mob .topbar-mobile-toggle-texto { display: none; }
+  .pagina-erp-mob .topbar-profile-name { display: none; }
+  .pagina-erp-mob .topbar { padding: 0 10px; gap: 4px; }
+  .pagina-erp-mob #app-topbar.nav-open .topbar-nav { display: none !important; }
+  /* tela inicial + barra de baixo (reaproveita o visual do CRM) */
+  .pagina-erp-mob .erp-home-mobile { display: block; margin-bottom: 8px; }
+  .pagina-erp-mob .erp-tabbar {
+    display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; position: fixed; left: 0; right: 0; bottom: 0; z-index: 380;
+    height: calc(64px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: color-mix(in srgb, var(--bg-elevated) 94%, transparent); border-top: 1px solid var(--border); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  }
+  .pagina-erp-mob .erp-tabbar .crm-tab { text-decoration: none; }
+  .pagina-erp-mob .crm-home-tile { text-decoration: none; }
+  .pagina-erp-mob .main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
+  .pagina-erp-mob .chatbot-launcher { bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important; }
+  .pagina-erp-mob .erpan-launcher { bottom: calc(146px + env(safe-area-inset-bottom, 0px)) !important; }
+  .pagina-erp-mob .sis-hoje { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .pagina-erp-mob .sis-hoje-card b { font-size: 17px; }
+  .erp-criar { max-width: 420px; }
+  .erp-criar-lista { display: grid; gap: 6px; }
+  .erp-criar-op { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 14px; color: var(--text); text-decoration: none; background: var(--bg-soft); }
+  .erp-criar-op b { font-size: 15px; font-weight: 600; }
+}
+/* tela inicial e barra de baixo do CRM: as regras de tamanho também valem para o ERP */
+@media (max-width: 860px) {
+  .pagina-erp-mob .crm-home-ola { display: flex; align-items: center; gap: 10px; margin: 4px 0 18px; }
+  .pagina-erp-mob .crm-home-ola h2 { margin: 0; font-size: 26px; }
+  .pagina-erp-mob .crm-home-ola span { font-size: 14px; color: var(--text-soft); }
+}
+@media (max-width: 860px) {
+  .erp-gaveta-nav .mn-nav-item, .erp-gaveta-nav .mn-nav-sublink { justify-content: flex-start !important; text-align: left !important; }
+  .erp-gaveta-nav .erp-gaveta-cab .kb-espaco { flex: 1; }
+  .erp-chev { color: var(--text-soft); font-size: 13px; }
+}

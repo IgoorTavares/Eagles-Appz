@@ -215,6 +215,7 @@ const ICONES_SISTEMA = {
   lista: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
   mensagem: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   sino: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  carrinho: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
   ajuda: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
   colunas: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
   computador: '<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
@@ -6401,6 +6402,12 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '11/10/2026 · ERP no celular', itens: [
+    { titulo: 'ERP com o mesmo visual do CRM no celular', badges: ['melhoria'], texto: 'No celular, o ERP ganhou a gaveta lateral (com "Nova venda" e os grupos do menu), a tela inicial do Painel com "Olá" e a grade de atalhos, e a barra de baixo com o "+" no meio (novo pedido, cliente, produto, contrato, estoque, financeiro e tarefas). Tudo segue o plano, o perfil de operação e o Meu sistema.' },
+  ]},
+  { data: '11/10/2026 · Tarefas pelo celular', itens: [
+    { titulo: 'Tarefas do celular viram cartões no Kanban', badges: ['melhoria'], texto: 'Na página Tarefas do dia, escolha o profissional responsável e o cliente: cada linha vira um cartão no Kanban, na coluna "A Fazer", com o prazo do dia, o cliente e a pessoa certa. Na prévia dá para trocar o responsável de cada item, e na mensagem "@Ana" e "#Seven" escolhem a pessoa e o cliente daquela linha. A aba "Hoje" mostra os cartões com prazo de hoje (seus ou da equipe) e conclui com um toque.' },
+  ]},
   { data: '11/10/2026 · Meu sistema', itens: [
     { titulo: 'Questionário de primeiro acesso, com barra de progresso', badges: ['novo'], texto: 'Dados da empresa e perguntas que mudam conforme as respostas (a barra recalcula). Guarda o andamento, dá para voltar, pular perguntas ou deixar para depois. Empresas que já usavam o sistema veem só um convite no Painel.' },
     { titulo: '5 versões do sistema', badges: ['novo'], texto: 'Agência e serviços criativos, Serviços profissionais e consultoria, Serviços com hora marcada, Comércio e varejo, e Produção e serviço técnico (mais a Genérica). Cada uma mostra só as ferramentas certas, ajusta o funil e os nomes, e já cria categorias do financeiro, modelo de contrato, automações sugeridas (pausadas) e itens de exemplo opcionais. Tudo continua editável.' },
@@ -9788,7 +9795,7 @@ function erpanRender() {
 // marcadores (-, •, *, 1., ☐, ✅). Fica atrás do login (o celular já
 // fica conectado), então o link pode ficar salvo na tela inicial.
 const TT_DIAS = { dom: 0, domingo: 0, seg: 1, segunda: 1, ter: 2, terca: 2, qua: 3, quarta: 3, qui: 4, quinta: 4, sex: 5, sexta: 5, sab: 6, sabado: 6 };
-let TT = { data: '', texto: '', previa: [], carregado: false, aba: 'lancar' };
+let TT = { data: '', texto: '', previa: [], carregado: false, aba: 'lancar', resp: '', cliente: '', soMinhas: true };
 function ttSemAcento(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
 function ttProximoDia(dow, base) {
   const d = new Date((base || isoHoje()) + 'T12:00:00');
@@ -9806,6 +9813,12 @@ function ttLerDia(linha, base) {
   // tira o pedaço do dia do texto original (mesmo comprimento, com ou sem acento)
   return { data, resto: String(linha).trim().slice(m[0].length).trim() };
 }
+// "@Ana" escolhe a pessoa e "#Seven" o cliente daquela linha
+function ttLerMarcas(texto) {
+  let resp = '', cli = '';
+  const t = String(texto || '').replace(/(^|\s)@([\wÀ-ÿ.-]+)/g, (m, a, n) => { resp = n; return a; }).replace(/(^|\s)#([^\s#@][^#@]*?)(?=\s+[-–—]\s|\s*$|\s@)/g, (m, a, n) => { cli = n.trim(); return a; });
+  return { texto: t.replace(/\s+/g, ' ').trim(), resp, cli };
+}
 function ttLimparLinha(l) {
   return String(l || '').replace(/^\s*(?:[-•*·▪►✓✔☐☑✅⬜🔲🔳]+|\d{1,2}[.)-]|\[\s?[xX]?\s?\])\s*/u, '').replace(/\s+/g, ' ').trim();
 }
@@ -9820,7 +9833,7 @@ function ttLer(texto, dataPadrao, base) {
     if (d) {
       atual = d.data;
       const r = ttLimparLinha(d.resto);
-      if (r) out.push({ texto: r.slice(0, 200), data: d.data });
+      if (r) { const mk = ttLerMarcas(r); if (mk.texto) out.push({ texto: mk.texto.slice(0, 200), data: d.data, resp: mk.resp, cli: mk.cli }); }
       return;
     }
     // linha só com a data ("10/10" ou "10/10:") também vira cabeçalho
@@ -9834,11 +9847,12 @@ function ttLer(texto, dataPadrao, base) {
       if (!isNaN(new Date(isoFinal + 'T12:00:00'))) {
         atual = isoFinal;
         const r = ttLimparLinha(dm[4]);
-        if (r) out.push({ texto: r.slice(0, 200), data: isoFinal });
+        if (r) { const mk = ttLerMarcas(r); if (mk.texto) out.push({ texto: mk.texto.slice(0, 200), data: isoFinal, resp: mk.resp, cli: mk.cli }); }
         return;
       }
     }
-    out.push({ texto: l.slice(0, 200), data: atual });
+    const mk = ttLerMarcas(l);
+    if (mk.texto) out.push({ texto: mk.texto.slice(0, 200), data: atual, resp: mk.resp, cli: mk.cli });
   });
   return out;
 }
@@ -9851,30 +9865,66 @@ function ttNomeDia(iso) {
 }
 function ttIniciar() {
   TT.data = isoHoje();
-  cloudWatch(CRM_TAREFAS_KEY, [], (d) => { CRM_TAREFAS_DATA = Array.isArray(d) ? d : []; TT.carregado = true; ttRender(); });
+  TT.resp = USUARIO_UID || 'local';
+  kbIniciarDados(); // tarefas, projetos e equipe do Kanban
+  cloudWatch(CRM_CLIENTES_KEY, [], (d) => { CRM_CLIENTES_INDEP_DATA = Array.isArray(d) ? d : []; ttRender(); });
+  cloudWatch(CLIENTES_FORN_KEY, [], (d) => { TT.clientesErp = Array.isArray(d) ? d.filter((c) => c.tipoCadastro !== 'fornecedor').map((c) => c.nome || c.razaoSocial).filter(Boolean) : []; ttRender(); });
+  const esperar = () => { if (KB_CARREGADO) { TT.carregado = true; ttRender(); } else setTimeout(esperar, 400); };
+  esperar();
   ttRender();
+}
+function ttClientes() { return Array.from(new Set((CRM_CLIENTES_INDEP_DATA || []).map((c) => c.nome).concat(TT.clientesErp || []).filter(Boolean))).sort((a, b) => a.localeCompare(b)); }
+function ttEquipe() { return (typeof KB_USUARIOS !== 'undefined' && KB_USUARIOS.length ? KB_USUARIOS : [{ uid: USUARIO_UID || 'local', nome: USUARIO_NOME || 'Eu' }]); }
+// "@Ana" → uid de quem tem esse nome (primeiro nome ou começo do nome)
+function ttAcharPessoa(nome) {
+  const n = ttSemAcento(nome);
+  if (!n) return '';
+  const l = ttEquipe();
+  const u = l.find((x) => ttSemAcento(x.nome) === n) || l.find((x) => ttSemAcento(x.nome).split(' ')[0] === n) || l.find((x) => ttSemAcento(x.nome).startsWith(n));
+  return u ? u.uid : '';
+}
+function ttAcharCliente(nome) {
+  const n = ttSemAcento(nome);
+  if (!n) return '';
+  const l = ttClientes();
+  return l.find((x) => ttSemAcento(x) === n) || l.find((x) => ttSemAcento(x).startsWith(n)) || nome;
+}
+// coluna "A Fazer" do Kanban (pelo nome; se a equipe mudou as colunas, a primeira que não é final)
+function ttColunaAFazer() {
+  const cols = kbColunasGlobais();
+  return (cols.find((c) => c.id === 'afazer') || cols.find((c) => !c.final && kbNomeNorm(c.nome) === 'a fazer') || cols.find((c) => !c.final && /fazer|todo/.test(kbNomeNorm(c.nome))) || cols.find((c) => !c.final) || cols[0]).id;
 }
 function ttRender() {
   const el = document.getElementById('tt-app');
   if (!el) return;
   const foco = document.activeElement && document.activeElement.id;
   const hoje = isoHoje();
-  const deHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje));
-  const feitas = deHoje.filter((t) => tarefaConcluidaEm(t, hoje)).length;
+  const eu = USUARIO_UID || 'local';
+  const doKanban = (typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS : []).filter((t) => !t.arquivada && t.prazo === hoje && (!TT.soMinhas || t.responsavel === eu));
+  const feita = (t) => { try { return kbConcluida(t); } catch (e) { return false; } };
+  const feitas = doKanban.filter(feita).length;
+  const equipe = ttEquipe(), clientes = ttClientes();
+  const nomeDe = (uid) => (equipe.find((u) => u.uid === uid) || {}).nome || '';
   const porDia = {};
   TT.previa.forEach((p, i) => { (porDia[p.data] = porDia[p.data] || []).push(Object.assign({ i }, p)); });
   const empresa = (typeof PERFIL_DATA !== 'undefined' && PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || 'Eagles Labz';
+  const opPessoas = (sel) => equipe.map((u) => `<option value="${escapeHtml(u.uid)}" ${u.uid === sel ? 'selected' : ''}>${escapeHtml(u.nome)}${u.uid === eu ? ' (eu)' : ''}</option>`).join('');
   el.innerHTML = `
     <header class="tt-cab"><img src="assets/favicon-eagles.png" alt=""><div><strong>Tarefas do dia</strong><small>${escapeHtml(empresa)}${USUARIO_NOME ? ' · ' + escapeHtml(USUARIO_NOME) : ''}</small></div><span class="kb-espaco"></span><a class="btn btn-small" href="crm.html">Abrir o CRM</a></header>
-    <div class="kb-segmento tt-abas"><button type="button" class="${TT.aba === 'lancar' ? 'ativo' : ''}" onclick="TT.aba='lancar'; ttRender()">Lançar</button><button type="button" class="${TT.aba === 'hoje' ? 'ativo' : ''}" onclick="TT.aba='hoje'; ttRender()">Hoje (${feitas}/${deHoje.length})</button></div>
+    <div class="kb-segmento tt-abas"><button type="button" class="${TT.aba === 'lancar' ? 'ativo' : ''}" onclick="TT.aba='lancar'; ttRender()">Lançar</button><button type="button" class="${TT.aba === 'hoje' ? 'ativo' : ''}" onclick="TT.aba='hoje'; ttRender()">Hoje (${feitas}/${doKanban.length})</button></div>
     ${TT.aba === 'hoje' ? `
       <section class="fin-painel">
-        ${deHoje.length ? deHoje.map((t) => { const f = tarefaConcluidaEm(t, hoje); return `<button type="button" class="tt-item${f ? ' feita' : ''}" onclick="toggleTarefaCrm('${escapeParaOnclick(t.id)}'); ttRender();"><span class="tt-check">${f ? '✓' : ''}</span><span>${escapeHtml(t.texto)}${t.responsavel ? `<small>${escapeHtml(t.responsavel)}</small>` : ''}</span></button>`; }).join('') : '<p class="kb-vazio">Nenhuma tarefa para hoje.</p>'}
+        <div class="atd-chips" style="margin:0 0 6px;"><button type="button" class="${TT.soMinhas ? 'ativo' : ''}" onclick="TT.soMinhas=true; ttRender()">Minhas</button><button type="button" class="${!TT.soMinhas ? 'ativo' : ''}" onclick="TT.soMinhas=false; ttRender()">Da equipe</button></div>
+        ${!TT.carregado ? '<p class="kb-vazio">Carregando o Kanban...</p>' : doKanban.length ? doKanban.map((t) => { const f = feita(t); return `<button type="button" class="tt-item${f ? ' feita' : ''}" onclick="ttConcluir('${escapeParaOnclick(t.id)}')"><span class="tt-check">${f ? '✓' : ''}</span><span>${escapeHtml(t.titulo)}<small>${[t.cliente, !TT.soMinhas ? nomeDe(t.responsavel) : ''].filter(Boolean).map(escapeHtml).join(' · ')}</small></span></button>`; }).join('') : '<p class="kb-vazio">Nenhuma tarefa com prazo para hoje.</p>'}
       </section>` : `
       <section class="fin-painel">
         <label class="tt-rot" for="tt-texto">Cole a mensagem ou escreva uma tarefa por linha</label>
-        <textarea id="tt-texto" rows="8" maxlength="6000" placeholder="Segunda:&#10;- Gravar reels da Seven&#10;- Enviar orçamento Caniballs&#10;Terça:&#10;- Reunião às 10h&#10;&#10;(sem dia, entra na data escolhida abaixo)" oninput="TT.texto = this.value; ttAtualizarPrevia()">${escapeHtml(TT.texto)}</textarea>
-        <div class="tt-rot" style="margin-top:10px;">Tarefas sem dia entram em</div>
+        <textarea id="tt-texto" rows="7" maxlength="6000" placeholder="Segunda:&#10;- Gravar reels #Seven&#10;- Enviar orçamento @Ana&#10;Terça:&#10;- Reunião às 10h&#10;&#10;@pessoa e #cliente valem só para aquela linha" oninput="TT.texto = this.value; ttAtualizarPrevia()">${escapeHtml(TT.texto)}</textarea>
+        <div class="tt-campos">
+          <div class="field"><label for="tt-resp">Profissional responsável</label><select id="tt-resp" onchange="TT.resp = this.value; ttAtualizarPrevia(); ttRender()">${opPessoas(TT.resp)}</select></div>
+          <div class="field"><label for="tt-cliente">Cliente</label><input type="text" id="tt-cliente" list="tt-lista-clientes" placeholder="Opcional" value="${escapeHtml(TT.cliente)}" oninput="TT.cliente = this.value; ttAtualizarPrevia()"><datalist id="tt-lista-clientes">${clientes.map((c) => `<option value="${escapeHtml(c)}"></option>`).join('')}</datalist></div>
+        </div>
+        <div class="tt-rot" style="margin-top:10px;">Tarefas sem dia ficam com prazo</div>
         <div class="atd-chips" style="margin:0;">
           <button type="button" class="${TT.data === hoje ? 'ativo' : ''}" onclick="TT.data='${hoje}'; ttAtualizarPrevia(); ttRender()">Hoje</button>
           <button type="button" class="${TT.data === atdMaisDias(hoje, 1) ? 'ativo' : ''}" onclick="TT.data='${atdMaisDias(hoje, 1)}'; ttAtualizarPrevia(); ttRender()">Amanhã</button>
@@ -9882,32 +9932,44 @@ function ttRender() {
         </div>
       </section>
       ${TT.previa.length ? `<section class="fin-painel">
-        <div class="tt-rot">Vai lançar ${TT.previa.length} ${TT.previa.length === 1 ? 'tarefa' : 'tarefas'}</div>
-        ${Object.keys(porDia).sort().map((d) => `<div class="tt-dia"><b>${escapeHtml(ttNomeDia(d))}</b>${porDia[d].map((p) => `<div class="tt-prev"><span>${escapeHtml(p.texto)}</span><button type="button" class="cw-x" aria-label="Tirar" onclick="ttTirar(${p.i})">✕</button></div>`).join('')}</div>`).join('')}
-        <button type="button" class="btn btn-primary tt-lancar" onclick="ttLancar()" ${TT.carregado ? '' : 'disabled'}>Lançar ${TT.previa.length} ${TT.previa.length === 1 ? 'tarefa' : 'tarefas'}</button>
+        <div class="tt-rot">Vai criar ${TT.previa.length} ${TT.previa.length === 1 ? 'cartão' : 'cartões'} no Kanban, na coluna "A Fazer"</div>
+        ${Object.keys(porDia).sort().map((d) => `<div class="tt-dia"><b>${escapeHtml(ttNomeDia(d))}</b>${porDia[d].map((p) => `<div class="tt-prev"><span>${escapeHtml(p.texto)}<small>${escapeHtml([p.clienteFinal, nomeDe(p.respFinal)].filter(Boolean).join(' · '))}</small></span>
+          <select class="tt-prev-resp" aria-label="Responsável" onchange="TT.previa[${p.i}].respFinal = this.value; TT.previa[${p.i}].respFixo = true; ttRender()">${opPessoas(p.respFinal)}</select>
+          <button type="button" class="cw-x" aria-label="Tirar" onclick="ttTirar(${p.i})">✕</button></div>`).join('')}</div>`).join('')}
+        <button type="button" class="btn btn-primary tt-lancar" onclick="ttLancar()" ${TT.carregado ? '' : 'disabled'}>${TT.carregado ? `Criar ${TT.previa.length} ${TT.previa.length === 1 ? 'cartão' : 'cartões'} no Kanban` : 'Carregando o Kanban...'}</button>
       </section>` : ''}`}
     <p class="kb-vazio-mini tt-dica">Dica: no celular, toque em Compartilhar → "Adicionar à tela de início" para ter este atalho sempre à mão.</p>`;
-  if (foco) { const f = document.getElementById(foco); if (f) { f.focus(); if (f.tagName === 'TEXTAREA') f.setSelectionRange(f.value.length, f.value.length); } }
+  if (foco) { const f = document.getElementById(foco); if (f) { f.focus(); if (f.tagName === 'TEXTAREA' || f.type === 'text') try { f.setSelectionRange(f.value.length, f.value.length); } catch (e) {} } }
 }
 let TT_TIMER = null;
 function ttAtualizarPrevia() {
-  TT.previa = ttLer(TT.texto, TT.data);
+  const antes = TT.previa;
+  TT.previa = ttLer(TT.texto, TT.data).map((p, i) => {
+    const velho = antes[i] && antes[i].texto === p.texto ? antes[i] : null;
+    return Object.assign(p, {
+      respFinal: velho && velho.respFixo ? velho.respFinal : (p.resp && ttAcharPessoa(p.resp)) || TT.resp,
+      respFixo: !!(velho && velho.respFixo), clienteFinal: p.cli ? ttAcharCliente(p.cli) : TT.cliente.trim(),
+    });
+  });
   clearTimeout(TT_TIMER);
   TT_TIMER = setTimeout(ttRender, 250);
 }
 function ttTirar(i) { TT.previa.splice(i, 1); ttRender(); }
 function ttLancar() {
   if (!TT.previa.length) return;
-  if (FIREBASE_PRONTO && TENANT_ID && !nivelPodeOperar()) { avisarSemPermissaoNivel('lançar tarefas'); return; }
-  const agora = new Date().toISOString();
-  const novas = TT.previa.map((p) => ({ id: genId('tf'), texto: p.texto, descricao: '', responsavel: USUARIO_NOME || '', recorrencia: 'nenhuma', feita: false, concluidasEm: [], data: p.data, criadoEm: agora, origem: 'celular' }));
-  CRM_TAREFAS_DATA = CRM_TAREFAS_DATA.concat(novas);
-  if (cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA) === false) return;
-  const n = novas.length;
-  TT.texto = ''; TT.previa = []; TT.aba = novas.some((t) => t.data === isoHoje()) ? 'hoje' : 'lancar';
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelPodeOperar()) { avisarSemPermissaoNivel('criar tarefas'); return; }
+  if (!KB_CARREGADO) { avisar('O Kanban ainda está carregando. Tente de novo em alguns segundos.'); return; }
+  const status = ttColunaAFazer();
+  let n = 0;
+  TT.previa.forEach((p) => {
+    if (kbCriarTarefa({ titulo: p.texto.slice(0, 140), cliente: p.clienteFinal || '', responsavel: p.respFinal || '', prazo: p.data, status, etiquetas: ['celular'], origem: 'celular' })) n++;
+  });
+  if (!n) return;
+  TT.texto = ''; TT.previa = []; TT.aba = 'lancar';
   ttRender();
-  avisar(`${n} ${n === 1 ? 'tarefa lançada' : 'tarefas lançadas'}. Já aparecem em Tarefas diárias no Dashboard do CRM.`, 'Tarefas do dia');
+  avisar(`${n} ${n === 1 ? 'cartão criado' : 'cartões criados'} no Kanban, na coluna "A Fazer". Quem foi escolhido como responsável já vê no quadro dele.`, 'Tarefas do dia');
 }
+function ttConcluir(id) { try { kbAlternarConcluida(id); } catch (e) { console.error(e); } setTimeout(ttRender, 100); }
 // no Dashboard: o link para abrir no celular (com QR Code)
 function ttAbrirLinkCelular() {
   const link = location.origin + location.pathname.replace(/[^/]*$/, '') + 'tarefas.html';
@@ -9916,7 +9978,7 @@ function ttAbrirLinkCelular() {
   const ov = srvGarantirModal();
   ov.innerHTML = `<div class="modal kb-modal" style="max-width:480px;" role="dialog" aria-modal="true">
     <div class="modal-header"><h2>Lançar tarefas pelo celular</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
-    <p class="cfg-modal-sub">Abra este link no celular, cole a mensagem com as atividades (uma por linha; dá para separar por dia da semana) e toque em Lançar. As tarefas aparecem aqui na hora.</p>
+    <p class="cfg-modal-sub">Abra este link no celular, cole a mensagem com as atividades (uma por linha; dá para separar por dia da semana), escolha o profissional e o cliente e toque em Criar. Os cartões aparecem na hora no Kanban, na coluna "A Fazer".</p>
     ${qr ? `<div class="tt-qr">${qr}<small>Aponte a câmera do celular</small></div>` : ''}
     <div class="lk-linha"><input type="text" id="tt-link" readonly value="${escapeHtml(link)}" onclick="this.select()"><button type="button" class="btn btn-primary" onclick="navigator.clipboard && navigator.clipboard.writeText('${escapeParaOnclick(link)}'); this.textContent='Copiado!'">Copiar</button></div>
     <div class="lk-opcoes"><button type="button" class="lk-opcao lk-whats" onclick="window.open('https://wa.me/?text=' + encodeURIComponent('Lançar tarefas do dia: ${escapeParaOnclick(link)}'), '_blank', 'noopener')"><span>${ic('conversa', 'ic-herda')}</span><b>Mandar para o meu WhatsApp</b><small>para abrir no celular</small></button></div>
@@ -10984,6 +11046,104 @@ async function sisMontarParaEmpresa(tenantId, versao) {
   } catch (e) { console.error(e); avisar('Não foi possível gravar na empresa.'); }
 }
 
+
+// =====================================================================
+// ---------- ERP no celular: gaveta + tela inicial + barra de baixo (igual ao CRM) ----------
+// =====================================================================
+const ERP_MOB_ICONES = { painel: 'quadro', 'meu-negocio': 'grafico', cadastros: 'pessoas', vendas: 'carrinho', estoque: 'caixa', financeiro: 'dinheiro', crm: 'conversa',
+  produtos: 'pacote', 'clientes-fornecedores': 'pessoas', vendedores: 'usuario', funcionarios: 'usuario', 'pedidos-venda': 'documento', 'objetos-postagem': 'enviar', contratos: 'prancheta', 'nfse-externo': 'abrir',
+  'estoque-posicao': 'caixa', 'lancamentos-estoque': 'repetir', 'conferencia-estoque': 'aprovado', 'pedido-compras': 'carrinho', 'notas-fiscais-entrada': 'documento', 'fornecedores-atalho': 'pessoas' };
+function erpEhCelular() { return window.matchMedia && window.matchMedia('(max-width: 860px)').matches; }
+function erpMobItens() {
+  // mesmos itens do menu de cima, com os mesmos filtros (plano, perfil e Meu sistema)
+  const ok = (i) => itemVisivelNoPlano(i) && (!i.soProdutos || perfilOpVendeProdutos()) && (!i.modulo || [].concat(i.modulo).some((m) => sisModuloAtivo(m)));
+  const rot = (c) => { if (c.key === 'pedidos-venda') { const t = sisTermo('pedido', 'Pedido'); return t === 'Pedido' ? c.label : t + 's'; } if (c.key === 'clientes-fornecedores') return sisTermo('cliente', 'Cliente') + 's e Fornecedores'; return c.label; };
+  return NAV_ITEMS.filter(ok).map((it) => {
+    const filhos = (it.children || []).filter(ok).concat(...((it.columns || []).map((col) => col.items.filter(ok))));
+    return { key: it.key, label: it.label, href: it.href || '', filhos: filhos.map((c) => ({ key: c.key, label: rot(c), href: c.href, externo: !!c.externo })) };
+  }).filter((it) => it.href || it.filhos.length || it.type === 'meu-negocio');
+}
+function erpMontarMobile(activeKey) {
+  if (document.getElementById('crm-sidebar-painel') || document.getElementById('erp-tabbar') || !document.getElementById('app-topbar')) return;
+  if (!ERPAN_PAGINAS.includes(activeKey)) return;
+  document.body.classList.add('pagina-erp-mob');
+  // gaveta
+  const g = document.createElement('aside');
+  g.id = 'erp-gaveta'; g.className = 'erp-gaveta'; g.setAttribute('aria-label', 'Menu');
+  document.body.appendChild(g);
+  const fundo = document.createElement('div');
+  fundo.id = 'erp-gaveta-fundo'; fundo.className = 'erp-gaveta-fundo';
+  fundo.addEventListener('click', erpFecharGaveta);
+  document.body.appendChild(fundo);
+  // barra de baixo
+  const bar = document.createElement('nav');
+  bar.id = 'erp-tabbar'; bar.className = 'crm-tabbar erp-tabbar'; bar.setAttribute('aria-label', 'Atalhos');
+  document.body.appendChild(bar);
+  // tela inicial no Painel
+  const main = document.querySelector('.main');
+  if (activeKey === 'painel' && main && !document.getElementById('erp-home-mobile')) main.insertAdjacentHTML('afterbegin', '<div class="crm-home-mobile erp-home-mobile" id="erp-home-mobile"></div>');
+  ERP_MOB_ATIVA = activeKey;
+  erpRenderMobile();
+}
+let ERP_MOB_ATIVA = '';
+let ERP_GAVETA_ABERTOS = {};
+function erpRenderMobile() {
+  const ativa = ERP_MOB_ATIVA;
+  const itens = erpMobItens();
+  const g = document.getElementById('erp-gaveta');
+  if (g) {
+    g.innerHTML = `<button type="button" class="crm-gaveta-fechar erp-gaveta-fechar" aria-label="Fechar menu" onclick="erpFecharGaveta()">${ic('x', 'ic-herda')}</button>
+      <a class="btn btn-primary erp-gaveta-novo" href="pedidos-venda.html?novo=1">${ic('mais', 'ic-herda')} Nova ${sisTermo('pedido', 'Pedido') === 'Pedido' ? 'venda' : sisTermo('pedido', 'Pedido').toLowerCase()}</a>
+      <nav class="erp-gaveta-nav">${itens.map((it) => {
+        const temAtivo = it.key === ativa || it.filhos.some((c) => c.key === ativa);
+        if (!it.filhos.length) return `<a class="mn-nav-item${temAtivo ? ' active' : ''}" href="${it.href || 'index.html'}">${ic(ERP_MOB_ICONES[it.key] || 'quadro', 'ic-herda')} ${escapeHtml(it.label)}</a>`;
+        const aberto = ERP_GAVETA_ABERTOS[it.key] !== undefined ? ERP_GAVETA_ABERTOS[it.key] : temAtivo;
+        return `<div class="erp-gaveta-grupo"><button type="button" class="mn-nav-item erp-gaveta-cab" onclick="ERP_GAVETA_ABERTOS['${it.key}'] = ${!aberto}; erpRenderMobile()" aria-expanded="${aberto}">${ic(ERP_MOB_ICONES[it.key] || 'quadro', 'ic-herda')} ${escapeHtml(it.label)}<span class="kb-espaco"></span><span class="erp-chev">${aberto ? '▴' : '▾'}</span></button>
+          ${aberto ? `<div class="erp-gaveta-sub">${it.filhos.map((c) => `<a class="mn-nav-sublink${c.key === ativa ? ' active' : ''}" href="${c.href}"${c.externo ? ' target="_blank" rel="noopener"' : ''}>${ic(ERP_MOB_ICONES[c.key] || 'documento', 'ic-herda')} ${escapeHtml(c.label)}</a>`).join('')}</div>` : ''}</div>`;
+      }).join('')}
+        <div class="erp-gaveta-sep"></div>
+        <a class="mn-nav-item" href="tarefas.html">${ic('tarefas', 'ic-herda')} Tarefas do dia</a>
+        <button type="button" class="mn-nav-item" onclick="erpFecharGaveta(); sisAbrirMeuSistema()">${ic('camadas', 'ic-herda')} Meu sistema</button>
+        <a class="mn-nav-item" href="configuracoes.html">${ic('configuracoes', 'ic-herda')} Configurações</a>
+      </nav>`;
+  }
+  // barra de baixo: Início, Vendas, +, Financeiro e o 4º conforme o sistema
+  const quarto = sisModuloAtivo('estoque') && perfilOpVendeProdutos() ? ['estoque-posicao', 'Estoque', 'caixa', 'estoque.html'] : sisModuloAtivo('contratos') ? ['contratos', 'Contratos', 'prancheta', 'contratos.html'] : ['clientes-fornecedores', sisTermo('cliente', 'Cliente') + 's', 'pessoas', 'clientes-fornecedores.html'];
+  const tabs = [['painel', 'Início', 'quadro', 'index.html'], ['pedidos-venda', sisTermo('pedido', 'Pedido') === 'Pedido' ? 'Vendas' : sisTermo('pedido', 'Pedido') + 's', 'documento', 'pedidos-venda.html'], ['+'], ['financeiro', 'Financeiro', 'dinheiro', 'financeiro.html'], quarto];
+  const bar = document.getElementById('erp-tabbar');
+  if (bar) bar.innerHTML = tabs.map(([k, t, i, h]) => k === '+' ? `<button type="button" class="crm-tab-mais" aria-label="Criar" onclick="erpAbrirCriar()">${ic('mais', 'ic-herda')}</button>`
+    : `<a class="crm-tab${k === ativa ? ' ativo' : ''}" href="${h}" aria-label="${escapeHtml(t)}">${ic(i, 'ic-herda')}<span>${escapeHtml(t)}</span></a>`).join('');
+  // tela inicial
+  const home = document.getElementById('erp-home-mobile');
+  if (home) {
+    const nome = String((typeof USUARIO_NOME !== 'undefined' && USUARIO_NOME) || (PERFIL_DATA && PERFIL_DATA.nomeFantasia) || '').split(' ')[0];
+    const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const atalhos = [['meu-negocio', 'Meu Negócio', 'grafico', 'meu-negocio.html'], ['clientes-fornecedores', sisTermo('cliente', 'Cliente') + 's', 'pessoas', 'clientes-fornecedores.html'], ['produtos', 'Produtos', 'pacote', 'produtos.html'],
+      ['pedidos-venda', sisTermo('pedido', 'Pedido') === 'Pedido' ? 'Vendas' : sisTermo('pedido', 'Pedido') + 's', 'documento', 'pedidos-venda.html'], ['estoque-posicao', 'Estoque', 'caixa', 'estoque.html', 'estoque'], ['pedido-compras', 'Compras', 'carrinho', 'pedido-compras.html', 'compras'],
+      ['contratos', 'Contratos', 'prancheta', 'contratos.html', 'contratos'], ['financeiro', 'Financeiro', 'dinheiro', 'financeiro.html'], ['tarefas', 'Tarefas', 'tarefas', 'tarefas.html'],
+      ['crm', 'CRM', 'conversa', 'crm.html', '', 'crm'], ['meu-sistema', 'Meu sistema', 'camadas', '#'], ['configuracoes', 'Configurações', 'configuracoes', 'configuracoes.html']]
+      .filter(([k, , , , mod, plano]) => (!mod || (sisModuloAtivo(mod) && (!['estoque', 'compras'].includes(mod) || perfilOpVendeProdutos()))) && (!plano || !TENANT_PLANO || TENANT_PLANO === 'ambos' || TENANT_PLANO === plano));
+    home.innerHTML = `<div class="crm-home-ola"><div><h2>Olá${nome ? ', ' + escapeHtml(nome) : ''}</h2><span>${escapeHtml(hoje)}</span></div></div>
+      <div class="crm-home-rotulo">Menu</div>
+      <div class="crm-home-grade">${atalhos.map(([k, t, i, h]) => k === 'meu-sistema' ? `<button type="button" class="crm-home-tile" onclick="sisAbrirMeuSistema()"><span class="crm-home-ic">${ic(i, 'ic-herda')}</span><span class="crm-home-txt">${t}</span></button>` : `<a class="crm-home-tile" href="${h}"><span class="crm-home-ic">${ic(i, 'ic-herda')}</span><span class="crm-home-txt">${escapeHtml(t)}</span></a>`).join('')}</div>
+      <div class="crm-home-rotulo">Resumo rápido</div>`;
+  }
+}
+function erpAbrirGaveta() { document.body.classList.add('erp-gaveta-aberta'); }
+function erpFecharGaveta() { document.body.classList.remove('erp-gaveta-aberta'); }
+// o "+" do meio: o que dá para criar daqui
+function erpAbrirCriar() {
+  const op = [['pedidos-venda.html?novo=1', 'documento', `Nov${sisTermo('pedido', 'Pedido') === 'Pedido' ? 'o pedido de venda' : 'o ' + sisTermo('pedido', 'Pedido').toLowerCase()}`],
+    ['clientes-fornecedores.html?novo=1', 'pessoas', `Novo ${sisTermo('cliente', 'Cliente').toLowerCase()}`], ['produtos.html?novo=1', 'pacote', 'Novo produto ou serviço'],
+    sisModuloAtivo('estoque') && perfilOpVendeProdutos() ? ['estoque.html', 'caixa', 'Entrada ou saída de estoque'] : null,
+    sisModuloAtivo('contratos') ? ['contratos.html?novo=1', 'prancheta', 'Novo contrato'] : null,
+    ['financeiro.html', 'dinheiro', 'Lançar no financeiro'], ['tarefas.html', 'tarefas', 'Tarefas do dia']].filter(Boolean);
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal erp-criar" role="dialog" aria-modal="true"><div class="modal-header"><h2>Criar</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="erp-criar-lista">${op.map(([h, i, t]) => `<a class="erp-criar-op" href="${h}"><span class="crm-home-ic">${ic(i, 'ic-herda')}</span><b>${escapeHtml(t)}</b></a>`).join('')}</div></div>`;
+  openModal('modal-srv');
+}
+
 function renderCrmEmConstrucao(secao) {
   const info = CRM_EM_CONSTRUCAO_INFO[secao];
   const el = document.getElementById('crm-secao-' + secao);
@@ -11575,6 +11735,7 @@ function itemVisivelNoPlano(item) {
 function renderTopbar(activeKey) {
   const nav = document.getElementById('topbar-nav');
   if (!nav) return;
+  if (typeof erpRenderMobile === 'function' && document.getElementById('erp-tabbar')) setTimeout(erpRenderMobile, 0);
 
   let html = '';
   const soProd = (i) => (!i.soProdutos || typeof perfilOpVendeProdutos !== 'function' || perfilOpVendeProdutos()) && (!i.modulo || typeof sisModuloAtivo !== 'function' || [].concat(i.modulo).some((m) => sisModuloAtivo(m)));
@@ -11642,6 +11803,7 @@ document.addEventListener('click', (e) => {
 });
 
 function toggleMobileNav() {
+  if (document.body.classList.contains('pagina-erp-mob') && erpEhCelular()) { document.body.classList.toggle('erp-gaveta-aberta'); return; }
   if (document.body.classList.contains('pagina-crm') && crmEhCelular()) {
     // a gaveta abre sempre completa (desfaz o "recolhido" de quando a tela era maior)
     const painel = document.getElementById('crm-sidebar-painel');
@@ -20580,7 +20742,7 @@ const CHATBOT_FAQ = [
         { p: 'Onde gerencio a equipe?', r: 'CRM → Operacional → Equipe. Ali o Diretor adiciona pessoas (nome, e-mail, senha e nível), muda o nível de acesso, remove quem saiu e cadastra o WhatsApp de cada um (o mesmo usado nas Automações). Também mostra quantas tarefas e conteúdos cada pessoa tem em aberto, e permite apagar os logins antigos de cliente do portal.' },
         { p: 'Como compartilho o link de aprovação?', r: 'Clique no ícone de link do conteúdo (ou em "Enviar para aprovação" no cartão do Kanban). Abre uma janela com o link, o botão "Copiar link" e as opções de compartilhar por WhatsApp (já com o número do cliente, se estiver no cadastro) ou e-mail, com uma mensagem pronta que você pode editar.' },
         { p: 'O que é o botão do Analista no ERP?', r: 'É o botão com o ícone de gráfico, logo acima do robozinho, nas telas do ERP. Ele abre o Analista do negócio: lê vendas, estoque, compras, notas, contratos, clientes e (para quem vê) o financeiro dos últimos 90 dias e devolve uma nota geral, uma nota por área e uma lista de melhorias priorizadas pelo impacto. Você marca cada melhoria como feita e acompanha a nota subir a cada diagnóstico. Usa a mesma chave de IA dos agentes do CRM.' },
-        { p: 'Como lanço as tarefas do dia pelo celular?', r: 'No Dashboard do CRM, em Tarefas diárias, toque no ícone de celular: aparece o link (e um QR Code) da página "Tarefas do dia". No celular, cole a mensagem com as atividades — uma por linha; dá para separar por dia ("Segunda:", "ter - reunião", "amanhã:", "10/10:") — e toque em Lançar. Elas aparecem na hora em Tarefas diárias. Dica: adicione a página à tela de início do celular.' },
+        { p: 'Como lanço as tarefas do dia pelo celular?', r: 'Abra a página Tarefas do dia (ícone de celular no painel Tarefas diárias do Dashboard), cole as atividades — uma por linha, com dias da semana se quiser —, escolha o profissional responsável e o cliente e toque em Criar: os cartões vão para o Kanban, na coluna A Fazer, com o prazo do dia. Dentro da mensagem, "@Ana" escolhe a pessoa e "#Seven" o cliente só daquela linha. Dica: adicione a página à tela de início do celular.' },
         { p: 'Onde vejo o saldo do caixa?', r: 'No Financeiro, na barra do período (logo abaixo das abas), aparece "Saldo em caixa" borrado. Toque no olho para mostrar; tocando no valor, abre a aba Caixa com o saldo de cada caixa. O aparelho lembra se você deixou visível ou escondido.' },
         { p: 'Como funciona o estoque no ERP?', r: 'Cada item do cadastro é produto ou serviço; produto com "Controla estoque: Sim" tem saldo. O saldo anda sozinho: pedido de venda faturado baixa, pedido cancelado (ou que volta para aberto) devolve, e pedidos em aberto ficam como reserva. Em Estoque → Posição de estoque você vê em estoque, reservado e disponível, faz entrada, saída e ajuste e vê o histórico de cada produto. No pedido de venda aparece o disponível de cada item, com aviso se faltar.' },
         { p: 'O que é o perfil de operação?', r: 'É a resposta para "O que a sua empresa vende?": serviços, produtos ou os dois. Muda só o que aparece: quem vende só serviços não vê Estoque e Compras no menu. O Diretor escolhe no Painel do ERP (selo "Vende: ...") e pode mudar quando quiser; nada é apagado.' },
@@ -20766,6 +20928,7 @@ function initPaginaComum(activeKey) {
   initFirebase();
   montarChatbotWidget();
   try { erpanMontar(activeKey); } catch (e) { console.error(e); }
+  try { erpMontarMobile(activeKey); } catch (e) { console.error(e); }
   bloquearZoomMobile();
   // initPerfilWatch() e initBuscaGlobalWatch() NÃO entram aqui de propósito:
   // elas dependem de TENANT_ID, que só fica pronto depois que o login
@@ -20791,6 +20954,7 @@ function registrarModuloCadastro(moduloKey, def) {
 
 function initModuloCadastro(moduloKey) {
   const def = CADASTROS_REGISTRO[moduloKey];
+  if (new URLSearchParams(location.search).get('novo') === '1' && def && def.modalNovoId && moduloKey !== 'pedido-venda') setTimeout(() => { if (document.getElementById(def.modalNovoId)) openModal(def.modalNovoId); }, 400);
   if (['produto', 'pedido-venda', 'lancamento-estoque'].includes(moduloKey) && typeof estIniciar === 'function') estIniciar();
   cloudWatch(def.storageKey, def.seed(), (data) => {
     CADASTROS_DATA[moduloKey] = data;
@@ -21281,6 +21445,7 @@ let CLIENTE_FORN_DETALHE_ID = null;
 let CLIENTE_FORN_MODO_EDICAO = false;
 
 function initClientesFornPage() {
+  if (new URLSearchParams(location.search).get('novo') === '1') setTimeout(() => { if (document.getElementById('modal-novo-cliente-forn')) openModal('modal-novo-cliente-forn'); }, 400);
   cloudWatch(CLIENTES_FORN_KEY, clientesFornSeed(), (data) => {
     CLIENTES_FORN_DATA = data;
     CLIENTES_FORN_DATA_CARREGADO = true;
@@ -23646,6 +23811,7 @@ let PEDIDO_FORM_EDITANDO_ID = null;
 let FINANCE_SYNC_PRONTO_PV = false;
 
 function initPedidosVendaExtra() {
+  if (new URLSearchParams(location.search).get('novo') === '1') setTimeout(() => { try { abrirNovoPedidoVenda(); } catch (e) { console.error(e); } }, 500);
   cloudWatch(CLIENTES_FORN_KEY, clientesFornSeed(), (data) => {
     CLIENTES_FORN_DATA = data;
     CLIENTES_FORN_DATA_CARREGADO = true;

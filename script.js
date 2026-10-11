@@ -735,6 +735,143 @@ function chaveProntaParaGravar(key) {
   return true;
 }
 
+// ---------- Cadastros do ERP: um documento por item ----------
+// Antes, cada cadastro do ERP era UMA lista guardada inteira num documento:
+// duas pessoas salvando ao mesmo tempo, a última apagava a mudança da
+// outra. Agora cada item é um documento próprio numa coleção da empresa.
+// O resto do sistema continua chamando cloudWatch/cloudSet com a lista
+// inteira: esta camada compara com o que já está salvo e grava SÓ o que
+// mudou (item novo, campo alterado, item excluído). O saldo de estoque é
+// gravado como "soma/subtração" no banco, para duas vendas ao mesmo tempo
+// não se anularem.
+const CHAVES_COLECAO = {
+  eagles_produtos_v1: 'erp_produtos', eagles_pedidos_venda_v1: 'erp_pedidos_venda', eagles_clientes_fornecedores_v1: 'erp_clientes_fornecedores',
+  eagles_contratos_v1: 'erp_contratos', eagles_pedido_compras_v1: 'erp_pedido_compras', eagles_notas_fiscais_entrada_v1: 'erp_notas_entrada',
+  eagles_lancamentos_estoque_v1: 'erp_mov_estoque', eagles_vendedores_v1: 'erp_vendedores', eagles_funcionarios_v1: 'erp_funcionarios',
+  eagles_objetos_postagem_v1: 'erp_objetos_postagem', eagles_conferencia_estoque_v1: 'erp_conferencia_estoque',
+};
+const COL_ULTIMO = {}; // chave -> Map(id -> JSON do item como está no banco)
+function colRef(key) { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(CHAVES_COLECAO[key]); }
+function colJson(o) {
+  // JSON com as chaves em ordem (para comparar sem falso "mudou")
+  const ord = (v) => (Array.isArray(v) ? v.map(ord) : v && typeof v === 'object' ? Object.keys(v).sort().reduce((a, k) => { if (v[k] !== undefined) a[k] = ord(v[k]); return a; }, {}) : v);
+  return JSON.stringify(ord(o));
+}
+function colLimpo(o) { return JSON.parse(JSON.stringify(o)); }
+function colOrdenar(l) { return l.sort((a, b) => (Number(a._pos) || 0) - (Number(b._pos) || 0) || String(a.criadoEm || '').localeCompare(String(b.criadoEm || ''))); }
+function colGuardarUltimo(key, lista) { const m = new Map(); lista.forEach((it) => { if (it && it.id) m.set(it.id, colJson(it)); }); COL_ULTIMO[key] = m; }
+// copia a lista antiga para a coleção (uma vez só; a lista antiga fica guardada, marcada)
+async function colMigrar(key, legado) {
+  const ref = colRef(key);
+  const itens = legado.map((it, i) => Object.assign({}, it, { id: it && it.id ? String(it.id) : 'mig_' + i, _pos: it && it._pos !== undefined ? it._pos : i }));
+  for (let i = 0; i < itens.length; i += 400) {
+    const lote = firestoreDb.batch();
+    itens.slice(i, i + 400).forEach((it) => { const d = colLimpo(it); delete d.id; lote.set(ref.doc(it.id), d); });
+    await lote.commit();
+  }
+  await caminhoTenantDoc(key).set({ migradoParaColecao: CHAVES_COLECAO[key], migradoEm: new Date().toISOString(), migradoPor: USUARIO_NOME || '' }, { merge: true });
+  console.log(`[EaglesLabz] "${key}": ${itens.length} item(ns) passaram para um documento por item.`);
+  return itens;
+}
+function colWatch(key, fallback, onChange) {
+  if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'aguardando';
+  let conferiuLegado = false;
+  colRef(key).onSnapshot(async (snap) => {
+    const lista = colOrdenar(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })));
+    if (!lista.length && !conferiuLegado) {
+      conferiuLegado = true;
+      try {
+        const leg = await caminhoTenantDoc(key).get();
+        const dados = leg.exists ? leg.data() : null;
+        const valor = dados && Array.isArray(dados.valor) ? dados.valor : [];
+        if (valor.length && !dados.migradoParaColecao) {
+          if (nivelPodeGravarChave(key)) { await colMigrar(key, valor); return; } // o próximo retrato já vem com tudo
+          // sem permissão para gravar: mostra a lista antiga, só para leitura
+          CLOUD_ESTADO_CHAVES[key] = 'carregado'; colGuardarUltimo(key, []); onChange(valor); atualizarIndicadorSincronizacao('ok'); return;
+        }
+      } catch (e) { console.error('Migração de "' + key + '":', e); }
+    }
+    conferiuLegado = true;
+    colGuardarUltimo(key, lista);
+    CLOUD_ESTADO_CHAVES[key] = 'carregado';
+    lsSave(chaveLocalTenant(key), lista);
+    onChange(lista);
+    atualizarIndicadorSincronizacao('ok');
+  }, (err) => {
+    console.error('Erro de sincronização em "' + key + '":', err);
+    if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'erro';
+    atualizarIndicadorSincronizacao('erro');
+    onChange(lsLoad(chaveLocalTenant(key), fallback));
+  });
+}
+function colSet(key, lista) {
+  const ref = colRef(key);
+  const ultimo = COL_ULTIMO[key] || new Map();
+  const FV = firebase.firestore.FieldValue;
+  const agora = Date.now() * 1000;
+  const ops = [];
+  const novos = new Map();
+  (Array.isArray(lista) ? lista : []).forEach((it, i) => {
+    if (!it || typeof it !== 'object') return;
+    if (!it.id) it.id = genId('it');
+    if (it._pos === undefined) it._pos = agora + i;
+    const json = colJson(it);
+    novos.set(it.id, json);
+    const antes = ultimo.get(it.id);
+    if (antes === json) return;
+    const d = colLimpo(it); delete d.id;
+    if (!antes) { ops.push({ t: 'set', id: it.id, d }); return; }
+    // só os campos que mudaram (assim duas pessoas mexendo em campos diferentes não se atrapalham)
+    const velho = JSON.parse(antes);
+    const mud = {};
+    Object.keys(d).forEach((k) => { if (colJson(d[k]) !== colJson(velho[k])) mud[k] = d[k]; });
+    Object.keys(velho).forEach((k) => { if (k !== 'id' && !(k in d)) mud[k] = FV.delete(); });
+    if (key === 'eagles_produtos_v1' && 'estoque' in mud && typeof d.estoque === 'number' && typeof velho.estoque === 'number') {
+      const delta = Math.round((d.estoque - velho.estoque) * 1000) / 1000;
+      mud.estoque = FV.increment(delta);
+    }
+    if (Object.keys(mud).length) ops.push({ t: 'update', id: it.id, d: mud, inteiro: d });
+  });
+  ultimo.forEach((json, id) => { if (!novos.has(id)) ops.push({ t: 'delete', id }); });
+  COL_ULTIMO[key] = novos;
+  if (!ops.length) return;
+  const aplicar = (b, o) => (o.t === 'set' ? b.set(ref.doc(o.id), o.d) : o.t === 'update' ? b.update(ref.doc(o.id), o.d) : b.delete(ref.doc(o.id)));
+  for (let i = 0; i < ops.length; i += 400) {
+    const parte = ops.slice(i, i + 400);
+    const lote = firestoreDb.batch();
+    parte.forEach((o) => aplicar(lote, o));
+    lote.commit().then(() => atualizarIndicadorSincronizacao('ok')).catch((err) => {
+      // um item que outra pessoa excluiu no mesmo instante faz o lote falhar:
+      // refaz um por um, e o item editado volta a existir com a edição
+      if (err && /not-found|NOT_FOUND|No document/i.test(String(err.code || err.message))) {
+        parte.forEach((o) => {
+          const r = ref.doc(o.id);
+          const p = o.t === 'set' ? r.set(o.d) : o.t === 'delete' ? r.delete() : r.update(o.d).catch((e2) => (/not-found|NOT_FOUND|No document/i.test(String(e2.code || e2.message)) ? r.set(o.inteiro) : Promise.reject(e2)));
+          p.catch((e3) => console.error('Erro ao salvar "' + key + '/' + o.id + '":', e3));
+        });
+        return;
+      }
+      console.error('Erro ao salvar "' + key + '" na nuvem:', err);
+      atualizarIndicadorSincronizacao('erro');
+    });
+  }
+}
+async function colGetForce(key, fallback) {
+  const snap = await colRef(key).get();
+  let lista = colOrdenar(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })));
+  if (!lista.length) {
+    const leg = await caminhoTenantDoc(key).get();
+    const dados = leg.exists ? leg.data() : null;
+    if (dados && Array.isArray(dados.valor) && dados.valor.length && !dados.migradoParaColecao) {
+      lista = nivelPodeGravarChave(key) ? await colMigrar(key, dados.valor) : dados.valor;
+    }
+  }
+  colGuardarUltimo(key, lista);
+  lsSave(chaveLocalTenant(key), lista);
+  CLOUD_ESTADO_CHAVES[key] = 'carregado';
+  return lista.length || !Array.isArray(fallback) ? lista : fallback;
+}
+
 function cloudWatch(key, fallback, onChange) {
   if (!FIREBASE_PRONTO || !TENANT_ID) {
     onChange(lsLoad(chaveLocalTenant(key), fallback));
@@ -747,6 +884,7 @@ function cloudWatch(key, fallback, onChange) {
     onChange(fallback);
     return;
   }
+  if (CHAVES_COLECAO[key]) { colWatch(key, fallback, onChange); return; }
   if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'aguardando';
   caminhoTenantDoc(key).onSnapshot((snap) => {
     CLOUD_ESTADO_CHAVES[key] = 'carregado';
@@ -772,6 +910,7 @@ function cloudSet(key, data) {
   if (!chaveProntaParaGravar(key)) return false;
   lsSave(chaveLocalTenant(key), data);
   if (!FIREBASE_PRONTO || !TENANT_ID) return true;
+  if (CHAVES_COLECAO[key]) { colSet(key, data); return true; }
   caminhoTenantDoc(key).set({ valor: data }).then(() => {
     atualizarIndicadorSincronizacao('ok');
   }).catch((err) => {
@@ -783,6 +922,7 @@ function cloudSet(key, data) {
 
 async function cloudGetForce(key, fallback) {
   if (!FIREBASE_PRONTO || !TENANT_ID) return lsLoad(chaveLocalTenant(key), fallback);
+  if (CHAVES_COLECAO[key]) return colGetForce(key, fallback);
   const snap = await caminhoTenantDoc(key).get();
   const valor = snap.exists ? snap.data().valor : fallback;
   lsSave(chaveLocalTenant(key), valor);
@@ -6403,6 +6543,14 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '11/10/2026 · Cadastros', itens: [
+    { titulo: 'Cliente sem CPF e sem CNPJ', badges: ['melhoria'], texto: 'Em Clientes e Fornecedores, dá para salvar o cadastro sem o documento: o sistema pergunta "Cadastrar sem CPF e sem CNPJ?" e salva se você confirmar. Documento preenchido errado continua bloqueado.' },
+  ]},
+  { data: '11/10/2026 · Dados mais seguros', itens: [
+    { titulo: 'Cadastros do ERP sem sobrescrever', badges: ['melhoria'], texto: 'Produtos, pedidos, clientes e fornecedores, contratos, compras, notas, movimentações, vendedores, funcionários, objetos de postagem e conferências agora guardam um documento por item. Duas pessoas salvando ao mesmo tempo não se apagam mais (cada uma grava só o que mudou), e duas vendas juntas do mesmo produto baixam o estoque certinho. Os dados antigos passam sozinhos para o formato novo na primeira vez que um Diretor ou Administrativo abrir o sistema; a lista antiga fica guardada.' },
+    { titulo: 'Planilha Excel dos cadastros', badges: ['novo'], texto: 'Configurações → Backup → "Baixar planilha (Excel)": uma aba para cada cadastro principal, com os nomes das colunas em português.' },
+    { titulo: 'Restauração só pelo suporte', badges: ['melhoria'], texto: 'O backup completo continua liberado para o Diretor baixar. Restaurar passou a ser feito só pelo super administrador (Empresas → Restaurar backup), para evitar perda de dados por engano.' },
+  ]},
   { data: '11/10/2026 · Ajustes', itens: [
     { titulo: 'Painel sempre no mês atual', badges: ['corrigido'], texto: 'O Painel do ERP abria sempre em setembro (o mês estava fixo na página). Agora abre no mês de hoje.' },
     { titulo: 'Plano só ERP sem ferramentas do CRM', badges: ['corrigido'], texto: 'Com o plano só ERP, "Tarefas" (que cria cartões no Kanban do CRM) saiu dos atalhos, da gaveta e do "+", e os primeiros passos que levam ao CRM somem. Em Meu sistema aparecem só as ferramentas do plano contratado. O ícone de Estoque também foi corrigido.' },
@@ -10377,6 +10525,7 @@ function estAoCriarProduto(novo) {
   if (!novo.natureza) novo.natureza = perfilOp() === 'servicos' ? 'servico' : 'produto';
   if (!novo.controlaEstoque) novo.controlaEstoque = novo.natureza === 'servico' ? 'nao' : 'sim';
   const q = estNum(novo.estoque);
+  if (estControla(novo)) novo.estoque = q; // sempre número (o banco soma e subtrai direto)
   if (estControla(novo) && q) {
     const hist = (CADASTROS_DATA['lancamento-estoque'] || []).concat([{ id: genId('mv'), produto: novo.nome, produtoId: novo.id, tipo: 'entrada', quantidade: q, data: isoHoje(), motivo: 'Saldo inicial do cadastro', origem: { tipo: 'cadastro' }, saldoApos: q, aplicado: true, automatico: true, por: USUARIO_NOME || '', criadoEm: new Date().toISOString() }]);
     CADASTROS_DATA['lancamento-estoque'] = hist; cloudSet(EST_MOV_KEY, hist);
@@ -10386,6 +10535,7 @@ function estAoCriarProduto(novo) {
 // estoque mudado à mão na edição do produto → vira um "ajuste" no histórico
 function estAoEditarProduto(antes, item) {
   if (!estControla(item)) return;
+  item.estoque = estNum(item.estoque);
   const d = Math.round((estNum(item.estoque) - estNum(antes.estoque)) * 1000) / 1000;
   if (!d) return;
   const hist = (CADASTROS_DATA['lancamento-estoque'] || []).concat([{ id: genId('mv'), produto: item.nome, produtoId: item.id, tipo: 'ajuste', quantidade: Math.abs(d), sinal: d > 0 ? 1 : -1, data: isoHoje(), motivo: `Ajuste manual no cadastro (${d > 0 ? '+' : ''}${d})`, origem: { tipo: 'cadastro' }, saldoApos: estNum(item.estoque), aplicado: true, automatico: true, por: USUARIO_NOME || '', criadoEm: new Date().toISOString() }]);
@@ -20483,29 +20633,31 @@ function agComoConfigurarGoogle() {
 // apaga o que foi criado depois do backup. Antes de restaurar, baixa um
 // backup do estado atual. Logins não entram (contas não se recriam).
 const BKP_META_KEY = 'eagles_backup_meta_v1';
-const BKP_SUBCOLECOES = ['dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'agenda', 'portal', 'portal_pedidos', 'receitas_pendentes', 'atend_envios'];
+const BKP_SUBCOLECOES = ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'agenda', 'portal', 'portal_pedidos', 'receitas_pendentes', 'atend_envios'];
 const BKP_PUBLICAS = ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'conteudos_publicos', 'leads_publicos'];
 const BKP_LEMBRETE_DIAS = 30;
-const BKP_NOMES = { dados: 'Cadastros, CRM e configurações', kanban_tarefas: 'Tarefas do Kanban', kanban_projetos: 'Projetos', fin_lancamentos: 'Lançamentos financeiros', fin_recorrencias: 'Contas recorrentes', fin_meta: 'Controle do Financeiro', conteudos: 'Conteúdos', agenda: 'Compromissos', portal: 'Portal do Cliente', portal_pedidos: 'Pedidos do portal', receitas_pendentes: 'Receitas pendentes', propostas_publicas: 'Propostas', briefings_publicos: 'Briefings', planos_publicos: 'Planos publicados', paginas_publicas: 'Página pública', conteudos_publicos: 'Links de aprovação', leads_publicos: 'Leads do site', pix_publico: 'PIX' };
+const BKP_NOMES = { erp_produtos: 'Produtos e serviços (ERP)', erp_pedidos_venda: 'Pedidos de venda', erp_clientes_fornecedores: 'Clientes e fornecedores (ERP)', erp_contratos: 'Contratos (ERP)', erp_pedido_compras: 'Compras', erp_notas_entrada: 'Notas de entrada', erp_mov_estoque: 'Movimentações de estoque', erp_vendedores: 'Vendedores', erp_funcionarios: 'Funcionários', erp_objetos_postagem: 'Objetos de postagem', erp_conferencia_estoque: 'Conferências de estoque', dados: 'Cadastros, CRM e configurações', kanban_tarefas: 'Tarefas do Kanban', kanban_projetos: 'Projetos', fin_lancamentos: 'Lançamentos financeiros', fin_recorrencias: 'Contas recorrentes', fin_meta: 'Controle do Financeiro', conteudos: 'Conteúdos', agenda: 'Compromissos', portal: 'Portal do Cliente', portal_pedidos: 'Pedidos do portal', receitas_pendentes: 'Receitas pendentes', propostas_publicas: 'Propostas', briefings_publicos: 'Briefings', planos_publicos: 'Planos publicados', paginas_publicas: 'Página pública', conteudos_publicos: 'Links de aprovação', leads_publicos: 'Leads do site', pix_publico: 'PIX' };
 let BKP_META = null;
 let BKP_ARQUIVO = null;
 
 function bkpNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
-function bkpBase() { return firestoreDb.collection('tenants').doc(TENANT_ID); }
+let BKP_ALVO = null; // empresa da restauração feita pelo super administrador (senão, a própria)
+function bkpTenant() { return BKP_ALVO || TENANT_ID; }
+function bkpBase() { return firestoreDb.collection('tenants').doc(bkpTenant()); }
 async function bkpColetar() {
-  const out = { app: 'eagles-labz', versao: 1, tenantId: TENANT_ID, empresa: (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '', geradoEm: new Date().toISOString(), geradoPor: USUARIO_NOME || '', colecoes: {} };
+  const out = { app: 'eagles-labz', versao: 1, tenantId: bkpTenant(), empresa: BKP_ALVO ? (BKP_ALVO_NOME || '') : ((PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || ''), geradoEm: new Date().toISOString(), geradoPor: USUARIO_NOME || '', colecoes: {} };
   for (const sub of BKP_SUBCOLECOES) {
     const snap = await bkpBase().collection(sub).get();
     const docs = {}; snap.forEach((d) => { docs[d.id] = d.data(); });
     out.colecoes[sub] = docs;
   }
   for (const col of BKP_PUBLICAS) {
-    const snap = await firestoreDb.collection(col).where('tenantId', '==', TENANT_ID).get();
+    const snap = await firestoreDb.collection(col).where('tenantId', '==', bkpTenant()).get();
     const docs = {}; snap.forEach((d) => { docs[d.id] = d.data(); });
     out.colecoes[col] = docs;
   }
-  const pix = await firestoreDb.collection('pix_publico').doc(TENANT_ID).get().catch(() => null);
-  out.colecoes.pix_publico = pix && pix.exists ? { [TENANT_ID]: pix.data() } : {};
+  const pix = await firestoreDb.collection('pix_publico').doc(bkpTenant()).get().catch(() => null);
+  out.colecoes.pix_publico = pix && pix.exists ? { [bkpTenant()]: pix.data() } : {};
   return out;
 }
 function bkpBaixarArquivo(obj, prefixo) {
@@ -20537,14 +20689,16 @@ async function bkpLerArquivo(input) {
   try {
     const obj = JSON.parse(await f.text());
     if (obj.app !== 'eagles-labz' || !obj.colecoes || typeof obj.colecoes !== 'object') throw new Error('formato');
-    if (obj.tenantId !== TENANT_ID) { avisar('Esse backup é de OUTRA empresa. Por segurança, só dá pra restaurar o backup da própria empresa.'); input.value = ''; return; }
+    if (obj.tenantId !== bkpTenant()) { avisar('Esse backup é de OUTRA empresa. Por segurança, só dá pra restaurar o backup da própria empresa.'); input.value = ''; return; }
     BKP_ARQUIVO = obj;
   } catch (e) { avisar('Esse arquivo não é um backup válido do sistema.'); input.value = ''; return; }
-  renderAbaBackupConfig();
+  if (BKP_ALVO) bkpRenderRestauracaoSA(); else renderAbaBackupConfig();
 }
 async function bkpRestaurar() {
   const obj = BKP_ARQUIVO;
-  if (!obj || !nivelEhDiretor() || !bkpNuvem()) return;
+  // restaurar é só com o super administrador (uma restauração errada mexe em tudo)
+  if (!obj || !bkpNuvem()) return;
+  if (nivelUsuario() !== 'superadmin') { avisar('A restauração de backup é feita pela equipe da Eagles Labz. Fale com o suporte.'); return; }
   const digitado = window.prompt('Restaurar devolve ao banco tudo o que está no arquivo (sobrescrevendo esses itens). O que foi criado depois do backup continua. Antes, o sistema baixa um backup do estado atual.\n\nPara confirmar, digite RESTAURAR:');
   if (digitado === null) return;
   if (String(digitado).trim().toUpperCase() !== 'RESTAURAR') { avisar('Palavra de confirmação incorreta. Nada foi alterado.'); return; }
@@ -20557,8 +20711,8 @@ async function bkpRestaurar() {
         if (!dados || typeof dados !== 'object' || !/^[\w.\-:@]{1,200}$/.test(id)) return;
         let ref = null;
         if (BKP_SUBCOLECOES.includes(col)) ref = bkpBase().collection(col).doc(id);
-        else if (BKP_PUBLICAS.includes(col)) { if (dados.tenantId !== TENANT_ID) return; ref = firestoreDb.collection(col).doc(id); }
-        else if (col === 'pix_publico' && id === TENANT_ID) ref = firestoreDb.collection('pix_publico').doc(id);
+        else if (BKP_PUBLICAS.includes(col)) { if (dados.tenantId !== bkpTenant()) return; ref = firestoreDb.collection(col).doc(id); }
+        else if (col === 'pix_publico' && id === bkpTenant()) ref = firestoreDb.collection('pix_publico').doc(id);
         if (ref) escritas.push([ref, dados]);
       });
     });
@@ -20572,10 +20726,92 @@ async function bkpRestaurar() {
       }
     }
     BKP_ARQUIVO = null;
-    avisar(`Restauração concluída: ${feitos} item(ns) devolvido(s)${falhas ? `, ${falhas} não puderam ser restaurados` : ''}. Recarregue a página para ver tudo atualizado.`, 'Backup');
-    renderAbaBackupConfig();
+    avisar(`Restauração concluída: ${feitos} item(ns) devolvido(s)${falhas ? `, ${falhas} não puderam ser restaurados` : ''}. Peça para a equipe da empresa recarregar a página.`, 'Backup');
+    if (BKP_ALVO) { srvFecharModal(); BKP_ALVO = null; } else renderAbaBackupConfig();
   } catch (err) { console.error(err); avisar('Não foi possível restaurar: ' + mensagemErroFirestore(err)); }
   finally { const b = document.getElementById('bkp-btn-restaurar'); if (b) { b.disabled = false; b.textContent = 'Restaurar'; } }
+}
+
+// ---------- planilha Excel com os cadastros principais ----------
+let BKP_XLSX_PROMESSA = null;
+function bkpCarregarXlsx() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!BKP_XLSX_PROMESSA) BKP_XLSX_PROMESSA = new Promise((ok, erro) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload = () => ok(window.XLSX); sc.onerror = () => { BKP_XLSX_PROMESSA = null; erro(new Error('Não foi possível carregar o gerador de planilhas. Confira a internet.')); }; document.head.appendChild(sc); });
+  return BKP_XLSX_PROMESSA;
+}
+const BKP_XLSX_ABAS = [
+  ['erp_clientes_fornecedores', 'Clientes e fornecedores'], ['erp_produtos', 'Produtos e serviços'], ['erp_pedidos_venda', 'Pedidos de venda'], ['erp_contratos', 'Contratos (ERP)'],
+  ['erp_pedido_compras', 'Compras'], ['erp_notas_entrada', 'Notas de entrada'], ['erp_mov_estoque', 'Movimentações de estoque'], ['erp_vendedores', 'Vendedores'], ['erp_funcionarios', 'Funcionários'],
+  ['dados:eagles_crm_clientes_v1', 'Clientes (CRM)'], ['dados:eagles_crm_negocios_v1', 'Funil de vendas'], ['dados:eagles_crm_contratos_v1', 'Contratos (CRM)'],
+  ['kanban_tarefas', 'Tarefas do Kanban'], ['conteudos', 'Conteúdos'], ['agenda', 'Agenda'], ['fin_lancamentos', 'Financeiro'], ['fin_recorrencias', 'Recorrências'],
+];
+const BKP_XLSX_COLUNAS = { nome: 'Nome', razaoSocial: 'Razão social', cnpj: 'CNPJ', cpf: 'CPF', email: 'E-mail', telefone: 'Telefone', cidade: 'Cidade', estado: 'UF', cliente: 'Cliente', fornecedor: 'Fornecedor',
+  titulo: 'Título', descricao: 'Descrição', valor: 'Valor', valorPago: 'Valor pago', status: 'Situação', data: 'Data', vencimento: 'Vencimento', dataPagamento: 'Pago em', competencia: 'Competência', numero: 'Número',
+  sku: 'Código (SKU)', estoque: 'Estoque', precoVenda: 'Preço de venda', quantidadeMinima: 'Estoque mínimo', quantidade: 'Quantidade', tipo: 'Tipo', prazo: 'Prazo', responsavel: 'Responsável', etapa: 'Etapa',
+  dataInicio: 'Início', dataFim: 'Fim', criadoEm: 'Criado em', atualizadoEm: 'Atualizado em', id: 'ID' };
+// uma linha por item; listas e objetos viram texto para caber numa célula
+function bkpLinhaXlsx(id, d) {
+  const o = { ID: id };
+  Object.keys(d || {}).filter((k) => !k.startsWith('_') && k !== 'historico').forEach((k) => {
+    let v = d[k];
+    if (Array.isArray(v)) v = k === 'itens' ? v.map((i) => `${i.quantidade || 1}× ${i.descricao || i.nome || ''}`).join('; ') : v.map((x) => (x && typeof x === 'object' ? JSON.stringify(x) : x)).join(', ');
+    else if (v && typeof v === 'object') v = JSON.stringify(v);
+    if (typeof v === 'string' && v.length > 32000) v = v.slice(0, 32000);
+    o[BKP_XLSX_COLUNAS[k] || k] = v;
+  });
+  return o;
+}
+async function bkpExcel() {
+  if (!nivelEhDiretor()) { avisarSemPermissaoNivel('baixar a planilha (só o Diretor)'); return; }
+  if (!bkpNuvem()) { avisar('A planilha precisa do sistema conectado ao Firebase.'); return; }
+  const btn = document.getElementById('bkp-btn-excel'); if (btn) { btn.disabled = true; btn.textContent = 'Montando a planilha...'; }
+  try {
+    const XLSX = await bkpCarregarXlsx();
+    const wb = XLSX.utils.book_new();
+    let total = 0;
+    for (const [fonte, nome] of BKP_XLSX_ABAS) {
+      let linhas = [];
+      if (fonte.startsWith('dados:')) {
+        const s2 = await bkpBase().collection('dados').doc(fonte.slice(6)).get();
+        const v = s2.exists ? s2.data().valor : null;
+        linhas = (Array.isArray(v) ? v : []).map((d, i) => bkpLinhaXlsx(d.id || String(i + 1), d));
+      } else {
+        if (fonte.startsWith('fin_') && !nivelVeFinanceiro()) continue;
+        const snap = await bkpBase().collection(fonte).get();
+        snap.forEach((d) => linhas.push(bkpLinhaXlsx(d.id, d.data())));
+      }
+      if (!linhas.length) continue;
+      total += linhas.length;
+      const ws = XLSX.utils.json_to_sheet(linhas);
+      ws['!cols'] = Object.keys(linhas[0]).map((k) => ({ wch: Math.min(40, Math.max(10, k.length + 2)) }));
+      XLSX.utils.book_append_sheet(wb, ws, nome.slice(0, 31));
+    }
+    if (!total) { avisar('Ainda não há cadastros para exportar.'); return; }
+    const empresa = kbNomeNorm((PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || 'empresa').replace(/[^a-z0-9]+/g, '-').slice(0, 30) || 'empresa';
+    XLSX.writeFile(wb, `cadastros-${empresa}-${isoHoje()}.xlsx`);
+    avisar(`Planilha baixada com ${total} registro(s), uma aba para cada cadastro.`, 'Planilha');
+  } catch (err) { console.error(err); avisar(err.message || 'Não foi possível gerar a planilha agora.'); }
+  finally { const b = document.getElementById('bkp-btn-excel'); if (b) { b.disabled = false; b.innerHTML = ic('baixar', 'ic-herda') + ' Baixar planilha (Excel)'; } }
+}
+
+// ---------- super administrador: restaurar o backup de uma empresa ----------
+let BKP_ALVO_NOME = '';
+function bkpAbrirRestauracaoSA(tenantId, nome) {
+  if (nivelUsuario() !== 'superadmin') return;
+  BKP_ALVO = tenantId; BKP_ALVO_NOME = nome || tenantId; BKP_ARQUIVO = null;
+  bkpRenderRestauracaoSA();
+  openModal('modal-srv');
+}
+function bkpRenderRestauracaoSA() {
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:520px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Restaurar backup · ${escapeHtml(BKP_ALVO_NOME)}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal(); BKP_ALVO = null;">✕</button></div>
+    <p class="cfg-modal-sub">Escolha o arquivo .json que a empresa baixou em Configurações → Backup. Antes de restaurar, o sistema baixa um backup do estado atual dela. O que foi criado depois do backup continua.</p>
+    <input type="file" accept=".json,application/json" onchange="bkpLerArquivo(this)">
+    ${BKP_ARQUIVO ? `<div class="bkp-previa"><strong>Backup de ${escapeHtml(formatDatePt(String(BKP_ARQUIVO.geradoEm || '').slice(0, 10)))}${BKP_ARQUIVO.geradoPor ? ' · por ' + escapeHtml(BKP_ARQUIVO.geradoPor) : ''}</strong>
+      ${bkpContar(BKP_ARQUIVO).map(([c, n]) => `<div class="fin-linha"><span>${escapeHtml(BKP_NOMES[c] || c)}</span><span>${n}</span></div>`).join('')}
+      <button type="button" class="btn btn-primary" id="bkp-btn-restaurar" onclick="bkpRestaurar()">Restaurar</button></div>` : ''}
+  </div>`;
 }
 
 // ---------- aba em Configurações ----------
@@ -20591,9 +20827,10 @@ function renderAbaBackupConfig() {
     <div class="fin-painel"><div class="fin-painel-cab"><strong style="font-size:16px;">${ic('baixar')} Backup completo</strong></div>
       <p class="cfg-secao-nota" style="margin-top:0;">Baixa um arquivo com <b>todos os dados da empresa</b>: cadastros, clientes, CRM, Kanban, conteúdos, agenda, financeiro, portal e páginas públicas. Guarde num lugar seguro (Google Drive, OneDrive ou pendrive).</p>
       <div class="bkp-status ${dias === null ? 'nunca' : dias > BKP_LEMBRETE_DIAS ? 'atrasado' : 'ok'}">${dias === null ? `${ic('alerta', 'ic-herda')} Nenhum backup feito ainda.` : `${dias > BKP_LEMBRETE_DIAS ? ic('alerta', 'ic-herda') : ic('aprovado', 'ic-herda')} Último backup: <b>${escapeHtml(formatDatePt(m.ultimoEm.slice(0, 10)))}</b> (${dias === 0 ? 'hoje' : `há ${dias} dia${dias > 1 ? 's' : ''}`})${m.por ? ' por ' + escapeHtml(m.por) : ''}.`}</div>
-      ${diretor ? '<button type="button" class="btn btn-primary" id="bkp-btn-gerar" onclick="bkpGerar()">Baixar backup completo</button>' : '<p class="kb-vazio-mini">Só o Diretor pode fazer e restaurar backups (o arquivo inclui o financeiro).</p>'}
+      ${diretor ? `<div style="display:flex; gap:8px; flex-wrap:wrap;"><button type="button" class="btn btn-primary" id="bkp-btn-gerar" onclick="bkpGerar()">Baixar backup completo</button><button type="button" class="btn" id="bkp-btn-excel" onclick="bkpExcel()">${ic('baixar', 'ic-herda')} Baixar planilha (Excel)</button></div><p class="kb-vazio-mini" style="margin:8px 0 0;">O backup completo (.json) serve para restaurar. A planilha (.xlsx) traz os cadastros principais, uma aba para cada, para abrir no Excel ou no Google Planilhas.</p>` : '<p class="kb-vazio-mini">Só o Diretor pode fazer e restaurar backups (o arquivo inclui o financeiro).</p>'}
       <p class="kb-vazio-mini" style="margin-bottom:0;">Os logins da equipe e dos clientes não entram no arquivo: contas de acesso não podem ser recriadas a partir dele.</p></div>
-    ${diretor ? `<div class="fin-painel"><div class="fin-painel-cab"><strong style="font-size:16px;">${ic('recorrente')} Restaurar backup</strong></div>
+    ${diretor && nivelUsuario() !== 'superadmin' ? `<div class="fin-painel"><div class="fin-painel-cab"><strong style="font-size:16px;">${ic('recorrente')} Restaurar backup</strong></div><p class="cfg-secao-nota" style="margin:0;">Para restaurar um backup, fale com o suporte da Eagles Labz: a restauração é feita pela nossa equipe, com o arquivo que você baixou, para evitar perda de dados.</p></div>` : ''}
+    ${nivelUsuario() === 'superadmin' ? `<div class="fin-painel"><div class="fin-painel-cab"><strong style="font-size:16px;">${ic('recorrente')} Restaurar backup</strong></div>
       <p class="cfg-secao-nota" style="margin-top:0;">Devolve ao banco tudo o que está no arquivo (sobrescrevendo esses itens). O que foi criado <b>depois</b> do backup continua. Antes de restaurar, o sistema baixa um backup do estado atual — assim nada se perde se você escolher o arquivo errado.</p>
       <input type="file" accept=".json,application/json" id="bkp-arquivo" onchange="bkpLerArquivo(this)">
       ${BKP_ARQUIVO ? `<div class="bkp-previa"><strong>Backup de ${escapeHtml(formatDatePt(String(BKP_ARQUIVO.geradoEm || '').slice(0, 10)))}${BKP_ARQUIVO.geradoPor ? ' · por ' + escapeHtml(BKP_ARQUIVO.geradoPor) : ''}</strong>
@@ -20653,7 +20890,7 @@ const CHATBOT_KB = [
   { padroes: ['papeis', 'papéis', 'permissao', 'permissão', 'tipos de usuario'], resposta: 'Dentro de cada empresa existem 3 níveis: Diretor (tudo, inclusive usuários e configurações), Administrativo (tudo, menos o financeiro — Painel, Meu Negócio e Financeiro ficam bloqueados) e Financeiro (o financeiro completo e, no resto, só visualiza). Acima deles está o Super Admin, que administra a plataforma.' },
 
   // ---------- Cadastros ----------
-  { padroes: ['cadastrar cliente', 'novo cliente', 'adicionar cliente', 'incluir cliente'], resposta: 'Vá em Cadastros → Clientes e Fornecedores e clique em "+ Incluir cadastro". Preencha os dados e salve. O CPF/CNPJ é validado de verdade (confere o dígito) — se digitar errado, o sistema não deixa salvar.' },
+  { padroes: ['cadastrar cliente', 'novo cliente', 'adicionar cliente', 'incluir cliente'], resposta: 'Vá em Cadastros → Clientes e Fornecedores e clique em "+ Incluir cadastro". Preencha os dados e salve. O CPF/CNPJ é validado de verdade (confere o dígito) — se digitar errado, o sistema não deixa salvar. Sem CPF e sem CNPJ dá para salvar: o sistema pergunta "Cadastrar sem CPF e sem CNPJ?" e você completa depois.' },
   { padroes: ['fornecedor'], resposta: 'Fornecedores ficam na mesma lista de Clientes e Fornecedores — marque o tipo de cadastro como "Fornecedor" (ou "Ambos", se for os dois). Também dá pra acessar direto por Estoque → Compras → Fornecedores.' },
   { padroes: ['editar cadastro', 'como edito', 'mudar dados de'], resposta: 'Em qualquer lista de cadastro, clique em cima do item (ou no botão "Ver"/"Editar") pra abrir a ficha completa. Lá tem um botão "Editar" pra poder mudar os campos.' },
   { padroes: ['excluir', 'apagar', 'deletar', 'remover cadastro'], resposta: 'Dentro da ficha de qualquer cadastro tem a opção de excluir. Cuidado: excluir um cadastro não desfaz — pense antes de confirmar.' },
@@ -20763,6 +21000,7 @@ const CHATBOT_FAQ = [
         { p: 'O que é o perfil de operação?', r: 'É a resposta para "O que a sua empresa vende?": serviços, produtos ou os dois. Muda só o que aparece: quem vende só serviços não vê Estoque e Compras no menu. O Diretor escolhe no Painel do ERP (selo "Vende: ...") e pode mudar quando quiser; nada é apagado.' },
         { p: 'O que é o questionário de primeiro acesso?', r: 'No primeiro acesso, o Diretor responde algumas perguntas (com barra de progresso): dados da empresa, o que vende, ramo, como cobra, equipe e objetivos. O sistema escolhe a versão mais adequada (Agência, Consultoria, Hora marcada, Comércio, Produção ou Genérico), mostra só as ferramentas certas e já cria categorias do financeiro, modelo de contrato, automações sugeridas (pausadas) e um checklist de primeiros passos. Para mudar depois: Configurações → Meu sistema.' },
         { p: 'Como mudo as ferramentas que aparecem?', r: 'Configurações → Meu sistema: liga e desliga ferramentas (estoque, compras, contratos, NFS-e, conteúdos, portal, agenda, atendimento, agentes de IA), muda os nomes ("Cliente", "Pedido") e permite refazer o questionário. Nada é apagado. Ferramentas fora do plano contratado não aparecem, mesmo ligadas.' },
+        { p: 'Como baixo meus dados em Excel?', r: 'Configurações → Backup → "Baixar planilha (Excel)": um arquivo .xlsx com uma aba para cada cadastro (clientes, produtos, pedidos, contratos, compras, estoque, CRM, Kanban, conteúdos, agenda e, para quem vê, o financeiro). O "Baixar backup completo" (.json) é o que serve para restaurar. A restauração é feita pela equipe da Eagles Labz: fale com o suporte.' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
@@ -21804,6 +22042,16 @@ function limparFiltroClientesForn() {
   renderClientesFornTabela();
 }
 
+// Sem CPF e sem CNPJ: dá para salvar, depois de confirmar. Documento
+// preenchido errado continua bloqueado (o dígito verificador não confere).
+let CF_SEM_DOC_CONFIRMADO = false;
+function cfSemDocumento(cnpj, cpf) { return !String(cnpj || '').replace(/\D/g, '') && !String(cpf || '').replace(/\D/g, ''); }
+function cfConfirmarSemDocumento(nome, continuar) {
+  confirmarAcao(`Cadastrar "${nome || 'este cliente'}" sem CPF e sem CNPJ?\n\nDá para completar depois. Enquanto estiver sem o documento, ele não sai preenchido na NFS-e nem nos contratos.`, () => {
+    CF_SEM_DOC_CONFIRMADO = true;
+    try { continuar(); } finally { CF_SEM_DOC_CONFIRMADO = false; }
+  }, 'Cadastro sem documento');
+}
 function documentoValidoParaSalvar(tipoPessoa, cnpj, cpf) {
   if (tipoPessoa === 'PF') return validarCPF(cpf);
   return validarCNPJ(cnpj);
@@ -21819,7 +22067,9 @@ function handleNovoClienteForn(e) {
   const cnpj = document.getElementById('input-novo-cnpj').value;
   const cpf = document.getElementById('input-novo-cpf').value;
 
-  if (!documentoValidoParaSalvar(tipoPessoa, cnpj, cpf)) {
+  if (cfSemDocumento(cnpj, cpf)) {
+    if (!CF_SEM_DOC_CONFIRMADO) { cfConfirmarSemDocumento(nome, () => handleNovoClienteForn({ preventDefault() {}, target: form })); return; }
+  } else if (!documentoValidoParaSalvar(tipoPessoa, cnpj, cpf)) {
     checarDocumento('input-novo-cnpj', 'hint-novo-cnpj', 'cnpj');
     checarDocumento('input-novo-cpf', 'hint-novo-cpf', 'cpf');
     avisar('Não é possível salvar: informe um ' + (tipoPessoa === 'PF' ? 'CPF' : 'CNPJ') + ' válido (o dígito verificador não confere).');
@@ -21944,7 +22194,9 @@ function salvarClienteFornDetalhe() {
   if (!c) return;
   const dados = lerCamposModal('#cliente-forn-detalhe-campos');
 
-  if (!documentoValidoParaSalvar(dados.tipoPessoa, dados.cnpj, dados.cpf)) {
+  if (cfSemDocumento(dados.cnpj, dados.cpf)) {
+    if (!CF_SEM_DOC_CONFIRMADO) { cfConfirmarSemDocumento(dados.nome || c.nome, () => salvarClienteFornDetalhe()); return; }
+  } else if (!documentoValidoParaSalvar(dados.tipoPessoa, dados.cnpj, dados.cpf)) {
     avisar('Não é possível salvar: informe um ' + (dados.tipoPessoa === 'PF' ? 'CPF' : 'CNPJ') + ' válido (o dígito verificador não confere).');
     return;
   }
@@ -25036,6 +25288,7 @@ function renderTenantsLista() {
         ${ativo
           ? `<button class="btn btn-small btn-ghost" style="color:var(--warning);" onclick="suspenderEmpresa('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Suspender</button>`
           : `<button class="btn btn-small btn-ghost" style="color:var(--success);" onclick="reativarEmpresa('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Reativar</button>`}
+        <button class="btn btn-small btn-ghost" onclick="bkpAbrirRestauracaoSA('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Restaurar backup</button>
         <button class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirEmpresaCompleta('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Excluir</button>
       </td>
     </tr>`;
@@ -25114,7 +25367,7 @@ async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
 
     // todas as subcoleções da empresa (antes só "dados" era apagada e as
     // tarefas/projetos do Kanban ficavam órfãos no banco)
-    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'portal', 'portal_pedidos', 'agenda', 'atend_envios']) {
+    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'portal', 'portal_pedidos', 'agenda', 'atend_envios', 'erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque']) {
       const snap = await firestoreDb.collection('tenants').doc(tenantId).collection(sub).get();
       const docs = []; snap.forEach((d) => docs.push(d.ref));
       for (let i = 0; i < docs.length; i += 400) { // limite de 500 operações por lote

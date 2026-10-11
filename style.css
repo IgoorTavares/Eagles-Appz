@@ -5004,3 +5004,23 @@ body.sis-wiz-aberto { overflow: hidden; }
   .erp-gaveta-nav .erp-gaveta-cab .kb-espaco { flex: 1; }
   .erp-chev { color: var(--text-soft); font-size: 13px; }
 }
+
+/* Clientes e Fornecedores no celular: o bloco de filtros passava da tela (rolagem para o lado) */
+@media (max-width: 860px) {
+  .ficha-layout { grid-template-columns: minmax(0, 1fr) !important; }
+  .ficha-layout > * { min-width: 0; }
+  .filtro-data-popover { max-width: calc(100vw - 40px); }
+}
+
+/* ---------- auditoria v108: ajustes de largura no celular ---------- */
+@media (max-width: 860px) {
+  .kb-tabela-wrap { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+  .fin-cab, .fin-painel-cab { flex-wrap: wrap; row-gap: 8px; }
+  .fin-cab > *, .fin-painel-cab > * { min-width: 0; max-width: 100%; }
+  .fin-painel-cab .srv-select, .fin-cab .srv-select { flex: 1 1 140px; min-width: 0; max-width: 100%; }
+  .crm-subabas { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .crm-subabas::-webkit-scrollbar { display: none; }
+  .crm-subabas .crm-subaba { flex-shrink: 0; }
+  .kb-select-wrap { min-width: 0; max-width: 100%; }
+  .kb-select-wrap select { min-width: 0; max-width: 100%; }
+}

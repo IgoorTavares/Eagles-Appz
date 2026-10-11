@@ -6402,6 +6402,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '11/10/2026 · Auditoria', itens: [
+    { titulo: 'Revisão geral do sistema', badges: ['corrigido'], texto: 'Telas que passavam da largura no celular foram ajustadas (Clientes e Fornecedores, Financeiro → Caixa e Relatórios, Orçamentos, filtros do Kanban e Portal do cliente). No CRM pelo celular, o atalho "Equipe" agora abre a ferramenta Equipe, e os atalhos seguem o Meu sistema (o que está desligado não aparece).' },
+  ]},
   { data: '11/10/2026 · ERP no celular', itens: [
     { titulo: 'ERP com o mesmo visual do CRM no celular', badges: ['melhoria'], texto: 'No celular, o ERP ganhou a gaveta lateral (com "Nova venda" e os grupos do menu), a tela inicial do Painel com "Olá" e a grade de atalhos, e a barra de baixo com o "+" no meio (novo pedido, cliente, produto, contrato, estoque, financeiro e tarefas). Tudo segue o plano, o perfil de operação e o Meu sistema.' },
   ]},
@@ -10679,6 +10682,7 @@ function sisAplicarVisual() {
   // nome de quem compra no menu do CRM
   const cli = document.querySelector('.mn-nav-sublink[data-menu-id="clientes"]');
   if (cli) { const t = Array.from(cli.childNodes).filter((n) => n.nodeType === 3 && n.textContent.trim()).pop(); if (t) t.textContent = ' ' + sisTermo('cliente', 'Cliente') + 's'; }
+  if (typeof crmRenderHomeMobile === 'function' && document.getElementById('crm-home-mobile')) crmRenderHomeMobile();
   sisRenderPainel();
 }
 
@@ -18427,7 +18431,7 @@ async function cfgSalvarPixels(qual) {
 const CRM_ATALHOS_MOBILE = [
   ['dashboard', 'Dashboard', 'quadro'], ['clientes', 'Clientes', 'pessoas'], ['pipeline', 'Pipelines', 'kanban'], ['kanban', 'Tarefas', 'tarefas'],
   ['agenda', 'Agenda', 'calendario'], ['financeiro', 'Financeiro', 'dinheiro'], ['servicos-servicos', 'Serviços', 'pacote'], ['orcamentos', 'Orçamentos', 'documento'],
-  ['briefings', 'Briefings', 'prancheta'], ['paginas-landing', 'Páginas', 'globo'], ['@usuarios.html', 'Equipe', 'usuario'], ['@configuracoes.html', 'Configurações', 'configuracoes'],
+  ['briefings', 'Briefings', 'prancheta'], ['paginas-landing', 'Páginas', 'globo'], ['equipe', 'Equipe', 'usuario'], ['@configuracoes.html', 'Configurações', 'configuracoes'],
 ];
 const CRM_TABBAR = [['dashboard', 'Início', 'quadro'], ['pipeline', 'Pipelines', 'kanban'], ['+', 'Nova venda', 'mais'], ['financeiro', 'Financeiro', 'dinheiro'], ['orcamentos', 'Orçamentos', 'documento']];
 
@@ -18468,7 +18472,8 @@ function crmRenderHomeMobile() {
   if (!el) return;
   const nome = String((typeof USUARIO_NOME !== 'undefined' && USUARIO_NOME) || (PERFIL_DATA && PERFIL_DATA.nomeFantasia) || '').split(' ')[0];
   const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
-  const atalhos = CRM_ATALHOS_MOBILE.filter(([s]) => s !== '@usuarios.html' || nivelEhDiretor());
+  // atalhos seguem o "Meu sistema" (o que está desligado não aparece)
+  const atalhos = CRM_ATALHOS_MOBILE.filter(([s]) => typeof SIS_CRM_MENU === 'undefined' || !SIS_CRM_MENU[s] || sisModuloAtivo(SIS_CRM_MENU[s]));
   el.innerHTML = `
     <div class="crm-home-ola"><div><h2>Olá${nome ? ', ' + escapeHtml(nome) : ''}</h2><span>${escapeHtml(hoje)}</span></div></div>
     <div class="crm-home-rotulo">Menu</div>

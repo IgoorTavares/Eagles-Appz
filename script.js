@@ -215,6 +215,7 @@ const ICONES_SISTEMA = {
   lista: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
   mensagem: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   sino: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  estoque: '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>',
   carrinho: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
   ajuda: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
   colunas: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
@@ -6402,6 +6403,10 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '11/10/2026 · Ajustes', itens: [
+    { titulo: 'Painel sempre no mês atual', badges: ['corrigido'], texto: 'O Painel do ERP abria sempre em setembro (o mês estava fixo na página). Agora abre no mês de hoje.' },
+    { titulo: 'Plano só ERP sem ferramentas do CRM', badges: ['corrigido'], texto: 'Com o plano só ERP, "Tarefas" (que cria cartões no Kanban do CRM) saiu dos atalhos, da gaveta e do "+", e os primeiros passos que levam ao CRM somem. Em Meu sistema aparecem só as ferramentas do plano contratado. O ícone de Estoque também foi corrigido.' },
+  ]},
   { data: '11/10/2026 · Auditoria', itens: [
     { titulo: 'Revisão geral do sistema', badges: ['corrigido'], texto: 'Telas que passavam da largura no celular foram ajustadas (Clientes e Fornecedores, Financeiro → Caixa e Relatórios, Orçamentos, filtros do Kanban e Portal do cliente). No CRM pelo celular, o atalho "Equipe" agora abre a ferramenta Equipe, e os atalhos seguem o Meu sistema (o que está desligado não aparece).' },
   ]},
@@ -10261,7 +10266,7 @@ function perfilOpAbrir() {
     <p class="cfg-modal-sub">O sistema mostra só o que faz sentido para o seu negócio. Dá para mudar quando quiser, e nada é apagado.</p>
     <div class="cw-opcoes">
       ${op('servicos', 'maleta', 'Contratos, NFS-e e pedidos de serviço. Estoque e Compras ficam escondidos.')}
-      ${op('produtos', 'caixa', 'Estoque que baixa sozinho na venda, posição de estoque, compras e movimentações.')}
+      ${op('produtos', 'estoque', 'Estoque que baixa sozinho na venda, posição de estoque, compras e movimentações.')}
       ${op('ambos', 'camadas', 'Tudo. Cada item diz se é produto (mexe no estoque) ou serviço (não mexe).')}
     </div>
     ${FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor() ? '<p class="kb-vazio-mini" style="margin-top:10px;">Só o Diretor muda o perfil de operação.</p>' : ''}
@@ -10565,7 +10570,7 @@ const SIS_VERSOES = {
     passos: ['empresa', 'cliente', 'item', 'agenda', 'automacao', 'whatsapp'],
   },
   comercio: {
-    nome: 'Comércio e varejo', icone: 'caixa', vende: 'produtos', exemplo: 'loja física, loja online, distribuidora, revenda',
+    nome: 'Comércio e varejo', icone: 'estoque', vende: 'produtos', exemplo: 'loja física, loja online, distribuidora, revenda',
     desc: 'ERP completo: posição de estoque, pedidos de venda com o disponível na hora, movimentações, compras, envios e o Analista do ERP. CRM enxuto.',
     modulos: { estoque: true, compras: true, envio: true, contratos: false, nfse: false, conteudos: false, portal: false, briefings: false, agenda: false, atendimento: true, agentes: true },
     etapas: {}, categorias: { receber: ['Vendas no balcão', 'Vendas online', 'Atacado'], pagar: ['Mercadoria para revenda', 'Frete', 'Taxa de cartão e maquininha', 'Embalagens'] },
@@ -10658,6 +10663,9 @@ function sisIniciar() {
   });
 }
 function sisCache() { if (SIS) return SIS; try { return JSON.parse(localStorage.getItem('eagles_sis_cache::' + (TENANT_ID || 'local')) || 'null'); } catch (e) { return null; } }
+// ferramentas de cada sistema (as do outro não aparecem para quem só contratou um)
+const SIS_MODULOS_ERP = ['estoque', 'compras', 'envio', 'contratos', 'nfse'];
+function sisModuloNoPlano(k) { if (!TENANT_PLANO || TENANT_PLANO === 'ambos') return true; return TENANT_PLANO === 'erp' ? SIS_MODULOS_ERP.includes(k) : !SIS_MODULOS_ERP.includes(k) || k === 'contratos'; }
 function sisModuloAtivo(nome) { const c = sisCache(); return !c || !c.modulos || c.modulos[nome] !== false; }
 function sisTermo(qual, padrao) { const c = sisCache(); return (c && c.termos && c.termos[qual]) || padrao; }
 // menu, nomes e etapas do funil conforme a versão
@@ -10805,7 +10813,7 @@ function sisRender() {
       corpo = `<h2>Montamos o seu sistema como:</h2>
         <div class="sis-versao"><span class="sis-versao-ic">${ic(V.icone, 'ic-herda')}</span><div><b>${escapeHtml(V.nome)}</b><small>${escapeHtml(V.desc)}</small></div></div>
         <div class="sis-tit">Ferramentas ligadas <small>toque para ligar ou desligar</small></div>
-        <div class="sis-mods">${Object.keys(SIS_MODULOS).map((k) => `<button type="button" class="sis-mod${m[k] !== false ? ' on' : ''}" onclick="SIS_WIZ.modulos['${k}'] = !(SIS_WIZ.modulos['${k}'] !== false); sisRender()">${m[k] !== false ? '✓' : '+'} ${escapeHtml(SIS_MODULOS[k])}</button>`).join('')}</div>
+        <div class="sis-mods">${Object.keys(SIS_MODULOS).filter(sisModuloNoPlano).map((k) => `<button type="button" class="sis-mod${m[k] !== false ? ' on' : ''}" onclick="SIS_WIZ.modulos['${k}'] = !(SIS_WIZ.modulos['${k}'] !== false); sisRender()">${m[k] !== false ? '✓' : '+'} ${escapeHtml(SIS_MODULOS[k])}</button>`).join('')}</div>
         <div class="sis-tit">Vem pronto</div>
         <ul class="sis-lista">${V.categorias.receber.length ? `<li>Categorias do financeiro: ${escapeHtml(V.categorias.receber.concat(V.categorias.pagar).join(', '))}</li>` : ''}${Object.keys(V.etapas || {}).length ? `<li>Funil com as etapas: ${escapeHtml(CRM_ETAPAS.map((x) => (V.etapas[x.key] || x.label)).join(' → '))}</li>` : ''}${V.contrato ? '<li>Modelo de contrato para o seu tipo de negócio</li>' : ''}${V.automacoes.length ? `<li>${V.automacoes.length} automações sugeridas (ficam pausadas para você revisar)</li>` : ''}<li>Checklist de primeiros passos no Painel</li></ul>
         ${V.exemplos.length ? `<label class="sis-check"><input type="checkbox" ${r.exemplos ? 'checked' : ''} onchange="SIS_WIZ.r.exemplos = this.checked"> Criar ${V.exemplos.length === 1 ? 'um item' : V.exemplos.length + ' itens'} de exemplo para eu ver como funciona (dá para apagar com um clique)</label>` : ''}
@@ -10957,8 +10965,9 @@ async function sisRenderPainel() {
   const V = SIS_VERSOES[c.versao] || SIS_VERSOES.generico;
   const d = SIS_PAINEL_DADOS && Date.now() - (SIS_PAINEL_DADOS.em || 0) < 30000 ? SIS_PAINEL_DADOS : await sisColetarPainel();
   const noCrm = PAGINA_ATIVA_KEY === 'crm';
-  const ordem = noCrm ? [] : (V.hoje || []).filter((k) => !(['estoqueAlerta', 'comprasReceber'].includes(k) && !sisModuloAtivo('estoque')) && !(['contratosVencendo', 'notasMes'].includes(k) && !sisModuloAtivo('contratos')));
-  const passos = (V.passos || []).filter((p) => !(p === 'estoque' && !sisModuloAtivo('estoque')) && !(p === 'contrato' && !sisModuloAtivo('contratos')) && !(p === 'agenda' && !sisModuloAtivo('agenda')) && !(['automacao', 'whatsapp'].includes(p) && !sisModuloAtivo('atendimento')));
+ const ordem = noCrm ? [] : (V.hoje || []).filter((k) => !(k === 'agendaHoje' && typeof planoTemCrm === 'function' && !planoTemCrm()) && !(['estoqueAlerta', 'comprasReceber'].includes(k) && !sisModuloAtivo('estoque')) && !(['contratosVencendo', 'notasMes'].includes(k) && !sisModuloAtivo('contratos')));
+  const semCrm = typeof planoTemCrm === 'function' && !planoTemCrm();
+  const passos = (V.passos || []).filter((p) => !(semCrm && ['automacao', 'whatsapp', 'agenda', 'ia'].includes(p)) && !(p === 'estoque' && !sisModuloAtivo('estoque')) && !(p === 'contrato' && !sisModuloAtivo('contratos')) && !(p === 'agenda' && !sisModuloAtivo('agenda')) && !(['automacao', 'whatsapp'].includes(p) && !sisModuloAtivo('atendimento')));
   const feitos = passos.filter((p) => sisPassoFeito(p, d)).length;
   const escondido = (c.checklistOculto || false) || (feitos === passos.length && passos.length);
   const exemplos = d.prods.filter((p) => p.exemplo).length;
@@ -10991,7 +11000,7 @@ function sisAbrirMeuSistema() {
     <div class="modal-header"><h2>Meu sistema</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
     <div class="sis-versao"><span class="sis-versao-ic">${ic(V.icone, 'ic-herda')}</span><div><b>${escapeHtml(c.versao ? V.nome : 'Ainda não escolhida')}</b><small>${escapeHtml(c.versao ? V.desc : 'Responda o questionário para o sistema se adaptar ao seu negócio.')}</small></div></div>
     <div class="sis-tit">Ferramentas ${pode ? '<small>toque para ligar ou desligar</small>' : ''}</div>
-    <div class="sis-mods">${Object.keys(SIS_MODULOS).map((k) => `<button type="button" class="sis-mod${m[k] !== false ? ' on' : ''}" ${pode ? `onclick="sisAlternarModulo('${k}')"` : 'disabled'}>${m[k] !== false ? '✓' : '+'} ${escapeHtml(SIS_MODULOS[k])}</button>`).join('')}</div>
+    <div class="sis-mods">${Object.keys(SIS_MODULOS).filter(sisModuloNoPlano).map((k) => `<button type="button" class="sis-mod${m[k] !== false ? ' on' : ''}" ${pode ? `onclick="sisAlternarModulo('${k}')"` : 'disabled'}>${m[k] !== false ? '✓' : '+'} ${escapeHtml(SIS_MODULOS[k])}</button>`).join('')}</div>
     <div class="sis-tit">Nomes</div>
     <div class="cw-grade2"><div class="field"><label>Quem compra de você é chamado de</label><input type="text" id="sis-t-cliente" maxlength="20" value="${escapeHtml(sisTermo('cliente', 'Cliente'))}" ${pode ? '' : 'disabled'}></div>
       <div class="field"><label>Pedido de venda é chamado de</label><input type="text" id="sis-t-pedido" maxlength="20" value="${escapeHtml(sisTermo('pedido', 'Pedido'))}" ${pode ? '' : 'disabled'}></div></div>
@@ -11054,9 +11063,10 @@ async function sisMontarParaEmpresa(tenantId, versao) {
 // =====================================================================
 // ---------- ERP no celular: gaveta + tela inicial + barra de baixo (igual ao CRM) ----------
 // =====================================================================
-const ERP_MOB_ICONES = { painel: 'quadro', 'meu-negocio': 'grafico', cadastros: 'pessoas', vendas: 'carrinho', estoque: 'caixa', financeiro: 'dinheiro', crm: 'conversa',
+const ERP_MOB_ICONES = { painel: 'quadro', 'meu-negocio': 'grafico', cadastros: 'pessoas', vendas: 'carrinho', estoque: 'estoque', financeiro: 'dinheiro', crm: 'conversa',
   produtos: 'pacote', 'clientes-fornecedores': 'pessoas', vendedores: 'usuario', funcionarios: 'usuario', 'pedidos-venda': 'documento', 'objetos-postagem': 'enviar', contratos: 'prancheta', 'nfse-externo': 'abrir',
-  'estoque-posicao': 'caixa', 'lancamentos-estoque': 'repetir', 'conferencia-estoque': 'aprovado', 'pedido-compras': 'carrinho', 'notas-fiscais-entrada': 'documento', 'fornecedores-atalho': 'pessoas' };
+  'estoque-posicao': 'estoque', 'lancamentos-estoque': 'repetir', 'conferencia-estoque': 'aprovado', 'pedido-compras': 'carrinho', 'notas-fiscais-entrada': 'documento', 'fornecedores-atalho': 'pessoas' };
+function planoTemCrm() { return !TENANT_PLANO || TENANT_PLANO !== 'erp'; }
 function erpEhCelular() { return window.matchMedia && window.matchMedia('(max-width: 860px)').matches; }
 function erpMobItens() {
   // mesmos itens do menu de cima, com os mesmos filtros (plano, perfil e Meu sistema)
@@ -11106,13 +11116,13 @@ function erpRenderMobile() {
           ${aberto ? `<div class="erp-gaveta-sub">${it.filhos.map((c) => `<a class="mn-nav-sublink${c.key === ativa ? ' active' : ''}" href="${c.href}"${c.externo ? ' target="_blank" rel="noopener"' : ''}>${ic(ERP_MOB_ICONES[c.key] || 'documento', 'ic-herda')} ${escapeHtml(c.label)}</a>`).join('')}</div>` : ''}</div>`;
       }).join('')}
         <div class="erp-gaveta-sep"></div>
-        <a class="mn-nav-item" href="tarefas.html">${ic('tarefas', 'ic-herda')} Tarefas do dia</a>
+        ${planoTemCrm() ? `<a class="mn-nav-item" href="tarefas.html">${ic('tarefas', 'ic-herda')} Tarefas do dia</a>` : ''}
         <button type="button" class="mn-nav-item" onclick="erpFecharGaveta(); sisAbrirMeuSistema()">${ic('camadas', 'ic-herda')} Meu sistema</button>
         <a class="mn-nav-item" href="configuracoes.html">${ic('configuracoes', 'ic-herda')} Configurações</a>
       </nav>`;
   }
   // barra de baixo: Início, Vendas, +, Financeiro e o 4º conforme o sistema
-  const quarto = sisModuloAtivo('estoque') && perfilOpVendeProdutos() ? ['estoque-posicao', 'Estoque', 'caixa', 'estoque.html'] : sisModuloAtivo('contratos') ? ['contratos', 'Contratos', 'prancheta', 'contratos.html'] : ['clientes-fornecedores', sisTermo('cliente', 'Cliente') + 's', 'pessoas', 'clientes-fornecedores.html'];
+  const quarto = sisModuloAtivo('estoque') && perfilOpVendeProdutos() ? ['estoque-posicao', 'Estoque', 'estoque', 'estoque.html'] : sisModuloAtivo('contratos') ? ['contratos', 'Contratos', 'prancheta', 'contratos.html'] : ['clientes-fornecedores', sisTermo('cliente', 'Cliente') + 's', 'pessoas', 'clientes-fornecedores.html'];
   const tabs = [['painel', 'Início', 'quadro', 'index.html'], ['pedidos-venda', sisTermo('pedido', 'Pedido') === 'Pedido' ? 'Vendas' : sisTermo('pedido', 'Pedido') + 's', 'documento', 'pedidos-venda.html'], ['+'], ['financeiro', 'Financeiro', 'dinheiro', 'financeiro.html'], quarto];
   const bar = document.getElementById('erp-tabbar');
   if (bar) bar.innerHTML = tabs.map(([k, t, i, h]) => k === '+' ? `<button type="button" class="crm-tab-mais" aria-label="Criar" onclick="erpAbrirCriar()">${ic('mais', 'ic-herda')}</button>`
@@ -11123,8 +11133,8 @@ function erpRenderMobile() {
     const nome = String((typeof USUARIO_NOME !== 'undefined' && USUARIO_NOME) || (PERFIL_DATA && PERFIL_DATA.nomeFantasia) || '').split(' ')[0];
     const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
     const atalhos = [['meu-negocio', 'Meu Negócio', 'grafico', 'meu-negocio.html'], ['clientes-fornecedores', sisTermo('cliente', 'Cliente') + 's', 'pessoas', 'clientes-fornecedores.html'], ['produtos', 'Produtos', 'pacote', 'produtos.html'],
-      ['pedidos-venda', sisTermo('pedido', 'Pedido') === 'Pedido' ? 'Vendas' : sisTermo('pedido', 'Pedido') + 's', 'documento', 'pedidos-venda.html'], ['estoque-posicao', 'Estoque', 'caixa', 'estoque.html', 'estoque'], ['pedido-compras', 'Compras', 'carrinho', 'pedido-compras.html', 'compras'],
-      ['contratos', 'Contratos', 'prancheta', 'contratos.html', 'contratos'], ['financeiro', 'Financeiro', 'dinheiro', 'financeiro.html'], ['tarefas', 'Tarefas', 'tarefas', 'tarefas.html'],
+      ['pedidos-venda', sisTermo('pedido', 'Pedido') === 'Pedido' ? 'Vendas' : sisTermo('pedido', 'Pedido') + 's', 'documento', 'pedidos-venda.html'], ['estoque-posicao', 'Estoque', 'estoque', 'estoque.html', 'estoque'], ['pedido-compras', 'Compras', 'carrinho', 'pedido-compras.html', 'compras'],
+      ['contratos', 'Contratos', 'prancheta', 'contratos.html', 'contratos'], ['financeiro', 'Financeiro', 'dinheiro', 'financeiro.html'], ['tarefas', 'Tarefas', 'tarefas', 'tarefas.html', '', 'crm'],
       ['crm', 'CRM', 'conversa', 'crm.html', '', 'crm'], ['meu-sistema', 'Meu sistema', 'camadas', '#'], ['configuracoes', 'Configurações', 'configuracoes', 'configuracoes.html']]
       .filter(([k, , , , mod, plano]) => (!mod || (sisModuloAtivo(mod) && (!['estoque', 'compras'].includes(mod) || perfilOpVendeProdutos()))) && (!plano || !TENANT_PLANO || TENANT_PLANO === 'ambos' || TENANT_PLANO === plano));
     home.innerHTML = `<div class="crm-home-ola"><div><h2>Olá${nome ? ', ' + escapeHtml(nome) : ''}</h2><span>${escapeHtml(hoje)}</span></div></div>
@@ -11139,9 +11149,9 @@ function erpFecharGaveta() { document.body.classList.remove('erp-gaveta-aberta')
 function erpAbrirCriar() {
   const op = [['pedidos-venda.html?novo=1', 'documento', `Nov${sisTermo('pedido', 'Pedido') === 'Pedido' ? 'o pedido de venda' : 'o ' + sisTermo('pedido', 'Pedido').toLowerCase()}`],
     ['clientes-fornecedores.html?novo=1', 'pessoas', `Novo ${sisTermo('cliente', 'Cliente').toLowerCase()}`], ['produtos.html?novo=1', 'pacote', 'Novo produto ou serviço'],
-    sisModuloAtivo('estoque') && perfilOpVendeProdutos() ? ['estoque.html', 'caixa', 'Entrada ou saída de estoque'] : null,
+    sisModuloAtivo('estoque') && perfilOpVendeProdutos() ? ['estoque.html', 'estoque', 'Entrada ou saída de estoque'] : null,
     sisModuloAtivo('contratos') ? ['contratos.html?novo=1', 'prancheta', 'Novo contrato'] : null,
-    ['financeiro.html', 'dinheiro', 'Lançar no financeiro'], ['tarefas.html', 'tarefas', 'Tarefas do dia']].filter(Boolean);
+    ['financeiro.html', 'dinheiro', 'Lançar no financeiro'], planoTemCrm() ? ['tarefas.html', 'tarefas', 'Tarefas do dia'] : null].filter(Boolean);
   const ov = srvGarantirModal();
   ov.innerHTML = `<div class="modal kb-modal erp-criar" role="dialog" aria-modal="true"><div class="modal-header"><h2>Criar</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
     <div class="erp-criar-lista">${op.map(([h, i, t]) => `<a class="erp-criar-op" href="${h}"><span class="crm-home-ic">${ic(i, 'ic-herda')}</span><b>${escapeHtml(t)}</b></a>`).join('')}</div></div>`;
@@ -22150,6 +22160,8 @@ function carregarCicloAtual(mesInputId) {
 
 function initPainel() {
   onCicloCarregado = renderPainelLeitura;
+  const m = document.getElementById('painel-mes');
+  if (m) m.value = mesKeyDoHoje(); // sempre abre no mês de hoje
   carregarCicloAtual('painel-mes');
 }
 

@@ -27,7 +27,7 @@
 <script>
 aplicarTemaSalvo();
 initFirebase();
-protegerPagina(function () { ttIniciar(); });
+protegerPagina(function () { if (!protegerPaginaPorPlano('crm')) return; ttIniciar(); });
 </script>
 <div class="modal-overlay" id="modal-aviso-sistema">
   <div class="modal crm-modal-aviso">

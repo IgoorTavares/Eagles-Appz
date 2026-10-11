@@ -805,6 +805,8 @@ function protegerPagina(callback) {
     initPerfilWatch();
     initBuscaGlobalWatch();
     callback();
+    try { if (typeof perfilOpIniciar === 'function') perfilOpIniciar(); } catch (e) { console.error(e); }
+    try { if (typeof sisIniciar === 'function') sisIniciar(); } catch (e) { console.error(e); }
     return;
   }
   firebase.auth().onAuthStateChanged((user) => {
@@ -819,7 +821,10 @@ function protegerPagina(callback) {
         aplicarRestricoesDeNivel();
         initPerfilWatch();
         initBuscaGlobalWatch();
+        try { renderTopbar(PAGINA_ATIVA_KEY); } catch (e) {} // menu já com o perfil de operação guardado neste aparelho
         callback();
+        try { if (typeof perfilOpIniciar === 'function') perfilOpIniciar(); } catch (e) { console.error(e); }
+        try { if (typeof sisIniciar === 'function') sisIniciar(); } catch (e) { console.error(e); }
         setTimeout(() => { if (typeof bkpVerificarLembrete === 'function') bkpVerificarLembrete(); }, 1500); // lembrete de backup (30 dias)
       });
     } else {
@@ -906,7 +911,7 @@ const NIVEIS = {
   financeiro: { nome: 'Financeiro', desc: 'Financeiro completo; o resto só visualiza (não cadastra nem edita)' },
 };
 const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1'];
-const CHAVES_CONFIG_EMPRESA = ['eagles_ia_config_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'];
+const CHAVES_CONFIG_EMPRESA = ['eagles_sistema_config_v1', 'eagles_ia_config_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'];
 
 function nivelDoRole(role) {
   if (role === 'SuperAdmin') return 'superadmin';
@@ -1078,25 +1083,26 @@ const NAV_ITEMS = [
     key: 'vendas', label: 'Vendas', plano: 'erp',
     children: [
       { key: 'pedidos-venda', href: 'pedidos-venda.html', label: 'Pedidos de vendas' },
-      { key: 'objetos-postagem', href: 'objetos-postagem.html', label: 'Objetos de postagens' },
-      { key: 'contratos', href: 'contratos.html', label: 'Contratos' },
-      { key: 'nfse-externo', href: 'https://www.nfse.gov.br/EmissorNacional/Login', label: 'Emitir NFS-e ↗', externo: true },
+      { key: 'objetos-postagem', href: 'objetos-postagem.html', label: 'Objetos de postagens', soProdutos: true, modulo: 'envio' },
+      { key: 'contratos', href: 'contratos.html', label: 'Contratos', modulo: 'contratos' },
+      { key: 'nfse-externo', href: 'https://www.nfse.gov.br/EmissorNacional/Login', label: 'Emitir NFS-e ↗', externo: true, modulo: 'nfse' },
     ],
   },
   {
-    key: 'estoque', label: 'Estoque', plano: 'erp',
+    key: 'estoque', label: 'Estoque', plano: 'erp', soProdutos: true, modulo: ['estoque', 'compras'],
     columns: [
       {
-        title: 'Compras', items: [
-          { key: 'pedido-compras', href: 'pedido-compras.html', label: 'Pedido de compras' },
-          { key: 'notas-fiscais-entrada', href: 'notas-fiscais-entrada.html', label: 'Notas fiscais de entrada' },
-          { key: 'fornecedores-atalho', href: 'clientes-fornecedores.html?tipo=fornecedor', label: 'Fornecedores' },
+        title: 'Estoque', items: [
+          { key: 'estoque-posicao', href: 'estoque.html', label: 'Posição de estoque', modulo: 'estoque' },
+          { key: 'lancamentos-estoque', href: 'lancamentos-estoque.html', label: 'Movimentações', modulo: 'estoque' },
+          { key: 'conferencia-estoque', href: 'conferencia-estoque.html', label: 'Conferência de estoque', modulo: 'estoque' },
         ],
       },
       {
-        title: 'Estoque', items: [
-          { key: 'lancamentos-estoque', href: 'lancamentos-estoque.html', label: 'Lançamentos de estoque' },
-          { key: 'conferencia-estoque', href: 'conferencia-estoque.html', label: 'Conferência de estoque' },
+        title: 'Compras', items: [
+          { key: 'pedido-compras', href: 'pedido-compras.html', label: 'Pedido de compras', modulo: 'compras' },
+          { key: 'notas-fiscais-entrada', href: 'notas-fiscais-entrada.html', label: 'Notas fiscais de entrada', modulo: 'compras' },
+          { key: 'fornecedores-atalho', href: 'clientes-fornecedores.html?tipo=fornecedor', label: 'Fornecedores' },
         ],
       },
     ],
@@ -6395,6 +6401,17 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '11/10/2026 · Meu sistema', itens: [
+    { titulo: 'Questionário de primeiro acesso, com barra de progresso', badges: ['novo'], texto: 'Dados da empresa e perguntas que mudam conforme as respostas (a barra recalcula). Guarda o andamento, dá para voltar, pular perguntas ou deixar para depois. Empresas que já usavam o sistema veem só um convite no Painel.' },
+    { titulo: '5 versões do sistema', badges: ['novo'], texto: 'Agência e serviços criativos, Serviços profissionais e consultoria, Serviços com hora marcada, Comércio e varejo, e Produção e serviço técnico (mais a Genérica). Cada uma mostra só as ferramentas certas, ajusta o funil e os nomes, e já cria categorias do financeiro, modelo de contrato, automações sugeridas (pausadas) e itens de exemplo opcionais. Tudo continua editável.' },
+    { titulo: 'Painel com "hoje" e primeiros passos', badges: ['novo'], texto: 'O Painel do ERP mostra os números do dia que importam para a sua versão e um checklist de primeiros passos com progresso. Configurações → Meu sistema liga e desliga ferramentas, muda nomes e refaz o questionário. O super administrador vê as versões e respostas de todas as empresas e pode montar a versão de um cliente antes de entregar o acesso.' },
+  ]},
+  { data: '11/10/2026 · ERP híbrido', itens: [
+    { titulo: 'Perfil de operação: serviços, produtos ou os dois', badges: ['novo'], texto: 'No Painel do ERP, o Diretor diz o que a empresa vende. Quem vende só serviços não vê Estoque, Compras e Objetos de postagem no menu; nada é apagado e dá para mudar quando quiser.' },
+    { titulo: 'Produto ou serviço em cada item', badges: ['novo'], texto: 'O cadastro ganhou "É produto ou serviço?" e "Controla estoque?". O mesmo pedido pode ter os dois: só o produto com controle mexe no saldo.' },
+    { titulo: 'Estoque que anda sozinho', badges: ['novo'], texto: 'Pedido faturado baixa o estoque; cancelado ou de volta para aberto devolve; pedidos em aberto ficam reservados. Toda mudança vira movimentação com o saldo depois (histórico por produto), inclusive o saldo inicial e os ajustes feitos no cadastro. Pedidos antigos não mexem no saldo.' },
+    { titulo: 'Posição de estoque', badges: ['novo'], texto: 'Estoque → Posição de estoque (agora o primeiro do menu): em estoque, reservado, disponível, mínimo e situação, com busca, filtro, entrada, saída, ajuste e histórico. No pedido de venda, cada item mostra o disponível e o sistema avisa se faltar antes de salvar.' },
+  ]},
   { data: '11/10/2026 · Contratos', itens: [
     { titulo: 'Contratos do ERP com modelo, PDF e NFS-e', badges: ['novo'], texto: 'Vendas → Contratos ganhou: resumo (vigentes, valor, vencendo em 30 dias, sem NFS-e no mês), "Gerar contrato" por modelo com os dados do contrato, do cliente do cadastro e da sua empresa (inclusive valor por extenso), edição do texto, PDF, modelos próprios do ERP e NFS-e por mês de competência.' },
     { titulo: 'Emitir NFS-e no menu Vendas', badges: ['novo'], texto: 'Atalho direto para o Emissor Nacional, logo abaixo de Contratos.' },
@@ -9550,7 +9567,7 @@ async function eqCriar() {
 // Os NÚMEROS são calculados aqui; a IA dá as notas por área e as
 // melhorias. Cada melhoria pode ser marcada como feita, e a nota de cada
 // diagnóstico fica guardada para ver a evolução.
-const ERPAN_PAGINAS = ['painel', 'meu-negocio', 'produtos', 'clientes-fornecedores', 'vendedores', 'funcionarios', 'pedidos-venda', 'objetos-postagem', 'contratos', 'pedido-compras', 'notas-fiscais-entrada', 'lancamentos-estoque', 'conferencia-estoque', 'financeiro'];
+const ERPAN_PAGINAS = ['estoque-posicao', 'painel', 'meu-negocio', 'produtos', 'clientes-fornecedores', 'vendedores', 'funcionarios', 'pedidos-venda', 'objetos-postagem', 'contratos', 'pedido-compras', 'notas-fiscais-entrada', 'lancamentos-estoque', 'conferencia-estoque', 'financeiro'];
 const ERPAN_KEY = 'eagles_ia_analista_erp_v1';
 const ERPAN_KEY_FIN = 'eagles_fin_ia_analista_erp_v1';
 const ERPAN_AREAS = { vendas: 'Vendas', estoque: 'Estoque', compras: 'Compras', financeiro: 'Financeiro', clientes: 'Clientes', contratos: 'Contratos' };
@@ -10125,6 +10142,846 @@ function ectAcoes(item) {
     <button type="button" class="btn btn-small btn-ghost${nf ? ' ect-nf-ok' : ''}" onclick="ectNfse('${id}')" title="${nf ? 'NFS-e deste mês registrada' : 'Emitir a NFS-e deste mês'}">${nf ? 'NFS-e ✓' : 'NFS-e'}</button>
     <button type="button" class="btn btn-small btn-ghost" onclick="abrirCadastroModal('contrato','${id}')">Editar</button>
     <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirCadastroItem('contrato','${id}')">Excluir</button>`;
+}
+
+// =====================================================================
+// ---------- ERP híbrido: perfil de operação + estoque que anda sozinho ----------
+// =====================================================================
+// Perfil de operação: "O que você vende?" (serviços, produtos ou os dois).
+// Só muda o que aparece; nada é apagado.
+// Natureza do item: cada cadastro é produto ou serviço. Só produto com
+// "controla estoque" mexe no saldo. O mesmo pedido pode misturar os dois.
+// Saldo: o campo "estoque" do produto passa a ser mexido pelas
+// movimentações (eagles_lancamentos_estoque_v1), que viram o histórico
+// (kardex). Venda faturada baixa; venda cancelada (ou que deixa de estar
+// faturada) devolve; pedidos em aberto ficam como reserva.
+const PERFIL_OP_KEY = 'eagles_perfil_operacao_v1';
+const PERFIL_OP_NOMES = { servicos: 'Serviços', produtos: 'Produtos', ambos: 'Produtos e serviços' };
+let PERFIL_OP = null;
+const EST_MOV_KEY = 'eagles_lancamentos_estoque_v1';
+let EST_INICIADO = false;
+let EST_TIMER = null;
+
+function perfilOpCacheKey() { return 'eagles_perfil_op_cache::' + (TENANT_ID || 'local'); }
+function perfilOp() { if (PERFIL_OP) return PERFIL_OP; try { return localStorage.getItem(perfilOpCacheKey()) || 'ambos'; } catch (e) { return 'ambos'; } }
+function perfilOpDefinido() { try { return !!(PERFIL_OP || localStorage.getItem(perfilOpCacheKey())); } catch (e) { return !!PERFIL_OP; } }
+function perfilOpVendeProdutos() { return perfilOp() !== 'servicos'; }
+function perfilOpIniciar() {
+  cloudWatch(PERFIL_OP_KEY, null, (d) => {
+    const v = d && d.vende && PERFIL_OP_NOMES[d.vende] ? d.vende : null;
+    const mudou = v !== PERFIL_OP;
+    PERFIL_OP = v;
+    try { if (v) localStorage.setItem(perfilOpCacheKey(), v); } catch (e) {}
+    if (mudou) { try { renderTopbar(PAGINA_ATIVA_KEY); } catch (e) {} }
+    perfilOpRenderAviso();
+  });
+}
+function perfilOpSalvar(vende) {
+  if (!PERFIL_OP_NOMES[vende]) return;
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) { avisarSemPermissaoNivel('mudar o perfil de operação'); return; }
+  if (cloudSet(PERFIL_OP_KEY, { vende, atualizadoEm: new Date().toISOString(), por: USUARIO_NOME || '' }) === false) return;
+  PERFIL_OP = vende;
+  try { localStorage.setItem(perfilOpCacheKey(), vende); } catch (e) {}
+  srvFecharModal();
+  try { renderTopbar(PAGINA_ATIVA_KEY); } catch (e) {}
+  perfilOpRenderAviso();
+  avisar(`Perfil de operação: ${PERFIL_OP_NOMES[vende]}. ${vende === 'servicos' ? 'Estoque e Compras saíram do menu (os dados continuam guardados).' : 'O menu mostra o que faz sentido para você.'} Dá para mudar quando quiser.`, 'Perfil de operação');
+}
+function perfilOpAbrir() {
+  const atual = perfilOp();
+  const ov = srvGarantirModal();
+  const op = (v, ic1, txt) => `<button type="button" class="cw-opcao${atual === v && perfilOpDefinido() ? ' ativo' : ''}" onclick="perfilOpSalvar('${v}')">${ic(ic1)}<strong>${PERFIL_OP_NOMES[v]}</strong><span>${txt}</span></button>`;
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:680px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>O que a sua empresa vende?</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub">O sistema mostra só o que faz sentido para o seu negócio. Dá para mudar quando quiser, e nada é apagado.</p>
+    <div class="cw-opcoes">
+      ${op('servicos', 'maleta', 'Contratos, NFS-e e pedidos de serviço. Estoque e Compras ficam escondidos.')}
+      ${op('produtos', 'caixa', 'Estoque que baixa sozinho na venda, posição de estoque, compras e movimentações.')}
+      ${op('ambos', 'camadas', 'Tudo. Cada item diz se é produto (mexe no estoque) ou serviço (não mexe).')}
+    </div>
+    ${FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor() ? '<p class="kb-vazio-mini" style="margin-top:10px;">Só o Diretor muda o perfil de operação.</p>' : ''}
+  </div>`;
+  openModal('modal-srv');
+}
+// aviso no Painel do ERP enquanto o perfil não foi escolhido + o selo do perfil
+function perfilOpRenderAviso() {
+  const el = document.getElementById('perfil-op-aviso'), selo = document.getElementById('perfil-op-selo-lugar');
+  if (selo && typeof SIS !== 'undefined' && SIS && SIS.versao) { selo.innerHTML = `<button type="button" class="perfil-op-selo" onclick="sisAbrirMeuSistema()" title="Ferramentas, nomes e versão do sistema">${ic('camadas', 'ic-herda')} Meu sistema: ${escapeHtml((SIS_VERSOES[SIS.versao] || {}).nome || '')} ✎</button>`; if (el) el.innerHTML = ''; return; }
+  if (selo) selo.innerHTML = perfilOpDefinido() ? `<button type="button" class="perfil-op-selo" onclick="perfilOpAbrir()" title="Mudar o que aparece no sistema">${ic('camadas', 'ic-herda')} Vende: ${PERFIL_OP_NOMES[perfilOp()]} ✎</button>` : '';
+  if (!el) return;
+  el.innerHTML = perfilOpDefinido() || typeof SIS_CARREGADO === 'undefined' || !SIS_CARREGADO || !(SIS && (SIS.concluidoEm || SIS.pulado))
+    ? ''
+    : `<div class="atd-banner" style="margin:0 0 16px;">${ic('ajuda', 'ic-herda')}<div><strong>Conte o que a sua empresa vende</strong> — serviços, produtos ou os dois — e o sistema mostra só o que você usa. <button type="button" class="btn btn-small btn-primary" style="margin-left:6px;" onclick="perfilOpAbrir()">Escolher</button></div></div>`;
+}
+
+// ---------- natureza do item ----------
+function estNatureza(p) { return p && p.natureza === 'servico' ? 'servico' : 'produto'; }
+function estControla(p) { return !!p && estNatureza(p) === 'produto' && p.controlaEstoque !== 'nao' && p.controlaEstoque !== false; }
+function estProdutos() { return CADASTROS_DATA['produto'] || []; }
+function estAcharProduto(ref) {
+  if (!ref) return null;
+  const l = estProdutos();
+  if (ref.produtoId) { const p = l.find((x) => x.id === ref.produtoId); if (p) return p; }
+  const cod = String(ref.codigo || ref.sku || '').trim().toLowerCase();
+  if (cod) { const p = l.find((x) => String(x.sku || '').trim().toLowerCase() === cod); if (p) return p; }
+  const nome = String(ref.descricao || ref.produto || ref.nome || '').trim().toLowerCase();
+  return nome ? l.find((x) => String(x.nome || '').trim().toLowerCase() === nome) || null : null;
+}
+function estNum(v) { const n = Number(String(v === undefined || v === null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
+
+// ---------- movimentar ----------
+function estIniciar() {
+  if (EST_INICIADO) return;
+  EST_INICIADO = true;
+  cloudWatch(EST_MOV_KEY, [], (d) => { CADASTROS_DATA['lancamento-estoque'] = Array.isArray(d) ? d : []; estAgendar(); });
+  if (!CADASTROS_DATA['produto']) cloudWatch('eagles_produtos_v1', [], (d) => { CADASTROS_DATA['produto'] = Array.isArray(d) ? d : []; estAgendar(); });
+  if (!CADASTROS_DATA['pedido-venda']) cloudWatch('eagles_pedidos_venda_v1', [], (d) => { CADASTROS_DATA['pedido-venda'] = Array.isArray(d) ? d : []; estAgendar(); });
+}
+function estPronto() { return ['eagles_produtos_v1', 'eagles_pedidos_venda_v1', EST_MOV_KEY].every((k) => chaveCarregadaNaNuvem(k)) && Array.isArray(CADASTROS_DATA['produto']); }
+// aplica várias mudanças de saldo e grava produtos + histórico de uma vez
+function estAplicar(movs) {
+  const lista = estProdutos();
+  const hist = (CADASTROS_DATA['lancamento-estoque'] || []).slice();
+  const agora = new Date().toISOString();
+  const feitos = [];
+  movs.forEach((m) => {
+    const p = lista.find((x) => x.id === m.produtoId);
+    if (!p || !estControla(p) || !m.delta) return;
+    const saldo = Math.round((estNum(p.estoque) + m.delta) * 1000) / 1000;
+    p.estoque = saldo; p.atualizadoEm = agora;
+    const reg = { id: genId('mv'), produto: p.nome, produtoId: p.id, tipo: m.tipo || (m.delta > 0 ? 'entrada' : 'saida'), quantidade: Math.abs(m.delta), data: m.data || isoHoje(), motivo: String(m.motivo || '').slice(0, 200),
+      origem: m.origem || { tipo: 'manual' }, saldoApos: saldo, aplicado: true, automatico: true, por: USUARIO_NOME || '', criadoEm: agora, atualizadoEm: agora };
+    hist.push(reg); feitos.push(reg);
+  });
+  if (!feitos.length) return [];
+  if (cloudSet('eagles_produtos_v1', lista) === false) return [];
+  CADASTROS_DATA['produto'] = lista;
+  CADASTROS_DATA['lancamento-estoque'] = hist;
+  cloudSet(EST_MOV_KEY, hist);
+  return feitos;
+}
+// itens do pedido que mexem no estoque: [{produtoId, qtd}]
+function estItensDoPedido(pedido) {
+  const soma = {};
+  (pedido.itens || []).forEach((i) => {
+    const p = estAcharProduto(i);
+    if (!p || !estControla(p)) return;
+    const q = estNum(i.quantidade);
+    if (q > 0) soma[p.id] = (soma[p.id] || 0) + q;
+  });
+  return Object.keys(soma).map((produtoId) => ({ produtoId, qtd: soma[produtoId] }));
+}
+// reserva: o que está em pedidos abertos (ainda não baixado)
+function estReservado(produtoId, excetoPedidoId) {
+  return (CADASTROS_DATA['pedido-venda'] || []).filter((p) => p.estoqueControlado && p.status === 'aberto' && !p.estoqueBaixado && p.id !== excetoPedidoId)
+    .reduce((a, p) => a + estItensDoPedido(p).filter((x) => x.produtoId === produtoId).reduce((s, x) => s + x.qtd, 0), 0);
+}
+function estDisponivel(p, excetoPedidoId) { return Math.round((estNum(p.estoque) - estReservado(p.id, excetoPedidoId)) * 1000) / 1000; }
+// confere todos os pedidos: faturado e ainda não baixado → baixa;
+// baixado mas não está mais faturado → devolve. Fica gravado no pedido
+// exatamente o que saiu, para devolver o mesmo se mudar.
+function estSincronizarPedidos() {
+  if (!estPronto() || !perfilOpVendeProdutos() || (FIREBASE_PRONTO && TENANT_ID && !nivelPodeOperar())) return;
+  const pedidos = CADASTROS_DATA['pedido-venda'] || [];
+  let mexeu = false;
+  pedidos.forEach((pd) => {
+    if (!pd.estoqueControlado) return;
+    const quer = pd.status === 'faturado';
+    if (quer && !pd.estoqueBaixado) {
+      const itens = estItensDoPedido(pd);
+      pd.estoqueBaixado = true; pd.estoqueBaixa = itens; pd.estoqueBaixadoEm = new Date().toISOString(); mexeu = true;
+      if (itens.length) estAplicar(itens.map((x) => ({ produtoId: x.produtoId, delta: -x.qtd, tipo: 'saida', motivo: `Venda — pedido nº ${pd.numero || ''}`, origem: { tipo: 'pedido', id: pd.id } })));
+    } else if (!quer && pd.estoqueBaixado) {
+      const itens = pd.estoqueBaixa || [];
+      pd.estoqueBaixado = false; pd.estoqueBaixa = []; pd.estoqueBaixadoEm = ''; mexeu = true;
+      if (itens.length) estAplicar(itens.map((x) => ({ produtoId: x.produtoId, delta: x.qtd, tipo: 'entrada', motivo: `Devolução ao estoque — pedido nº ${pd.numero || ''} ${pd.status === 'cancelado' ? 'cancelado' : 'voltou para aberto'}`, origem: { tipo: 'pedido', id: pd.id } })));
+    }
+  });
+  if (mexeu) cloudSet('eagles_pedidos_venda_v1', pedidos);
+}
+function estAgendar() { clearTimeout(EST_TIMER); EST_TIMER = setTimeout(() => { try { estSincronizarPedidos(); } catch (e) { console.error(e); } estRenderPosicao(); }, 300); }
+
+// ---------- ganchos do cadastro ----------
+// produto novo com estoque inicial → registra o "saldo inicial" no histórico
+function estAoCriarProduto(novo) {
+  if (!novo.natureza) novo.natureza = perfilOp() === 'servicos' ? 'servico' : 'produto';
+  if (!novo.controlaEstoque) novo.controlaEstoque = novo.natureza === 'servico' ? 'nao' : 'sim';
+  const q = estNum(novo.estoque);
+  if (estControla(novo) && q) {
+    const hist = (CADASTROS_DATA['lancamento-estoque'] || []).concat([{ id: genId('mv'), produto: novo.nome, produtoId: novo.id, tipo: 'entrada', quantidade: q, data: isoHoje(), motivo: 'Saldo inicial do cadastro', origem: { tipo: 'cadastro' }, saldoApos: q, aplicado: true, automatico: true, por: USUARIO_NOME || '', criadoEm: new Date().toISOString() }]);
+    CADASTROS_DATA['lancamento-estoque'] = hist; cloudSet(EST_MOV_KEY, hist);
+  }
+  if (!estControla(novo)) novo.estoque = '';
+}
+// estoque mudado à mão na edição do produto → vira um "ajuste" no histórico
+function estAoEditarProduto(antes, item) {
+  if (!estControla(item)) return;
+  const d = Math.round((estNum(item.estoque) - estNum(antes.estoque)) * 1000) / 1000;
+  if (!d) return;
+  const hist = (CADASTROS_DATA['lancamento-estoque'] || []).concat([{ id: genId('mv'), produto: item.nome, produtoId: item.id, tipo: 'ajuste', quantidade: Math.abs(d), sinal: d > 0 ? 1 : -1, data: isoHoje(), motivo: `Ajuste manual no cadastro (${d > 0 ? '+' : ''}${d})`, origem: { tipo: 'cadastro' }, saldoApos: estNum(item.estoque), aplicado: true, automatico: true, por: USUARIO_NOME || '', criadoEm: new Date().toISOString() }]);
+  CADASTROS_DATA['lancamento-estoque'] = hist; cloudSet(EST_MOV_KEY, hist);
+}
+// movimentação lançada à mão (tela Movimentações) → mexe no saldo
+function estDeltaDoLancamento(l) { const q = estNum(l.quantidade); return l.tipo === 'saida' ? -q : l.tipo === 'ajuste' ? q * (l.sinal === -1 ? -1 : 1) : q; }
+function estAoCriarLancamento(novo) {
+  const p = estAcharProduto({ produto: novo.produto, produtoId: novo.produtoId });
+  if (!p) { avisar(`Produto "${novo.produto}" não encontrado no cadastro. A movimentação ficou registrada, mas não mexeu em nenhum saldo. Use o nome exato do produto.`, 'Movimentação'); return; }
+  if (!estControla(p)) { avisar(`"${p.nome}" está como ${estNatureza(p) === 'servico' ? 'serviço' : 'produto sem controle de estoque'}: a movimentação ficou registrada, mas não mexe no saldo.`, 'Movimentação'); return; }
+  const saldo = Math.round((estNum(p.estoque) + estDeltaDoLancamento(novo)) * 1000) / 1000;
+  p.estoque = saldo; p.atualizadoEm = new Date().toISOString();
+  Object.assign(novo, { produto: p.nome, produtoId: p.id, saldoApos: saldo, aplicado: true, origem: { tipo: 'manual' }, por: USUARIO_NOME || '' });
+  cloudSet('eagles_produtos_v1', estProdutos());
+}
+function estAoExcluirLancamento(item) {
+  if (!item.aplicado) return;
+  const p = estAcharProduto({ produtoId: item.produtoId, produto: item.produto });
+  if (!p || !estControla(p)) return;
+  p.estoque = Math.round((estNum(p.estoque) - estDeltaDoLancamento(item)) * 1000) / 1000;
+  cloudSet('eagles_produtos_v1', estProdutos());
+}
+function estAoEditarLancamento(antes, item) {
+  if (!antes.aplicado) return;
+  if (antes.automatico) { Object.assign(item, { quantidade: antes.quantidade, tipo: antes.tipo, produto: antes.produto }); avisar('Movimentações automáticas (de venda, cadastro ou inventário) não mudam a quantidade. Para corrigir, lance um ajuste.', 'Movimentação'); return; }
+  const p = estAcharProduto({ produtoId: antes.produtoId, produto: antes.produto });
+  if (!p || !estControla(p)) return;
+  const d = estDeltaDoLancamento(item) - estDeltaDoLancamento(antes);
+  if (!d) return;
+  p.estoque = Math.round((estNum(p.estoque) + d) * 1000) / 1000;
+  item.saldoApos = p.estoque;
+  cloudSet('eagles_produtos_v1', estProdutos());
+}
+
+// ---------- Posição de estoque (estoque.html) ----------
+let EST_FILTRO = { busca: '', situacao: '' };
+function estSituacao(p) {
+  const s = estNum(p.estoque), min = estNum(p.quantidadeMinima), disp = estDisponivel(p);
+  if (s <= 0) return 'zerado';
+  if (disp <= 0) return 'reservado';
+  if (min > 0 && s < min) return 'baixo';
+  return 'ok';
+}
+const EST_SIT = { ok: ['Ok', 'badge-success'], baixo: ['Abaixo do mínimo', 'badge-warning'], zerado: ['Zerado', 'badge-danger'], reservado: ['Tudo reservado', 'badge-warning'] };
+function estRenderPosicao() {
+  const el = document.getElementById('est-posicao');
+  if (!el) return;
+  if (!estPronto()) { el.innerHTML = '<p class="kb-vazio">Carregando o estoque...</p>'; return; }
+  const todos = estProdutos().filter((p) => p.situacao !== 'inativo' && estControla(p));
+  const q = ttSemAcento(EST_FILTRO.busca);
+  const lista = todos.filter((p) => (!q || ttSemAcento(p.nome + ' ' + (p.sku || '')).includes(q)) && (!EST_FILTRO.situacao || estSituacao(p) === EST_FILTRO.situacao))
+    .sort((a, b) => ({ zerado: 0, reservado: 1, baixo: 2, ok: 3 }[estSituacao(a)] - { zerado: 0, reservado: 1, baixo: 2, ok: 3 }[estSituacao(b)]) || String(a.nome).localeCompare(String(b.nome)));
+  const valor = todos.reduce((a, p) => a + Math.max(0, estNum(p.estoque)) * estNum(p.precoVenda), 0);
+  const cont = (s) => todos.filter((p) => estSituacao(p) === s).length;
+  const servicos = estProdutos().filter((p) => p.situacao !== 'inativo' && !estControla(p)).length;
+  el.innerHTML = `
+    <div class="stat-grid" style="margin-bottom:14px;">
+      <div class="stat-card"><div class="stat-label">Itens com estoque</div><div class="stat-value">${todos.length}</div>${servicos ? `<div style="font-size:11.5px; color:var(--text-soft);">+ ${servicos} serviço(s) ou sem controle</div>` : ''}</div>
+      <div class="stat-card${cont('zerado') ? ' danger' : ''}"><div class="stat-label">Zerados</div><div class="stat-value">${cont('zerado')}</div></div>
+      <div class="stat-card"><div class="stat-label">Abaixo do mínimo</div><div class="stat-value" style="color:${cont('baixo') ? 'var(--warning)' : 'inherit'};">${cont('baixo')}</div></div>
+      <div class="stat-card"><div class="stat-label">Valor em estoque (preço de venda)</div><div class="stat-value" style="font-size:19px;">${formatMoney(valor)}</div></div>
+    </div>
+    <div class="panel">
+      <div class="est-filtros"><input type="search" id="est-busca" placeholder="Buscar produto ou SKU..." value="${escapeHtml(EST_FILTRO.busca)}" oninput="EST_FILTRO.busca = this.value; estRenderPosicao()">
+        <select class="srv-select" onchange="EST_FILTRO.situacao = this.value; estRenderPosicao()"><option value="">Todas as situações</option>${Object.keys(EST_SIT).map((k) => `<option value="${k}" ${EST_FILTRO.situacao === k ? 'selected' : ''}>${EST_SIT[k][0]}</option>`).join('')}</select></div>
+      <div class="table-scroll"><table><thead><tr><th>Produto</th><th>SKU</th><th style="text-align:right;">Em estoque</th><th style="text-align:right;">Reservado</th><th style="text-align:right;">Disponível</th><th style="text-align:right;">Mínimo</th><th>Situação</th><th></th></tr></thead>
+      <tbody>${lista.length ? lista.map((p) => { const s = estSituacao(p), r = estReservado(p.id), d = estDisponivel(p), id = escapeParaOnclick(p.id); return `<tr>
+        <td><strong>${escapeHtml(p.nome)}</strong>${p.unidade ? ` <small class="kb-vazio-mini">${escapeHtml(p.unidade)}</small>` : ''}</td><td>${escapeHtml(p.sku || '—')}</td>
+        <td style="text-align:right;">${estNum(p.estoque)}</td><td style="text-align:right; color:var(--text-soft);">${r || '—'}</td><td style="text-align:right; font-weight:700; color:${d <= 0 ? 'var(--danger)' : 'inherit'};">${d}</td>
+        <td style="text-align:right; color:var(--text-soft);">${estNum(p.quantidadeMinima) || '—'}</td><td><span class="badge ${EST_SIT[s][1]}">${EST_SIT[s][0]}</span></td>
+        <td style="white-space:nowrap; text-align:right;"><button type="button" class="btn btn-small btn-ghost" onclick="estAbrirMov('${id}','entrada')">+ Entrada</button><button type="button" class="btn btn-small btn-ghost" onclick="estAbrirMov('${id}','saida')">− Saída</button><button type="button" class="btn btn-small btn-ghost" onclick="estAbrirMov('${id}','ajuste')">Ajustar</button><button type="button" class="btn btn-small btn-ghost" onclick="estHistorico('${id}')">Histórico</button></td>
+      </tr>`; }).join('') : `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-soft);">${todos.length ? 'Nada com esse filtro.' : 'Nenhum produto com controle de estoque. Cadastre em Cadastros → Produtos.'}</td></tr>`}</tbody></table></div>
+    </div>`;
+  const b = document.getElementById('est-busca'); if (b && document.activeElement && document.activeElement.id === 'est-busca') { b.focus(); b.setSelectionRange(b.value.length, b.value.length); }
+}
+function estAbrirMov(id, tipo) {
+  const p = estProdutos().find((x) => x.id === id);
+  if (!p) return;
+  const nomes = { entrada: 'Entrada no estoque', saida: 'Saída do estoque', ajuste: 'Ajustar o saldo' };
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:440px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${nomes[tipo]}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub"><strong>${escapeHtml(p.nome)}</strong> · em estoque agora: <b>${estNum(p.estoque)}</b>${estReservado(p.id) ? ` · reservado: ${estReservado(p.id)}` : ''}</p>
+    <div class="field full"><label>${tipo === 'ajuste' ? 'Saldo correto (contado)' : 'Quantidade'}</label><input type="number" id="est-mov-qtd" min="0" step="any" value="${tipo === 'ajuste' ? estNum(p.estoque) : ''}"></div>
+    <div class="field full"><label>Motivo</label><input type="text" id="est-mov-motivo" maxlength="200" placeholder="${tipo === 'entrada' ? 'Ex.: compra do fornecedor X' : tipo === 'saida' ? 'Ex.: perda, uso interno, amostra' : 'Ex.: contagem do estoque'}"></div>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="estSalvarMov('${escapeParaOnclick(id)}','${tipo}')">Salvar</button></div></div>`;
+  openModal('modal-srv');
+  setTimeout(() => { const i = document.getElementById('est-mov-qtd'); if (i) i.focus(); }, 50);
+}
+function estSalvarMov(id, tipo) {
+  if (!exigirPodeOperar('movimentar estoque')) return;
+  const p = estProdutos().find((x) => x.id === id);
+  const v = estNum((document.getElementById('est-mov-qtd') || {}).value);
+  const motivo = ((document.getElementById('est-mov-motivo') || {}).value || '').trim();
+  if (!p) return;
+  if (tipo !== 'ajuste' && !(v > 0)) { avisar('Informe uma quantidade maior que zero.'); return; }
+  const delta = tipo === 'entrada' ? v : tipo === 'saida' ? -v : Math.round((v - estNum(p.estoque)) * 1000) / 1000;
+  if (!delta) { srvFecharModal(); return; }
+  if (tipo === 'saida' && v > estNum(p.estoque) && !confirm(`Vai ficar negativo (${estNum(p.estoque) - v}). Continuar?`)) return;
+  estAplicar([{ produtoId: p.id, delta, tipo, motivo: motivo || (tipo === 'ajuste' ? `Ajuste de saldo (${delta > 0 ? '+' : ''}${delta})` : ''), origem: { tipo: 'manual' } }]);
+  srvFecharModal(); estRenderPosicao();
+}
+function estHistorico(id) {
+  const p = estProdutos().find((x) => x.id === id);
+  if (!p) return;
+  const movs = (CADASTROS_DATA['lancamento-estoque'] || []).filter((m) => m.produtoId === id || (!m.produtoId && m.produto === p.nome)).sort((a, b) => String(b.criadoEm || b.data).localeCompare(String(a.criadoEm || a.data))).slice(0, 100);
+  const sinal = (m) => (m.tipo === 'saida' || (m.tipo === 'ajuste' && m.sinal === -1) ? '−' : '+');
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:640px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Histórico · ${escapeHtml(p.nome)}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub">Saldo atual: <b>${estNum(p.estoque)}</b> · disponível: <b>${estDisponivel(p)}</b></p>
+    ${movs.length ? `<div class="table-scroll"><table><thead><tr><th>Data</th><th>Movimento</th><th style="text-align:right;">Qtd.</th><th style="text-align:right;">Saldo</th><th>Motivo</th></tr></thead><tbody>${movs.map((m) => `<tr><td style="white-space:nowrap;">${escapeHtml(formatDatePt(String(m.data || '').slice(0, 10)))}</td><td>${escapeHtml({ entrada: 'Entrada', saida: 'Saída', ajuste: 'Ajuste' }[m.tipo] || m.tipo || '')}</td><td style="text-align:right; color:${sinal(m) === '−' ? 'var(--danger)' : 'var(--success)'};">${sinal(m)}${estNum(m.quantidade)}</td><td style="text-align:right;">${m.saldoApos !== undefined && m.saldoApos !== '' ? estNum(m.saldoApos) : '—'}</td><td style="font-size:12.5px;">${escapeHtml(m.motivo || '')}${m.por ? ` <span class="kb-vazio-mini">· ${escapeHtml(m.por)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="kb-vazio">Nenhuma movimentação ainda.</p>'}
+  </div>`;
+  openModal('modal-srv');
+}
+// mostra o disponível de cada item no formulário do pedido
+function estHtmlDisponivelItem(item) {
+  if (!perfilOpVendeProdutos()) return '';
+  const p = estAcharProduto(item);
+  if (!p) return '';
+  if (!estControla(p)) return `<div class="est-item-info">${estNatureza(p) === 'servico' ? 'Serviço · sem estoque' : 'Sem controle de estoque'}</div>`;
+  const disp = estDisponivel(p, typeof PEDIDO_FORM_EDITANDO_ID !== 'undefined' ? PEDIDO_FORM_EDITANDO_ID : null);
+  const falta = estNum(item.quantidade) > disp;
+  return `<div class="est-item-info${falta ? ' falta' : ''}">Disponível: <b>${disp}</b>${falta ? ' · não dá para a quantidade' : ''}</div>`;
+}
+function estFaltasDoPedidoForm() {
+  if (!perfilOpVendeProdutos()) return [];
+  const exceto = typeof PEDIDO_FORM_EDITANDO_ID !== 'undefined' ? PEDIDO_FORM_EDITANDO_ID : null;
+  const soma = {};
+  PEDIDO_FORM_ITENS.forEach((i) => { const p = estAcharProduto(i); if (p && estControla(p)) soma[p.id] = (soma[p.id] || 0) + estNum(i.quantidade); });
+  return Object.keys(soma).map((id) => { const p = estProdutos().find((x) => x.id === id); const d = estDisponivel(p, exceto); return soma[id] > d ? `${p.nome}: pedido ${soma[id]}, disponível ${d}` : ''; }).filter(Boolean);
+}
+
+// =====================================================================
+// ---------- "Meu sistema": assistente de primeiro acesso + 5 versões ----------
+// =====================================================================
+// Um sistema só, com pacotes de configuração. As respostas do questionário
+// somam pontos para cada versão; a mais pontuada é sugerida (o cliente
+// pode trocar). O pacote só liga, desliga e pré-preenche o que já existe,
+// e nunca libera mais do que o plano contratado (ERP/CRM).
+const SIS_KEY = 'eagles_sistema_config_v1';
+let SIS = null;          // configuração salva da empresa
+let SIS_CARREGADO = false;
+let SIS_WIZ = null;      // estado do assistente aberto
+const SIS_MODULOS = {
+  estoque: 'Estoque e posição de estoque', compras: 'Compras e notas de entrada', envio: 'Objetos de postagem (envios)', contratos: 'Contratos', nfse: 'NFS-e',
+  conteudos: 'Conteúdos e produção', portal: 'Portal do cliente', briefings: 'Briefings', agenda: 'Agenda', atendimento: 'Atendimento e automações de WhatsApp', agentes: 'Agentes de IA',
+};
+const SIS_VERSOES = {
+  agencia: {
+    nome: 'Agência e serviços criativos', icone: 'brilho', vende: 'servicos', exemplo: 'marketing, design, social media, produtora, fotografia, desenvolvimento',
+    desc: 'CRM completo com funil, orçamentos, briefings, produção de conteúdo, aprovação por link, portal do cliente e agentes de IA. ERP enxuto: financeiro, contratos e NFS-e.',
+    modulos: { estoque: false, compras: false, envio: false, contratos: true, nfse: true, conteudos: true, portal: true, briefings: true, agenda: true, atendimento: true, agentes: true },
+    etapas: { contato: 'Briefing', proposta: 'Proposta enviada' },
+    categorias: { receber: ['Social media', 'Tráfego pago', 'Design', 'Sites e sistemas', 'Produção de vídeo'], pagar: ['Freelancers', 'Ferramentas e assinaturas', 'Anúncios (verba de clientes)'] },
+    automacoes: ['cobranca_antes', 'novo_lead_equipe', 'tarefa_atribuida', 'prazo_vencendo'], contrato: 'recorrente', item: 'servico',
+    exemplos: [{ nome: 'Gestão de redes sociais (mensal)', natureza: 'servico', precoVenda: 1500 }, { nome: 'Identidade visual', natureza: 'servico', precoVenda: 2500 }],
+    hoje: ['aReceber', 'contratosVencendo', 'notasMes', 'pedidosAbertos'],
+    passos: ['empresa', 'cliente', 'item', 'ia', 'automacao', 'whatsapp'],
+  },
+  consultoria: {
+    nome: 'Serviços profissionais e consultoria', icone: 'maleta', vende: 'servicos', exemplo: 'consultoria, contabilidade, advocacia, TI, treinamento, manutenção predial',
+    desc: 'Contratos e mensalidades, NFS-e por mês, financeiro com DRE, agenda, tarefas e o Analista. Sem estoque, compras e produção de conteúdo.',
+    modulos: { estoque: false, compras: false, envio: false, contratos: true, nfse: true, conteudos: false, portal: false, briefings: true, agenda: true, atendimento: true, agentes: true },
+    etapas: { contato: 'Diagnóstico', proposta: 'Proposta enviada' },
+    categorias: { receber: ['Honorários', 'Mensalidades', 'Projetos avulsos'], pagar: ['Deslocamento', 'Certificados e taxas', 'Terceirizados'] },
+    automacoes: ['cobranca_antes', 'cobranca_atraso', 'compromisso_lembrete'], contrato: 'recorrente', item: 'servico',
+    exemplos: [{ nome: 'Consultoria mensal', natureza: 'servico', precoVenda: 2000 }, { nome: 'Hora técnica', natureza: 'servico', precoVenda: 180 }],
+    hoje: ['contratosVencendo', 'notasMes', 'aReceber', 'pedidosAbertos'],
+    passos: ['empresa', 'cliente', 'item', 'contrato', 'automacao'],
+  },
+  agenda: {
+    nome: 'Serviços com hora marcada', icone: 'calendario', vende: 'servicos', exemplo: 'clínica, estética, salão, academia, personal, banho e tosa, cursos',
+    desc: 'Agenda no centro, lembrete de compromisso, aniversário, reativação de cliente parado, planos e pacotes, financeiro e NFS-e. Estoque opcional para o balcão.',
+    modulos: { estoque: false, compras: false, envio: false, contratos: true, nfse: true, conteudos: false, portal: false, briefings: false, agenda: true, atendimento: true, agentes: true },
+    etapas: { contato: 'Agendou avaliação', proposta: 'Orçamento', negociacao: 'Retorno' },
+    categorias: { receber: ['Atendimentos', 'Pacotes e planos', 'Produtos no balcão'], pagar: ['Materiais e insumos', 'Comissões'] },
+    automacoes: ['compromisso_lembrete', 'aniversario', 'reativacao', 'cobranca_antes'], contrato: 'pacote', item: 'servico', termos: { cliente: 'Cliente', pedido: 'Atendimento' },
+    exemplos: [{ nome: 'Sessão avulsa', natureza: 'servico', precoVenda: 150 }, { nome: 'Pacote com 10 sessões', natureza: 'servico', precoVenda: 1200 }],
+    hoje: ['agendaHoje', 'aReceber', 'pedidosAbertos', 'clientesParados'],
+    passos: ['empresa', 'cliente', 'item', 'agenda', 'automacao', 'whatsapp'],
+  },
+  comercio: {
+    nome: 'Comércio e varejo', icone: 'caixa', vende: 'produtos', exemplo: 'loja física, loja online, distribuidora, revenda',
+    desc: 'ERP completo: posição de estoque, pedidos de venda com o disponível na hora, movimentações, compras, envios e o Analista do ERP. CRM enxuto.',
+    modulos: { estoque: true, compras: true, envio: true, contratos: false, nfse: false, conteudos: false, portal: false, briefings: false, agenda: false, atendimento: true, agentes: true },
+    etapas: {}, categorias: { receber: ['Vendas no balcão', 'Vendas online', 'Atacado'], pagar: ['Mercadoria para revenda', 'Frete', 'Taxa de cartão e maquininha', 'Embalagens'] },
+    automacoes: ['cobranca_atraso', 'pagamento_recebido', 'reativacao'], contrato: 'fornecimento', item: 'produto',
+    exemplos: [{ nome: 'Produto de exemplo', natureza: 'produto', precoVenda: 49.9, estoque: 20, quantidadeMinima: 5, unidade: 'UN' }],
+    hoje: ['vendasHoje', 'estoqueAlerta', 'pedidosAbertos', 'comprasReceber'],
+    passos: ['empresa', 'item', 'estoque', 'cliente', 'venda'],
+  },
+  producao: {
+    nome: 'Produção e serviço técnico', icone: 'camadas', vende: 'ambos', exemplo: 'indústria pequena, gráfica, confecção, marcenaria, assistência técnica, instaladora, oficina',
+    desc: 'O híbrido: pedido com peça e mão de obra juntos, estoque de peças e matéria-prima, compras, relatório de produção, contratos, NFS-e e Kanban para acompanhar a produção.',
+    modulos: { estoque: true, compras: true, envio: true, contratos: true, nfse: true, conteudos: false, portal: true, briefings: false, agenda: true, atendimento: true, agentes: true },
+    etapas: { contato: 'Visita técnica', proposta: 'Orçamento enviado' },
+    categorias: { receber: ['Produtos fabricados', 'Mão de obra', 'Manutenção e assistência'], pagar: ['Matéria-prima', 'Mão de obra terceirizada', 'Energia e manutenção de máquinas'] },
+    automacoes: ['cobranca_antes', 'prazo_vencendo', 'pagamento_recebido'], contrato: 'fornecimento', item: 'produto',
+    exemplos: [{ nome: 'Peça de exemplo', natureza: 'produto', precoVenda: 80, estoque: 10, quantidadeMinima: 3, unidade: 'UN' }, { nome: 'Mão de obra (hora)', natureza: 'servico', precoVenda: 120 }],
+    hoje: ['pedidosAbertos', 'estoqueAlerta', 'aReceber', 'comprasReceber'],
+    passos: ['empresa', 'item', 'estoque', 'cliente', 'venda', 'contrato'],
+  },
+  generico: {
+    nome: 'Genérico (tudo visível)', icone: 'lista', vende: 'ambos', exemplo: 'para quem prefere ver todas as ferramentas',
+    desc: 'Todas as ferramentas do plano aparecem, como o sistema funcionava antes. Dá para escolher uma versão depois.',
+    modulos: { estoque: true, compras: true, envio: true, contratos: true, nfse: true, conteudos: true, portal: true, briefings: true, agenda: true, atendimento: true, agentes: true },
+    etapas: {}, categorias: { receber: [], pagar: [] }, automacoes: [], contrato: '', item: 'produto', exemplos: [],
+    hoje: ['vendasHoje', 'aReceber', 'pedidosAbertos', 'estoqueAlerta'], passos: ['empresa', 'cliente', 'item', 'venda'],
+  },
+};
+const SIS_RAMOS = {
+  servicos: [['agencia_mkt', 'Agência de marketing / social media'], ['design', 'Design, fotografia ou vídeo'], ['dev', 'Desenvolvimento, sites e TI'], ['consultoria', 'Consultoria ou assessoria'], ['contabil', 'Contabilidade, advocacia ou escritório'], ['saude', 'Clínica, saúde ou terapia'], ['beleza', 'Estética, salão ou barbearia'], ['fitness', 'Academia, personal ou cursos'], ['tecnico', 'Assistência técnica, manutenção ou instalação'], ['outro', 'Outro']],
+  produtos: [['loja', 'Loja física'], ['ecommerce', 'Loja online / marketplace'], ['distribuidora', 'Distribuidora ou atacado'], ['industria', 'Indústria ou fabricação'], ['alimentos', 'Alimentos ou bebidas'], ['outro', 'Outro']],
+  ambos: [['grafica', 'Gráfica, comunicação visual ou brindes'], ['confeccao', 'Confecção ou marcenaria'], ['tecnico', 'Assistência técnica, oficina ou instaladora'], ['loja_servico', 'Loja que também presta serviço'], ['saude', 'Clínica que vende produtos'], ['agencia_mkt', 'Agência que vende produtos'], ['outro', 'Outro']],
+};
+const SIS_RAMO_PONTOS = {
+  agencia_mkt: { agencia: 6 }, design: { agencia: 5, consultoria: 1 }, dev: { agencia: 3, consultoria: 3 }, consultoria: { consultoria: 6 }, contabil: { consultoria: 6 },
+  saude: { agenda: 6 }, beleza: { agenda: 6 }, fitness: { agenda: 6 }, tecnico: { producao: 5, consultoria: 1 },
+  loja: { comercio: 6 }, ecommerce: { comercio: 6 }, distribuidora: { comercio: 6 }, industria: { producao: 6 }, alimentos: { comercio: 3, producao: 3 },
+  grafica: { producao: 6 }, confeccao: { producao: 6 }, loja_servico: { comercio: 4, producao: 2 },
+};
+// perguntas do assistente (a lista muda conforme as respostas)
+function sisPassos(r) {
+  const p = ['boasvindas', 'empresa', 'vende', 'ramo'];
+  const v = r.vende || '';
+  if (v === 'servicos' || v === 'ambos') p.push('servicos');
+  if (v === 'produtos' || v === 'ambos') p.push('produtos');
+  p.push('cobranca', 'equipe', 'objetivos', 'origem', 'resumo');
+  return p;
+}
+function sisPontuar(r) {
+  const pts = { agencia: 0, consultoria: 0, agenda: 0, comercio: 0, producao: 0 };
+  const add = (o) => Object.keys(o || {}).forEach((k) => { pts[k] += o[k]; });
+  add({ servicos: { agencia: 2, consultoria: 2, agenda: 2 }, produtos: { comercio: 3, producao: 2 }, ambos: { producao: 3, comercio: 1 } }[r.vende]);
+  add(SIS_RAMO_PONTOS[r.ramo]);
+  if (r.horaMarcada === 'sim') add({ agenda: 4 });
+  if (r.aprovacao === 'sim') add({ agencia: 4 });
+  if (r.estoque === 'sim') add({ comercio: 2, producao: 1 });
+  if (r.fabrica === 'sim') add({ producao: 4 });
+  if (r.envia === 'sim') add({ comercio: 2 });
+  if ((r.cobranca || []).includes('mensalidade')) add({ agencia: 1, consultoria: 2, agenda: 1 });
+  if ((r.objetivos || []).includes('estoque')) add({ comercio: 2, producao: 2 });
+  if ((r.objetivos || []).includes('producao')) add({ agencia: 2, producao: 2 });
+  if ((r.objetivos || []).includes('atender')) add({ agenda: 1, agencia: 1 });
+  const melhor = Object.keys(pts).sort((a, b) => pts[b] - pts[a] || (SIS_RAMO_PONTOS[r.ramo] && SIS_RAMO_PONTOS[r.ramo][b] ? 1 : 0) - (SIS_RAMO_PONTOS[r.ramo] && SIS_RAMO_PONTOS[r.ramo][a] ? 1 : 0))[0];
+  return pts[melhor] > 0 ? melhor : 'generico';
+}
+// módulos a partir da versão + ajustes pelas respostas
+function sisModulosSugeridos(versao, r) {
+  const m = Object.assign({}, SIS_VERSOES[versao].modulos);
+  if (r.estoque === 'sim') m.estoque = true; if (r.estoque === 'nao') m.estoque = false;
+  if (r.envia === 'sim') m.envio = true;
+  if (r.compraFornecedor === 'sim') m.compras = true;
+  if (r.horaMarcada === 'sim') m.agenda = true;
+  if (r.aprovacao === 'sim') { m.conteudos = true; m.portal = true; }
+  if (r.nfse === 'sim') m.nfse = true; if (r.nfse === 'nao') m.nfse = false;
+  if (r.whatsapp === 'nao') m.atendimento = false;
+  if (r.portal === 'sim') m.portal = true; if (r.portal === 'nao') m.portal = false;
+  if ((r.cobranca || []).includes('mensalidade')) m.contratos = true;
+  if (r.vende === 'servicos') { m.estoque = !!(r.estoque === 'sim'); m.compras = false; m.envio = false; }
+  return m;
+}
+
+// ---------- carregar e aplicar ----------
+function sisIniciar() {
+  cloudWatch(SIS_KEY, null, (d) => {
+    SIS = d && typeof d === 'object' ? d : null;
+    SIS_CARREGADO = true;
+    try { localStorage.setItem('eagles_sis_cache::' + (TENANT_ID || 'local'), JSON.stringify(SIS ? { versao: SIS.versao, modulos: SIS.modulos, termos: SIS.termos, etapas: SIS.etapas } : null)); } catch (e) {}
+    sisAplicarVisual();
+    sisTalvezAbrir();
+    try { perfilOpRenderAviso(); } catch (e) {}
+  });
+}
+function sisCache() { if (SIS) return SIS; try { return JSON.parse(localStorage.getItem('eagles_sis_cache::' + (TENANT_ID || 'local')) || 'null'); } catch (e) { return null; } }
+function sisModuloAtivo(nome) { const c = sisCache(); return !c || !c.modulos || c.modulos[nome] !== false; }
+function sisTermo(qual, padrao) { const c = sisCache(); return (c && c.termos && c.termos[qual]) || padrao; }
+// menu, nomes e etapas do funil conforme a versão
+const SIS_CRM_MENU = { conteudos: 'conteudos', 'portal-cliente': 'portal', automacoes: 'atendimento', whatsapp: 'atendimento', atendentes: 'atendimento', 'monitor-grupos': 'atendimento', briefings: 'briefings', agenda: 'agenda', 'agente-analista': 'agentes', 'agente-copywriter': 'agentes', 'agente-designer': 'agentes' };
+function sisAplicarVisual() {
+  const c = sisCache();
+  try { renderTopbar(PAGINA_ATIVA_KEY); } catch (e) {}
+  // etapas do funil (só o nome; a chave continua a mesma)
+  const etapasOrig = { lead: 'Lead', contato: 'Contato feito', proposta: 'Proposta enviada', negociacao: 'Negociação', fechado: 'Fechado', perdido: 'Perdido' };
+  CRM_ETAPAS.forEach((e) => { e.label = (c && c.etapas && c.etapas[e.key]) || etapasOrig[e.key] || e.label; });
+  // menu lateral do CRM
+  document.querySelectorAll('[data-menu-id]').forEach((b) => {
+    const mod = SIS_CRM_MENU[b.dataset.menuId];
+    if (!mod) return;
+    b.style.display = sisModuloAtivo(mod) ? '' : 'none';
+  });
+  // grupos do CRM que ficaram vazios somem também
+  document.querySelectorAll('div[data-menu-id^="crm-grupo-"]').forEach((g) => {
+    const itens = g.querySelectorAll('.mn-nav-sublink[data-menu-id]');
+    if (itens.length) g.style.display = Array.from(itens).every((x) => x.style.display === 'none') ? 'none' : '';
+  });
+  // nome de quem compra no menu do CRM
+  const cli = document.querySelector('.mn-nav-sublink[data-menu-id="clientes"]');
+  if (cli) { const t = Array.from(cli.childNodes).filter((n) => n.nodeType === 3 && n.textContent.trim()).pop(); if (t) t.textContent = ' ' + sisTermo('cliente', 'Cliente') + 's'; }
+  sisRenderPainel();
+}
+
+// ---------- abrir o assistente na hora certa ----------
+function sisTalvezAbrir() {
+  if (!SIS_CARREGADO || SIS_WIZ || document.getElementById('sis-wiz')) return;
+  if (!/(^|\/)(index\.html)?$|crm\.html$/.test(location.pathname)) return;
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) return;
+  // montado pelo super administrador: aplica o que falta, sem perguntar
+  if (SIS && SIS.aplicarSementes) { sisAplicarSementes(SIS.versao, SIS.respostas || {}, false).then(() => cloudSet(SIS_KEY, Object.assign({}, SIS, { aplicarSementes: false }))); return; }
+  if (SIS && (SIS.concluidoEm || SIS.pulado)) return;
+  if (!chaveCarregadaNaNuvem(PERFIL_KEY)) { setTimeout(sisTalvezAbrir, 700); return; }
+  // empresa que já usava o sistema: só um aviso no Painel (não obriga)
+  const jaUsava = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || perfilOpDefinido();
+  if (jaUsava && !(SIS && SIS.progresso)) { sisRenderPainel(); return; }
+  sisAbrirAssistente();
+}
+
+// ---------- assistente ----------
+function sisAbrirAssistente(recomecar) {
+  const salvo = !recomecar && SIS && SIS.progresso ? SIS.progresso : null;
+  SIS_WIZ = { passo: salvo ? salvo.passo : 'boasvindas', r: Object.assign({ cobranca: [], objetivos: [], exemplos: true }, salvo ? salvo.respostas : {}), versao: '', modulos: null, refazer: !!recomecar };
+  if (!SIS_WIZ.r.empresa) SIS_WIZ.r.empresa = { nomeFantasia: PERFIL_DATA.nomeFantasia || '', nomeEmpresa: PERFIL_DATA.nomeEmpresa || '', doc: PERFIL_DATA.cnpj || PERFIL_DATA.cpf || '', telefone1: PERFIL_DATA.telefone1 || PERFIL_DATA.whatsapp || '', email: PERFIL_DATA.email || '', cidade: PERFIL_DATA.cidade || '', estado: PERFIL_DATA.estado || '' };
+  let el = document.getElementById('sis-wiz');
+  if (!el) { el = document.createElement('div'); el.id = 'sis-wiz'; el.className = 'sis-wiz'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); document.body.appendChild(el); }
+  document.body.classList.add('sis-wiz-aberto');
+  sisRender();
+}
+function sisFechar() { const el = document.getElementById('sis-wiz'); if (el) el.remove(); document.body.classList.remove('sis-wiz-aberto'); SIS_WIZ = null; }
+let SIS_SALVAR_TIMER = null;
+function sisGuardarProgresso() {
+  clearTimeout(SIS_SALVAR_TIMER);
+  SIS_SALVAR_TIMER = setTimeout(() => {
+    if (!SIS_WIZ || SIS_WIZ.refazer && SIS && SIS.concluidoEm) return;
+    cloudSet(SIS_KEY, Object.assign({}, SIS || {}, { progresso: { passo: SIS_WIZ.passo, respostas: SIS_WIZ.r, em: new Date().toISOString() } }));
+  }, 600);
+}
+function sisIr(delta) {
+  const lista = sisPassos(SIS_WIZ.r);
+  const i = lista.indexOf(SIS_WIZ.passo);
+  if (delta > 0 && !sisValidar()) return;
+  const novo = lista[Math.max(0, Math.min(lista.length - 1, i + delta))];
+  SIS_WIZ.passo = novo;
+  if (novo === 'resumo') { SIS_WIZ.versao = SIS_WIZ.versao || sisPontuar(SIS_WIZ.r); SIS_WIZ.modulos = sisModulosSugeridos(SIS_WIZ.versao, SIS_WIZ.r); }
+  sisGuardarProgresso();
+  sisRender();
+  const t = document.querySelector('#sis-wiz .sis-corpo'); if (t) t.scrollTop = 0;
+}
+function sisValidar() {
+  const r = SIS_WIZ.r, p = SIS_WIZ.passo;
+  const erro = (m) => { const e = document.getElementById('sis-erro'); if (e) e.textContent = m; return false; };
+  if (p === 'empresa') { sisLerEmpresa(); if (!String(r.empresa.nomeFantasia || '').trim()) return erro('Diga pelo menos o nome da empresa.'); }
+  if (p === 'vende' && !r.vende) return erro('Escolha uma opção.');
+  if (p === 'ramo' && !r.ramo) return erro('Escolha o ramo (ou "Outro").');
+  return true;
+}
+function sisLerEmpresa() {
+  const v = (id) => ((document.getElementById(id) || {}).value || '').trim();
+  if (!document.getElementById('sis-e-fantasia')) return;
+  SIS_WIZ.r.empresa = { nomeFantasia: v('sis-e-fantasia'), nomeEmpresa: v('sis-e-razao'), doc: v('sis-e-doc'), telefone1: v('sis-e-tel'), email: v('sis-e-email'), cidade: v('sis-e-cidade'), estado: v('sis-e-uf').toUpperCase().slice(0, 2) };
+}
+function sisEscolher(campo, valor, multi, max) {
+  const r = SIS_WIZ.r;
+  if (multi) { const l = r[campo] || []; r[campo] = l.includes(valor) ? l.filter((x) => x !== valor) : (max && l.length >= max ? l : l.concat([valor])); }
+  else { r[campo] = valor; if (campo === 'vende') { r.ramo = ''; } }
+  if (campo === 'vende' || campo === 'ramo') SIS_WIZ.versao = '';
+  sisGuardarProgresso(); sisRender();
+}
+function sisPular() {
+  confirmarAcao('Pular o questionário? O sistema fica com todas as ferramentas visíveis (versão Genérica). Dá para responder depois em Configurações → Meu sistema.', () => {
+    cloudSet(SIS_KEY, Object.assign({}, SIS || {}, { versao: 'generico', modulos: Object.assign({}, SIS_VERSOES.generico.modulos), pulado: true, puladoEm: new Date().toISOString(), progresso: null }));
+    sisFechar();
+  }, 'Pular');
+}
+function sisOpcoes(campo, lista, multi, max) {
+  const r = SIS_WIZ.r;
+  return `<div class="sis-opcoes">${lista.map(([v, t, sub]) => { const on = multi ? (r[campo] || []).includes(v) : r[campo] === v; return `<button type="button" class="sis-op${on ? ' ativo' : ''}" onclick="sisEscolher('${campo}','${v}',${multi ? 'true' : 'false'},${max || 0})"><b>${escapeHtml(t)}</b>${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</button>`; }).join('')}</div>`;
+}
+function sisSimNao(campo, pergunta, ajuda) {
+  return `<div class="sis-pergunta"><strong>${escapeHtml(pergunta)}</strong>${ajuda ? `<small>${escapeHtml(ajuda)}</small>` : ''}${sisOpcoes(campo, [['sim', 'Sim'], ['nao', 'Não']])}</div>`;
+}
+function sisRender() {
+  const el = document.getElementById('sis-wiz');
+  if (!el || !SIS_WIZ) return;
+  const r = SIS_WIZ.r, lista = sisPassos(r), i = lista.indexOf(SIS_WIZ.passo), total = lista.length;
+  const pct = Math.round((i / (total - 1)) * 100);
+  const e = r.empresa || {};
+  let corpo = '';
+  switch (SIS_WIZ.passo) {
+    case 'boasvindas': corpo = `<div class="sis-boas">${ic('brilho')}<h1>Vamos montar o seu sistema</h1><p>São algumas perguntas rápidas (uns 2 minutos). Com as respostas, o sistema mostra só as ferramentas que fazem sentido para o seu negócio e já vem com categorias, modelos e lembretes prontos.</p><p class="kb-vazio-mini">Nada fica travado: dá para mudar tudo depois em Configurações → Meu sistema.</p></div>`; break;
+    case 'empresa': corpo = `<h2>Dados da sua empresa</h2><p class="sis-sub">Aparecem em contratos, orçamentos, recibos, NFS-e e na sua página pública.</p>
+      <div class="cw-grade2"><div class="field full"><label>Nome da empresa (fantasia) *</label><input type="text" id="sis-e-fantasia" maxlength="80" value="${escapeHtml(e.nomeFantasia || '')}"></div>
+      <div class="field full"><label>Razão social</label><input type="text" id="sis-e-razao" maxlength="120" value="${escapeHtml(e.nomeEmpresa || '')}"></div>
+      <div class="field"><label>CNPJ ou CPF</label><input type="text" id="sis-e-doc" maxlength="20" value="${escapeHtml(e.doc || '')}"></div>
+      <div class="field"><label>WhatsApp / telefone</label><input type="tel" id="sis-e-tel" maxlength="20" value="${escapeHtml(e.telefone1 || '')}"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="sis-e-email" maxlength="120" value="${escapeHtml(e.email || '')}"></div>
+      <div class="field"><label>Cidade / UF</label><div style="display:flex; gap:6px;"><input type="text" id="sis-e-cidade" maxlength="60" value="${escapeHtml(e.cidade || '')}"><input type="text" id="sis-e-uf" maxlength="2" style="width:64px;" value="${escapeHtml(e.estado || '')}" placeholder="UF"></div></div></div>
+      <p class="kb-vazio-mini">Logo, endereço completo e cores você coloca depois em Meu perfil.</p>`; break;
+    case 'vende': corpo = `<h2>O que a sua empresa vende?</h2><p class="sis-sub">Define as ferramentas principais.</p>${sisOpcoes('vende', [['servicos', 'Serviços', 'Atendimentos, projetos, mensalidades'], ['produtos', 'Produtos', 'Mercadorias com estoque'], ['ambos', 'Produtos e serviços', 'Por exemplo: peça + mão de obra']])}`; break;
+    case 'ramo': corpo = `<h2>Qual é o seu ramo?</h2><p class="sis-sub">Escolha o mais próximo.</p>${sisOpcoes('ramo', SIS_RAMOS[r.vende] || SIS_RAMOS.ambos)}${r.ramo === 'outro' ? `<div class="field full" style="margin-top:10px;"><label>Conte em poucas palavras</label><input type="text" maxlength="80" value="${escapeHtml(r.ramoOutro || '')}" oninput="SIS_WIZ.r.ramoOutro = this.value"></div>` : ''}`; break;
+    case 'servicos': corpo = `<h2>Sobre os seus serviços</h2>
+      ${sisSimNao('horaMarcada', 'Você trabalha com hora marcada?', 'Consultas, sessões, aulas, visitas...')}
+      ${sisSimNao('aprovacao', 'Você produz conteúdo ou entregas que o cliente precisa aprovar?', 'Posts, artes, vídeos, projetos...')}
+      ${sisSimNao('nfse', 'Você emite NFS-e (nota de serviço)?')}`; break;
+    case 'produtos': corpo = `<h2>Sobre os seus produtos</h2>
+      ${sisSimNao('estoque', 'Você controla estoque?', 'Saber quanto tem para vender, com baixa automática na venda.')}
+      ${r.estoque === 'sim' ? `<div class="sis-pergunta"><strong>Quantos itens, mais ou menos?</strong>${sisOpcoes('qtdItens', [['ate50', 'Até 50'], ['ate500', '50 a 500'], ['mais', 'Mais de 500']])}</div>` : ''}
+      ${sisSimNao('envia', 'Você vende online e envia por Correios ou transportadora?')}
+      ${sisSimNao('compraFornecedor', 'Você compra de fornecedores com frequência?')}
+      ${sisSimNao('fabrica', 'Você fabrica o que vende?')}`; break;
+    case 'cobranca': corpo = `<h2>Como você cobra?</h2><p class="sis-sub">Pode marcar mais de uma.</p>${sisOpcoes('cobranca', [['avulsa', 'Venda ou serviço avulso'], ['mensalidade', 'Mensalidade ou contrato'], ['parcelado', 'Parcelado'], ['pix', 'PIX na hora']], true)}`; break;
+    case 'equipe': corpo = `<h2>Equipe e atendimento</h2>
+      <div class="sis-pergunta"><strong>Quantas pessoas vão usar o sistema?</strong>${sisOpcoes('equipe', [['1', 'Só eu'], ['2-5', '2 a 5'], ['6-15', '6 a 15'], ['16+', 'Mais de 15']])}</div>
+      ${sisSimNao('whatsapp', 'Você atende clientes pelo WhatsApp?')}
+      ${sisSimNao('portal', 'Quer um portal para o cliente acompanhar e aprovar o que você faz?')}`; break;
+    case 'objetivos': corpo = `<h2>O que mais importa agora?</h2><p class="sis-sub">Escolha até 3. Isso define o que aparece primeiro no Painel.</p>${sisOpcoes('objetivos', [['financeiro', 'Organizar o financeiro'], ['vender', 'Vender mais'], ['estoque', 'Controlar o estoque'], ['producao', 'Organizar a produção e as entregas'], ['cobrar', 'Cobrar em dia'], ['atender', 'Atender melhor']], true, 3)}`; break;
+    case 'origem': corpo = `<h2>Como você conheceu o sistema?</h2><p class="sis-sub">Opcional — ajuda a gente a melhorar.</p>${sisOpcoes('origem', [['indicacao', 'Indicação'], ['instagram', 'Instagram'], ['google', 'Google'], ['youtube', 'YouTube'], ['evento', 'Evento ou curso'], ['outro', 'Outro']])}`; break;
+    case 'resumo': {
+      const V = SIS_VERSOES[SIS_WIZ.versao] || SIS_VERSOES.generico, m = SIS_WIZ.modulos || V.modulos;
+      corpo = `<h2>Montamos o seu sistema como:</h2>
+        <div class="sis-versao"><span class="sis-versao-ic">${ic(V.icone, 'ic-herda')}</span><div><b>${escapeHtml(V.nome)}</b><small>${escapeHtml(V.desc)}</small></div></div>
+        <div class="sis-tit">Ferramentas ligadas <small>toque para ligar ou desligar</small></div>
+        <div class="sis-mods">${Object.keys(SIS_MODULOS).map((k) => `<button type="button" class="sis-mod${m[k] !== false ? ' on' : ''}" onclick="SIS_WIZ.modulos['${k}'] = !(SIS_WIZ.modulos['${k}'] !== false); sisRender()">${m[k] !== false ? '✓' : '+'} ${escapeHtml(SIS_MODULOS[k])}</button>`).join('')}</div>
+        <div class="sis-tit">Vem pronto</div>
+        <ul class="sis-lista">${V.categorias.receber.length ? `<li>Categorias do financeiro: ${escapeHtml(V.categorias.receber.concat(V.categorias.pagar).join(', '))}</li>` : ''}${Object.keys(V.etapas || {}).length ? `<li>Funil com as etapas: ${escapeHtml(CRM_ETAPAS.map((x) => (V.etapas[x.key] || x.label)).join(' → '))}</li>` : ''}${V.contrato ? '<li>Modelo de contrato para o seu tipo de negócio</li>' : ''}${V.automacoes.length ? `<li>${V.automacoes.length} automações sugeridas (ficam pausadas para você revisar)</li>` : ''}<li>Checklist de primeiros passos no Painel</li></ul>
+        ${V.exemplos.length ? `<label class="sis-check"><input type="checkbox" ${r.exemplos ? 'checked' : ''} onchange="SIS_WIZ.r.exemplos = this.checked"> Criar ${V.exemplos.length === 1 ? 'um item' : V.exemplos.length + ' itens'} de exemplo para eu ver como funciona (dá para apagar com um clique)</label>` : ''}
+        <details class="sis-trocar"><summary>Escolher outra versão</summary><div class="sis-opcoes">${Object.keys(SIS_VERSOES).map((k) => `<button type="button" class="sis-op${SIS_WIZ.versao === k ? ' ativo' : ''}" onclick="SIS_WIZ.versao='${k}'; SIS_WIZ.modulos = sisModulosSugeridos('${k}', SIS_WIZ.r); sisRender()"><b>${escapeHtml(SIS_VERSOES[k].nome)}</b><small>${escapeHtml(SIS_VERSOES[k].exemplo)}</small></button>`).join('')}</div></details>`;
+      break;
+    }
+  }
+  const ultimo = SIS_WIZ.passo === 'resumo';
+  const opcional = ['origem', 'servicos', 'produtos', 'cobranca', 'equipe', 'objetivos'].includes(SIS_WIZ.passo);
+  el.innerHTML = `<div class="sis-caixa">
+    <div class="sis-topo"><div class="sis-progresso"><span style="width:${pct}%"></span></div><div class="sis-etapa"><span>${SIS_WIZ.passo === 'boasvindas' ? 'Começando' : `Etapa ${i} de ${total - 1}`}</span><span>${pct}%</span></div></div>
+    <div class="sis-corpo">${corpo}<p class="sis-erro" id="sis-erro"></p></div>
+    <div class="sis-rodape">
+      ${i > 0 ? `<button type="button" class="btn" onclick="${SIS_WIZ.passo === 'empresa' ? 'sisLerEmpresa(); ' : ''}sisIr(-1)">← Voltar</button>` : (SIS_WIZ.refazer ? '<button type="button" class="btn" onclick="sisFechar()">Cancelar</button>' : '<button type="button" class="btn btn-ghost" onclick="sisPular()">Fazer depois</button>')}
+      <span class="kb-espaco"></span>
+      ${opcional && !ultimo ? '<button type="button" class="btn btn-ghost" onclick="sisIr(1)">Pular esta</button>' : ''}
+      ${ultimo ? `<button type="button" class="btn btn-primary" id="sis-concluir" onclick="sisConcluir()">${ic('aprovado', 'ic-herda')} Começar</button>` : `<button type="button" class="btn btn-primary" onclick="sisIr(1)">${SIS_WIZ.passo === 'boasvindas' ? 'Vamos lá' : 'Continuar'} →</button>`}
+    </div></div>`;
+}
+
+// ---------- concluir: grava tudo e prepara o que vem pronto ----------
+async function sisConcluir() {
+  const btn = document.getElementById('sis-concluir'); if (btn) { btn.disabled = true; btn.textContent = 'Montando...'; }
+  const r = SIS_WIZ.r, versao = SIS_WIZ.versao || sisPontuar(r), modulos = Object.assign({}, SIS_WIZ.modulos || sisModulosSugeridos(versao, r));
+  try {
+    // dados da empresa
+    const e = r.empresa || {};
+    const doc = String(e.doc || '').replace(/\D/g, '');
+    const perfil = Object.assign({}, PERFIL_DATA, { nomeFantasia: e.nomeFantasia || PERFIL_DATA.nomeFantasia, nomeEmpresa: e.nomeEmpresa || PERFIL_DATA.nomeEmpresa, telefone1: e.telefone1 || PERFIL_DATA.telefone1, email: e.email || PERFIL_DATA.email, cidade: e.cidade || PERFIL_DATA.cidade, estado: e.estado || PERFIL_DATA.estado });
+    if (doc.length === 14) { perfil.cnpj = e.doc; perfil.tipoPessoa = 'PJ'; } else if (doc.length === 11) { perfil.cpf = e.doc; perfil.tipoPessoa = 'PF'; }
+    if (cloudSet(PERFIL_KEY, perfil) !== false) PERFIL_DATA = perfil;
+    // perfil de operação (Serviços / Produtos / os dois)
+    let vende = r.vende || SIS_VERSOES[versao].vende;
+    if (vende === 'servicos' && (modulos.estoque || modulos.compras || modulos.envio)) vende = 'ambos'; // ligou estoque: passa a vender os dois
+    if (cloudSet(PERFIL_OP_KEY, { vende, atualizadoEm: new Date().toISOString(), por: USUARIO_NOME || '' }) !== false) { PERFIL_OP = vende; try { localStorage.setItem(perfilOpCacheKey(), vende); } catch (x) {} }
+    const V = SIS_VERSOES[versao];
+    const conf = { versao, respostas: r, modulos, etapas: Object.assign({}, V.etapas || {}), termos: Object.assign({}, V.termos || {}), objetivos: r.objetivos || [], origem: r.origem || '', ramo: r.ramo || '', concluidoEm: new Date().toISOString(), por: USUARIO_NOME || '', progresso: null, pulado: false };
+    if (cloudSet(SIS_KEY, conf) === false) throw new Error('sem permissão');
+    SIS = conf;
+    await sisAplicarSementes(versao, r, true);
+    sisFechar();
+    sisAplicarVisual();
+    avisar(`Pronto! Seu sistema está montado como "${V.nome}". No Painel tem um checklist de primeiros passos. Para mudar qualquer coisa: Configurações → Meu sistema.`, 'Seu sistema');
+  } catch (err) {
+    console.error(err);
+    if (btn) { btn.disabled = false; btn.textContent = 'Começar'; }
+    const e2 = document.getElementById('sis-erro'); if (e2) e2.textContent = 'Não foi possível salvar agora. Confira a internet e tente de novo.';
+  }
+}
+// categorias, modelo de contrato, automações (pausadas) e exemplos — sem
+// apagar nada do que a empresa já tem
+async function sisAplicarSementes(versao, r, comExemplos) {
+  const V = SIS_VERSOES[versao] || SIS_VERSOES.generico;
+  const ler = async (k, padrao) => { try { const v = await cloudGetForce(k, padrao); return v === undefined || v === null ? padrao : v; } catch (e) { return padrao; } };
+  // categorias do financeiro
+  if ((V.categorias.receber.length || V.categorias.pagar.length) && (!FIREBASE_PRONTO || !TENANT_ID || nivelVeFinanceiro())) {
+    const cats = await ler(FIN_CATEGORIAS_KEY, FIN_CATEGORIAS_PADRAO);
+    const c = { receber: (cats.receber || FIN_CATEGORIAS_PADRAO.receber).slice(), pagar: (cats.pagar || FIN_CATEGORIAS_PADRAO.pagar).slice() };
+    const cores = ['#3b82f6', '#22c55e', '#8b5cf6', '#f97316', '#06b6d4', '#ec4899', '#eab308'];
+    ['receber', 'pagar'].forEach((t) => V.categorias[t].forEach((nome, i) => { if (!c[t].some((x) => ttSemAcento(x.nome) === ttSemAcento(nome))) c[t].push({ id: genId('cat'), nome, cor: cores[i % cores.length] }); }));
+    cloudSet(FIN_CATEGORIAS_KEY, c);
+  }
+  // modelo de contrato do ERP (só se a empresa ainda não tem modelos próprios)
+  if (V.contrato) {
+    const mods = await ler(ECT_MODELOS_KEY, []);
+    if (!Array.isArray(mods) || !mods.length) cloudSet(ECT_MODELOS_KEY, [{ id: 'sis-' + V.contrato, nome: { recorrente: 'Prestação de serviço recorrente', pacote: 'Pacote de atendimentos', fornecimento: 'Fornecimento e serviço' }[V.contrato], conteudo: SIS_CONTRATOS[V.contrato], padrao: true, criadoEm: new Date().toISOString() }]);
+  }
+  // automações sugeridas, pausadas
+  if (V.automacoes.length && (!FIREBASE_PRONTO || !TENANT_ID || nivelPodeOperar())) {
+    const cfg = await ler(ATD_CFG_KEY, { automacoes: [], respostas: [], membros: {}, assinar: false });
+    const auto = Array.isArray(cfg.automacoes) ? cfg.automacoes.slice() : [];
+    V.automacoes.forEach((g) => { const G = ATD_GATILHOS[g]; if (G && !auto.some((a) => a.gatilho === g)) auto.push({ id: genId('atd'), gatilho: g, nome: G.nome, texto: G.texto, dias: G.dias, ativo: false, sugerida: true, criadoEm: new Date().toISOString() }); });
+    cloudSet(ATD_CFG_KEY, Object.assign({}, cfg, { automacoes: auto }));
+  }
+  // itens de exemplo
+  if (comExemplos && r.exemplos && V.exemplos.length) {
+    const prods = await ler('eagles_produtos_v1', []);
+    const lista = Array.isArray(prods) ? prods.slice() : [];
+    V.exemplos.forEach((x) => { if (!lista.some((p) => p.nome === x.nome)) lista.push(Object.assign({ id: genId('pr'), situacao: 'ativo', controlaEstoque: x.natureza === 'servico' ? 'nao' : 'sim', exemplo: true, criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() }, x, x.natureza === 'servico' ? { estoque: '' } : {})); });
+    cloudSet('eagles_produtos_v1', lista);
+    CADASTROS_DATA['produto'] = lista;
+  }
+}
+const SIS_CONTRATOS = {
+  recorrente: 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS\n\nCONTRATADA: {{Nome do Prestador}}, inscrita no CPF/CNPJ {{CPF/CNPJ do Prestador}}, com sede em {{Cidade do Prestador}}/{{Estado do Prestador}}.\nCONTRATANTE: {{Razão Social do Cliente}}, inscrita no CPF/CNPJ {{CPF/CNPJ do Cliente}}, com endereço em {{Endereço do Cliente}}, {{Cidade do Cliente}}/{{Estado do Cliente}}.\n\n1 – OBJETO\nA CONTRATADA prestará à CONTRATANTE os serviços de {{Título do Contrato}}, conforme o escopo combinado entre as partes.\n\n2 – VIGÊNCIA\nEste contrato vale de {{Início da Vigência}} a {{Fim da Vigência}} ({{Prazo do Contrato}}), podendo ser renovado por acordo entre as partes.\n\n3 – VALOR E PAGAMENTO\nPelos serviços, a CONTRATANTE pagará {{Valor do Contrato}} ({{Valor por Extenso}}) por mês, até o dia combinado. O atraso gera multa de 2% e juros de 1% ao mês.\n\n4 – OBRIGAÇÕES\nA CONTRATADA executará os serviços com qualidade e nos prazos combinados. A CONTRATANTE fornecerá as informações, acessos e aprovações necessários dentro de prazos razoáveis.\n\n5 – CANCELAMENTO\nQualquer das partes pode encerrar este contrato com aviso prévio de 30 dias, por escrito, quitados os valores devidos até a data do encerramento.\n\n6 – CONFIDENCIALIDADE\nAs partes manterão em sigilo as informações trocadas em razão deste contrato.\n\n7 – FORO\nFica eleito o foro da comarca de {{Cidade do Prestador}}/{{Estado do Prestador}}.\n\n{{Cidade do Prestador}}, {{Data}}.\n\n_____________________________\n{{Nome do Prestador}}\n\n_____________________________\n{{Razão Social do Cliente}}',
+  pacote: 'CONTRATO DE PACOTE DE ATENDIMENTOS\n\nCONTRATADA: {{Nome do Prestador}}, CPF/CNPJ {{CPF/CNPJ do Prestador}}.\nCONTRATANTE: {{Nome do Cliente}}, CPF/CNPJ {{CPF/CNPJ do Cliente}}, telefone {{Telefone do Cliente}}.\n\n1 – OBJETO\nPacote de atendimentos: {{Título do Contrato}}.\n\n2 – VALIDADE\nO pacote pode ser utilizado de {{Início da Vigência}} a {{Fim da Vigência}}. Sessões não utilizadas no prazo não são reembolsadas, salvo acordo entre as partes.\n\n3 – VALOR\nValor total de {{Valor do Contrato}} ({{Valor por Extenso}}), pago na forma combinada.\n\n4 – AGENDAMENTO E FALTAS\nOs horários são agendados com antecedência. Cancelamentos com menos de 24 horas contam como sessão realizada.\n\n5 – CANCELAMENTO DO PACOTE\nEm caso de desistência, será devolvido o valor proporcional às sessões não realizadas, descontada taxa administrativa de 10%.\n\n{{Cidade do Prestador}}, {{Data}}.\n\n_____________________________\n{{Nome do Prestador}}\n\n_____________________________\n{{Nome do Cliente}}',
+  fornecimento: 'CONTRATO DE FORNECIMENTO E PRESTAÇÃO DE SERVIÇOS\n\nFORNECEDORA: {{Nome do Prestador}}, CPF/CNPJ {{CPF/CNPJ do Prestador}}, com sede em {{Cidade do Prestador}}/{{Estado do Prestador}}.\nCLIENTE: {{Razão Social do Cliente}}, CPF/CNPJ {{CPF/CNPJ do Cliente}}, com endereço em {{Endereço do Cliente}}, {{Cidade do Cliente}}/{{Estado do Cliente}}.\n\n1 – OBJETO\nFornecimento de produtos e/ou execução de serviços: {{Título do Contrato}}, conforme pedido ou orçamento aprovado.\n\n2 – PRAZO\nVigência de {{Início da Vigência}} a {{Fim da Vigência}}. Prazos de entrega são os informados em cada pedido.\n\n3 – VALOR E PAGAMENTO\nValor de {{Valor do Contrato}} ({{Valor por Extenso}}), pago conforme as condições do pedido.\n\n4 – ENTREGA E GARANTIA\nOs produtos serão entregues conforme combinado. A garantia segue a legislação vigente e as condições informadas no pedido. Defeitos devem ser comunicados em até 7 dias do recebimento.\n\n5 – CANCELAMENTO\nPedidos já em produção podem ter cobrança proporcional ao que já foi executado ou comprado.\n\n6 – FORO\nFica eleito o foro da comarca de {{Cidade do Prestador}}/{{Estado do Prestador}}.\n\n{{Cidade do Prestador}}, {{Data}}.\n\n_____________________________\n{{Nome do Prestador}}\n\n_____________________________\n{{Razão Social do Cliente}}',
+};
+
+// ---------- Painel: "Hoje", primeiros passos e aviso para quem já usava ----------
+const SIS_PASSOS = {
+  empresa: { t: 'Completar os dados da empresa', href: 'meu-perfil.html' },
+  cliente: { t: 'Cadastrar o primeiro cliente', href: 'clientes-fornecedores.html' },
+  item: { t: 'Cadastrar o primeiro produto ou serviço', href: 'produtos.html' },
+  estoque: { t: 'Dar entrada no estoque', href: 'estoque.html' },
+  venda: { t: 'Fazer o primeiro pedido de venda', href: 'pedidos-venda.html' },
+  contrato: { t: 'Criar o primeiro contrato', href: 'contratos.html' },
+  automacao: { t: 'Ligar uma automação de WhatsApp', href: 'crm.html' },
+  whatsapp: { t: 'Cadastrar o WhatsApp da equipe', href: 'crm.html' },
+  agenda: { t: 'Marcar o primeiro compromisso na Agenda', href: 'crm.html' },
+  ia: { t: 'Conectar uma IA para os agentes', href: 'crm.html' },
+};
+let SIS_PAINEL_DADOS = null;
+async function sisColetarPainel() {
+  const ler = async (k) => { try { const v = await cloudGetForce(k, []); return v || []; } catch (e) { return []; } };
+  const [prods, pedidos, clientes, contratos, compras, atd] = await Promise.all(['eagles_produtos_v1', 'eagles_pedidos_venda_v1', CLIENTES_FORN_KEY, 'eagles_contratos_v1', 'eagles_pedido_compras_v1', ATD_CFG_KEY].map(ler));
+  let agendaHoje = 0, temAgenda = false;
+  try { if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) { const s = await firestoreDb.collection('tenants').doc(TENANT_ID).collection('agenda').where('data', '==', isoHoje()).get(); agendaHoje = s.size; temAgenda = s.size > 0 || !(await firestoreDb.collection('tenants').doc(TENANT_ID).collection('agenda').limit(1).get()).empty; } else { const l = lsLoad(chaveLocalTenant('eagles_agenda_local_v1'), []); agendaHoje = l.filter((a) => a.data === isoHoje()).length; temAgenda = l.length > 0; } } catch (e) {}
+  SIS_PAINEL_DADOS = { em: Date.now(), prods: Array.isArray(prods) ? prods : [], pedidos: Array.isArray(pedidos) ? pedidos : [], clientes: Array.isArray(clientes) ? clientes : [], contratos: Array.isArray(contratos) ? contratos : [], compras: Array.isArray(compras) ? compras : [], atd: atd && typeof atd === 'object' ? atd : {}, agendaHoje, temAgenda };
+  return SIS_PAINEL_DADOS;
+}
+function sisPassoFeito(id, d) {
+  const reais = (l) => l.filter((x) => !x.exemplo);
+  switch (id) {
+    case 'empresa': return !!(PERFIL_DATA.nomeFantasia && (PERFIL_DATA.cnpj || PERFIL_DATA.cpf) && PERFIL_DATA.endereco);
+    case 'cliente': return reais(d.clientes).some((c) => c.tipoCadastro !== 'fornecedor');
+    case 'item': return reais(d.prods).length > 0;
+    case 'estoque': return d.prods.some((p) => !p.exemplo && estControla(p) && estNum(p.estoque) > 0);
+    case 'venda': return d.pedidos.length > 0;
+    case 'contrato': return d.contratos.length > 0;
+    case 'automacao': return (d.atd.automacoes || []).some((a) => a.ativo !== false);
+    case 'whatsapp': return Object.values(d.atd.membros || {}).some((m) => m && m.whatsapp);
+    case 'agenda': return d.temAgenda;
+    case 'ia': return typeof iaPronta === 'function' && iaPronta();
+  }
+  return false;
+}
+const SIS_HOJE = {
+  vendasHoje: (d) => ({ r: 'Vendas de hoje', v: formatMoney(d.pedidos.filter((p) => p.data === isoHoje() && p.status !== 'cancelado').reduce((a, p) => a + (Number(p.valor) || 0), 0)), href: 'pedidos-venda.html' }),
+  pedidosAbertos: (d) => { const n = d.pedidos.filter((p) => p.status === 'aberto').length; return { r: `${sisTermo('pedido', 'Pedido')}s em aberto`, v: String(n), href: 'pedidos-venda.html', alerta: n > 0 }; },
+  estoqueAlerta: (d) => { const l = d.prods.filter((p) => estControla(p) && p.situacao !== 'inativo'); const z = l.filter((p) => estNum(p.estoque) <= 0).length, b = l.filter((p) => estNum(p.quantidadeMinima) > 0 && estNum(p.estoque) > 0 && estNum(p.estoque) < estNum(p.quantidadeMinima)).length; return { r: 'Zerados / abaixo do mínimo', v: `${z} / ${b}`, href: 'estoque.html', alerta: z + b > 0 }; },
+  comprasReceber: (d) => { const n = d.compras.filter((c) => c.status === 'aberto').length; return { r: 'Compras a receber', v: String(n), href: 'pedido-compras.html' }; },
+  contratosVencendo: (d) => { const h = isoHoje(), em30 = atdMaisDias(h, 30); const n = d.contratos.filter((c) => c.status === 'vigente' && c.dataFim && c.dataFim >= h && c.dataFim <= em30).length; return { r: 'Contratos vencendo (30 dias)', v: String(n), href: 'contratos.html', alerta: n > 0 }; },
+  notasMes: (d) => { const m = isoHoje().slice(0, 7); const n = d.contratos.filter((c) => c.status === 'vigente' && !(c.nfses || []).some((x) => x.competencia === m)).length; return { r: 'Contratos sem NFS-e no mês', v: String(n), href: 'contratos.html', alerta: n > 0 }; },
+  aReceber: (d) => ({ r: 'Pedidos faturados no mês', v: formatMoney(d.pedidos.filter((p) => p.status === 'faturado' && String(p.data || '').slice(0, 7) === isoHoje().slice(0, 7)).reduce((a, p) => a + (Number(p.valor) || 0), 0)), href: 'pedidos-venda.html' }),
+  agendaHoje: (d) => ({ r: 'Compromissos hoje', v: String(d.agendaHoje), href: 'crm.html' }),
+  clientesParados: (d) => { const ult = {}; d.pedidos.filter((p) => p.status === 'faturado').forEach((p) => { if (!ult[p.cliente] || p.data > ult[p.cliente]) ult[p.cliente] = p.data; }); const lim = atdMaisDias(isoHoje(), -60); return { r: 'Clientes sem voltar há 60 dias', v: String(Object.values(ult).filter((x) => x && x < lim).length), href: 'clientes-fornecedores.html' }; },
+};
+async function sisRenderPainel() {
+  const el = document.getElementById('sis-painel');
+  if (!el) return;
+  const c = SIS;
+  if (!SIS_CARREGADO) return;
+  // quem já usava e não respondeu: convite, sem obrigar
+  if (!c || (!c.concluidoEm && !c.pulado)) {
+    el.innerHTML = (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) ? '' : `<div class="atd-banner" style="margin-bottom:16px;">${ic('brilho', 'ic-herda')}<div><strong>Personalize o seu sistema.</strong> Responda 2 minutos de perguntas e o sistema mostra só as ferramentas do seu tipo de negócio, com categorias, modelos e lembretes prontos. <button type="button" class="btn btn-small btn-primary" style="margin-left:6px;" onclick="sisAbrirAssistente()">Começar</button></div></div>`;
+    return;
+  }
+  const V = SIS_VERSOES[c.versao] || SIS_VERSOES.generico;
+  const d = SIS_PAINEL_DADOS && Date.now() - (SIS_PAINEL_DADOS.em || 0) < 30000 ? SIS_PAINEL_DADOS : await sisColetarPainel();
+  const noCrm = PAGINA_ATIVA_KEY === 'crm';
+  const ordem = noCrm ? [] : (V.hoje || []).filter((k) => !(['estoqueAlerta', 'comprasReceber'].includes(k) && !sisModuloAtivo('estoque')) && !(['contratosVencendo', 'notasMes'].includes(k) && !sisModuloAtivo('contratos')));
+  const passos = (V.passos || []).filter((p) => !(p === 'estoque' && !sisModuloAtivo('estoque')) && !(p === 'contrato' && !sisModuloAtivo('contratos')) && !(p === 'agenda' && !sisModuloAtivo('agenda')) && !(['automacao', 'whatsapp'].includes(p) && !sisModuloAtivo('atendimento')));
+  const feitos = passos.filter((p) => sisPassoFeito(p, d)).length;
+  const escondido = (c.checklistOculto || false) || (feitos === passos.length && passos.length);
+  const exemplos = d.prods.filter((p) => p.exemplo).length;
+  el.innerHTML = `
+    ${ordem.length ? `<div class="sis-hoje">${ordem.map((k) => { const x = SIS_HOJE[k](d); return `<a class="sis-hoje-card${x.alerta ? ' alerta' : ''}" href="${x.href}"><span>${escapeHtml(x.r)}</span><b>${escapeHtml(x.v)}</b></a>`; }).join('')}</div>` : ''}
+    ${!escondido && passos.length ? `<div class="sis-passos">
+      <div class="sis-passos-cab"><strong>${ic('aprovado', 'ic-herda')} Primeiros passos</strong><span>${feitos} de ${passos.length}</span><span class="kb-espaco"></span>${nivelEhDiretor() || !FIREBASE_PRONTO ? '<button type="button" class="kb-link" onclick="sisOcultarChecklist()">Ocultar</button>' : ''}</div>
+      <div class="sis-progresso pequeno"><span style="width:${Math.round((feitos / passos.length) * 100)}%"></span></div>
+      <div class="sis-passos-lista">${passos.map((p) => { const f = sisPassoFeito(p, d); return `<a class="sis-passo${f ? ' feito' : ''}" href="${SIS_PASSOS[p].href}"><span>${f ? '✓' : ''}</span>${escapeHtml(SIS_PASSOS[p].t)}</a>`; }).join('')}</div>
+      ${exemplos ? `<p class="kb-vazio-mini" style="margin:8px 0 0;">Tem ${exemplos} item(ns) de exemplo no cadastro. <button type="button" class="kb-link" onclick="sisApagarExemplos()">Apagar exemplos</button></p>` : ''}
+    </div>` : ''}`;
+}
+function sisOcultarChecklist() { if (SIS) cloudSet(SIS_KEY, Object.assign({}, SIS, { checklistOculto: true })); }
+async function sisApagarExemplos() {
+  confirmarAcao('Apagar os itens de exemplo do cadastro?', async () => {
+    const prods = await cloudGetForce('eagles_produtos_v1', []);
+    const l = (Array.isArray(prods) ? prods : []).filter((p) => !p.exemplo);
+    if (cloudSet('eagles_produtos_v1', l) !== false) { CADASTROS_DATA['produto'] = l; SIS_PAINEL_DADOS = null; sisRenderPainel(); if (typeof renderCadastroTabela === 'function' && document.getElementById('tabela-produto-body')) renderCadastroTabela('produto'); }
+  }, 'Apagar exemplos');
+}
+
+// ---------- Configurações → Meu sistema ----------
+function sisAbrirMeuSistema() {
+  const c = SIS || {};
+  const V = SIS_VERSOES[c.versao] || SIS_VERSOES.generico;
+  const m = Object.assign({}, V.modulos, c.modulos || {});
+  const pode = !FIREBASE_PRONTO || !TENANT_ID || nivelEhDiretor();
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:640px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Meu sistema</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="sis-versao"><span class="sis-versao-ic">${ic(V.icone, 'ic-herda')}</span><div><b>${escapeHtml(c.versao ? V.nome : 'Ainda não escolhida')}</b><small>${escapeHtml(c.versao ? V.desc : 'Responda o questionário para o sistema se adaptar ao seu negócio.')}</small></div></div>
+    <div class="sis-tit">Ferramentas ${pode ? '<small>toque para ligar ou desligar</small>' : ''}</div>
+    <div class="sis-mods">${Object.keys(SIS_MODULOS).map((k) => `<button type="button" class="sis-mod${m[k] !== false ? ' on' : ''}" ${pode ? `onclick="sisAlternarModulo('${k}')"` : 'disabled'}>${m[k] !== false ? '✓' : '+'} ${escapeHtml(SIS_MODULOS[k])}</button>`).join('')}</div>
+    <div class="sis-tit">Nomes</div>
+    <div class="cw-grade2"><div class="field"><label>Quem compra de você é chamado de</label><input type="text" id="sis-t-cliente" maxlength="20" value="${escapeHtml(sisTermo('cliente', 'Cliente'))}" ${pode ? '' : 'disabled'}></div>
+      <div class="field"><label>Pedido de venda é chamado de</label><input type="text" id="sis-t-pedido" maxlength="20" value="${escapeHtml(sisTermo('pedido', 'Pedido'))}" ${pode ? '' : 'disabled'}></div></div>
+    <p class="kb-vazio-mini">Os nomes aparecem no menu. Plano contratado: ${escapeHtml(TENANT_PLANO === 'ambos' ? 'ERP + CRM' : (TENANT_PLANO || 'ERP + CRM').toUpperCase())} — as ferramentas fora do plano não aparecem, mesmo ligadas.</p>
+    ${pode ? `<div class="cfg-modal-rodape"><button type="button" class="btn" onclick="srvFecharModal(); sisAbrirAssistente(true)">${ic('repetir', 'ic-herda')} Refazer o questionário</button><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="sisSalvarNomes()">Salvar</button></div>` : '<p class="kb-vazio-mini">Só o Diretor muda o sistema.</p>'}
+  </div>`;
+  openModal('modal-srv');
+}
+function sisAlternarModulo(k) {
+  const c = Object.assign({ versao: 'generico' }, SIS || {});
+  const V = SIS_VERSOES[c.versao] || SIS_VERSOES.generico;
+  c.modulos = Object.assign({}, V.modulos, c.modulos || {});
+  c.modulos[k] = c.modulos[k] === false;
+  if (cloudSet(SIS_KEY, c) === false) return;
+  // ligar estoque, compras ou envios em quem só vendia serviços passa o perfil para "os dois"
+  if (c.modulos[k] && ['estoque', 'compras', 'envio'].includes(k) && perfilOp() === 'servicos' && cloudSet(PERFIL_OP_KEY, { vende: 'ambos', atualizadoEm: new Date().toISOString(), por: USUARIO_NOME || '' }) !== false) { PERFIL_OP = 'ambos'; try { localStorage.setItem(perfilOpCacheKey(), 'ambos'); } catch (e) {} }
+  SIS = c; sisAplicarVisual(); sisAbrirMeuSistema();
+}
+function sisSalvarNomes() {
+  const c = Object.assign({ versao: 'generico' }, SIS || {});
+  c.termos = Object.assign({}, c.termos || {}, { cliente: ((document.getElementById('sis-t-cliente') || {}).value || '').trim() || 'Cliente', pedido: ((document.getElementById('sis-t-pedido') || {}).value || '').trim() || 'Pedido' });
+  if (cloudSet(SIS_KEY, c) === false) return;
+  SIS = c; sisAplicarVisual(); srvFecharModal();
+}
+
+// ---------- super administrador: relatório e montar a versão de um cliente ----------
+async function sisRelatorioSuperAdmin() {
+  if (!FIREBASE_PRONTO || !firestoreDb) { avisar('Precisa da conexão com a nuvem.'); return; }
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:980px;"><div class="modal-header"><h2>Versões do sistema por empresa</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div><p class="kb-vazio">Carregando...</p></div>`;
+  openModal('modal-srv');
+  try {
+    const ts = await firestoreDb.collection('tenants').get();
+    const linhas = await Promise.all(ts.docs.map(async (t) => { let cfg = null; try { const s = await firestoreDb.collection('tenants').doc(t.id).collection('dados').doc(SIS_KEY).get(); cfg = s.exists ? s.data().valor : null; } catch (e) {} return { id: t.id, nome: (t.data() || {}).nome || (t.data() || {}).nomeEmpresa || t.id, cfg }; }));
+    const conta = {}, obj = {}, ori = {};
+    linhas.forEach((l) => { const v = l.cfg && l.cfg.versao ? l.cfg.versao : (l.cfg && l.cfg.pulado ? 'generico' : 'sem'); conta[v] = (conta[v] || 0) + 1; ((l.cfg && l.cfg.objetivos) || []).forEach((o) => { obj[o] = (obj[o] || 0) + 1; }); if (l.cfg && l.cfg.origem) ori[l.cfg.origem] = (ori[l.cfg.origem] || 0) + 1; });
+    const top = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${escapeHtml(k)} (${n})`).join(', ') || '—';
+    const el = document.querySelector('#modal-srv .modal');
+    el.innerHTML = `<div class="modal-header"><h2>Versões do sistema por empresa</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="an-kpis">${Object.keys(SIS_VERSOES).concat(['sem']).map((k) => `<div class="an-kpi"><span>${escapeHtml(k === 'sem' ? 'Não responderam' : SIS_VERSOES[k].nome)}</span><b>${conta[k] || 0}</b></div>`).join('')}</div>
+      <p class="kb-vazio-mini" style="margin:10px 0;">Objetivos mais escolhidos: ${top(obj)} · Como conheceram: ${top(ori)}</p>
+      <div class="table-scroll"><table><thead><tr><th>Empresa</th><th>Versão</th><th>Ramo</th><th>Respondeu em</th><th>Montar versão</th></tr></thead><tbody>
+      ${linhas.sort((a, b) => String(a.nome).localeCompare(String(b.nome))).map((l) => `<tr><td>${escapeHtml(l.nome)}</td><td>${escapeHtml(l.cfg && l.cfg.versao ? SIS_VERSOES[l.cfg.versao].nome : (l.cfg && l.cfg.pulado ? 'Pulou' : '—'))}</td><td>${escapeHtml((l.cfg && (l.cfg.ramo || (l.cfg.respostas || {}).ramo)) || '—')}</td><td>${escapeHtml(l.cfg && l.cfg.concluidoEm ? formatDatePt(l.cfg.concluidoEm.slice(0, 10)) : '—')}</td>
+        <td><select class="srv-select" onchange="if (this.value) sisMontarParaEmpresa('${escapeParaOnclick(l.id)}', this.value)"><option value="">Escolher...</option>${Object.keys(SIS_VERSOES).map((k) => `<option value="${k}">${escapeHtml(SIS_VERSOES[k].nome)}</option>`).join('')}</select></td></tr>`).join('')}
+      </tbody></table></div>
+      <p class="kb-vazio-mini">"Montar versão" deixa o sistema da empresa pronto antes de você entregar o acesso: o questionário não aparece para ela, e no primeiro acesso do Diretor entram as categorias, o modelo de contrato e as automações sugeridas.</p>`;
+  } catch (e) { console.error(e); avisar('Não foi possível ler as empresas. Confira se você entrou como super administrador.'); }
+}
+async function sisMontarParaEmpresa(tenantId, versao) {
+  const V = SIS_VERSOES[versao];
+  if (!V) return;
+  try {
+    await firestoreDb.collection('tenants').doc(tenantId).collection('dados').doc(SIS_KEY).set({ valor: { versao, modulos: Object.assign({}, V.modulos), etapas: Object.assign({}, V.etapas || {}), termos: Object.assign({}, V.termos || {}), respostas: { vende: V.vende }, concluidoEm: new Date().toISOString(), por: 'Super administrador', aplicarSementes: true, progresso: null, pulado: false }, atualizadoEm: new Date().toISOString() }, { merge: true });
+    await firestoreDb.collection('tenants').doc(tenantId).collection('dados').doc(PERFIL_OP_KEY).set({ valor: { vende: V.vende, atualizadoEm: new Date().toISOString(), por: 'Super administrador' }, atualizadoEm: new Date().toISOString() }, { merge: true });
+    avisar(`Versão "${V.nome}" montada para a empresa.`, 'Meu sistema');
+  } catch (e) { console.error(e); avisar('Não foi possível gravar na empresa.'); }
 }
 
 function renderCrmEmConstrucao(secao) {
@@ -10720,7 +11577,9 @@ function renderTopbar(activeKey) {
   if (!nav) return;
 
   let html = '';
-  NAV_ITEMS.filter(itemVisivelNoPlano).forEach((item) => {
+  const soProd = (i) => (!i.soProdutos || typeof perfilOpVendeProdutos !== 'function' || perfilOpVendeProdutos()) && (!i.modulo || typeof sisModuloAtivo !== 'function' || [].concat(i.modulo).some((m) => sisModuloAtivo(m)));
+  const rotulo = (c) => { if (typeof sisTermo !== 'function') return c.label; if (c.key === 'pedidos-venda') { const t = sisTermo('pedido', 'Pedido'); return t === 'Pedido' ? c.label : t + 's'; } if (c.key === 'clientes-fornecedores') return sisTermo('cliente', 'Cliente') + 's e Fornecedores'; return c.label; };
+  NAV_ITEMS.filter(itemVisivelNoPlano).filter(soProd).forEach((item) => {
     if (item.type === 'meu-negocio') {
       html += `<div class="topbar-item">
         <button type="button" class="topbar-menu-btn" onclick="toggleDropdown('menu-meu-negocio')">${item.label} <span class="chevron">▾</span></button>
@@ -10736,7 +11595,7 @@ function renderTopbar(activeKey) {
       html += `<div class="topbar-item">
         <button type="button" class="topbar-menu-btn ${isOpen ? 'active' : ''}" onclick="toggleDropdown('menu-${item.key}')">${item.label} <span class="chevron">▾</span></button>
         <div class="mega-menu" id="menu-${item.key}">
-          ${item.children.map((c) => `<a href="${c.href}" class="${c.key === activeKey ? 'active' : ''}"${c.externo ? ' target="_blank" rel="noopener" title="Abre o Emissor Nacional da NFS-e em outra aba"' : ''}>${c.label}</a>`).join('')}
+          ${item.children.filter(soProd).map((c) => `<a href="${c.href}" class="${c.key === activeKey ? 'active' : ''}"${c.externo ? ' target="_blank" rel="noopener" title="Abre o Emissor Nacional da NFS-e em outra aba"' : ''}>${rotulo(c)}</a>`).join('')}
         </div>
       </div>`;
     } else if (item.columns) {
@@ -10745,7 +11604,7 @@ function renderTopbar(activeKey) {
         <button type="button" class="topbar-menu-btn ${isOpen ? 'active' : ''}" onclick="toggleDropdown('menu-${item.key}')">${item.label} <span class="chevron">▾</span></button>
         <div class="mega-menu" id="menu-${item.key}">
           <div class="mega-menu-cols">
-            ${item.columns.map((col) => `<div><div class="mega-menu-col-title">${col.title}</div>${col.items.map((c) => `<a href="${c.href}" class="${c.key === activeKey ? 'active' : ''}">${c.label}</a>`).join('')}</div>`).join('')}
+            ${item.columns.filter((col) => col.items.filter(soProd).length).map((col) => `<div><div class="mega-menu-col-title">${col.title}</div>${col.items.filter(soProd).map((c) => `<a href="${c.href}" class="${c.key === activeKey ? 'active' : ''}">${rotulo(c)}</a>`).join('')}</div>`).join('')}
           </div>
         </div>
       </div>`;
@@ -19723,6 +20582,10 @@ const CHATBOT_FAQ = [
         { p: 'O que é o botão do Analista no ERP?', r: 'É o botão com o ícone de gráfico, logo acima do robozinho, nas telas do ERP. Ele abre o Analista do negócio: lê vendas, estoque, compras, notas, contratos, clientes e (para quem vê) o financeiro dos últimos 90 dias e devolve uma nota geral, uma nota por área e uma lista de melhorias priorizadas pelo impacto. Você marca cada melhoria como feita e acompanha a nota subir a cada diagnóstico. Usa a mesma chave de IA dos agentes do CRM.' },
         { p: 'Como lanço as tarefas do dia pelo celular?', r: 'No Dashboard do CRM, em Tarefas diárias, toque no ícone de celular: aparece o link (e um QR Code) da página "Tarefas do dia". No celular, cole a mensagem com as atividades — uma por linha; dá para separar por dia ("Segunda:", "ter - reunião", "amanhã:", "10/10:") — e toque em Lançar. Elas aparecem na hora em Tarefas diárias. Dica: adicione a página à tela de início do celular.' },
         { p: 'Onde vejo o saldo do caixa?', r: 'No Financeiro, na barra do período (logo abaixo das abas), aparece "Saldo em caixa" borrado. Toque no olho para mostrar; tocando no valor, abre a aba Caixa com o saldo de cada caixa. O aparelho lembra se você deixou visível ou escondido.' },
+        { p: 'Como funciona o estoque no ERP?', r: 'Cada item do cadastro é produto ou serviço; produto com "Controla estoque: Sim" tem saldo. O saldo anda sozinho: pedido de venda faturado baixa, pedido cancelado (ou que volta para aberto) devolve, e pedidos em aberto ficam como reserva. Em Estoque → Posição de estoque você vê em estoque, reservado e disponível, faz entrada, saída e ajuste e vê o histórico de cada produto. No pedido de venda aparece o disponível de cada item, com aviso se faltar.' },
+        { p: 'O que é o perfil de operação?', r: 'É a resposta para "O que a sua empresa vende?": serviços, produtos ou os dois. Muda só o que aparece: quem vende só serviços não vê Estoque e Compras no menu. O Diretor escolhe no Painel do ERP (selo "Vende: ...") e pode mudar quando quiser; nada é apagado.' },
+        { p: 'O que é o questionário de primeiro acesso?', r: 'No primeiro acesso, o Diretor responde algumas perguntas (com barra de progresso): dados da empresa, o que vende, ramo, como cobra, equipe e objetivos. O sistema escolhe a versão mais adequada (Agência, Consultoria, Hora marcada, Comércio, Produção ou Genérico), mostra só as ferramentas certas e já cria categorias do financeiro, modelo de contrato, automações sugeridas (pausadas) e um checklist de primeiros passos. Para mudar depois: Configurações → Meu sistema.' },
+        { p: 'Como mudo as ferramentas que aparecem?', r: 'Configurações → Meu sistema: liga e desliga ferramentas (estoque, compras, contratos, NFS-e, conteúdos, portal, agenda, atendimento, agentes de IA), muda os nomes ("Cliente", "Pedido") e permite refazer o questionário. Nada é apagado. Ferramentas fora do plano contratado não aparecem, mesmo ligadas.' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
@@ -19895,7 +20758,9 @@ function bloquearZoomMobile() {
   }, { passive: false });
 }
 
+let PAGINA_ATIVA_KEY = '';
 function initPaginaComum(activeKey) {
+  PAGINA_ATIVA_KEY = activeKey || '';
   aplicarTemaSalvo();
   renderTopbar(activeKey);
   initFirebase();
@@ -19926,6 +20791,7 @@ function registrarModuloCadastro(moduloKey, def) {
 
 function initModuloCadastro(moduloKey) {
   const def = CADASTROS_REGISTRO[moduloKey];
+  if (['produto', 'pedido-venda', 'lancamento-estoque'].includes(moduloKey) && typeof estIniciar === 'function') estIniciar();
   cloudWatch(def.storageKey, def.seed(), (data) => {
     CADASTROS_DATA[moduloKey] = data;
     renderCadastroTabela(moduloKey);
@@ -19972,6 +20838,7 @@ function handleNovoCadastroSimples(moduloKey) {
     novo[f.key] = f.type === 'checkbox' ? el.checked : el.value;
   });
   if (def.camposExtras) Object.assign(novo, def.camposExtras());
+  if (typeof def.aoCriar === 'function') { try { def.aoCriar(novo); } catch (e) { console.error(e); } }
   CADASTROS_DATA[moduloKey] = CADASTROS_DATA[moduloKey] || [];
   CADASTROS_DATA[moduloKey].push(novo);
   cloudSet(def.storageKey, CADASTROS_DATA[moduloKey]);
@@ -20009,8 +20876,10 @@ function salvarCadastroModal() {
   const def = CADASTROS_REGISTRO[moduloKey];
   const item = (CADASTROS_DATA[moduloKey] || []).find((i) => i.id === CADASTRO_MODAL_ID);
   if (!item) return;
+  const antes = JSON.parse(JSON.stringify(item));
   Object.assign(item, lerCamposModal('#' + def.modalEditCamposId));
   item.atualizadoEm = new Date().toISOString();
+  if (typeof def.aoEditar === 'function') { try { def.aoEditar(antes, item); } catch (e) { console.error(e); } }
   cloudSet(def.storageKey, CADASTROS_DATA[moduloKey]);
   renderCadastroTabela(moduloKey);
   closeModal(def.modalEditId);
@@ -20022,6 +20891,7 @@ function excluirCadastroItem(moduloKey, id) {
   if (!item) return;
   const nomeExibicao = item[def.campoNome] || 'este registro';
   confirmarAcao(`Excluir "${nomeExibicao}"? Essa ação não pode ser desfeita.`, () => {
+    if (typeof def.aoExcluir === 'function') { try { def.aoExcluir(item); } catch (e) { console.error(e); } }
     CADASTROS_DATA[moduloKey] = CADASTROS_DATA[moduloKey].filter((i) => i.id !== id);
     cloudSet(def.storageKey, CADASTROS_DATA[moduloKey]);
     renderCadastroTabela(moduloKey);
@@ -20049,6 +20919,8 @@ registrarModuloCadastro('produto', {
     { key: 'nome', label: 'Nome', type: 'text', full: true, secao: 'Identificação' },
     { key: 'sku', label: 'Código (SKU)', type: 'text' },
     { key: 'formato', label: 'Formato', type: 'text', placeholder: 'Ex: Unidade, Kit, Caixa' },
+    { key: 'natureza', label: 'É produto ou serviço?', type: 'select', options: [{ value: 'produto', label: 'Produto' }, { value: 'servico', label: 'Serviço' }] },
+    { key: 'controlaEstoque', label: 'Controla estoque?', type: 'select', options: [{ value: 'sim', label: 'Sim — baixa na venda' }, { value: 'nao', label: 'Não' }] },
     { key: 'tipo', label: 'Tipo', type: 'text', placeholder: 'Categoria do produto' },
     { key: 'situacao', label: 'Situação', type: 'select', options: [{ value: 'ativo', label: 'Ativo' }, { value: 'inativo', label: 'Inativo' }] },
     { key: 'condicao', label: 'Condição', type: 'select', options: [{ value: 'novo', label: 'Novo' }, { value: 'usado', label: 'Usado' }, { value: 'recondicionado', label: 'Recondicionado' }] },
@@ -20083,10 +20955,12 @@ registrarModuloCadastro('produto', {
   colunas: [
     { key: 'nome', label: 'Produto' },
     { key: 'sku', label: 'SKU' },
-    { key: 'estoque', label: 'Estoque' },
+    { key: 'estoque', label: 'Estoque', render: (i) => (estControla(i) ? `${estNum(i.estoque)}${estReservado(i.id) ? ` <small class="kb-vazio-mini">(${estDisponivel(i)} disp.)</small>` : ''}` : `<span class="kb-vazio-mini">${estNatureza(i) === 'servico' ? 'serviço' : 'sem controle'}</span>`) },
     { key: 'precoVenda', label: 'Preço de venda', render: (i) => formatMoney(i.precoVenda) },
     { key: 'situacao', label: 'Status', render: (i) => `<span class="badge ${i.situacao === 'ativo' ? 'badge-blue' : 'badge-neutral'}">${i.situacao === 'ativo' ? 'Ativo' : 'Inativo'}</span>` },
   ],
+  aoCriar: (novo) => estAoCriarProduto(novo),
+  aoEditar: (antes, item) => estAoEditarProduto(antes, item),
 });
 
 function vendedoresSeed() {
@@ -20211,6 +21085,7 @@ registrarModuloCadastro('pedido-venda', {
     { key: 'valor', label: 'Valor', render: (i) => formatMoney(i.valor) },
     { key: 'status', label: 'Status', render: (i) => `<span class="badge badge-blue">${i.status || '—'}</span>` },
   ],
+  aposRender: () => { if (typeof estAgendar === 'function') estAgendar(); },
 });
 
 function objetosPostagemSeed() { return []; }
@@ -20354,11 +21229,15 @@ registrarModuloCadastro('lancamento-estoque', {
   ],
   colunas: [
     { key: 'produto', label: 'Produto' },
-    { key: 'tipo', label: 'Tipo', render: (i) => `<span class="badge ${i.tipo === 'entrada' ? 'badge-success' : 'badge-danger'}">${i.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span>` },
+    { key: 'tipo', label: 'Tipo', render: (i) => `<span class="badge ${i.tipo === 'entrada' ? 'badge-success' : i.tipo === 'ajuste' ? 'badge-warning' : 'badge-danger'}">${i.tipo === 'entrada' ? 'Entrada' : i.tipo === 'ajuste' ? 'Ajuste' : 'Saída'}</span>${i.automatico ? ' <small class="kb-vazio-mini">automático</small>' : ''}` },
     { key: 'quantidade', label: 'Qtd.' },
     { key: 'data', label: 'Data', render: (i) => formatDatePt(i.data) },
+    { key: 'saldoApos', label: 'Saldo depois', render: (i) => (i.saldoApos !== undefined && i.saldoApos !== '' ? String(estNum(i.saldoApos)) : '—') },
     { key: 'motivo', label: 'Motivo' },
   ],
+  aoCriar: (novo) => estAoCriarLancamento(novo),
+  aoEditar: (antes, item) => estAoEditarLancamento(antes, item),
+  aoExcluir: (item) => estAoExcluirLancamento(item),
 });
 
 function conferenciaEstoqueSeed() { return []; }
@@ -22893,7 +23772,7 @@ function renderItensPedidoForm() {
     const precoTotal = precoUn * Number(item.quantidade || 0);
     return `<tr>
       <td style="color:var(--text-soft); font-size:12px;">${idx + 1}</td>
-      <td><input type="text" value="${escapeHtml(item.descricao)}" list="pv-lista-produtos" oninput="atualizarItemPedido(${idx},'descricao',this.value)" placeholder="Pesquise por código, descrição ou GTIN"></td>
+      <td><input type="text" value="${escapeHtml(item.descricao)}" list="pv-lista-produtos" oninput="atualizarItemPedido(${idx},'descricao',this.value)" placeholder="Pesquise por código, descrição ou GTIN"><span class="est-item-slot">${typeof estHtmlDisponivelItem === 'function' ? estHtmlDisponivelItem(item) : ''}</span></td>
       <td style="width:90px;"><input type="text" value="${escapeHtml(item.codigo)}" oninput="atualizarItemPedido(${idx},'codigo',this.value)"></td>
       <td style="width:60px;"><input type="text" value="${escapeHtml(item.unidade)}" oninput="atualizarItemPedido(${idx},'unidade',this.value)"></td>
       <td style="width:80px;"><input type="number" value="${item.quantidade}" min="0" oninput="atualizarItemPedido(${idx},'quantidade',this.value)"></td>
@@ -22913,6 +23792,7 @@ function atualizarItemPedido(idx, campo, valor) {
   if (campo === 'descricao') {
     const produto = (CADASTROS_DATA['produto'] || []).find((p) => p.nome === valor);
     if (produto) {
+      PEDIDO_FORM_ITENS[idx].produtoId = produto.id;
       PEDIDO_FORM_ITENS[idx].precoLista = Number(produto.precoVenda || 0);
       PEDIDO_FORM_ITENS[idx].codigo = produto.sku || '';
       PEDIDO_FORM_ITENS[idx].unidade = produto.unidade || 'UN';
@@ -22930,6 +23810,9 @@ function atualizarItemPedido(idx, campo, valor) {
   if (row) {
     row.querySelector('.pv-item-preco-un').textContent = formatMoney(precoUn);
     row.querySelector('.pv-item-preco-total').textContent = formatMoney(precoTotal);
+    const slot = row.querySelector('.est-item-slot');
+    if (campo === 'descricao' && !(CADASTROS_DATA['produto'] || []).some((p) => p.nome === valor)) delete PEDIDO_FORM_ITENS[idx].produtoId;
+    if (slot && typeof estHtmlDisponivelItem === 'function') slot.innerHTML = estHtmlDisponivelItem(item);
   }
   recalcularTotaisPedido();
 }
@@ -23076,11 +23959,17 @@ function verificarClientePedido() {
   return true;
 }
 
+let PEDIDO_SALVAR_SEM_ESTOQUE = false;
 function salvarPedidoVenda() {
   const cliente = document.getElementById('pv-cliente').value.trim();
   if (!cliente) { avisar('Informe o cliente.'); return; }
   if (!verificarClientePedido()) { return; }
   if (!PEDIDO_FORM_ITENS.some((i) => i.descricao.trim())) { avisar('Adicione ao menos um item com descrição.'); return; }
+  const faltas = typeof estFaltasDoPedidoForm === 'function' ? estFaltasDoPedidoForm() : [];
+  if (faltas.length && !PEDIDO_SALVAR_SEM_ESTOQUE) {
+    confirmarAcao(`Sem estoque suficiente:\n${faltas.join('\n')}\n\nSalvar o pedido mesmo assim? O saldo pode ficar negativo quando ele for faturado.`, () => { PEDIDO_SALVAR_SEM_ESTOQUE = true; try { salvarPedidoVenda(); } finally { PEDIDO_SALVAR_SEM_ESTOQUE = false; } }, 'Estoque');
+    return;
+  }
 
   const vendedor = document.getElementById('pv-vendedor').value.trim();
   const numero = document.getElementById('pv-numero-pedido').value.trim() || calcularProximoNumeroPedido();
@@ -23107,6 +23996,9 @@ function salvarPedidoVenda() {
     data: dataVenda, valor: totalVenda,
     status: (registroAnterior && registroAnterior.status) || 'aberto',
     itens: PEDIDO_FORM_ITENS.slice(),
+    // só pedidos novos mexem no estoque (os antigos já estavam no saldo digitado)
+    estoqueControlado: registroAnterior ? !!registroAnterior.estoqueControlado : true,
+    estoqueBaixado: !!(registroAnterior && registroAnterior.estoqueBaixado), estoqueBaixa: (registroAnterior && registroAnterior.estoqueBaixa) || [], estoqueBaixadoEm: (registroAnterior && registroAnterior.estoqueBaixadoEm) || '',
     loja: document.getElementById('pv-loja').value,
     unidadeNegocio: document.getElementById('pv-unidade-negocio').value,
     listaPreco: document.getElementById('pv-lista-preco').value,

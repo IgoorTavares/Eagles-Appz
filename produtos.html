@@ -152,10 +152,12 @@
         <div class="field full"><label>Nome do produto</label><input type="text" data-novo-key="nome" placeholder="Ex: Camiseta Eagles Dry-fit" required></div>
         <div class="field"><label>Código (SKU)</label><input type="text" data-novo-key="sku" placeholder="Ex: CAM-001"></div>
         <div class="field"><label>Marca</label><input type="text" data-novo-key="marca"></div>
+        <div class="field"><label>É produto ou serviço?</label><select data-novo-key="natureza" onchange="if (this.value === 'servico') this.form.querySelector('[data-novo-key=controlaEstoque]').value = 'nao'; else this.form.querySelector('[data-novo-key=controlaEstoque]').value = 'sim';"><option value="produto">Produto</option><option value="servico">Serviço</option></select></div>
+        <div class="field"><label>Controla estoque?</label><select data-novo-key="controlaEstoque"><option value="sim">Sim — baixa na venda</option><option value="nao">Não</option></select></div>
         <div class="field"><label>Tipo</label><input type="text" data-novo-key="tipo" placeholder="Categoria do produto"></div>
         <div class="field"><label>Unidade</label><input type="text" data-novo-key="unidade" placeholder="Ex: UN, KG, CX"></div>
         <div class="field"><label>Preço de venda (R$)</label><input type="number" data-novo-key="precoVenda"></div>
-        <div class="field"><label>Estoque</label><input type="number" data-novo-key="estoque"></div>
+        <div class="field"><label>Estoque inicial</label><input type="number" data-novo-key="estoque"></div>
         <div class="field"><label>Situação</label>
           <select data-novo-key="situacao"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select>
         </div>

@@ -4861,3 +4861,77 @@ body.pc-body { background: #0b0f14; }
 .ect-codigos .crm-shortcode-btn { display: block; width: 100%; text-align: left; margin-bottom: 4px; }
 .ect-nf-ok { color: var(--success, #3fae12) !important; }
 @media (max-width: 760px) { .ect-editor { grid-template-columns: minmax(0, 1fr); } .ect-codigos { border-left: 0; padding-left: 0; max-height: 220px; } }
+
+/* ---------- ERP híbrido: estoque ---------- */
+.est-filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.est-filtros input[type="search"] { flex: 1 1 220px; min-width: 0; }
+.est-item-info { font-size: 11.5px; color: var(--text-soft); margin-top: 3px; }
+.est-item-info b { color: var(--text); }
+.est-item-info.falta, .est-item-info.falta b { color: var(--danger); }
+.perfil-op-selo { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--bg-soft); color: var(--text-soft); border-radius: 99px; padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.perfil-op-selo .ic { width: 13px; height: 13px; }
+.perfil-op-selo:hover { border-color: var(--blue-strong); color: var(--text); }
+
+/* ---------- Meu sistema: assistente de primeiro acesso ---------- */
+body.sis-wiz-aberto { overflow: hidden; }
+.sis-wiz { position: fixed; inset: 0; z-index: 2000; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: calc(14px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
+.sis-caixa { width: min(720px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.4); overflow: hidden; }
+.sis-topo { padding: 18px 22px 10px; }
+.sis-progresso { height: 8px; border-radius: 99px; background: var(--bg-soft); overflow: hidden; }
+.sis-progresso span { display: block; height: 100%; background: var(--blue-strong); border-radius: 99px; transition: width .35s ease; }
+.sis-progresso.pequeno { height: 6px; margin: 8px 0 10px; }
+.sis-etapa { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-soft); margin-top: 6px; }
+.sis-corpo { flex: 1; overflow-y: auto; padding: 8px 22px 6px; }
+.sis-corpo h1 { font-size: 24px; margin: 6px 0 8px; }
+.sis-corpo h2 { font-size: 19px; margin: 4px 0 4px; }
+.sis-sub { color: var(--text-soft); font-size: 13.5px; margin: 0 0 12px; }
+.sis-boas { text-align: center; padding: 18px 6px; }
+.sis-boas > .ic { width: 36px; height: 36px; color: var(--blue-text); }
+.sis-boas p { color: var(--text-soft); line-height: 1.6; }
+.sis-opcoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin: 6px 0 4px; }
+.sis-op { display: flex; flex-direction: column; gap: 3px; text-align: left; border: 1px solid var(--border); background: var(--bg-soft); color: var(--text); border-radius: 12px; padding: 12px 14px; font: inherit; cursor: pointer; }
+.sis-op b { font-size: 14px; }
+.sis-op small { font-size: 12px; color: var(--text-soft); line-height: 1.4; }
+.sis-op:hover { border-color: var(--blue-strong); }
+.sis-op.ativo { border-color: var(--blue-strong); background: var(--blue-tint); box-shadow: 0 0 0 1px var(--blue-strong); }
+.sis-pergunta { margin: 0 0 16px; }
+.sis-pergunta > strong { display: block; font-size: 14.5px; }
+.sis-pergunta > small { display: block; font-size: 12.5px; color: var(--text-soft); margin-top: 2px; }
+.sis-pergunta .sis-opcoes { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.sis-erro { color: var(--danger); font-size: 13px; min-height: 18px; margin: 6px 0 0; }
+.sis-rodape { display: flex; align-items: center; gap: 8px; padding: 12px 22px 18px; border-top: 1px solid var(--border); }
+.sis-versao { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--blue-strong); background: var(--blue-tint); border-radius: 14px; padding: 14px; margin: 8px 0 4px; }
+.sis-versao b { display: block; font-size: 16px; }
+.sis-versao small { display: block; font-size: 13px; color: var(--text-soft); line-height: 1.5; margin-top: 2px; }
+.sis-versao-ic { flex-shrink: 0; width: 40px; height: 40px; border-radius: 12px; background: var(--blue-strong); color: #0b0f0b; display: inline-flex; align-items: center; justify-content: center; }
+.sis-versao-ic .ic { width: 20px; height: 20px; }
+.sis-tit { display: flex; align-items: baseline; gap: 8px; font-size: 12px; letter-spacing: .4px; text-transform: uppercase; color: var(--text-soft); margin: 16px 0 8px; }
+.sis-tit small { text-transform: none; letter-spacing: 0; }
+.sis-mods { display: flex; flex-wrap: wrap; gap: 6px; }
+.sis-mod { border: 1px solid var(--border); background: transparent; color: var(--text-soft); border-radius: 99px; padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.sis-mod.on { border-color: var(--blue-strong); color: var(--blue-text); background: var(--blue-tint); }
+.sis-mod:disabled { cursor: default; }
+.sis-lista { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.7; }
+.sis-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; margin: 14px 0 4px; cursor: pointer; }
+.sis-trocar { margin-top: 14px; font-size: 13.5px; }
+.sis-trocar summary { cursor: pointer; color: var(--blue-text); margin-bottom: 8px; }
+/* Painel: hoje + primeiros passos */
+.sis-hoje { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.sis-hoje-card { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; background: var(--bg-elevated); color: var(--text); text-decoration: none; }
+.sis-hoje-card:hover { border-color: var(--blue-strong); }
+.sis-hoje-card span { font-size: 12px; color: var(--text-soft); }
+.sis-hoje-card b { font-size: 20px; }
+.sis-hoje-card.alerta b { color: var(--warning); }
+.sis-passos { border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; background: var(--bg-elevated); margin-bottom: 16px; }
+.sis-passos-cab { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.sis-passos-cab strong { display: flex; align-items: center; gap: 6px; }
+.sis-passos-cab .ic { width: 14px; height: 14px; }
+.sis-passos-cab > span { color: var(--text-soft); font-size: 12.5px; }
+.sis-passos-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
+.sis-passo { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); text-decoration: none; padding: 6px 4px; border-radius: 8px; }
+.sis-passo:hover { background: var(--bg-soft); }
+.sis-passo > span { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--blue-strong); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #0b0f0b; }
+.sis-passo.feito > span { background: var(--blue-strong); }
+.sis-passo.feito { color: var(--text-soft); text-decoration: line-through; }
+@media (max-width: 560px) { .sis-caixa { border-radius: 16px; } .sis-corpo, .sis-topo { padding-left: 16px; padding-right: 16px; } .sis-rodape { padding: 10px 16px 14px; flex-wrap: wrap; } .sis-opcoes { grid-template-columns: minmax(0, 1fr); } .sis-pergunta .sis-opcoes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sis-rodape .btn-primary { margin-left: auto; }

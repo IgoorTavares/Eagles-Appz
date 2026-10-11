@@ -83,8 +83,9 @@
     <h1>Contratos</h1>
     <p>Contratos vigentes e encerrados</p>
   </div>
-  <button type="button" class="btn btn-primary" onclick="openModal('modal-novo-contrato')">+ Novo(a) Contrato</button>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;"><button type="button" class="btn" onclick="ectAbrirModelos()">Modelos de contrato</button><button type="button" class="btn btn-primary" onclick="openModal('modal-novo-contrato')">+ Novo contrato</button></div>
 </div>
+<div class="stat-grid" id="erp-contratos-resumo" style="margin-bottom:16px;"></div>
 
 <div class="panel">
   <div class="table-scroll">
@@ -128,6 +129,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="script.js"></script>
 <script>

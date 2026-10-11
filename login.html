@@ -128,12 +128,13 @@
 <script src="firebase-config.js"></script>
 <script src="script.js"></script>
 <script>
+function loginDestino() { const v = String(new URLSearchParams(location.search).get('voltar') || '').toLowerCase(); return /^[a-z0-9-]+\.html$/.test(v) && v !== 'login.html' ? v : 'index.html'; }
 initFirebase();
 bloquearZoomMobile();
 
 if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length) {
   firebase.auth().onAuthStateChanged((user) => {
-    if (user) window.location.href = 'index.html';
+    if (user) window.location.href = loginDestino();
   });
 }
 
@@ -156,7 +157,7 @@ document.getElementById('form-login').addEventListener('submit', function (e) {
   btn.disabled = true;
   btn.textContent = 'Entrando...';
   firebase.auth().signInWithEmailAndPassword(email, senha)
-    .then(() => { window.location.href = 'index.html'; })
+    .then(() => { window.location.href = loginDestino(); })
     .catch((err) => {
       erroEl.textContent = mensagemErroLogin(err.code);
       erroEl.style.display = '';

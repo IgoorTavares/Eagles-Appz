@@ -808,6 +808,7 @@ function protegerPagina(callback) {
     return;
   }
   firebase.auth().onAuthStateChanged((user) => {
+    if (!user) { const pg = (location.pathname.split('/').pop() || '').toLowerCase(); window.location.href = 'login.html' + (/^[a-z0-9-]+\.html$/.test(pg) && pg !== 'index.html' ? '?voltar=' + pg : ''); return; }
     if (user) {
       resolverTenantDoUsuario(user).then((ok) => {
         if (!ok) return; // resolverTenantDoUsuario já tratou o erro e deslogou
@@ -1079,6 +1080,7 @@ const NAV_ITEMS = [
       { key: 'pedidos-venda', href: 'pedidos-venda.html', label: 'Pedidos de vendas' },
       { key: 'objetos-postagem', href: 'objetos-postagem.html', label: 'Objetos de postagens' },
       { key: 'contratos', href: 'contratos.html', label: 'Contratos' },
+      { key: 'nfse-externo', href: 'https://www.nfse.gov.br/EmissorNacional/Login', label: 'Emitir NFS-e ↗', externo: true },
     ],
   },
   {
@@ -2495,6 +2497,25 @@ async function brfEnviar() {
   }
 }
 
+// Os contratos do CRM ficam numa lista SÓ do CRM (antes dividiam a lista
+// com os Contratos do ERP). Os contratos que tinham sido gerados pelo CRM
+// (de orçamento ou negócio) são levados para cá uma vez, sozinhos.
+const CRM_CONTRATOS_KEY = 'eagles_crm_contratos_v1';
+let CRM_CONTRATOS_DATA = [];
+function crmMigrarContratos() {
+  if (!nivelPodeOperar() || !chaveCarregadaNaNuvem(CRM_CONTRATOS_KEY) || !chaveCarregadaNaNuvem('eagles_contratos_v1')) return;
+  const erp = CADASTROS_DATA['contrato'] || [];
+  const doCrm = erp.filter((c) => c.origemPropostaId || c.origemNegocioId);
+  if (!doCrm.length) return;
+  const ja = new Set(CRM_CONTRATOS_DATA.map((c) => c.id));
+  const novaCrm = CRM_CONTRATOS_DATA.concat(doCrm.filter((c) => !ja.has(c.id)));
+  if (cloudSet(CRM_CONTRATOS_KEY, novaCrm) === false) return;
+  CRM_CONTRATOS_DATA = novaCrm;
+  const restoErp = erp.filter((c) => !(c.origemPropostaId || c.origemNegocioId));
+  if (cloudSet('eagles_contratos_v1', restoErp) !== false) CADASTROS_DATA['contrato'] = restoErp;
+  console.log(`[EaglesLabz] ${doCrm.length} contrato(s) do CRM separados dos Contratos do ERP.`);
+}
+
 // ---------- CRM: Modelos de Contrato (com preenchimento de dados e exportação em PDF) ----------
 
 const CRM_MODELOS_CONTRATO_KEY = 'eagles_crm_modelos_contrato_v1';
@@ -2731,7 +2752,7 @@ function modeloContratoPadraoAtual() {
 // gerar duplicado sem avisar.
 function contratoExistenteParaCliente(clienteNome) {
   if (!clienteNome) return null;
-  const lista = CADASTROS_DATA['contrato'] || [];
+  const lista = CRM_CONTRATOS_DATA || [];
   return lista.find((c) => c.cliente === clienteNome) || null;
 }
 
@@ -2769,7 +2790,7 @@ function resolverContratoExistente(acao) {
       existente.valor = (p.itens || []).reduce((a, i) => a + Number(i.valor || 0), 0);
       existente.textoContrato = textoNovo;
       existente.atualizadoEm = new Date().toISOString();
-      cloudSet('eagles_contratos_v1', CADASTROS_DATA['contrato']);
+      cloudSet(CRM_CONTRATOS_KEY, CRM_CONTRATOS_DATA);
     }
     p.contratoGerado = true;
     firestoreDb.collection(PROPOSTAS_COLECAO).doc(id).set({ contratoGerado: true }, { merge: true });
@@ -2796,9 +2817,9 @@ function criarContratoDeProposta(p, textoContrato) {
     origemPropostaId: p.id,
     textoContrato,
   };
-  CADASTROS_DATA['contrato'] = CADASTROS_DATA['contrato'] || [];
-  CADASTROS_DATA['contrato'].push(novoContrato);
-  cloudSet('eagles_contratos_v1', CADASTROS_DATA['contrato']);
+  CRM_CONTRATOS_DATA = CRM_CONTRATOS_DATA || [];
+  CRM_CONTRATOS_DATA.push(novoContrato);
+  cloudSet(CRM_CONTRATOS_KEY, CRM_CONTRATOS_DATA);
   p.contratoGerado = true;
   firestoreDb.collection(PROPOSTAS_COLECAO).doc(p.id).set({ contratoGerado: true }, { merge: true });
   renderPropostasListaCrm();
@@ -2874,12 +2895,12 @@ function chaveCarregadaNaNuvem(key) {
 
 function converterPropostasAprovadasEmContrato() {
   if (!nivelPodeOperar()) return; // Financeiro só visualiza: quem opera gera o contrato
-  if (!chaveCarregadaNaNuvem('eagles_contratos_v1')) return; // roda de novo quando carregar
+  if (!chaveCarregadaNaNuvem(CRM_CONTRATOS_KEY)) return; // roda de novo quando carregar
   const candidatas = CRM_PROPOSTAS_DATA.filter((p) =>
     p.status === 'aprovada' && !p.contratoGerado && p.gerarContratoAutomatico !== false && !PROPOSTAS_CONVERTENDO.has(p.id));
   candidatas.forEach((p) => {
     if (p.negocioId && !chaveCarregadaNaNuvem(CRM_NEGOCIOS_KEY)) return; // espera o funil carregar
-    const jaExiste = (CADASTROS_DATA['contrato'] || []).some((c) => c.origemPropostaId === p.id);
+    const jaExiste = (CRM_CONTRATOS_DATA || []).some((c) => c.origemPropostaId === p.id);
     if (jaExiste) { marcarPropostaComContrato(p); return; }
     PROPOSTAS_CONVERTENDO.add(p.id);
     reivindicarPropostaParaContrato(p.id).then((ganhou) => {
@@ -2936,9 +2957,9 @@ function criarContratoAutomaticoDaProposta(p) {
     origemPropostaId: p.id,
     textoContrato: preencherModeloContrato(conteudoModelo, p),
   };
-  const lista = (CADASTROS_DATA['contrato'] || []).concat([novoContrato]);
-  if (cloudSet('eagles_contratos_v1', lista) === false) return false;
-  CADASTROS_DATA['contrato'] = lista;
+  const lista = (CRM_CONTRATOS_DATA || []).concat([novoContrato]);
+  if (cloudSet(CRM_CONTRATOS_KEY, lista) === false) return false;
+  CRM_CONTRATOS_DATA = lista;
 
   if (p.negocioId) {
     const negocio = CRM_NEGOCIOS_DATA.find((n) => n.id === p.negocioId);
@@ -3093,7 +3114,7 @@ function renderCrmContratosLista() {
   const statsEl = document.getElementById('crm-contratos-stats');
   const tbody = document.getElementById('crm-contratos-lista');
   if (!tbody) return;
-  const contratos = CADASTROS_DATA['contrato'] || [];
+  const contratos = CRM_CONTRATOS_DATA || [];
 
   if (statsEl) {
     const vigentes = contratos.filter((c) => c.status === 'vigente').length;
@@ -3120,19 +3141,19 @@ function renderCrmContratosLista() {
 
 function excluirContratoCrm(id) {
   if (!exigirPodeOperar('excluir contratos')) return;
-  const c = (CADASTROS_DATA['contrato'] || []).find((x) => x.id === id);
+  const c = (CRM_CONTRATOS_DATA || []).find((x) => x.id === id);
   if (!c) return;
-  const compartilhado = typeof crmUsaDadosDoErp === 'function' && crmUsaDadosDoErp();
+  const compartilhado = false; // os contratos do CRM não aparecem no ERP (cada sistema tem os seus)
   confirmarAcao(`Excluir o contrato "${c.titulo || 'Sem título'}"${c.cliente ? ` (${c.cliente})` : ''}? Isso não pode ser desfeito.${compartilhado ? ' Como sua conta tem ERP + CRM, ele sai também da lista de Contratos do ERP.' : ''}${c.origemPropostaId ? ' O orçamento de origem continua aprovado e não gera o contrato de novo.' : ''}`, () => {
-    const lista = (CADASTROS_DATA['contrato'] || []).filter((x) => x.id !== id);
-    if (cloudSet('eagles_contratos_v1', lista) === false) return; // ainda carregando ou sem permissão: a própria trava avisa
-    CADASTROS_DATA['contrato'] = lista;
+    const lista = (CRM_CONTRATOS_DATA || []).filter((x) => x.id !== id);
+    if (cloudSet(CRM_CONTRATOS_KEY, lista) === false) return; // ainda carregando ou sem permissão: a própria trava avisa
+    CRM_CONTRATOS_DATA = lista;
     renderCrmContratosLista();
   }, 'Excluir contrato');
 }
 
 function baixarContratoPdfPorId(id) {
-  const c = (CADASTROS_DATA['contrato'] || []).find((x) => x.id === id);
+  const c = (CRM_CONTRATOS_DATA || []).find((x) => x.id === id);
   if (!c || !c.textoContrato) return;
   gerarPdfTextoLongo(c.textoContrato, `Contrato - ${c.cliente || 'Cliente'}.pdf`, 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS');
 }
@@ -6374,6 +6395,18 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '11/10/2026 · Contratos', itens: [
+    { titulo: 'Contratos do ERP com modelo, PDF e NFS-e', badges: ['novo'], texto: 'Vendas → Contratos ganhou: resumo (vigentes, valor, vencendo em 30 dias, sem NFS-e no mês), "Gerar contrato" por modelo com os dados do contrato, do cliente do cadastro e da sua empresa (inclusive valor por extenso), edição do texto, PDF, modelos próprios do ERP e NFS-e por mês de competência.' },
+    { titulo: 'Emitir NFS-e no menu Vendas', badges: ['novo'], texto: 'Atalho direto para o Emissor Nacional, logo abaixo de Contratos.' },
+    { titulo: 'Contratos do CRM e do ERP separados', badges: ['melhoria'], texto: 'Cada sistema tem a sua lista de contratos e os seus modelos. Os contratos que o CRM tinha gerado (de orçamentos e negócios) foram levados sozinhos para a lista do CRM e saem da lista do ERP.' },
+  ]},
+  { data: '11/10/2026 · Financeiro e tarefas', itens: [
+    { titulo: 'Saldo em caixa no topo do Financeiro', badges: ['novo'], texto: 'A barra do período agora mostra o saldo somado de todos os caixas, borrado até você tocar no olho. Tocando no valor, abre a aba Caixa.' },
+    { titulo: 'Tarefas do dia pelo celular', badges: ['novo'], texto: 'Página "Tarefas do dia" (tarefas.html), leve para o celular: cole a mensagem com as atividades e toque em Lançar — entende uma tarefa por linha, marcadores, dias da semana, "hoje", "amanhã" e datas. As tarefas entram em Tarefas diárias do Dashboard na hora, e dá para marcar como feita por lá. O link (com QR Code) fica no ícone de celular do painel Tarefas diárias.' },
+  ]},
+  { data: '10/10/2026 · ERP', itens: [
+    { titulo: 'Emitir NFS-e pelo Emissor Nacional', badges: ['novo'], texto: 'No Pedido de venda, "Gerar nota serviço" virou "Emitir NFS-e": mostra os dados que o Emissor Nacional pede (CPF/CNPJ, nome, e-mail e endereço do tomador, descrição, valor e competência) com botão de copiar em cada um, avisa o que falta no cadastro do cliente e abre o portal nfse.gov.br. Depois de emitir, registre o número (e a chave ou o link) e ele fica salvo no pedido. O rascunho em PDF continua disponível.' },
+  ]},
   { data: '09/10/2026 · ERP', itens: [
     { titulo: 'Analista do negócio no ERP', badges: ['novo'], texto: 'Botão novo acima do robozinho em todas as telas do ERP. O Analista lê vendas, estoque, compras e notas, contratos, clientes e o financeiro dos últimos 90 dias e devolve: nota geral (com a evolução desde o diagnóstico anterior), nota de 0 a 10 por área, números principais, melhorias priorizadas pelo impacto (com caixinha de "feita") e o que vai bem. Tem "Pergunte ao Analista" e histórico.' },
   ]},
@@ -6838,7 +6871,9 @@ function initCrmHub() {
     renderFiltroClientesCrm();
     atualizarSecaoAtivaCrm();
   });
-  cloudWatch('eagles_contratos_v1', contratosSeed(), (data) => { CADASTROS_DATA['contrato'] = data; atualizarSecaoAtivaCrm(); converterPropostasAprovadasEmContrato(); });
+  cloudWatch(CRM_CONTRATOS_KEY, [], (data) => { CRM_CONTRATOS_DATA = Array.isArray(data) ? data : []; atualizarSecaoAtivaCrm(); converterPropostasAprovadasEmContrato(); crmMigrarContratos(); });
+  // a lista do ERP só é lida para separar, uma vez, os contratos antigos do CRM
+  cloudWatch('eagles_contratos_v1', contratosSeed(), (data) => { CADASTROS_DATA['contrato'] = data; crmMigrarContratos(); });
   FINANCE_MES_ATUAL = mesKeyDoHoje();
   finEscutar(() => {
     FINANCE_CICLO = getCicloDoMes(FINANCE_MES_ATUAL);
@@ -9727,6 +9762,371 @@ function erpanRender() {
     </div>`;
 }
 
+// =====================================================================
+// ---------- Tarefas do dia pelo celular (tarefas.html) ----------
+// =====================================================================
+// Página leve para lançar as Tarefas diárias do Dashboard sem abrir o
+// CRM: cola a mensagem (uma tarefa por linha) e pronto. Entende dias da
+// semana ("Segunda:", "ter - reunião"), "hoje", "amanhã" e listas com
+// marcadores (-, •, *, 1., ☐, ✅). Fica atrás do login (o celular já
+// fica conectado), então o link pode ficar salvo na tela inicial.
+const TT_DIAS = { dom: 0, domingo: 0, seg: 1, segunda: 1, ter: 2, terca: 2, qua: 3, quarta: 3, qui: 4, quinta: 4, sex: 5, sexta: 5, sab: 6, sabado: 6 };
+let TT = { data: '', texto: '', previa: [], carregado: false, aba: 'lancar' };
+function ttSemAcento(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+function ttProximoDia(dow, base) {
+  const d = new Date((base || isoHoje()) + 'T12:00:00');
+  const dif = (dow - d.getDay() + 7) % 7;
+  d.setDate(d.getDate() + dif);
+  return agIso(d);
+}
+// "Segunda:", "seg -", "terça-feira", "Hoje:", "amanhã" no começo da linha
+function ttLerDia(linha, base) {
+  const t = ttSemAcento(linha).trim();
+  const m = t.match(/^(hoje|amanha|domingo|segunda|terca|quarta|quinta|sexta|sabado|dom|seg|ter|qua|qui|sex|sab)(?:-feira)?\b\.?\s*(?:[:\-–—]\s*|\s+|$)/);
+  if (!m) return null;
+  const chave = m[1];
+  const data = chave === 'hoje' ? (base || isoHoje()) : chave === 'amanha' ? atdMaisDias(base || isoHoje(), 1) : ttProximoDia(TT_DIAS[chave], base);
+  // tira o pedaço do dia do texto original (mesmo comprimento, com ou sem acento)
+  return { data, resto: String(linha).trim().slice(m[0].length).trim() };
+}
+function ttLimparLinha(l) {
+  return String(l || '').replace(/^\s*(?:[-•*·▪►✓✔☐☑✅⬜🔲🔳]+|\d{1,2}[.)-]|\[\s?[xX]?\s?\])\s*/u, '').replace(/\s+/g, ' ').trim();
+}
+// texto colado → [{ texto, data }]
+function ttLer(texto, dataPadrao, base) {
+  let atual = dataPadrao || isoHoje();
+  const out = [];
+  String(texto || '').split(/\r?\n/).forEach((bruta) => {
+    const l = ttLimparLinha(bruta);
+    if (!l) return;
+    const d = ttLerDia(l, base);
+    if (d) {
+      atual = d.data;
+      const r = ttLimparLinha(d.resto);
+      if (r) out.push({ texto: r.slice(0, 200), data: d.data });
+      return;
+    }
+    // linha só com a data ("10/10" ou "10/10:") também vira cabeçalho
+    const dm = l.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s*[:\-–—]?\s*(.*)$/);
+    if (dm) {
+      const hoje = base || isoHoje();
+      let ano = dm[3] ? Number(dm[3].length === 2 ? '20' + dm[3] : dm[3]) : Number(hoje.slice(0, 4));
+      const iso = `${ano}-${String(dm[2]).padStart(2, '0')}-${String(dm[1]).padStart(2, '0')}`;
+      if (!dm[3] && iso < atdMaisDias(hoje, -30)) ano++;
+      const isoFinal = `${ano}-${String(dm[2]).padStart(2, '0')}-${String(dm[1]).padStart(2, '0')}`;
+      if (!isNaN(new Date(isoFinal + 'T12:00:00'))) {
+        atual = isoFinal;
+        const r = ttLimparLinha(dm[4]);
+        if (r) out.push({ texto: r.slice(0, 200), data: isoFinal });
+        return;
+      }
+    }
+    out.push({ texto: l.slice(0, 200), data: atual });
+  });
+  return out;
+}
+function ttNomeDia(iso) {
+  const hoje = isoHoje();
+  if (iso === hoje) return 'Hoje';
+  if (iso === atdMaisDias(hoje, 1)) return 'Amanhã';
+  const d = new Date(iso + 'T12:00:00');
+  return ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][d.getDay()] + ', ' + formatDatePt(iso).slice(0, 5);
+}
+function ttIniciar() {
+  TT.data = isoHoje();
+  cloudWatch(CRM_TAREFAS_KEY, [], (d) => { CRM_TAREFAS_DATA = Array.isArray(d) ? d : []; TT.carregado = true; ttRender(); });
+  ttRender();
+}
+function ttRender() {
+  const el = document.getElementById('tt-app');
+  if (!el) return;
+  const foco = document.activeElement && document.activeElement.id;
+  const hoje = isoHoje();
+  const deHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje));
+  const feitas = deHoje.filter((t) => tarefaConcluidaEm(t, hoje)).length;
+  const porDia = {};
+  TT.previa.forEach((p, i) => { (porDia[p.data] = porDia[p.data] || []).push(Object.assign({ i }, p)); });
+  const empresa = (typeof PERFIL_DATA !== 'undefined' && PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || 'Eagles Labz';
+  el.innerHTML = `
+    <header class="tt-cab"><img src="assets/favicon-eagles.png" alt=""><div><strong>Tarefas do dia</strong><small>${escapeHtml(empresa)}${USUARIO_NOME ? ' · ' + escapeHtml(USUARIO_NOME) : ''}</small></div><span class="kb-espaco"></span><a class="btn btn-small" href="crm.html">Abrir o CRM</a></header>
+    <div class="kb-segmento tt-abas"><button type="button" class="${TT.aba === 'lancar' ? 'ativo' : ''}" onclick="TT.aba='lancar'; ttRender()">Lançar</button><button type="button" class="${TT.aba === 'hoje' ? 'ativo' : ''}" onclick="TT.aba='hoje'; ttRender()">Hoje (${feitas}/${deHoje.length})</button></div>
+    ${TT.aba === 'hoje' ? `
+      <section class="fin-painel">
+        ${deHoje.length ? deHoje.map((t) => { const f = tarefaConcluidaEm(t, hoje); return `<button type="button" class="tt-item${f ? ' feita' : ''}" onclick="toggleTarefaCrm('${escapeParaOnclick(t.id)}'); ttRender();"><span class="tt-check">${f ? '✓' : ''}</span><span>${escapeHtml(t.texto)}${t.responsavel ? `<small>${escapeHtml(t.responsavel)}</small>` : ''}</span></button>`; }).join('') : '<p class="kb-vazio">Nenhuma tarefa para hoje.</p>'}
+      </section>` : `
+      <section class="fin-painel">
+        <label class="tt-rot" for="tt-texto">Cole a mensagem ou escreva uma tarefa por linha</label>
+        <textarea id="tt-texto" rows="8" maxlength="6000" placeholder="Segunda:&#10;- Gravar reels da Seven&#10;- Enviar orçamento Caniballs&#10;Terça:&#10;- Reunião às 10h&#10;&#10;(sem dia, entra na data escolhida abaixo)" oninput="TT.texto = this.value; ttAtualizarPrevia()">${escapeHtml(TT.texto)}</textarea>
+        <div class="tt-rot" style="margin-top:10px;">Tarefas sem dia entram em</div>
+        <div class="atd-chips" style="margin:0;">
+          <button type="button" class="${TT.data === hoje ? 'ativo' : ''}" onclick="TT.data='${hoje}'; ttAtualizarPrevia(); ttRender()">Hoje</button>
+          <button type="button" class="${TT.data === atdMaisDias(hoje, 1) ? 'ativo' : ''}" onclick="TT.data='${atdMaisDias(hoje, 1)}'; ttAtualizarPrevia(); ttRender()">Amanhã</button>
+          <input type="date" class="tt-data" value="${TT.data}" onchange="if (this.value) { TT.data = this.value; ttAtualizarPrevia(); ttRender(); }" aria-label="Escolher a data">
+        </div>
+      </section>
+      ${TT.previa.length ? `<section class="fin-painel">
+        <div class="tt-rot">Vai lançar ${TT.previa.length} ${TT.previa.length === 1 ? 'tarefa' : 'tarefas'}</div>
+        ${Object.keys(porDia).sort().map((d) => `<div class="tt-dia"><b>${escapeHtml(ttNomeDia(d))}</b>${porDia[d].map((p) => `<div class="tt-prev"><span>${escapeHtml(p.texto)}</span><button type="button" class="cw-x" aria-label="Tirar" onclick="ttTirar(${p.i})">✕</button></div>`).join('')}</div>`).join('')}
+        <button type="button" class="btn btn-primary tt-lancar" onclick="ttLancar()" ${TT.carregado ? '' : 'disabled'}>Lançar ${TT.previa.length} ${TT.previa.length === 1 ? 'tarefa' : 'tarefas'}</button>
+      </section>` : ''}`}
+    <p class="kb-vazio-mini tt-dica">Dica: no celular, toque em Compartilhar → "Adicionar à tela de início" para ter este atalho sempre à mão.</p>`;
+  if (foco) { const f = document.getElementById(foco); if (f) { f.focus(); if (f.tagName === 'TEXTAREA') f.setSelectionRange(f.value.length, f.value.length); } }
+}
+let TT_TIMER = null;
+function ttAtualizarPrevia() {
+  TT.previa = ttLer(TT.texto, TT.data);
+  clearTimeout(TT_TIMER);
+  TT_TIMER = setTimeout(ttRender, 250);
+}
+function ttTirar(i) { TT.previa.splice(i, 1); ttRender(); }
+function ttLancar() {
+  if (!TT.previa.length) return;
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelPodeOperar()) { avisarSemPermissaoNivel('lançar tarefas'); return; }
+  const agora = new Date().toISOString();
+  const novas = TT.previa.map((p) => ({ id: genId('tf'), texto: p.texto, descricao: '', responsavel: USUARIO_NOME || '', recorrencia: 'nenhuma', feita: false, concluidasEm: [], data: p.data, criadoEm: agora, origem: 'celular' }));
+  CRM_TAREFAS_DATA = CRM_TAREFAS_DATA.concat(novas);
+  if (cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA) === false) return;
+  const n = novas.length;
+  TT.texto = ''; TT.previa = []; TT.aba = novas.some((t) => t.data === isoHoje()) ? 'hoje' : 'lancar';
+  ttRender();
+  avisar(`${n} ${n === 1 ? 'tarefa lançada' : 'tarefas lançadas'}. Já aparecem em Tarefas diárias no Dashboard do CRM.`, 'Tarefas do dia');
+}
+// no Dashboard: o link para abrir no celular (com QR Code)
+function ttAbrirLinkCelular() {
+  const link = location.origin + location.pathname.replace(/[^/]*$/, '') + 'tarefas.html';
+  let qr = '';
+  try { if (typeof qrcode === 'function') { const q = qrcode(0, 'M'); q.addData(link); q.make(); qr = q.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); } } catch (e) {}
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:480px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Lançar tarefas pelo celular</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub">Abra este link no celular, cole a mensagem com as atividades (uma por linha; dá para separar por dia da semana) e toque em Lançar. As tarefas aparecem aqui na hora.</p>
+    ${qr ? `<div class="tt-qr">${qr}<small>Aponte a câmera do celular</small></div>` : ''}
+    <div class="lk-linha"><input type="text" id="tt-link" readonly value="${escapeHtml(link)}" onclick="this.select()"><button type="button" class="btn btn-primary" onclick="navigator.clipboard && navigator.clipboard.writeText('${escapeParaOnclick(link)}'); this.textContent='Copiado!'">Copiar</button></div>
+    <div class="lk-opcoes"><button type="button" class="lk-opcao lk-whats" onclick="window.open('https://wa.me/?text=' + encodeURIComponent('Lançar tarefas do dia: ${escapeParaOnclick(link)}'), '_blank', 'noopener')"><span>${ic('conversa', 'ic-herda')}</span><b>Mandar para o meu WhatsApp</b><small>para abrir no celular</small></button></div>
+    <p class="kb-vazio-mini" style="margin:12px 0 0;">No celular, depois de abrir: Compartilhar → "Adicionar à tela de início". Pede o login só na primeira vez.</p>
+  </div>`;
+  openModal('modal-srv');
+}
+
+// =====================================================================
+// ---------- ERP → Contratos (modelos, texto, PDF e NFS-e) ----------
+// =====================================================================
+// Mesmas funções do CRM, mas do ERP e só do ERP: os modelos ficam numa
+// chave própria e os contratos continuam em eagles_contratos_v1. Os dados
+// do cliente vêm do cadastro de Clientes e Fornecedores do ERP.
+const ECT_MODELOS_KEY = 'eagles_erp_modelos_contrato_v1';
+let ECT_MODELOS = [];
+let ECT_INICIADO = false;
+const ECT_SHORTCODES = [
+  { grupo: 'Prestador (sua empresa)', itens: ['Nome do Prestador', 'Endereço do Prestador', 'Bairro do Prestador', 'Cidade do Prestador', 'Estado do Prestador', 'CPF/CNPJ do Prestador', 'Telefone do Prestador'] },
+  { grupo: 'Cliente (do cadastro)', itens: ['Nome do Cliente', 'Razão Social do Cliente', 'CPF/CNPJ do Cliente', 'Endereço do Cliente', 'Bairro do Cliente', 'Cidade do Cliente', 'Estado do Cliente', 'CEP do Cliente', 'Telefone do Cliente', 'E-mail do Cliente'] },
+  { grupo: 'Contrato', itens: ['Título do Contrato', 'Início da Vigência', 'Fim da Vigência', 'Prazo do Contrato', 'Valor do Contrato', 'Valor por Extenso', 'Data'] },
+];
+function ectIniciar() {
+  if (ECT_INICIADO) return;
+  ECT_INICIADO = true;
+  cloudWatch(ECT_MODELOS_KEY, [], (d) => {
+    ECT_MODELOS = Array.isArray(d) && d.length ? d : [{ id: 'erp-modelo-padrao', nome: 'Modelo Padrão', conteudo: ectModeloPadrao(), padrao: true, criadoEm: new Date().toISOString() }];
+  });
+  try { if (typeof CLIENTES_FORN_DATA !== 'undefined' && !CLIENTES_FORN_DATA_CARREGADO) cloudWatch(CLIENTES_FORN_KEY, [], (d) => { CLIENTES_FORN_DATA = Array.isArray(d) ? d : []; }); } catch (e) {}
+}
+function ectModeloPadrao() {
+  return (typeof TEXTO_MODELO_CONTRATO_PADRAO === 'string' ? TEXTO_MODELO_CONTRATO_PADRAO : 'CONTRATO\n\n{{Nome do Prestador}} e {{Nome do Cliente}} firmam o presente contrato...')
+    .split('{{Nome/Objetivo do Projeto}}').join('{{Título do Contrato}}').split('{{Nome do Projeto}}').join('{{Título do Contrato}}')
+    .split('{{Valor Final}}').join('{{Valor do Contrato}}').split('{{Valor Total}}').join('{{Valor do Contrato}}');
+}
+function ectContrato(id) { return (CADASTROS_DATA['contrato'] || []).find((c) => c.id === id); }
+function ectCliente(nome) {
+  const lista = (typeof CLIENTES_FORN_DATA !== 'undefined' && CLIENTES_FORN_DATA.length ? CLIENTES_FORN_DATA : lsLoad(chaveLocalTenant(CLIENTES_FORN_KEY), [])) || [];
+  const n = String(nome || '').trim().toLowerCase();
+  return lista.find((c) => [c.nome, c.razaoSocial, c.nomeFantasia].some((x) => String(x || '').trim().toLowerCase() === n)) || {};
+}
+function ectPrazo(c) {
+  if (!c.dataInicio || !c.dataFim) return 'Indeterminado';
+  const dias = Math.round((new Date(c.dataFim + 'T12:00:00') - new Date(c.dataInicio + 'T12:00:00')) / 86400000) + 1; // conta o último dia
+  const meses = Math.round(dias / 30.44);
+  return meses >= 1 ? `${meses} ${meses === 1 ? 'mês' : 'meses'}` : `${Math.max(1, dias)} ${dias === 1 ? 'dia' : 'dias'}`;
+}
+function ectExtenso(v) {
+  // valor por extenso simples (até milhões), em reais
+  const u = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+  const d = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+  const c = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+  const ate999 = (n) => { if (!n) return ''; if (n === 100) return 'cem'; const p = []; if (n >= 100) { p.push(c[Math.floor(n / 100)]); n %= 100; } if (n >= 20) { p.push(d[Math.floor(n / 10)] + (n % 10 ? ' e ' + u[n % 10] : '')); } else if (n) p.push(u[n]); return p.join(' e '); };
+  const inteiro = Math.floor(Math.abs(Number(v) || 0)), cent = Math.round((Math.abs(Number(v) || 0) - inteiro) * 100);
+  const mi = Math.floor(inteiro / 1e6), mil = Math.floor((inteiro % 1e6) / 1000), resto = inteiro % 1000;
+  // regra do português: "e" antes da última parte quando ela é menor que 100
+  // ou uma centena redonda (mil e cem, mil e cinquenta); senão, só espaço
+  // (mil duzentos e cinquenta)
+  const grandes = [];
+  if (mi) grandes.push(ate999(mi) + (mi === 1 ? ' milhão' : ' milhões'));
+  if (mil) grandes.push(mil === 1 ? 'mil' : ate999(mil) + ' mil');
+  let txt = grandes.join(', ');
+  if (resto) txt += (txt ? ((resto < 100 || resto % 100 === 0) ? ' e ' : ' ') : '') + ate999(resto);
+  if (!txt) txt = 'zero';
+  txt += inteiro === 1 ? ' real' : (mi && !mil && !resto ? ' de reais' : ' reais');
+  if (cent) txt += ' e ' + ate999(cent) + (cent === 1 ? ' centavo' : ' centavos');
+  return txt;
+}
+function ectPreencher(texto, c) {
+  const p = PERFIL_DATA || {}, k = ectCliente(c.cliente);
+  const end = (o) => [o.endereco, o.numero].filter(Boolean).join(', ');
+  const mapa = {
+    'Nome do Prestador': p.nomeFantasia || p.nomeEmpresa || '—', 'Endereço do Prestador': end(p) || '—', 'Número do Endereço Prestador': p.numero || '—', 'Bairro do Prestador': p.bairro || '—', 'Cidade do Prestador': p.cidade || '—', 'Estado do Prestador': p.estado || '—', 'CPF/CNPJ do Prestador': p.cnpj || p.cpf || '—', 'Telefone do Prestador': p.telefone1 || p.telefone2 || '—',
+    'Nome do Cliente': k.nome || c.cliente || '—', 'Razão Social do Cliente': k.razaoSocial || k.nome || c.cliente || '—', 'Representante do Cliente': k.contato || k.nome || c.cliente || '—', 'CPF/CNPJ do Cliente': k.cnpj || k.cpf || '—',
+    'Endereço do Cliente': end(k) || '—', 'Número do Endereço Cliente': k.numero || '—', 'Bairro do Cliente': k.bairro || '—', 'Cidade do Cliente': k.cidade || '—', 'Estado do Cliente': k.estado || k.uf || '—', 'CEP do Cliente': k.cep || '—', 'Telefone do Cliente': k.telefone || k.celular || '—', 'E-mail do Cliente': k.email || '—',
+    'Título do Contrato': c.titulo || '—', 'Início da Vigência': c.dataInicio ? formatDatePt(c.dataInicio) : '—', 'Fim da Vigência': c.dataFim ? formatDatePt(c.dataFim) : 'Indeterminado', 'Prazo do Contrato': ectPrazo(c),
+    'Valor do Contrato': formatMoney(Number(c.valor) || 0), 'Valor por Extenso': ectExtenso(c.valor), 'Data': new Date().toLocaleDateString('pt-BR'),
+    // nomes usados no modelo padrão do CRM, para quem copiar um modelo de lá
+    'Nome do Projeto': c.titulo || '—', 'Serviços Inclusos': c.titulo || '—', 'Valor Total': formatMoney(Number(c.valor) || 0), 'Valor Final': formatMoney(Number(c.valor) || 0), 'Valor do Desconto': formatMoney(0),
+    'Condições de Pagamento': '—', 'Forma de Pagamento': '—', 'Número de Parcelas': '—', 'Prazo de Entrega': '—',
+  };
+  let t = String(texto || '');
+  Object.entries(mapa).forEach(([ch, v]) => { t = t.split('{{' + ch + '}}').join(v); });
+  return t;
+}
+function ectFaltaCliente(c) {
+  const k = ectCliente(c.cliente);
+  return [!(k.cnpj || k.cpf) && 'CPF/CNPJ', !k.endereco && 'endereço', !k.email && 'e-mail'].filter(Boolean);
+}
+
+// ---------- texto do contrato ----------
+function ectAbrirTexto(id) {
+  ectIniciar();
+  const c = ectContrato(id);
+  if (!c) return;
+  const modelo = ECT_MODELOS.find((m) => m.padrao) || ECT_MODELOS[0];
+  const texto = c.textoContrato || ectPreencher(modelo ? modelo.conteudo : ectModeloPadrao(), c);
+  const falta = ectFaltaCliente(c);
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:820px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Contrato · ${escapeHtml(c.titulo || 'Sem título')}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="ect-barra">
+      ${ECT_MODELOS.length > 1 ? `<select class="srv-select" id="ect-modelo" aria-label="Modelo">${ECT_MODELOS.map((m) => `<option value="${escapeHtml(m.id)}" ${m === modelo ? 'selected' : ''}>${escapeHtml(m.nome)}</option>`).join('')}</select>` : ''}
+      <button type="button" class="btn btn-small" onclick="ectRegerar('${escapeParaOnclick(id)}')">${ic('repetir', 'ic-herda')} ${c.textoContrato ? 'Refazer pelo modelo' : 'Preencher pelo modelo'}</button>
+      <span class="kb-espaco"></span><button type="button" class="btn btn-small btn-ghost" onclick="srvFecharModal(); ectAbrirModelos()">${ic('documento', 'ic-herda')} Modelos</button>
+    </div>
+    ${falta.length ? `<p class="cw-erro" style="margin:8px 0;">${ic('alerta', 'ic-herda')} Falta no cadastro de "${escapeHtml(c.cliente || 'cliente')}": ${falta.join(', ')}. Esses campos saem como "—" — complete em Cadastros → Clientes e Fornecedores e clique em "Refazer pelo modelo".</p>` : ''}
+    <textarea id="ect-texto" class="ect-texto" rows="20" maxlength="60000">${escapeHtml(texto)}</textarea>
+    <p class="kb-vazio-mini">${c.textoContrato ? 'Texto salvo neste contrato. Você pode editar à vontade.' : 'Prévia preenchida pelo modelo — salve para guardar no contrato.'}</p>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Fechar</button><button type="button" class="btn" onclick="ectSalvarTexto('${escapeParaOnclick(id)}', true)">${ic('baixar', 'ic-herda')} Salvar e baixar PDF</button><button type="button" class="btn btn-primary" onclick="ectSalvarTexto('${escapeParaOnclick(id)}')">Salvar</button></div>
+  </div>`;
+  openModal('modal-srv');
+}
+function ectRegerar(id) {
+  const c = ectContrato(id);
+  const sel = document.getElementById('ect-modelo');
+  const m = (sel && ECT_MODELOS.find((x) => x.id === sel.value)) || ECT_MODELOS.find((x) => x.padrao) || ECT_MODELOS[0];
+  const t = document.getElementById('ect-texto');
+  if (c && t) t.value = ectPreencher(m ? m.conteudo : ectModeloPadrao(), c);
+}
+function ectSalvarTexto(id, baixar) {
+  if (!exigirPodeOperar('salvar contratos')) return;
+  const c = ectContrato(id);
+  const t = (document.getElementById('ect-texto') || {}).value || '';
+  if (!c) return;
+  c.textoContrato = t; c.atualizadoEm = new Date().toISOString();
+  if (cloudSet('eagles_contratos_v1', CADASTROS_DATA['contrato']) === false) return;
+  srvFecharModal();
+  renderCadastroTabela('contrato');
+  if (baixar) ectBaixarPdf(id);
+}
+function ectBaixarPdf(id) {
+  const c = ectContrato(id);
+  if (!c || !c.textoContrato) { ectAbrirTexto(id); return; }
+  gerarPdfTextoLongo(c.textoContrato, `Contrato - ${c.cliente || 'Cliente'} - ${c.titulo || ''}.pdf`.replace(/[\\/:*?"<>|]+/g, ' '), 'CONTRATO');
+}
+
+// ---------- modelos ----------
+let ECT_MODELO_ED = null;
+function ectAbrirModelos(idEditar) {
+  ectIniciar();
+  ECT_MODELO_ED = idEditar === undefined ? null : idEditar;
+  const ed = ECT_MODELO_ED === null ? null : (ECT_MODELOS.find((m) => m.id === ECT_MODELO_ED) || { id: '', nome: '', conteudo: ectModeloPadrao() });
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:${ed ? 980 : 560}px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${ed ? (ed.id ? 'Editar modelo' : 'Novo modelo') : 'Modelos de contrato (ERP)'}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    ${ed ? `<div class="ect-editor">
+        <div><div class="field full"><label>Nome do modelo</label><input type="text" id="ect-m-nome" maxlength="80" value="${escapeHtml(ed.nome)}"></div>
+          <textarea id="ect-m-texto" class="ect-texto" rows="20" maxlength="60000">${escapeHtml(ed.conteudo)}</textarea></div>
+        <aside class="ect-codigos"><div class="cw-rotulo">Toque para inserir</div>${ECT_SHORTCODES.map((g) => `<p class="crm-shortcode-grupo-titulo">${escapeHtml(g.grupo)}</p>${g.itens.map((cod) => `<button type="button" class="crm-shortcode-btn" onclick="ectInserir('${escapeParaOnclick(cod)}')"><code>{{${escapeHtml(cod)}}}</code></button>`).join('')}`).join('')}</aside>
+      </div>
+      <div class="cfg-modal-rodape">${ed.id && !ed.padrao ? `<button type="button" class="btn btn-ghost kb-btn-perigo" onclick="ectExcluirModelo('${escapeParaOnclick(ed.id)}')">Excluir</button>` : ''}<span class="kb-espaco"></span><button type="button" class="btn" onclick="ectAbrirModelos()">Voltar</button><button type="button" class="btn btn-primary" onclick="ectSalvarModelo('${escapeParaOnclick(ed.id)}')">Salvar modelo</button></div>`
+    : `<p class="cfg-modal-sub">Modelos usados para montar o texto dos contratos do ERP. Os campos entre {{chaves}} são trocados pelos dados do contrato, do cliente e da sua empresa.</p>
+      <div class="atd-lista">${ECT_MODELOS.map((m) => `<div class="atd-auto"><div class="atd-auto-txt"><strong>${escapeHtml(m.nome)}${m.padrao ? ' <span class="srv-tag ativo">padrão</span>' : ''}</strong><span>${escapeHtml(String(m.conteudo || '').slice(0, 90))}...</span></div>
+        ${m.padrao ? '' : `<button type="button" class="btn btn-small btn-ghost" onclick="ectModeloPadrao2('${escapeParaOnclick(m.id)}')">Tornar padrão</button>`}<button type="button" class="btn btn-small" onclick="ectAbrirModelos('${escapeParaOnclick(m.id)}')">${ic('lapis', 'ic-herda')} Editar</button></div>`).join('')}</div>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="ectAbrirModelos('')">${ic('mais', 'ic-herda')} Novo modelo</button></div>`}
+  </div>`;
+  openModal('modal-srv');
+}
+function ectInserir(cod) {
+  const t = document.getElementById('ect-m-texto'); if (!t) return;
+  const v = '{{' + cod + '}}', i = t.selectionStart || t.value.length;
+  t.value = t.value.slice(0, i) + v + t.value.slice(t.selectionEnd || i); t.focus(); t.setSelectionRange(i + v.length, i + v.length);
+}
+function ectSalvarModelos(lista) { if (cloudSet(ECT_MODELOS_KEY, lista) === false) return false; ECT_MODELOS = lista; return true; }
+function ectSalvarModelo(id) {
+  if (!exigirPodeOperar('editar modelos')) return;
+  const nome = ((document.getElementById('ect-m-nome') || {}).value || '').trim(), conteudo = (document.getElementById('ect-m-texto') || {}).value || '';
+  if (!nome || !conteudo.trim()) { avisar('Dê um nome e escreva o texto do modelo.'); return; }
+  const lista = id ? ECT_MODELOS.map((m) => (m.id === id ? Object.assign({}, m, { nome, conteudo, atualizadoEm: new Date().toISOString() }) : m)) : ECT_MODELOS.concat([{ id: genId('emc'), nome, conteudo, padrao: !ECT_MODELOS.length, criadoEm: new Date().toISOString() }]);
+  if (ectSalvarModelos(lista)) ectAbrirModelos();
+}
+function ectModeloPadrao2(id) { ectSalvarModelos(ECT_MODELOS.map((m) => Object.assign({}, m, { padrao: m.id === id }))); ectAbrirModelos(); }
+function ectExcluirModelo(id) { confirmarAcao('Excluir este modelo?', () => { if (ectSalvarModelos(ECT_MODELOS.filter((m) => m.id !== id))) ectAbrirModelos(); }, 'Excluir modelo'); }
+
+// ---------- NFS-e do contrato (uma por mês de competência) ----------
+function ectNfse(id) {
+  const c = ectContrato(id);
+  if (!c) return;
+  const comp = isoHoje();
+  const mes = comp.slice(0, 7);
+  const ja = (c.nfses || []).find((n) => n.competencia === mes);
+  nfseModal({
+    titulo: `Emitir NFS-e · ${c.titulo || 'contrato'} · ${finNomeMes(mes)}`, cliente: c.cliente, competencia: comp,
+    descricao: `${c.titulo || 'Prestação de serviços'} — competência ${finNomeMes(mes)}${c.dataInicio ? ` (contrato desde ${formatDatePt(c.dataInicio)})` : ''}.`,
+    valor: Number(c.valor) || 0, registro: ja || {}, registrar: `ectNfseRegistrar('${escapeParaOnclick(id)}', '${mes}')`,
+    historico: (c.nfses || []).filter((n) => n.competencia !== mes).slice(-6).reverse(),
+  });
+}
+function ectNfseRegistrar(id, mes) {
+  const r = nfseLerRegistro(); if (!r) return;
+  const c = ectContrato(id); if (!c) return;
+  c.nfses = (c.nfses || []).filter((n) => n.competencia !== mes).concat([Object.assign({ competencia: mes }, r)]);
+  c.atualizadoEm = new Date().toISOString();
+  if (cloudSet('eagles_contratos_v1', CADASTROS_DATA['contrato']) === false) return;
+  renderCadastroTabela('contrato'); srvFecharModal();
+  avisar(`NFS-e nº ${r.numero} de ${finNomeMes(mes)} registrada no contrato.`, 'NFS-e');
+}
+
+// ---------- resumo no topo da página ----------
+function ectRenderResumo() {
+  const el = document.getElementById('erp-contratos-resumo');
+  if (!el) return;
+  ectIniciar();
+  const lista = CADASTROS_DATA['contrato'] || [];
+  const hoje = isoHoje(), em30 = atdMaisDias(hoje, 30), mes = hoje.slice(0, 7);
+  const vig = lista.filter((c) => c.status === 'vigente');
+  const vencendo = vig.filter((c) => c.dataFim && c.dataFim >= hoje && c.dataFim <= em30).length;
+  const vencidos = vig.filter((c) => c.dataFim && c.dataFim < hoje).length;
+  const semNota = vig.filter((c) => !(c.nfses || []).some((n) => n.competencia === mes)).length;
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-label">Contratos</div><div class="stat-value">${lista.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Vigentes</div><div class="stat-value" style="color:var(--success);">${vig.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Valor vigente</div><div class="stat-value" style="font-size:19px;">${formatMoney(vig.reduce((a, c) => a + (Number(c.valor) || 0), 0))}</div></div>
+    <div class="stat-card${vencendo || vencidos ? ' danger' : ''}"><div class="stat-label">Vencendo em 30 dias</div><div class="stat-value">${vencendo}</div>${vencidos ? `<div style="font-size:11.5px; color:var(--danger);">${vencidos} já vencido(s) e ainda vigente(s)</div>` : ''}</div>
+    <div class="stat-card"><div class="stat-label">Sem NFS-e em ${escapeHtml(finNomeMes(mes).split(' ')[0])}</div><div class="stat-value">${semNota}</div></div>`;
+}
+function ectAcoes(item) {
+  const id = escapeParaOnclick(item.id), mes = isoHoje().slice(0, 7);
+  const nf = (item.nfses || []).find((n) => n.competencia === mes);
+  return `<button type="button" class="btn btn-small btn-ghost" onclick="ectAbrirTexto('${id}')" title="Texto do contrato">${ic('documento', 'ic-herda')} ${item.textoContrato ? 'Contrato' : 'Gerar contrato'}</button>
+    ${item.textoContrato ? `<button type="button" class="btn btn-small btn-ghost" onclick="ectBaixarPdf('${id}')" title="Baixar PDF">PDF</button>` : ''}
+    <button type="button" class="btn btn-small btn-ghost${nf ? ' ect-nf-ok' : ''}" onclick="ectNfse('${id}')" title="${nf ? 'NFS-e deste mês registrada' : 'Emitir a NFS-e deste mês'}">${nf ? 'NFS-e ✓' : 'NFS-e'}</button>
+    <button type="button" class="btn btn-small btn-ghost" onclick="abrirCadastroModal('contrato','${id}')">Editar</button>
+    <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirCadastroItem('contrato','${id}')">Excluir</button>`;
+}
+
 function renderCrmEmConstrucao(secao) {
   const info = CRM_EM_CONSTRUCAO_INFO[secao];
   const el = document.getElementById('crm-secao-' + secao);
@@ -9952,7 +10352,7 @@ function renderCrmFinanceiroResumo() {
   // MRR e churn: assinaturas do Financeiro (Recorrentes) + contratos vigentes antigos
   const recs = (typeof FIN_REC !== 'undefined' ? FIN_REC : []).filter((r) => r.tipo === 'receber' && dshDoCliente(r.cliente));
   const recAtivas = recs.filter((r) => r.ativa !== false && (!r.fim || r.fim >= mesAtual));
-  const contratos = (CADASTROS_DATA['contrato'] || []).filter((c) => dshDoCliente(c.cliente));
+  const contratos = (CRM_CONTRATOS_DATA || []).filter((c) => dshDoCliente(c.cliente));
   const mrr = recAtivas.reduce((a, r) => a + (Number(r.valor) || 0), 0) + (recs.length ? 0 : contratos.filter((c) => c.status === 'vigente').reduce((a, c) => a + Number(c.valor || 0), 0));
   const churnMes = recs.filter((r) => (r.fim && r.fim.slice(0, 7) === mesAtual) || (r.ativa === false && String(r.atualizadoEm || '').slice(0, 7) === mesAtual)).length
     + contratos.filter((c) => c.status === 'encerrado' && (c.dataFim || '').slice(0, 7) === mesAtual).length;
@@ -10336,7 +10736,7 @@ function renderTopbar(activeKey) {
       html += `<div class="topbar-item">
         <button type="button" class="topbar-menu-btn ${isOpen ? 'active' : ''}" onclick="toggleDropdown('menu-${item.key}')">${item.label} <span class="chevron">▾</span></button>
         <div class="mega-menu" id="menu-${item.key}">
-          ${item.children.map((c) => `<a href="${c.href}" class="${c.key === activeKey ? 'active' : ''}">${c.label}</a>`).join('')}
+          ${item.children.map((c) => `<a href="${c.href}" class="${c.key === activeKey ? 'active' : ''}"${c.externo ? ' target="_blank" rel="noopener" title="Abre o Emissor Nacional da NFS-e em outra aba"' : ''}>${c.label}</a>`).join('')}
         </div>
       </div>`;
     } else if (item.columns) {
@@ -14831,13 +15231,29 @@ function finHtmlEmBreve(aba) {
   return `<div class="kb-vazio-grande"><div class="ic-circulo">${ic('relogio')}</div><h3>${nomes[aba]}</h3><p>Essa aba chega na Entrega ${FIN_ABAS_DEPOIS[aba]} do novo Financeiro.${aba === 'recorrentes' ? ' As recorrências já funcionam: crie em Venda Rápida ou Lançar Despesa, no modo "Recorrente".' : ''}</p></div>`;
 }
 
+// Saldo em caixa no topo: começa borrado; o olhinho mostra (fica lembrado
+// neste aparelho). É a soma do saldo atual de todos os caixas.
+function finSaldoVisivel() { try { return localStorage.getItem('eagles_fin_saldo_visivel') === '1'; } catch (e) { return false; } }
+function finAlternarSaldo() { try { localStorage.setItem('eagles_fin_saldo_visivel', finSaldoVisivel() ? '0' : '1'); } catch (e) {} finRender(); }
+function finHtmlSaldoCaixa() {
+  const caixas = (FIN_CAIXAS && FIN_CAIXAS.caixas) || [];
+  if (!caixas.length) return '';
+  const total = Math.round(caixas.reduce((a, c) => a + finSaldoCaixa(c.id), 0) * 100) / 100;
+  const ver = finSaldoVisivel();
+  const detalhe = caixas.map((c) => `${c.nome}: ${formatMoney(finSaldoCaixa(c.id))}`).join('\n');
+  return `<div class="fin-saldo-topo${ver ? '' : ' borrado'}" title="${ver ? escapeHtml(detalhe) : 'Clique no olho para mostrar'}">
+    <span class="fin-saldo-rot">${ic('banco', 'ic-herda')} Saldo em caixa</span>
+    <button type="button" class="fin-saldo-valor ${total >= 0 ? 'fin-verde' : 'fin-vermelho'}" onclick="${ver ? "finIrAba('caixa')" : 'finAlternarSaldo()'}" aria-label="${ver ? 'Ver os caixas' : 'Mostrar o saldo'}">${ver ? finV(total) : 'R$ 0.000,00'}</button>
+    <button type="button" class="kb-btn-ic" aria-label="${ver ? 'Esconder o saldo' : 'Mostrar o saldo'}" title="${ver ? 'Esconder' : 'Mostrar'}" onclick="finAlternarSaldo()">${ic(ver ? 'olho' : 'olhoFechado', 'ic-herda')}</button>
+  </div>`;
+}
 function finPeriodoHtml() {
   return `<div class="fin-periodo">
     ${ic('calendario', 'ic-herda')} <span class="kb-vazio-mini">Período:</span>
     <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Mês anterior" onclick="finMudarMes(-1)">${kbIc('setaEsq')}</button>
     <input type="month" value="${FIN_MES}" aria-label="Mês" onchange="if (this.value) { FIN_MES = this.value; finRender(); }">
     <button type="button" class="kb-btn-ic kb-btn-borda" aria-label="Próximo mês" onclick="finMudarMes(1)">${kbIc('seta')}</button>
-    <span class="kb-espaco"></span><strong>${finNomeMes(FIN_MES)}</strong>
+    <span class="kb-espaco"></span>${finHtmlSaldoCaixa()}<strong class="fin-periodo-mes">${finNomeMes(FIN_MES)}</strong>
   </div>`;
 }
 
@@ -19222,12 +19638,14 @@ const CHATBOT_KB = [
   { padroes: ['exportar em pdf', 'exportar pdf', 'baixar pdf do pedido'], resposta: 'Nos 3 pontinhos (⋮) do pedido tem "Exportar em PDF" — gera um arquivo PDF completo do pedido (todas as seções preenchidas) e baixa direto pro seu aparelho.' },
   { padroes: ['enviar por email', 'enviar por e-mail', 'enviar whatsapp', 'mandar pro cliente'], resposta: 'Nos 3 pontinhos (⋮) do pedido tem "Enviar por e-mail" (abre seu app de e-mail já com o resumo escrito) e "Enviar por WhatsApp" (abre uma conversa com o número do cliente, se ele tiver cadastrado).' },
   { padroes: ['boleto', 'emitir boleto'], resposta: 'Emitir um boleto de verdade (com código de barras válido) exige conectar o sistema a um banco ou gateway de pagamento — isso este sistema ainda não faz. Por enquanto, use "Gerar parcelas" + "Lançar" e acompanhe o recebimento pela aba Financeiro.' },
+  { padroes: ['modelo de contrato', 'gerar contrato', 'contrato pdf', 'contrato do erp'], resposta: 'No ERP, em Vendas → Contratos, cada contrato tem "Gerar contrato": o texto é montado por um modelo (botão Modelos), com os dados do contrato, do cliente (do cadastro de Clientes e Fornecedores) e da sua empresa. Você edita, salva e baixa em PDF. Também tem "NFS-e" para registrar a nota de cada mês. Os contratos e modelos do ERP são separados dos do CRM.' },
   { padroes: ['contrato'], resposta: 'Contratos ficam em Vendas → Contratos — pra clientes com cobrança recorrente (mensalidade, assinatura).' },
   { padroes: ['objeto de postagem', 'rastreio', 'rastreamento'], resposta: 'Objetos de postagem (Vendas → Objetos de postagens) servem pra anotar o rastreamento do envio de cada pedido.' },
 
   // ---------- Estoque ----------
   { padroes: ['estoque de produto', 'entrada de estoque', 'saida de estoque', 'saída de estoque'], resposta: 'Lançamentos de entrada/saída de estoque ficam em Estoque → Lançamentos de estoque.' },
   { padroes: ['conferencia', 'conferência', 'contagem'], resposta: 'A conferência de estoque fica em Estoque → Conferência de estoque, onde você registra a contagem física e compara com o que o sistema acha que tem.' },
+  { padroes: ['nfs-e', 'nfse', 'nota de serviço', 'nota de servico', 'emitir nota', 'emissor nacional'], resposta: 'No Pedido de venda, abra o menu (⋮) → "Emitir NFS-e". Aparecem os dados que o Emissor Nacional pede (tomador, descrição, valor, competência), cada um com botão de copiar, e o botão que abre o portal nfse.gov.br. Depois de emitir lá, volte e registre o número da nota: ele fica salvo no pedido. O sistema não emite a nota sozinho (isso precisaria de certificado digital e de um serviço de emissão).' },
   { padroes: ['nota fiscal', 'nf-e', 'nfe', 'nota de entrada'], resposta: 'Notas fiscais de ENTRADA (de compra) ficam em Estoque → Notas fiscais de entrada — é um registro manual, não emite nem consulta a SEFAZ.' },
   { padroes: ['compra', 'pedido de compra'], resposta: 'Pedidos de compra a fornecedores ficam em Estoque → Pedido de compras.' },
 
@@ -19303,6 +19721,8 @@ const CHATBOT_FAQ = [
         { p: 'Onde gerencio a equipe?', r: 'CRM → Operacional → Equipe. Ali o Diretor adiciona pessoas (nome, e-mail, senha e nível), muda o nível de acesso, remove quem saiu e cadastra o WhatsApp de cada um (o mesmo usado nas Automações). Também mostra quantas tarefas e conteúdos cada pessoa tem em aberto, e permite apagar os logins antigos de cliente do portal.' },
         { p: 'Como compartilho o link de aprovação?', r: 'Clique no ícone de link do conteúdo (ou em "Enviar para aprovação" no cartão do Kanban). Abre uma janela com o link, o botão "Copiar link" e as opções de compartilhar por WhatsApp (já com o número do cliente, se estiver no cadastro) ou e-mail, com uma mensagem pronta que você pode editar.' },
         { p: 'O que é o botão do Analista no ERP?', r: 'É o botão com o ícone de gráfico, logo acima do robozinho, nas telas do ERP. Ele abre o Analista do negócio: lê vendas, estoque, compras, notas, contratos, clientes e (para quem vê) o financeiro dos últimos 90 dias e devolve uma nota geral, uma nota por área e uma lista de melhorias priorizadas pelo impacto. Você marca cada melhoria como feita e acompanha a nota subir a cada diagnóstico. Usa a mesma chave de IA dos agentes do CRM.' },
+        { p: 'Como lanço as tarefas do dia pelo celular?', r: 'No Dashboard do CRM, em Tarefas diárias, toque no ícone de celular: aparece o link (e um QR Code) da página "Tarefas do dia". No celular, cole a mensagem com as atividades — uma por linha; dá para separar por dia ("Segunda:", "ter - reunião", "amanhã:", "10/10:") — e toque em Lançar. Elas aparecem na hora em Tarefas diárias. Dica: adicione a página à tela de início do celular.' },
+        { p: 'Onde vejo o saldo do caixa?', r: 'No Financeiro, na barra do período (logo abaixo das abas), aparece "Saldo em caixa" borrado. Toque no olho para mostrar; tocando no valor, abre a aba Caixa com o saldo de cada caixa. O aparelho lembra se você deixou visível ou escondido.' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
@@ -19521,8 +19941,10 @@ function renderCadastroTabela(moduloKey, dadosFiltrados) {
   const dados = dadosFiltrados || CADASTROS_DATA[moduloKey] || [];
   if (!dados.length) {
     tbody.innerHTML = emptyCadastroHtml(`openModal('${def.modalNovoId}')`, def.colunas.length + 1);
+    if (typeof def.aposRender === 'function') { try { def.aposRender(); } catch (e) { console.error(e); } }
     return;
   }
+  if (typeof def.aposRender === 'function') { try { def.aposRender(); } catch (e) { console.error(e); } }
   tbody.innerHTML = dados.map((item) => {
     const cols = def.colunas.map((c) => `<td>${c.render ? c.render(item) : (item[c.key] !== undefined ? escapeHtml(item[c.key]) : '—')}</td>`).join('');
     const editarAttr = def.onEditarCustom ? `${def.onEditarCustom}('${item.id}')` : `abrirCadastroModal('${moduloKey}','${item.id}')`;
@@ -19848,6 +20270,8 @@ registrarModuloCadastro('contrato', {
     { key: 'valor', label: 'Valor', render: (i) => formatMoney(i.valor) },
     { key: 'status', label: 'Status', render: (i) => `<span class="badge ${i.status === 'vigente' ? 'badge-blue' : 'badge-neutral'}">${i.status || '—'}</span>` },
   ],
+  renderAcoes: (i) => ectAcoes(i),
+  aposRender: () => ectRenderResumo(),
 });
 
 function pedidoComprasSeed() { return []; }
@@ -22749,7 +23173,7 @@ function conteudoMenuAcoesPedido(item) {
   return `
     <button type="button" class="mega-link" onclick="lancarPedidoNoFinanceiro('${item.id}')">${lancadoLabel}${item.lancadoFinanceiro ? ' ✓' : ''}</button>
     <button type="button" class="mega-link" onclick="imprimirDocumentoPedido('${item.id}','completo')">Exportar em PDF</button>
-    <button type="button" class="mega-link" onclick="gerarNotaServicoPedido('${item.id}')">Gerar nota serviço</button>
+    <button type="button" class="mega-link" onclick="gerarNotaServicoPedido('${item.id}')">${item.nfse && item.nfse.numero ? `NFS-e nº ${escapeHtml(item.nfse.numero)} ✓` : 'Emitir NFS-e'}</button>
     <button type="button" class="mega-link" onclick="gerarOrdemServicoPedido('${item.id}')">Gerar ordem serviço</button>
     <button type="button" class="mega-link" onclick="clonarPedidoVenda('${item.id}')">Clonar venda</button>
     <button type="button" class="mega-link" onclick="imprimirDocumentoPedido('${item.id}','simples')">Imprimir</button>
@@ -23113,7 +23537,86 @@ function imprimirDocumentoPedido(id, tipo) {
   window.print();
 }
 
-function gerarNotaServicoPedido(id) { imprimirDocumentoPedido(id, 'nota-servico'); }
+// ---------- NFS-e pelo Emissor Nacional ----------
+// O sistema não emite a nota sozinho (isso precisaria de certificado
+// digital e de um serviço de emissão). Ele faz o resto: separa os dados
+// que o Emissor Nacional pede, com um botão de copiar em cada um, abre o
+// portal e, depois, guarda no pedido o número e a chave da nota emitida.
+const NFSE_PORTAL = 'https://www.nfse.gov.br/EmissorNacional/Login';
+function nfseClienteDoPedido(pedido) {
+  const lista = (typeof CLIENTES_FORN_DATA !== 'undefined' && CLIENTES_FORN_DATA.length ? CLIENTES_FORN_DATA : lsLoad(chaveLocalTenant(CLIENTES_FORN_KEY), [])) || [];
+  const nome = String(pedido.cliente || '').trim().toLowerCase();
+  return lista.find((c) => [c.nome, c.razaoSocial, c.nomeFantasia].some((n) => String(n || '').trim().toLowerCase() === nome)) || {};
+}
+function nfseDescricao(pedido) {
+  const itens = (pedido.itens || []).filter((i) => String(i.descricao || '').trim());
+  const linhas = itens.map((i) => `${i.descricao}${Number(i.quantidade) > 1 ? ' (' + i.quantidade + 'x)' : ''}`);
+  return (linhas.length ? linhas.join('; ') : (pedido.produto || 'Prestação de serviços')) + ` — referente ao pedido nº ${pedido.numero || ''}.`;
+}
+// janela da NFS-e, usada pelo Pedido de venda e pelos Contratos do ERP
+function nfseModal(o) {
+  const c = nfseClienteDoPedido({ cliente: o.cliente });
+  const doc = c.cnpj || c.cpf || '';
+  const endereco = [c.endereco && (c.endereco + (c.numero ? ', ' + c.numero : '')), c.bairro, c.cidade && (c.cidade + (c.estado || c.uf ? '/' + (c.estado || c.uf) : '')), c.cep && 'CEP ' + c.cep].filter(Boolean).join(' · ');
+  const campos = [
+    ['Data de competência', formatDatePt(o.competencia || isoHoje())],
+    ['Tomador — CPF/CNPJ', doc],
+    ['Tomador — nome / razão social', c.razaoSocial || c.nome || o.cliente || ''],
+    ['Tomador — e-mail', c.email || ''],
+    ['Tomador — endereço', endereco],
+    ['Descrição do serviço', o.descricao || ''],
+    ['Valor do serviço', Number(o.valor || 0).toFixed(2).replace('.', ',')],
+  ];
+  const faltando = [!doc && 'CPF/CNPJ', !(c.email) && 'e-mail', !endereco && 'endereço'].filter(Boolean);
+  const nf = o.registro || {};
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:620px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${escapeHtml(o.titulo || 'Emitir NFS-e')}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    ${nf.numero ? `<div class="atd-banner">${ic('aprovado', 'ic-herda')}<div><strong>NFS-e nº ${escapeHtml(nf.numero)} já registrada</strong> em ${escapeHtml(formatDatePt(String(nf.emitidaEm || '').slice(0, 10)))}${nf.link ? ` · <a href="${escapeHtml(nf.link)}" target="_blank" rel="noopener">abrir a nota</a>` : ''}.</div></div>` : ''}
+    <p class="cfg-modal-sub">1) Copie os dados abaixo. 2) Abra o Emissor Nacional e emita a nota. 3) Volte aqui e registre o número.</p>
+    ${faltando.length ? `<p class="cw-erro" style="margin:0 0 10px;">${ic('alerta', 'ic-herda')} Falta no cadastro do cliente: ${faltando.join(', ')}. Dá para preencher direto no portal, ou completar em Cadastros → Clientes e Fornecedores.</p>` : ''}
+    <div class="nfse-campos">${campos.map(([rot, val], i) => `<div class="nfse-campo"><span>${escapeHtml(rot)}</span><div><code id="nfse-v-${i}">${escapeHtml(val || '—')}</code>${val ? `<button type="button" class="btn btn-small" onclick="nfseCopiar(${i}, this)">${ic('copiar', 'ic-herda')} Copiar</button>` : ''}</div></div>`).join('')}</div>
+    <a class="btn btn-primary nfse-abrir" href="${NFSE_PORTAL}" target="_blank" rel="noopener">${ic('abrir', 'ic-herda')} Abrir o Emissor Nacional (NFS-e)</a>
+    <div class="nfse-registro">
+      <div class="cw-rotulo" style="margin:14px 0 6px;">Depois de emitir</div>
+      <div class="cw-grade2"><div class="field"><label>Número da NFS-e</label><input type="text" id="nfse-numero" maxlength="30" value="${escapeHtml(nf.numero || '')}"></div>
+      <div class="field"><label>Chave de acesso ou link (opcional)</label><input type="text" id="nfse-link" maxlength="300" value="${escapeHtml(nf.link || nf.chave || '')}"></div></div>
+      ${(o.historico || []).length ? `<div class="kb-vazio-mini" style="margin-top:4px;">Notas anteriores: ${o.historico.map((h) => `${escapeHtml(finNomeMes(h.competencia))} nº ${escapeHtml(h.numero)}`).join(' · ')}</div>` : ''}
+    </div>
+    <div class="cfg-modal-rodape">${o.rascunho ? `<button type="button" class="btn btn-ghost" onclick="srvFecharModal(); ${o.rascunho}">Rascunho em PDF</button>` : ''}<span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Fechar</button><button type="button" class="btn btn-primary" onclick="${o.registrar}">Registrar nota emitida</button></div>
+  </div>`;
+  openModal('modal-srv');
+}
+function nfseLerRegistro() {
+  const numero = ((document.getElementById('nfse-numero') || {}).value || '').trim();
+  const ref = ((document.getElementById('nfse-link') || {}).value || '').trim();
+  if (!numero) { avisar('Informe o número da NFS-e emitida.'); return null; }
+  const link = /^https:\/\//i.test(ref) ? ref : '';
+  return { numero: numero.slice(0, 30), link, chave: link ? '' : ref.replace(/\s+/g, '').slice(0, 60), emitidaEm: new Date().toISOString(), por: USUARIO_NOME || '' };
+}
+function gerarNotaServicoPedido(id) {
+  fecharTodosDropdowns();
+  const pedido = buscarPedidoPorId(id);
+  if (!pedido) return;
+  nfseModal({ titulo: `Emitir NFS-e · pedido nº ${pedido.numero || ''}`, cliente: pedido.cliente, competencia: pedido.data || isoHoje(), descricao: nfseDescricao(pedido), valor: pedido.valor,
+    registro: pedido.nfse || {}, registrar: `nfseRegistrar('${escapeParaOnclick(id)}')`, rascunho: `imprimirDocumentoPedido('${escapeParaOnclick(id)}', 'nota-servico')` });
+}
+function nfseCopiar(i, btn) {
+  const t = (document.getElementById('nfse-v-' + i) || {}).textContent || '';
+  const ok = () => { if (btn) { btn.innerHTML = ic('aprovado', 'ic-herda') + ' Copiado'; setTimeout(() => { if (btn.isConnected) btn.innerHTML = ic('copiar', 'ic-herda') + ' Copiar'; }, 1500); } };
+  try { navigator.clipboard.writeText(t).then(ok, ok); } catch (e) { ok(); }
+}
+function nfseRegistrar(id) {
+  const r = nfseLerRegistro(); if (!r) return;
+  const lista = CADASTROS_DATA['pedido-venda'] || [];
+  const pedido = lista.find((p) => p.id === id);
+  if (!pedido) return;
+  pedido.nfse = r;
+  cloudSet('eagles_pedidos_venda_v1', lista);
+  renderCadastroTabela('pedido-venda');
+  srvFecharModal();
+  avisar(`NFS-e nº ${r.numero} registrada no pedido ${pedido.numero || ''}.`, 'NFS-e');
+}
 function gerarOrdemServicoPedido(id) { imprimirDocumentoPedido(id, 'ordem-servico'); }
 
 // ---------- Enviar por e-mail / WhatsApp ----------

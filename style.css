@@ -4808,3 +4808,56 @@ body.pc-body { background: #0b0f14; }
 .erpan-hist b { font-size: 15px; }
 .erpan-hist span { font-size: 10.5px; color: var(--text-soft); }
 @media (max-width: 768px) { .erpan-launcher { right: 20px; bottom: 84px; width: 44px; height: 44px; } }
+
+/* ---------- NFS-e ---------- */
+.nfse-campos { display: grid; gap: 6px; margin-bottom: 12px; }
+.nfse-campo { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--bg-soft); }
+.nfse-campo > span { font-size: 12px; color: var(--text-soft); }
+.nfse-campo > div { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.nfse-campo code { flex: 1; min-width: 0; font-family: inherit; font-size: 13px; overflow-wrap: anywhere; }
+.nfse-abrir { display: flex; justify-content: center; width: 100%; text-decoration: none; }
+@media (max-width: 560px) { .nfse-campo { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+
+/* ---------- saldo em caixa (Financeiro) ---------- */
+.fin-saldo-topo { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; padding: 4px 6px 4px 12px; border: 1px solid var(--border); border-radius: 99px; background: var(--bg-soft); }
+.fin-saldo-rot { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-soft); }
+.fin-saldo-rot .ic { width: 13px; height: 13px; }
+.fin-saldo-valor { border: 0; background: transparent; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; padding: 2px 4px; transition: filter .2s; }
+.fin-saldo-topo.borrado .fin-saldo-valor { filter: blur(6px); user-select: none; color: var(--text-soft); }
+@media (max-width: 640px) { .fin-saldo-topo { order: 10; width: 100%; justify-content: space-between; margin: 8px 0 0; } .fin-periodo { flex-wrap: wrap; } }
+
+/* ---------- Tarefas do dia (celular) ---------- */
+.tt-pagina { min-height: 100vh; }
+.tt { max-width: 560px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 14px calc(28px + env(safe-area-inset-bottom, 0px)); }
+.tt-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.tt-cab img { width: 36px; height: 36px; border-radius: 10px; }
+.tt-cab strong { display: block; font-size: 17px; }
+.tt-cab small { font-size: 12px; color: var(--text-soft); }
+.tt-abas { display: flex; margin-bottom: 12px; }
+.tt-abas button { flex: 1; }
+.tt-rot { font-size: 12.5px; color: var(--text-soft); margin-bottom: 6px; display: block; }
+.tt textarea { width: 100%; font: inherit; font-size: 15px; line-height: 1.5; resize: vertical; }
+.tt-data { max-width: 160px; }
+.tt-dia { margin-bottom: 10px; }
+.tt-dia > b { display: block; font-size: 13px; margin-bottom: 4px; }
+.tt-prev { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 6px 7px 12px; margin-bottom: 5px; font-size: 14px; background: var(--bg-soft); }
+.tt-prev span { flex: 1; min-width: 0; }
+.tt-lancar { width: 100%; justify-content: center; padding: 13px; font-size: 15px; margin-top: 4px; }
+.tt-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: 15px; padding: 13px 4px; cursor: pointer; }
+.tt-item small { display: block; font-size: 12px; color: var(--text-soft); }
+.tt-check { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--blue-strong); display: inline-flex; align-items: center; justify-content: center; color: #0b0f0b; font-weight: 700; font-size: 13px; }
+.tt-item.feita .tt-check { background: var(--blue-strong); }
+.tt-item.feita > span:last-child { text-decoration: line-through; color: var(--text-soft); }
+.tt-dica { text-align: center; margin-top: 14px; }
+.tt-qr { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 4px 0 12px; }
+.tt-qr svg { width: 180px; height: 180px; background: #fff; border-radius: 10px; padding: 6px; }
+.tt-qr small { font-size: 11.5px; color: var(--text-soft); }
+
+/* ---------- Contratos do ERP ---------- */
+.ect-barra { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.ect-texto { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.55; resize: vertical; }
+.ect-editor { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 14px; }
+.ect-codigos { max-height: 60vh; overflow-y: auto; border-left: 1px solid var(--border); padding-left: 12px; }
+.ect-codigos .crm-shortcode-btn { display: block; width: 100%; text-align: left; margin-bottom: 4px; }
+.ect-nf-ok { color: var(--success, #3fae12) !important; }
+@media (max-width: 760px) { .ect-editor { grid-template-columns: minmax(0, 1fr); } .ect-codigos { border-left: 0; padding-left: 0; max-height: 220px; } }

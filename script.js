@@ -908,6 +908,7 @@ function cloudWatch(key, fallback, onChange) {
 function cloudSet(key, data) {
   if (FIREBASE_PRONTO && TENANT_ID && !nivelPodeGravarChave(key)) { avisarSemPermissaoNivel(); return false; }
   if (!chaveProntaParaGravar(key)) return false;
+  if (key === 'eagles_crm_negocios_v1' && typeof negAnotarHistorico === 'function') negAnotarHistorico(data);
   lsSave(chaveLocalTenant(key), data);
   if (!FIREBASE_PRONTO || !TENANT_ID) return true;
   if (CHAVES_COLECAO[key]) { colSet(key, data); return true; }
@@ -935,6 +936,7 @@ async function cloudGetForce(key, fallback) {
 // =====================================================================
 
 let TENANT_ID = null;
+let TENANT_ASSINATURA = null;
 let TENANT_PLANO = null; // 'erp' | 'crm' | 'ambos' — controla quais ferramentas aparecem
 let USUARIO_ROLE = null;
 let USUARIO_NOME = null;
@@ -998,6 +1000,7 @@ async function resolverTenantDoUsuario(user) {
     USUARIO_TITULAR = !!dados.titular;
     USUARIO_NOME = dados.nome || user.email;
     USUARIO_UID = user.uid;
+    USUARIO_PREFS_NOTIF = dados.prefsNotif || null;
 
     // SuperAdmin não é OBRIGADO a ter empresa (continua entrando mesmo sem
     // uma), mas se ele tiver uma vinculada — porque também usa o sistema
@@ -1023,6 +1026,11 @@ async function resolverTenantDoUsuario(user) {
 
     // Empresa suspensa (ex: falta de pagamento) — bloqueia mesmo com login válido.
     const tenantSnap = await firestoreDb.collection('tenants').doc(TENANT_ID).get();
+    if (tenantSnap.exists && tenantSnap.data().ativo === false && tenantSnap.data().bloqueadoPor === 'pagamento') {
+      // suspensa por falta de pagamento: vai para a página da assinatura (sem sair da conta, para poder pagar)
+      window.location.href = 'assinatura.html';
+      return false;
+    }
     if (tenantSnap.exists && tenantSnap.data().ativo === false) {
       avisar('O acesso desta empresa está temporariamente suspenso. Fale com o suporte para regularizar.');
       await firebase.auth().signOut();
@@ -1030,6 +1038,7 @@ async function resolverTenantDoUsuario(user) {
       return false;
     }
     TENANT_PLANO = tenantSnap.exists ? (tenantSnap.data().plano || 'erp') : 'erp';
+    TENANT_ASSINATURA = tenantSnap.exists ? (tenantSnap.data().assinatura || null) : null;
 
     return true;
   } catch (err) {
@@ -1053,7 +1062,7 @@ const NIVEIS = {
   financeiro: { nome: 'Financeiro', desc: 'Financeiro completo; o resto só visualiza (não cadastra nem edita)' },
 };
 const CHAVES_FINANCEIRAS = ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1'];
-const CHAVES_CONFIG_EMPRESA = ['eagles_sistema_config_v1', 'eagles_ia_config_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'];
+const CHAVES_CONFIG_EMPRESA = ['eagles_emails_config_v1', 'eagles_sistema_config_v1', 'eagles_ia_config_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1'];
 
 function nivelDoRole(role) {
   if (role === 'SuperAdmin') return 'superadmin';
@@ -1237,7 +1246,7 @@ const NAV_ITEMS = [
         title: 'Estoque', items: [
           { key: 'estoque-posicao', href: 'estoque.html', label: 'Posição de estoque', modulo: 'estoque' },
           { key: 'lancamentos-estoque', href: 'lancamentos-estoque.html', label: 'Movimentações', modulo: 'estoque' },
-          { key: 'conferencia-estoque', href: 'conferencia-estoque.html', label: 'Conferência de estoque', modulo: 'estoque' },
+          { key: 'conferencia-estoque', href: 'conferencia-estoque.html', label: 'Inventário', modulo: 'estoque' },
         ],
       },
       {
@@ -1310,6 +1319,7 @@ let CRM_ARRASTANDO_ID = null;
 function initFunilVendasCrm() {
   cloudWatch(CRM_NEGOCIOS_KEY, [], (data) => {
     CRM_NEGOCIOS_DATA = data;
+    if (typeof negLembrarEtapas === 'function') negLembrarEtapas(data);
     CRM_NEGOCIOS_DATA_CARREGADO = true;
     renderFunilKanban();
   });
@@ -5229,15 +5239,21 @@ function initConfiguracoesPage() {
   if (/^#portal/.test(window.location.hash || '')) { mostrarAbaConfig('aparencia'); setTimeout(() => { if (typeof abrirCardAparenciaConfig === 'function') abrirCardAparenciaConfig('portal'); }, 0); return; }
   if (/^#integracoes-pixels/.test(window.location.hash || '')) { mostrarAbaConfig('integracoes'); setTimeout(() => cfgAbrirPixels('meta'), 0); return; }
   const abaInicial = (window.location.hash || '').replace('#', '');
-  mostrarAbaConfig(['perfil', 'aparencia', 'atualizacoes', 'notificacoes', 'automacoes', 'integracoes', 'email', 'conteudos', 'backup'].includes(abaInicial) ? abaInicial : 'perfil');
+  mostrarAbaConfig(['perfil', 'meusistema', 'aparencia', 'notificacoes', 'emails', 'email', 'automacoes', 'integracoes', 'conteudos', 'assinatura', 'backup', 'atualizacoes'].includes(abaInicial) ? abaInicial : 'perfil');
 }
 
 function mostrarAbaConfig(aba) {
   CFG_ABA_ATUAL = aba;
   const atalho = document.getElementById('topbar-config-btn');
   if (atalho) atalho.classList.toggle('ativo', aba === 'aparencia');
-  document.querySelectorAll('.cfg-aba').forEach((b) => b.classList.toggle('ativa', b.dataset.aba === aba));
+  document.querySelectorAll('.cfg-aba').forEach((b) => b.classList.toggle('ativa', b.dataset.aba === (aba === 'email' ? 'emails' : aba)));
+  const ativa = document.querySelector('.cfg-aba.ativa'); if (ativa && ativa.scrollIntoView) try { ativa.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {}
+  if (window.history && history.replaceState) history.replaceState(null, '', '#' + aba);
   const funcoes = {
+    meusistema: () => { document.getElementById('cfg-conteudo-aba').innerHTML = `<div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('camadas')}</div><div><h2>Meu sistema</h2><p>Versão, ferramentas que aparecem e nomes</p></div></div>${sisHtmlMeuSistema()}</div>`; },
+    emails: renderAbaEmailsConfig,
+    assinatura: renderAbaAssinaturaConfig,
+    email: renderAbaEmailsConfig,
     perfil: renderAbaPerfilConfig,
     aparencia: renderAbaAparenciaConfig,
     atualizacoes: renderAbaAtualizacoesConfig,
@@ -6543,6 +6559,40 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '13/10/2026 · Configurações', itens: [
+    { titulo: 'Configurações reorganizadas', badges: ['melhoria'], texto: 'Abas em ordem, sem a barra de rolagem branca. Meu sistema, E-mails e Assinatura viraram abas de verdade. "E-mail" e "E-mails automáticos" viraram uma aba só.' },
+    { titulo: 'Notificações que funcionam', badges: ['corrigido'], texto: 'Cada pessoa escolhe o que quer receber (aprovações, pedidos do portal, novos leads, agendamentos, tarefas e conteúdos atribuídos e prazos chegando), se quer a notificação do computador e o som. As escolhas ficam na conta e valem em qualquer aparelho.' },
+    { titulo: 'Modelos de e-mail', badges: ['novo'], texto: 'O texto dos lembretes de pagamento (antes, no dia e depois do vencimento) pode ser editado, com os campos {{cliente}}, {{valor}}, {{vencimento}}, {{descricao}}, {{empresa}} e {{pix}}.' },
+    { titulo: 'Integrações com a situação real', badges: ['melhoria'], texto: 'Cada integração mostra se está ligada (PIX, extrato OFX, assinatura, Google Agenda, WhatsApp, e-mails, Instagram e anúncios, Pixel, Analytics e IA) e leva direto para onde configura. Automações e Conteúdos mostram o resumo e os atalhos.' },
+  ]},
+  { data: '12/10/2026 · Meta', itens: [
+    { titulo: 'Instagram e anúncios (Meta)', badges: ['novo'], texto: 'CRM → Operacional → Instagram e anúncios: conexão com a Meta, agendamento de imagem, carrossel e reels (o servidor publica no horário e marca o conteúdo como publicado) e relatórios do perfil, dos posts e dos anúncios. Nos Conteúdos, o botão "Agendar no Instagram" já leva mídia e legenda. As chaves da Meta ficam só no servidor. Precisa do plano Blaze e do app da Meta (guia em functions/README-META.md).' },
+  ]},
+  { data: '12/10/2026 · Servidor e cobrança', itens: [
+    { titulo: 'Funções do servidor (plano Blaze)', badges: ['novo'], texto: 'Pasta functions/ com a rotina diária (7h, mesmo com o sistema fechado), e-mails automáticos, assinaturas no Asaas e no Mercado Pago com liberação e bloqueio automáticos, e o cadastro sozinho pela página de vendas. O passo a passo de instalação está em functions/README-INSTALACAO.md.' },
+    { titulo: 'Página de vendas e assinatura', badges: ['novo'], texto: 'vendas.html: planos, cadastro com período de teste e entrada direta no questionário. assinatura.html: situação, vencimento e pagamento (boleto, PIX ou cartão). Aviso de teste e de pagamento em aberto no Painel.' },
+    { titulo: 'E-mails automáticos', badges: ['novo'], texto: 'Configurações → E-mails: resumo do dia, aviso de aprovação do cliente e lembretes de pagamento para os clientes.' },
+  ]},
+  { data: '12/10/2026 · Operação', itens: [
+    { titulo: 'Monitoramento de erros', badges: ['novo'], texto: 'Quando algo quebra no aparelho de alguém logado, o erro chega sozinho para o suporte (só a mensagem técnica, a tela e a versão; nada dos cadastros). O super administrador vê tudo agrupado em Empresas → Erros do sistema.' },
+    { titulo: 'Uso por empresa', badges: ['novo'], texto: 'Em Empresas → Uso por empresa: usuários, documentos e tamanho estimado de cada empresa, e quanto do 1 GB grátis do Firebase já foi usado.' },
+    { titulo: 'Suporte e Acordo de Tratamento de Dados', badges: ['novo'], texto: 'Páginas novas: Suporte (canais, horário e prazos de resposta) e Acordo de Tratamento de Dados (LGPD), ligadas ao login, aos Termos e à Privacidade.' },
+  ]},
+  { data: '12/10/2026 · CRM: páginas e funil', itens: [
+    { titulo: 'Link da Bio, Formulários e Páginas de captura', badges: ['novo'], texto: 'CRM → Páginas ganhou as três: endereço próprio, cor, foto e textos; formulários com as perguntas que você quiser; captura com benefícios e material de isca. Cada envio vira cliente + negócio no Pipeline, com a origem da página e a etapa escolhida.' },
+    { titulo: 'Agendamento online', badges: ['novo'], texto: 'Página onde o cliente escolhe um horário livre (dias, faixa, duração, pausa e antecedência que você define). O compromisso cai na Agenda na hora, com notificação, e os horários ocupados na Agenda somem da página sozinhos. Opcional: criar um negócio para cada agendamento.' },
+    { titulo: 'Estatísticas do funil', badges: ['novo'], texto: 'Comercial → Estatísticas: novos, ganhos, perdidos, conversão, valor ganho, tempo até ganhar, tempo médio em cada etapa e conversão por origem e por vendedor. O sistema passou a anotar cada mudança de etapa dos negócios.' },
+  ]},
+  { data: '12/10/2026 · Financeiro', itens: [
+    { titulo: 'Conciliação bancária (OFX)', badges: ['novo'], texto: 'Financeiro → Caixa → "Conciliar extrato (OFX)": importa o extrato do banco, sugere o lançamento de cada movimento (mesmo valor, data perto) e, ao confirmar, dá baixa no que estava em aberto, marca o que já estava pago como conferido ou cria o lançamento que faltava. Cada movimento fica marcado: importar de novo não duplica.' },
+    { titulo: 'Fluxo de caixa projetado', badges: ['novo'], texto: 'Nova aba no Financeiro: saldo de hoje + o que vence para receber e pagar + recorrências, nos próximos 30, 60 ou 90 dias. Gráfico, saldo por semana, menor saldo do período e aviso de quando ficaria negativo.' },
+    { titulo: 'Comissão de vendedores', badges: ['novo'], texto: 'Em Vendedores: comissão do mês por vendedor (pedidos faturados × % do cadastro), com a meta e o botão "Lançar no Financeiro", que cria a conta a pagar sem duplicar.' },
+  ]},
+  { data: '12/10/2026 · ERP: estoque e Painel', itens: [
+    { titulo: 'Compras e notas com itens', badges: ['novo'], texto: 'Pedido de compra e nota de entrada ganharam itens (produto, quantidade e custo). Ao ficar "Recebido" ou "Lançada", entram no estoque sozinhos e o custo fica no produto; voltando atrás, estorna. Nota ligada ao pedido de compra traz os itens dele e não soma duas vezes.' },
+    { titulo: 'Inventário', badges: ['novo'], texto: 'A Conferência de estoque virou Inventário: conta vários produtos de uma vez (a contagem fica guardada no aparelho), mostra a diferença na hora e, ao concluir, ajusta o saldo e guarda o histórico.' },
+    { titulo: 'Painel do ERP mais operacional', badges: ['melhoria'], texto: 'Mais números do dia (a receber hoje, atrasados, a pagar, a faturar, ticket médio, compras paradas) e o bloco "Precisa de atenção", com os recebimentos dos próximos 3 dias e o botão "Lembrar no WhatsApp", que abre a conversa do cliente da ficha com a mensagem pronta.' },
+  ]},
   { data: '11/10/2026 · Cadastros', itens: [
     { titulo: 'Cliente sem CPF e sem CNPJ', badges: ['melhoria'], texto: 'Em Clientes e Fornecedores, dá para salvar o cadastro sem o documento: o sistema pergunta "Cadastrar sem CPF e sem CNPJ?" e salva se você confirmar. Documento preenchido errado continua bloqueado.' },
   ]},
@@ -6829,154 +6879,189 @@ const CFG_TIPOS_NOTIFICACAO = [
 
 function renderAbaNotificacoesConfig() {
   const el = document.getElementById('cfg-conteudo-aba');
-  const prefs = lerPreferenciasNotificacoesConfig();
-
+  const p = notifPrefs();
+  const perm = 'Notification' in window ? Notification.permission : 'indisponivel';
+  const linha = (k, t, d) => `<div class="cfg-linha-toggle"><div><strong>${escapeHtml(t)}</strong><span>${escapeHtml(d)}</span></div><label class="switch"><input type="checkbox" data-chave="${k}" class="cfg-toggle-notif" ${p[k] !== false ? 'checked' : ''} onchange="cfgSalvarNotif()"><span class="switch-slider"></span></label></div>`;
   el.innerHTML = `
     <div class="cfg-painel">
-      <div class="cfg-painel-titulo">
-        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
-        <div><h2>Resumo Diário</h2><p>Receba um resumo com tarefas pendentes e faturamento do dia</p></div>
-      </div>
-      <div class="cfg-linha-toggle">
-        <div><strong>Ativar resumo diário</strong><span>Mostra um card no Dashboard, ao abrir o sistema pela manhã</span></div>
-        <label class="switch"><input type="checkbox" id="cfg-resumo-diario" ${prefs.resumoDiario ? 'checked' : ''} onchange="salvarPreferenciasNotificacoesConfig()"><span class="switch-slider"></span></label>
-      </div>
-      <p style="font-size:11.5px; color:var(--text-soft); margin-top:10px;">${ic('alerta', 'ic-aviso')} Notificação push/e-mail de verdade ainda depende de um serviço de envio conectado — por enquanto isso só liga/desliga o que aparece dentro do próprio sistema.</p>
+      <div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('sino')}</div><div><h2>O que avisa você</h2><p>Aparece no sino do topo e num aviso na tela. As escolhas são suas (cada pessoa da equipe escolhe as dela) e valem em todos os aparelhos.</p></div></div>
+      ${NOTIF_TIPOS.map((t) => linha(t.chave, t.titulo, t.desc)).join('')}
     </div>
-
     <div class="cfg-painel">
-      <div class="cfg-painel-titulo">
-        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
-        <div><h2>Tipos de notificação</h2><p>Escolha quais eventos disparam notificações para você</p></div>
-      </div>
-      ${CFG_TIPOS_NOTIFICACAO.map((t) => `
-        <div class="cfg-linha-toggle">
-          <div><strong>${escapeHtml(t.titulo)}</strong><span>${escapeHtml(t.desc)}</span></div>
-          <label class="switch"><input type="checkbox" data-chave="${t.chave}" class="cfg-toggle-notif" ${prefs[t.chave] !== false ? 'checked' : ''} onchange="salvarPreferenciasNotificacoesConfig()"><span class="switch-slider"></span></label>
-        </div>`).join('')}
+      <div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('alerta')}</div><div><h2>Como avisa</h2><p>Quando o sistema está aberto em outra aba ou minimizado</p></div></div>
+      ${linha('computador', 'Notificação do computador e do celular', 'O aviso aparece mesmo com o sistema em segundo plano.')}
+      ${perm === 'default' ? `<p class="kb-vazio-mini" style="margin:-4px 0 10px;">O navegador ainda não deu permissão. <button type="button" class="btn btn-small" onclick="notifPedirPermissao(); setTimeout(renderAbaNotificacoesConfig, 1500)">Permitir notificações</button></p>` : perm === 'denied' ? '<p class="kb-vazio-mini" style="margin:-4px 0 10px;">As notificações estão bloqueadas neste navegador. Libere no cadeado ao lado do endereço do site.</p>' : perm === 'indisponivel' ? '<p class="kb-vazio-mini" style="margin:-4px 0 10px;">Este navegador não tem notificações.</p>' : ''}
+      ${linha('som', 'Som ao chegar um aviso', 'Um toque curto quando chega algo novo com o sistema aberto.')}
+      <p class="kb-vazio-mini" style="margin-top:10px;">Resumo do dia e lembretes por e-mail ficam na aba <a href="#emails" onclick="mostrarAbaConfig('emails'); return false;">E-mails</a>.</p>
     </div>`;
 }
-
-function lerPreferenciasNotificacoesConfig() {
-  try { return JSON.parse(localStorage.getItem('eagles_prefs_notificacoes') || '{}'); } catch (e) { return {}; }
+function cfgSalvarNotif() {
+  const p = notifPrefs();
+  document.querySelectorAll('.cfg-toggle-notif').forEach((el) => { p[el.dataset.chave] = el.checked; });
+  notifSalvarPrefs(p);
 }
-
-function salvarPreferenciasNotificacoesConfig() {
-  const prefs = { resumoDiario: document.getElementById('cfg-resumo-diario').checked };
-  document.querySelectorAll('.cfg-toggle-notif').forEach((el) => { prefs[el.dataset.chave] = el.checked; });
-  localStorage.setItem('eagles_prefs_notificacoes', JSON.stringify(prefs));
-}
-
 
 // ----- Aba: Integrações -----
 // Pedido especifico: bancos fica em branco por enquanto (nenhuma conta
 // bancaria de verdade conectada). As outras aparecem como cards, e vao
 // ganhando funcao de verdade conforme construirmos o Operacional.
 
-const CFG_INTEGRACOES = [
-  { categoria: 'Pagamentos e bancos', desc: 'Receba de clientes por PIX, boleto e cartão.', itens: [] },
-  { categoria: 'Arquivos e agenda', desc: 'Onde seus arquivos ficam salvos e como sua agenda sincroniza.', itens: [
-    { nome: 'Google Calendar', icone: 'calendario' },
-    { nome: 'Google Drive', icone: 'pasta' },
+// cada integração diz se está ligada e leva direto para onde configura
+const CFG_INTEG = [
+  { cat: 'Pagamentos e bancos', itens: [
+    { id: 'pix', nome: 'Chave PIX', icone: 'cifrao', desc: 'Aparece nos recibos, cobranças e no portal do cliente.', plano: 'erp', href: 'financeiro.html#pix' },
+    { id: 'ofx', nome: 'Extrato bancário (OFX)', icone: 'banco', desc: 'Conciliação: importa o extrato e casa com os lançamentos.', plano: 'erp', href: 'financeiro.html#caixa' },
+    { id: 'assinatura', nome: 'Asaas e Mercado Pago', icone: 'cartao', desc: 'Pagamento da assinatura do sistema (boleto, PIX e cartão).', aba: 'assinatura' },
   ]},
-  { categoria: 'Comunicação', desc: 'Como você fala com clientes e com a equipe.', itens: [
-    { nome: 'WhatsApp', icone: 'conversa' },
+  { cat: 'Agenda e comunicação', itens: [
+    { id: 'gagenda', nome: 'Google Agenda', icone: 'calendario', desc: 'Mostra e cria compromissos na sua agenda do Google.', plano: 'crm', href: 'crm.html#secao=agenda' },
+    { id: 'whats', nome: 'WhatsApp (modo assistido)', icone: 'conversa', desc: 'Automações com a mensagem pronta: você toca e o WhatsApp abre no contato.', plano: 'crm', href: 'crm.html#secao=automacoes' },
+    { id: 'emails', nome: 'E-mails automáticos', icone: 'email', desc: 'Resumo do dia, aviso de aprovação e lembretes de pagamento.', aba: 'emails' },
   ]},
-  { categoria: 'IA e automações', desc: 'Conecte o sistema a IAs e a outros serviços.', itens: [
-    { nome: 'Webhooks', icone: 'link' },
-    { nome: 'IA (Claude/ChatGPT)', icone: 'brilho' },
+  { cat: 'Marketing e redes', itens: [
+    { id: 'meta', nome: 'Instagram e anúncios (Meta)', icone: 'megafone', desc: 'Agendar posts e ver os relatórios do perfil e dos anúncios.', plano: 'crm', href: 'crm.html#secao=meta' },
+    { id: 'pixel', nome: 'Meta Pixel', icone: 'grafico', desc: 'Rastreio de visitas da Página Pública e das campanhas.', acao: "cfgAbrirPixels('meta')" },
+    { id: 'ga', nome: 'Google Analytics', icone: 'grafico', desc: 'Estatísticas de acesso da Página Pública.', acao: "cfgAbrirPixels('ga')" },
   ]},
-  { categoria: 'Marketing e criação', desc: 'Rastreio de anúncios e redes sociais.', itens: [
-    { nome: 'Meta Pixel', icone: 'grafico' },
-    { nome: 'Google Analytics', icone: 'grafico' },
-    { nome: 'Meta Ads', icone: 'megafone' },
+  { cat: 'Inteligência artificial', itens: [
+    { id: 'ia', nome: 'IA (ChatGPT, Gemini ou Claude)', icone: 'brilho', desc: 'A chave que os Agentes de IA usam (Copywriter, Analista e Designer).', plano: 'crm', href: 'crm.html#secao=agente-copywriter' },
+  ]},
+  { cat: 'Em breve (precisam do servidor ligado)', itens: [
+    { id: 'drive', nome: 'Google Drive', icone: 'pasta', desc: 'Enviar e escolher arquivos direto do seu Drive.', breve: true },
+    { id: 'webhooks', nome: 'Webhooks', icone: 'link', desc: 'Avisar outros sistemas quando algo acontece (venda, lead, pagamento).', breve: true },
+    { id: 'smtp', nome: 'E-mail pelo seu domínio', icone: 'email', desc: 'Os e-mails saírem do domínio da sua empresa.', breve: true },
   ]},
 ];
-
+let CFG_INTEG_ESTADO = null;
+async function cfgIntegEstado() {
+  const ler = async (k, pd) => { try { return await cloudGetForce(k, pd); } catch (e) { return pd; } };
+  const [pix, caixas, atd, meta, ia, emails] = await Promise.all([ler('eagles_fin_pix_v1', {}), ler('eagles_fin_caixas_v1', {}), ler('eagles_atend_config_v1', {}), ler('eagles_meta_v1', {}), ler('eagles_ia_config_v1', {}), ler('eagles_emails_config_v1', null)]);
+  let gag = false; try { const g = JSON.parse(sessionStorage.getItem('eagles_google_agenda_v1') || 'null'); gag = !!(g && g.expira > Date.now()); } catch (e) {}
+  const iaLoc = (() => { try { const v = lsLoad(chaveLocalTenant('eagles_ia_local_v1'), null); return !!(v && v.chaves && Object.values(v.chaves).some(Boolean)); } catch (e) { return false; } })();
+  const a = TENANT_ASSINATURA;
+  const autoAtivas = ((atd && atd.automacoes) || []).filter((x) => x.ativo !== false).length;
+  CFG_INTEG_ESTADO = {
+    pix: pix && pix.chave ? ['ok', 'Configurada'] : ['nao', 'Não configurada'],
+    ofx: (((caixas && caixas.caixas) || []).some((c) => (c.ofxIgnorados || []).length)) ? ['ok', 'Em uso'] : ['livre', 'Disponível'],
+    assinatura: !a ? ['livre', 'Sem assinatura pelo sistema'] : a.status === 'ativa' ? ['ok', 'Em dia'] : a.status === 'cortesia' ? ['ok', 'Cortesia'] : a.status === 'teste' ? ['livre', 'Em teste'] : ['nao', 'Pagamento pendente'],
+    gagenda: gag ? ['ok', 'Conectada'] : ['livre', 'Disponível'],
+    whats: autoAtivas ? ['ok', `${autoAtivas} automação(ões) ligada(s)`] : ['nao', 'Nenhuma automação ligada'],
+    emails: emails ? ['ok', 'Configurados'] : ['livre', 'Padrão'],
+    meta: meta && meta.conectado ? ['ok', 'Conectado'] : ['nao', 'Não conectado'],
+    pixel: PAG_PIXELS && PAG_PIXELS.meta && PAG_PIXELS.meta.ativo && PAG_PIXELS.meta.pixelId ? ['ok', 'Ligado'] : ['nao', 'Não configurado'],
+    ga: PAG_PIXELS && PAG_PIXELS.ga && PAG_PIXELS.ga.ativo && PAG_PIXELS.ga.medicaoId ? ['ok', 'Ligado'] : ['nao', 'Não configurado'],
+    ia: (ia && ia.modo === 'empresa' && ia.chaves && Object.values(ia.chaves).some(Boolean)) ? ['ok', 'Chave da empresa'] : iaLoc ? ['ok', 'Chave neste navegador'] : ['nao', 'Sem chave'],
+  };
+  if (CFG_ABA_ATUAL === 'integracoes') renderAbaIntegracoesConfig();
+}
 function renderAbaIntegracoesConfig() {
   const el = document.getElementById('cfg-conteudo-aba');
-  el.innerHTML = CFG_INTEGRACOES.map((cat) => `
-    <div class="cfg-integ-categoria">
-      <h3>${escapeHtml(cat.categoria)}</h3>
-      <p>${escapeHtml(cat.desc)}</p>
-      ${cat.itens.length ? `
-      <div class="cfg-integ-grid">
-        ${cat.itens.map((i) => `
-          <button type="button" class="cfg-integ-card" onclick="abrirIntegracaoConfig('${escapeParaOnclick(i.nome)}')">
-            <div class="cfg-integ-icone">${ic(i.icone)}</div>
-            <span>${escapeHtml(i.nome)}</span>
-          </button>`).join('')}
-      </div>` : `<p style="font-size:12px; color:var(--text-soft); font-style:italic;">Nenhuma conta bancária conectada ainda.</p>`}
-    </div>`).join('') + `
-    <div class="cfg-painel" style="text-align:center;">
-      <strong style="font-size:14px;">Não encontrou a integração que precisa?</strong>
-      <p style="font-size:12.5px; color:var(--text-soft); margin:6px 0 14px;">Me conta o que você precisa conectar e a gente avalia construir.</p>
-    </div>`;
+  if (!CFG_INTEG_ESTADO) cfgIntegEstado();
+  const E = CFG_INTEG_ESTADO || {};
+  const doPlano = (i) => !i.plano || !TENANT_PLANO || TENANT_PLANO === 'ambos' || TENANT_PLANO === i.plano;
+  el.innerHTML = CFG_INTEG.map((cat) => { const itens = cat.itens.filter(doPlano); if (!itens.length) return ''; return `
+    <div class="cfg-integ-categoria"><h3>${escapeHtml(cat.cat)}</h3>
+      <div class="cfg-integ-lista">${itens.map((i) => { const st = i.breve ? ['breve', 'Em breve'] : E[i.id] || ['carregando', '...'];
+        const acao = i.breve ? '' : i.aba ? `mostrarAbaConfig('${i.aba}')` : i.acao ? i.acao : `location.href='${i.href}'`;
+        return `<div class="cfg-integ-item${i.breve ? ' breve' : ''}"><div class="cfg-integ-icone">${ic(i.icone)}</div><div class="cfg-integ-txt"><strong>${escapeHtml(i.nome)}</strong><span>${escapeHtml(i.desc)}</span></div>
+          <span class="cfg-integ-st ${st[0]}">${escapeHtml(st[1])}</span>${acao ? `<button type="button" class="btn btn-small" onclick="${acao}">${st[0] === 'ok' ? 'Abrir' : 'Configurar'}</button>` : ''}</div>`; }).join('')}</div>
+    </div>`; }).join('');
 }
-
-function abrirIntegracaoConfig(nome) {
-  if (nome === 'Meta Pixel' || nome === 'Google Analytics') { cfgAbrirPixels(nome === 'Meta Pixel' ? 'meta' : 'ga'); return; }
-  avisar(`A integração com ${nome} ainda não está conectada de verdade — vamos construir isso junto quando chegarmos nessa parte do Operacional.`, nome);
-}
-
 
 // ----- Aba: Automações -----
 
-const CFG_AUTOMACOES_SUBABAS = ['Tarefas', 'Notificações', 'Atalhos'];
-
-function renderAbaAutomacoesConfig(sub) {
-  sub = sub || 'Tarefas';
+function renderAbaAutomacoesConfig() {
   const el = document.getElementById('cfg-conteudo-aba');
-  el.innerHTML = `
-    <div class="cfg-painel">
-      <div class="cfg-painel-titulo">
-        <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
-        <div><h2>Automações de Tarefas</h2><p>Personalize movimentos, notificações e atalhos</p></div>
-      </div>
-      <div class="cfg-automacoes-layout">
-        <div class="cfg-subnav">
-          ${CFG_AUTOMACOES_SUBABAS.map((s) => `<button type="button" class="${s === sub ? 'ativa' : ''}" onclick="renderAbaAutomacoesConfig('${s}')">${s}</button>`).join('')}
-        </div>
-        <div>${htmlConteudoSubAutomacao(sub)}</div>
-      </div>
-    </div>`;
-}
-
-function htmlConteudoSubAutomacao(sub) {
-  if (sub === 'Tarefas') {
-    const prefs = lerPreferenciasNotificacoesConfig();
-    return `
-      <div class="cfg-linha-toggle">
-        <div><strong>Criar tarefa de acompanhamento ao fechar venda</strong><span>Já existe — é o toggle "Gerar Tarefa ou Projeto" dentro da Venda Rápida.</span></div>
-        <label class="switch"><input type="checkbox" checked disabled><span class="switch-slider"></span></label>
-      </div>
-      <div class="cfg-linha-toggle">
-        <div><strong>Marcar negócio como Fechado ao aprovar orçamento</strong><span>Já existe — acontece automaticamente quando um orçamento é aprovado.</span></div>
-        <label class="switch"><input type="checkbox" checked disabled><span class="switch-slider"></span></label>
-      </div>`;
-  }
-  if (sub === 'Notificações') {
-    return `<p style="font-size:12.5px; color:var(--text-soft);">Use a aba <strong>Notificações</strong> do menu principal de Configurações pra ajustar isso.</p>`;
-  }
-  return `<p style="font-size:12.5px; color:var(--text-soft); font-style:italic;">Ainda em construção — vamos detalhar isso quando chegarmos nessa parte do Operacional.</p>`;
+  el.innerHTML = '<p class="kb-vazio">Carregando...</p>';
+  Promise.all([cloudGetForce('eagles_atend_config_v1', {}).catch(() => ({})), cloudGetForce('eagles_emails_config_v1', null).catch(() => null)]).then(([atd, em]) => {
+    const autos = (atd && atd.automacoes) || [];
+    const lig = autos.filter((x) => x.ativo !== false), pausa = autos.filter((x) => x.ativo === false);
+    const crm = !TENANT_PLANO || TENANT_PLANO !== 'erp';
+    const c = Object.assign({ resumoDiario: true, avisoAprovacao: true, cobrancaClientes: false }, em || {});
+    const sempre = [
+      ['Orçamento aprovado → negócio Fechado', 'Ao aprovar um orçamento pelo link, o negócio vai para Fechado e vira contrato.', crm],
+      ['Venda Rápida → tarefa ou projeto', 'O botão "Gerar Tarefa ou Projeto" dentro da Venda Rápida.', crm],
+      ['Conteúdo → cartão no Kanban', 'Iniciar produção cria o cartão em Produção de Conteúdo; os dois andam juntos.', crm],
+      ['Aprovação do cliente → coluna certa', 'Aprovou vai para Aprovados; pediu alteração volta para Alteração, com aviso no sino.', crm],
+      ['Formulários e páginas → lead no Pipeline', 'Cada envio vira cliente + negócio, com a origem da página.', crm],
+      ['Pedido faturado → baixa no estoque', 'Cancelado devolve; compra recebida soma.', !TENANT_PLANO || TENANT_PLANO !== 'crm'],
+    ].filter((x) => x[2]);
+    el.innerHTML = `
+      ${crm ? `<div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('raio')}</div><div><h2>Automações de atendimento (WhatsApp)</h2><p>Mensagens prontas de cobrança, lembrete, aniversário, reativação e avisos da equipe</p></div></div>
+        <div class="an-kpis" style="margin-bottom:12px;"><div class="an-kpi pos"><span>Ligadas</span><b>${lig.length}</b></div><div class="an-kpi"><span>Pausadas</span><b>${pausa.length}</b></div></div>
+        ${lig.length ? `<ul class="sis-lista">${lig.slice(0, 8).map((x) => `<li>${escapeHtml(x.nome || (ATD_GATILHOS[x.gatilho] || {}).nome || x.gatilho)}</li>`).join('')}</ul>` : '<p class="kb-vazio-mini">Nenhuma ligada ainda.</p>'}
+        <div class="cfg-modal-rodape"><span class="kb-espaco"></span><a class="btn btn-primary" href="crm.html#secao=automacoes">Abrir as Automações</a></div></div>` : ''}
+      <div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('email')}</div><div><h2>E-mails automáticos</h2><p>Saem pelo servidor, todo dia às 7h</p></div></div>
+        <ul class="sis-lista"><li>Resumo do dia: <b>${c.resumoDiario ? 'ligado' : 'desligado'}</b></li><li>Aviso de aprovação do cliente: <b>${c.avisoAprovacao ? 'ligado' : 'desligado'}</b></li><li>Lembrete de pagamento para os clientes: <b>${c.cobrancaClientes ? 'ligado' : 'desligado'}</b></li></ul>
+        <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="mostrarAbaConfig('emails')">Ajustar e-mails</button></div></div>
+      <div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('aprovado')}</div><div><h2>Sempre ligadas</h2><p>O sistema faz sozinho, sem precisar configurar</p></div></div>
+        ${sempre.map(([t, d]) => `<div class="cfg-linha-toggle"><div><strong>${escapeHtml(t)}</strong><span>${escapeHtml(d)}</span></div><span class="cfg-integ-st ok">Ativa</span></div>`).join('')}</div>`;
+  });
 }
 
 // ----- Aba: E-mail -----
 
-function renderAbaEmailConfig() {
+const EMAIL_MODELOS = {
+  cobranca_antes: { nome: 'Lembrete antes do vencimento', assunto: 'Lembrete de pagamento · {{empresa}}', texto: 'Olá, {{cliente}}!\n\nO pagamento de {{valor}} ({{descricao}}) vence em {{vencimento}}.\n\nSe já pagou, desconsidere esta mensagem. Qualquer dúvida, é só responder este e-mail.' },
+  cobranca_dia: { nome: 'No dia do vencimento', assunto: 'Seu pagamento vence hoje · {{empresa}}', texto: 'Olá, {{cliente}}!\n\nO pagamento de {{valor}} ({{descricao}}) vence hoje.\n\nSe já pagou, desconsidere esta mensagem.' },
+  cobranca_atraso: { nome: 'Depois do vencimento', assunto: 'Pagamento em aberto · {{empresa}}', texto: 'Olá, {{cliente}}!\n\nO pagamento de {{valor}} ({{descricao}}) venceu em {{vencimento}} e ainda não identificamos o pagamento.\n\nSe já pagou, desconsidere. Se precisar de outra data, é só responder.' },
+};
+const EMAIL_CAMPOS = ['{{cliente}}', '{{valor}}', '{{vencimento}}', '{{descricao}}', '{{empresa}}', '{{pix}}'];
+let EMAIL_ED = null;
+function renderAbaEmailsConfig() {
   const el = document.getElementById('cfg-conteudo-aba');
-  const cards = [
-    { icone: 'enviar', titulo: 'Envio pelo meu domínio (SMTP)', desc: 'Conecte seu e-mail para os envios saírem do seu domínio.' },
-    { icone: 'email', titulo: 'Modelos de e-mail', desc: 'Personalize orçamento, contrato e cobrança com a sua marca.' },
-    { icone: 'cifrao', titulo: 'Automações financeiras', desc: 'Disparar e-mail de cobrança ao criar lançamento, lembrete de vencimento e atraso.' },
-  ];
-  el.innerHTML = `<div class="cfg-grid-cards">
-    ${cards.map((c) => `
-      <button type="button" class="cfg-card" onclick="avisar('Isso depende de conectar um serviço de envio de e-mail (SMTP) de verdade — ainda não construído.', '${escapeParaOnclick(c.titulo)}')">
-        <div class="cfg-card-icone">${iconeAparenciaConfig(c.icone === 'enviar' ? 'link' : c.icone)}</div>
-        <div class="cfg-card-texto"><strong>${escapeHtml(c.titulo)}</strong><span>${escapeHtml(c.desc)}</span></div>
-        <svg class="cfg-card-seta" viewBox="0 0 24 24" style="width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2;"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>`).join('')}
+  el.innerHTML = '<p class="kb-vazio">Carregando...</p>';
+  cloudGetForce(EMAILS_CFG_KEY, {}).then((d) => {
+    const c = Object.assign({ resumoDiario: true, avisoAprovacao: true, cobrancaClientes: false, antes: true, antesDias: 3, noDia: true, atraso: true, atrasoDias: 2, modelos: {} }, d || {});
+    EMAIL_ED = c;
+    const pode = !FIREBASE_PRONTO || !TENANT_ID || nivelEhDiretor();
+    const chk = (k, t, sub) => `<div class="cfg-linha-toggle"><div><strong>${t}</strong><span>${sub}</span></div><label class="switch"><input type="checkbox" id="em-${k}" ${c[k] ? 'checked' : ''} ${pode ? '' : 'disabled'}><span class="switch-slider"></span></label></div>`;
+    el.innerHTML = `
+      <div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('email')}</div><div><h2>E-mails automáticos</h2><p>Enviados pelo servidor, todo dia às 7h, mesmo com o sistema fechado. Precisam do servidor ligado (plano Blaze); até lá, as escolhas ficam guardadas.</p></div></div>
+        ${chk('resumoDiario', 'Resumo do dia para os Diretores', 'A receber hoje, atrasados, a pagar, tarefas atrasadas e aprovações pendentes.')}
+        ${chk('avisoAprovacao', 'Aviso quando o cliente responder a aprovação', 'E-mail na hora em que ele aprova ou pede alteração.')}
+        ${chk('cobrancaClientes', 'Lembrete de pagamento por e-mail para os clientes', 'Usa o e-mail da ficha do cliente (CRM ou ERP). A resposta vai para o e-mail da empresa.')}
+        <div class="cw-grade2" style="margin-top:6px;"><div class="field"><label>Lembrar quantos dias antes</label><input type="number" id="em-antesDias" min="1" max="15" value="${c.antesDias}" ${pode ? '' : 'disabled'}></div><div class="field"><label>Cobrar quantos dias depois</label><input type="number" id="em-atrasoDias" min="1" max="30" value="${c.atrasoDias}" ${pode ? '' : 'disabled'}></div></div>
+        ${chk('noDia', 'Também no dia do vencimento', '')}
+      </div>
+      <div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('documento')}</div><div><h2>Modelos dos lembretes</h2><p>O texto de cada e-mail de cobrança. Toque num campo para inserir: ${EMAIL_CAMPOS.map((x) => `<code>${x}</code>`).join(' ')}</p></div></div>
+        ${Object.keys(EMAIL_MODELOS).map((k) => { const m = Object.assign({}, EMAIL_MODELOS[k], c.modelos[k] || {}); return `<details class="em-modelo"><summary><b>${escapeHtml(EMAIL_MODELOS[k].nome)}</b>${c.modelos[k] ? ' <span class="srv-tag ativo">personalizado</span>' : ''}</summary>
+          <div class="field full"><label>Assunto</label><input type="text" id="em-m-${k}-assunto" maxlength="150" value="${escapeHtml(m.assunto)}" ${pode ? '' : 'disabled'}></div>
+          <div class="field full"><label>Texto</label><textarea id="em-m-${k}-texto" rows="7" maxlength="3000" ${pode ? '' : 'disabled'}>${escapeHtml(m.texto)}</textarea></div>
+          ${pode ? `<div class="em-campos">${EMAIL_CAMPOS.map((x) => `<button type="button" class="crm-shortcode-btn" onclick="emInserir('em-m-${k}-texto', '${x}')"><code>${x}</code></button>`).join('')}<span class="kb-espaco"></span>${c.modelos[k] ? `<button type="button" class="kb-link" onclick="emRestaurar('${k}')">Voltar ao padrão</button>` : ''}</div>` : ''}</details>`; }).join('')}
+      </div>
+      <div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('link')}</div><div><h2>Remetente</h2><p>Os e-mails saem do domínio do Eagles Labz, com o nome da sua empresa no texto, e as respostas vão para o e-mail cadastrado no seu Perfil. Enviar pelo domínio da sua empresa ainda não está disponível.</p></div></div></div>
+      ${pode ? `<div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="emSalvarTudo()">Salvar e-mails</button></div>` : '<p class="kb-vazio-mini">Só o Diretor muda os e-mails automáticos.</p>'}`;
+  });
+}
+function emInserir(id, campo) { const t = document.getElementById(id); if (!t) return; const i = t.selectionStart || t.value.length; t.value = t.value.slice(0, i) + campo + t.value.slice(t.selectionEnd || i); t.focus(); t.setSelectionRange(i + campo.length, i + campo.length); }
+function emRestaurar(k) { if (EMAIL_ED && EMAIL_ED.modelos) { delete EMAIL_ED.modelos[k]; cloudSet(EMAILS_CFG_KEY, EMAIL_ED); } renderAbaEmailsConfig(); }
+function emSalvarTudo() {
+  const v = (k) => (document.getElementById('em-' + k) || {}).checked;
+  const n = (k, a, b, p) => Math.max(a, Math.min(b, Number((document.getElementById('em-' + k) || {}).value) || p));
+  const modelos = {};
+  Object.keys(EMAIL_MODELOS).forEach((k) => {
+    const assunto = ((document.getElementById(`em-m-${k}-assunto`) || {}).value || '').trim(), texto = ((document.getElementById(`em-m-${k}-texto`) || {}).value || '').trim();
+    if (assunto && texto && (assunto !== EMAIL_MODELOS[k].assunto || texto !== EMAIL_MODELOS[k].texto)) modelos[k] = { assunto: assunto.slice(0, 150), texto: texto.slice(0, 3000) };
+  });
+  const c = { resumoDiario: v('resumoDiario'), avisoAprovacao: v('avisoAprovacao'), cobrancaClientes: v('cobrancaClientes'), antes: true, antesDias: n('antesDias', 1, 15, 3), noDia: v('noDia'), atraso: true, atrasoDias: n('atrasoDias', 1, 30, 2), modelos, atualizadoEm: new Date().toISOString() };
+  if (cloudSet(EMAILS_CFG_KEY, c) !== false) { EMAIL_ED = c; avisar('E-mails salvos.', 'E-mails'); renderAbaEmailsConfig(); }
+}
+function renderAbaEmailConfig() { renderAbaEmailsConfig(); }
+// a assinatura dentro das Configurações (o pagamento continua na página própria)
+function renderAbaAssinaturaConfig() {
+  const el = document.getElementById('cfg-conteudo-aba');
+  const a = TENANT_ASSINATURA;
+  const st = !a ? ['Sem assinatura pelo sistema', 'badge-neutral'] : { teste: ['Período de teste', 'badge-blue'], ativa: ['Em dia', 'badge-success'], pendente: ['Pagamento pendente', 'badge-warning'], atrasada: ['Em atraso', 'badge-danger'], cancelada: ['Cancelada', 'badge-danger'], cortesia: ['Cortesia', 'badge-neutral'] }[a.status] || ['—', 'badge-neutral'];
+  el.innerHTML = `<div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('cartao')}</div><div><h2>Assinatura</h2><p>Plano e pagamento do sistema</p></div></div>
+    <div class="ass-linhas cfg-ass">
+      <div><span>Situação</span><b><span class="badge ${st[1]}">${st[0]}</span></b></div>
+      <div><span>Plano</span><b>${escapeHtml(TENANT_PLANO === 'ambos' ? 'ERP + CRM' : (TENANT_PLANO || '—').toUpperCase())}</b></div>
+      ${a && a.status === 'teste' ? `<div><span>Teste grátis até</span><b>${escapeHtml(formatDatePt(a.testeAte || ''))}</b></div>` : ''}
+      ${a && a.proximoVencimento ? `<div><span>Próximo vencimento</span><b>${escapeHtml(formatDatePt(a.proximoVencimento))}</b></div>` : ''}
+      ${a && a.ultimoPagamentoEm ? `<div><span>Último pagamento</span><b>${escapeHtml(formatDatePt(a.ultimoPagamentoEm.slice(0, 10)))}</b></div>` : ''}
+    </div>
+    ${!a ? '<p class="kb-vazio-mini">A sua conta não é cobrada pelo sistema. Para mudar o plano, fale com o suporte.</p>' : a.status === 'cortesia' ? '<p class="kb-vazio-mini">Esta conta não tem cobrança.</p>' : `<div class="cfg-modal-rodape"><span class="kb-espaco"></span><a class="btn btn-primary" href="assinatura.html">${['pendente', 'atrasada', 'teste'].includes(a.status) ? 'Pagar ou assinar' : 'Ver detalhes do pagamento'}</a></div>`}
   </div>`;
 }
 
@@ -6984,12 +7069,16 @@ function renderAbaEmailConfig() {
 
 function renderAbaConteudosConfig() {
   const el = document.getElementById('cfg-conteudo-aba');
-  el.innerHTML = `
-    <div class="cfg-painel" style="text-align:center; padding:50px 24px;">
-      <div class="ic-circulo">${ic('arquivos')}</div>
-      <h2 style="margin:0 0 8px;">Fluxo de Produção de Conteúdos</h2>
-      <p style="color:var(--text-soft); max-width:480px; margin:0 auto;">Essa configuração é do módulo de <strong>Conteúdos</strong>, que ainda não foi construído — ele faz parte do Operacional, que é o próximo bloco que vamos trabalhar juntos. Quando construirmos o Kanban de Conteúdos de verdade, essa tela ganha as etapas, funções e automações configuráveis.</p>
-    </div>`;
+  const crm = !TENANT_PLANO || TENANT_PLANO !== 'erp';
+  const atalho = (t, d, secao) => `<div class="cfg-linha-toggle"><div><strong>${t}</strong><span>${d}</span></div><a class="btn btn-small" href="crm.html#secao=${secao}">Abrir</a></div>`;
+  el.innerHTML = crm ? `<div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('arquivos')}</div><div><h2>Produção de conteúdo</h2><p>As configurações ficam dentro do próprio módulo, no CRM</p></div></div>
+      ${atalho('Colunas do quadro, tipos e categorias', 'Em Conteúdos: botões Colunas, Tipos e Categorias no topo do quadro.', 'conteudos')}
+      ${atalho('Modelos de conteúdo', 'Salve um conteúdo como modelo e reaproveite (Conteúdos → Modelos).', 'conteudos')}
+      ${atalho('Aprovação do cliente e portal', 'Link de aprovação com rodadas e o portal do cliente sem login.', 'portal-cliente')}
+      ${atalho('Produção no Kanban', 'Projeto "Produção de Conteúdo": A fazer → Em produção → Aprovação → Alteração → Aprovados → Entregue.', 'kanban')}
+      ${atalho('Agendar no Instagram', 'Abra um conteúdo → "Agendar no Instagram", ou CRM → Instagram e anúncios.', 'meta')}
+      <p class="kb-vazio-mini" style="margin-top:10px;">A aparência do link de aprovação e do portal fica em <a href="#aparencia" onclick="mostrarAbaConfig('aparencia'); return false;">Aparência</a>.</p></div>`
+    : '<div class="cfg-painel"><p class="kb-vazio-mini">A produção de conteúdo faz parte do CRM, que não está no seu plano.</p></div>';
 }
 
 
@@ -7007,7 +7096,6 @@ const CRM_EM_CONSTRUCAO_INFO = {
   whatsapp: { icone: 'conversa', titulo: 'Central de WhatsApp', texto: 'Histórico de conversas e dados do CRM lado a lado — precisa de WhatsApp Business API aprovada.' },
   atendentes: { icone: 'pessoas', titulo: 'Atendentes', texto: 'Vários atendentes usando o mesmo número de WhatsApp — precisa de WhatsApp Business API.' },
   'monitor-grupos': { icone: 'megafone', titulo: 'Monitor de grupos', texto: 'Acompanhar interações em grupos e comunidades do WhatsApp — precisa de WhatsApp Business API.' },
-  'paginas-captura': { icone: 'globo', titulo: 'Páginas de captura', texto: 'Páginas focadas 100% em converter visitante em lead.' },
 };
 
 function initCrmHub() {
@@ -7019,6 +7107,7 @@ function initCrmHub() {
   aplicarPreferenciasMenuCrm();
   cloudWatch(CRM_NEGOCIOS_KEY, [], (data) => {
     CRM_NEGOCIOS_DATA = data;
+    if (typeof negLembrarEtapas === 'function') negLembrarEtapas(data);
     CRM_NEGOCIOS_DATA_CARREGADO = true;
     atualizarSecaoAtivaCrm();
     converterPropostasAprovadasEmContrato();
@@ -7060,7 +7149,7 @@ function initCrmHub() {
     atualizarSecaoAtivaCrm();
   });
   // leads que chegam pelo formulário da Página Pública
-  if (nivelPodeOperar()) { pagIniciarDados(); pagIniciarLeads(); portalIniciarDados(); portalIniciarProcessamento(); }
+  if (nivelPodeOperar()) { pagIniciarDados(); pagIniciarLeads(); portalIniciarDados(); portalIniciarProcessamento(); setTimeout(() => { try { pgxIniciarAgendamentos(); } catch (e) { console.error(e); } }, 1500); }
   if (typeof srvIniciarDados === 'function') srvIniciarDados(); // estoque no Dashboard (já se protege contra rodar 2x)
   cntIniciarDados(); // Kanban + Conteúdos alimentam o Dashboard (tarefas, projetos, entregas)
   agIniciarDados(); // compromissos da Agenda → "Próximas reuniões" do Dashboard
@@ -7090,6 +7179,8 @@ function initCrmHub() {
 // Atalhos vindos de outras páginas (ex: Configurações → PDF de
 // Orçamento abre crm.html#orcamentos-pdf direto na aba certa).
 function abrirSecaoPeloHashCrm() {
+  const sec = (window.location.hash || '').match(/^#secao=([\w-]+)$/);
+  if (sec) { setTimeout(() => { const b = document.querySelector(`[data-menu-id="${sec[1]}"]`); mostrarSecaoCrm(sec[1], b); if (history.replaceState) history.replaceState(null, '', location.pathname + location.search); }, 300); return; }
   const m = (window.location.hash || '').match(/^#orcamentos-(lista|contratos|aprovacao|pdf)$/);
   if (!m) return;
   mostrarSecaoCrm('orcamentos', document.querySelector('[data-menu-id="orcamentos"]'));
@@ -7105,6 +7196,7 @@ function atualizarSecaoAtivaCrm() {
   if (secao === 'dashboard') renderCrmDashboard();
   if (secao === 'clientes') renderCrmClientes();
   if (secao === 'pipeline') renderFunilKanban();
+  if (secao === 'estatisticas-funil') fstRender();
   if (secao === 'leads') renderCrmLeads();
   if (secao === 'orcamentos') renderPropostasListaCrm();
   if (secao === 'financeiro') renderCrmFinanceiroSecao();
@@ -7137,6 +7229,7 @@ function mostrarSecaoCrm(secao, btn) {
   if (secao === 'dashboard') renderCrmDashboard();
   if (secao === 'clientes') renderCrmClientes();
   if (secao === 'pipeline') renderFunilKanban();
+  if (secao === 'estatisticas-funil') fstRender();
   if (secao === 'leads') renderCrmLeads();
   if (secao === 'orcamentos') renderPropostasListaCrm();
   if (secao === 'financeiro') renderCrmFinanceiroSecao();
@@ -7146,11 +7239,13 @@ function mostrarSecaoCrm(secao, btn) {
   if (secao === 'agenda') { agMontar(document.getElementById('crm-secao-agenda')); agGoogleBuscar(); }
   if (secao === 'portal-cliente') portalMontar(document.getElementById('crm-secao-portal-cliente'));
   if (secao === 'automacoes') atdMontar(document.getElementById('crm-secao-automacoes'));
+  if (secao === 'estatisticas-funil') setTimeout(fstRender, 0);
+  if (secao === 'meta') metaMontar(document.getElementById('crm-secao-meta'));
   if (secao === 'equipe') eqMontar(document.getElementById('crm-secao-equipe'));
   if (secao === 'agente-copywriter') cwMontar(document.getElementById('crm-secao-agente-copywriter'));
   if (secao === 'agente-analista') anMontar(document.getElementById('crm-secao-agente-analista'));
   if (secao === 'agente-designer') dsMontar(document.getElementById('crm-secao-agente-designer'));
-  const abaPag = { 'paginas-landing': 'pagina', 'paginas-link-bio': 'linkbio', 'paginas-formularios': 'formularios', 'paginas-agendamento': 'agendamento', 'paginas-portfolio': 'portfolio' }[secao];
+  const abaPag = { 'paginas-landing': 'pagina', 'paginas-link-bio': 'linkbio', 'paginas-formularios': 'formularios', 'paginas-captura': 'captura', 'paginas-agendamento': 'agendamento', 'paginas-portfolio': 'portfolio' }[secao];
   if (abaPag) pagMontar(document.getElementById('crm-secao-' + secao), abaPag);
   if (secao.startsWith('fin-')) finMontar(document.getElementById('crm-secao-' + secao), { 'fin-receber': 'receber', 'fin-pagar': 'pagar', 'fin-recorrencias': 'recorrentes', 'fin-relatorios': 'relatorios', 'fin-caixa': 'caixa', 'fin-integracoes': 'pix' }[secao]);
   if (secao === 'kanban') renderKanbanSecao();
@@ -9406,18 +9501,62 @@ function aprAtualizarFase(c, fase) {
 }
 
 // ---------- notificações (sino no topo + aviso na tela + aviso do sistema) ----------
+// Cada pessoa escolhe o que quer receber (fica no cadastro dela, vale em
+// qualquer aparelho). "cat" diz de que tipo é cada aviso.
+const NOTIF_TIPOS = [
+  { chave: 'aprovacao', titulo: 'Respostas de aprovação', desc: 'O cliente aprovou ou pediu alteração num conteúdo.' },
+  { chave: 'pedidoCliente', titulo: 'Pedidos e ideias do portal', desc: 'O cliente mandou um pedido ou uma ideia pelo portal.' },
+  { chave: 'lead', titulo: 'Novos leads', desc: 'Alguém preencheu o site, um formulário, a página de captura ou o link da bio.' },
+  { chave: 'agendamento', titulo: 'Agendamentos online', desc: 'Um cliente marcou horário pela página de agendamento.' },
+  { chave: 'tarefa', titulo: 'Tarefa atribuída a mim', desc: 'Outra pessoa colocou você como responsável por uma tarefa.' },
+  { chave: 'conteudo', titulo: 'Conteúdo atribuído a mim', desc: 'Outra pessoa colocou você como responsável por um conteúdo.' },
+  { chave: 'prazo', titulo: 'Prazos chegando', desc: 'As suas tarefas e conteúdos que vencem hoje ou amanhã (um aviso por dia).' },
+];
+let USUARIO_PREFS_NOTIF = null;
+function notifPrefs() { return Object.assign({ computador: true, som: true }, USUARIO_PREFS_NOTIF || lsLoad('eagles_prefs_notif_v2::' + (USUARIO_UID || 'local'), {})); }
+function notifSalvarPrefs(p) {
+  USUARIO_PREFS_NOTIF = Object.assign({}, p);
+  lsSave('eagles_prefs_notif_v2::' + (USUARIO_UID || 'local'), USUARIO_PREFS_NOTIF);
+  if (FIREBASE_PRONTO && firestoreDb && USUARIO_UID) firestoreDb.collection('usuarios').doc(USUARIO_UID).set({ prefsNotif: USUARIO_PREFS_NOTIF }, { merge: true }).catch((e) => console.error('Erro ao salvar as notificações:', e));
+}
+// tarefa/conteúdo que OUTRA pessoa passou para mim (o que eu mesmo mudo não avisa)
+const NOTIF_RESP = {};
+function notifChecarAtribuicoes(cat, snap) {
+  const eu = USUARIO_UID, antes = NOTIF_RESP[cat], agora = new Map();
+  snap.forEach((d) => {
+    const x = d.data() || {};
+    agora.set(d.id, x.responsavel || '');
+    if (!antes || !eu || x.responsavel !== eu || antes.get(d.id) === eu || x.arquivada || (d.metadata && d.metadata.hasPendingWrites)) return;
+    notifRegistrar({ id: `atr_${cat}_${d.id}_${Date.now()}`, em: new Date().toISOString(), tipo: 'info', cat, titulo: cat === 'tarefa' ? 'Nova tarefa para você' : 'Novo conteúdo para você', texto: [x.titulo, x.cliente].filter(Boolean).join(' · ').slice(0, 120),
+      acao: cat === 'tarefa' ? "mostrarSecaoCrm('kanban', document.querySelector('[data-menu-id=&quot;kanban&quot;]'))" : "mostrarSecaoCrm('conteudos', document.querySelector('[data-menu-id=&quot;conteudos&quot;]'))" });
+  });
+  NOTIF_RESP[cat] = agora;
+}
+let NOTIF_PRAZOS_FEITO = false;
+function notifChecarPrazos() {
+  if (NOTIF_PRAZOS_FEITO || !USUARIO_UID || typeof KB_CARREGADO === 'undefined' || !KB_CARREGADO) return;
+  NOTIF_PRAZOS_FEITO = true;
+  const hoje = isoHoje(), amanha = atdMaisDias(hoje, 1), eu = USUARIO_UID;
+  const chave = 'eagles_notif_prazos::' + eu + '::' + hoje, vistos = lsLoad(chave, []);
+  const itens = (KB_TAREFAS || []).filter((t) => t.responsavel === eu && !t.arquivada && [hoje, amanha].includes(t.prazo) && !(typeof kbConcluida === 'function' && kbConcluida(t))).map((t) => ({ id: 't' + t.id, titulo: t.titulo, quando: t.prazo, sec: 'kanban' }))
+    .concat((typeof CNT !== 'undefined' ? CNT : []).filter((c) => c.responsavel === eu && [hoje, amanha].includes(c.entrega) && c.status !== 'publicado').map((c) => ({ id: 'c' + c.id, titulo: c.titulo, quando: c.entrega, sec: 'conteudos' })));
+  itens.forEach((x) => notifRegistrar({ id: `prazo_${x.id}_${hoje}`, em: vistos.includes(x.id) ? NOTIF_INICIO.replace(/Z$/, '') : new Date().toISOString(), tipo: 'alerta', cat: 'prazo', titulo: x.quando === hoje ? 'Vence hoje' : 'Vence amanhã', texto: x.titulo || '', acao: `mostrarSecaoCrm('${x.sec}', document.querySelector('[data-menu-id=&quot;${x.sec}&quot;]'))` }));
+  lsSave(chave, Array.from(new Set(vistos.concat(itens.map((x) => x.id)))));
+}
 let NOTIF = [];
 const NOTIF_INICIO = new Date().toISOString();
 function notifChaveVisto() { return chaveLocalTenant('eagles_notif_visto_v1'); }
 function notifVistoEm() { return localStorage.getItem(notifChaveVisto()) || ''; }
 function notifRegistrar(n) {
   if (NOTIF.some((x) => x.id === n.id)) return;
+  const pr = notifPrefs();
+  if (n.cat && pr[n.cat] === false) return; // a pessoa desligou esse tipo
   NOTIF = [n].concat(NOTIF).sort((a, b) => b.em.localeCompare(a.em)).slice(0, 40);
   notifRenderSino();
   // só "toca" o que chegou depois que a tela abriu (o resto entra calado no sino)
   if (n.em > NOTIF_INICIO) {
     notifToast(n);
-    try { if ('Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification(n.titulo, { body: n.texto, icon: 'assets/favicon-eagles.png', tag: n.id }); } catch (e) {}
+    try { if (pr.computador !== false && 'Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification(n.titulo, { body: n.texto, icon: 'assets/favicon-eagles.png', tag: n.id }); } catch (e) {}
   }
 }
 function notifMontarSino() {
@@ -9456,7 +9595,7 @@ function notifToast(n) {
   el.innerHTML = `<span class="notif-ic ${n.tipo}">${ic(n.tipo === 'ok' ? 'aprovado' : 'alerta', 'ic-herda')}</span><div><b>${escapeHtml(n.titulo)}</b><span>${escapeHtml(n.texto)}</span></div><button type="button" aria-label="Fechar" onclick="this.parentNode.remove()">✕</button>`;
   if (n.acao) el.querySelector('div').onclick = () => { el.remove(); new Function(n.acao)(); };
   box.appendChild(el);
-  try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(), g = a.createGain(); o.connect(g); g.connect(a.destination); o.frequency.value = n.tipo === 'ok' ? 880 : 520; g.gain.value = 0.04; o.start(); o.stop(a.currentTime + 0.15); } catch (e) {}
+  if (notifPrefs().som !== false) try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(), g = a.createGain(); o.connect(g); g.connect(a.destination); o.frequency.value = n.tipo === 'ok' ? 880 : 520; g.gain.value = 0.04; o.start(); o.stop(a.currentTime + 0.15); } catch (e) {}
   setTimeout(() => { el.classList.add('saindo'); setTimeout(() => el.remove(), 400); }, 9000);
 }
 // recebe uma resposta do cliente (do link ou do portal)
@@ -9465,7 +9604,7 @@ function aprAoResponder(p, docId) {
   const titulo = (c && c.titulo) || p.titulo || 'Conteúdo';
   const aprovou = p.resposta === 'aprovado';
   const t = c && prdTarefaDoConteudo(c);
-  notifRegistrar({ id: 'apr_' + docId + '_' + (p.rodada || 1) + '_' + p.resposta, em: p.respondidoEm || new Date().toISOString(), tipo: aprovou ? 'ok' : 'alerta',
+  notifRegistrar({ cat: 'aprovacao', id: 'apr_' + docId + '_' + (p.rodada || 1) + '_' + p.resposta, em: p.respondidoEm || new Date().toISOString(), tipo: aprovou ? 'ok' : 'alerta',
     titulo: aprovou ? `${p.cliente || 'Cliente'} aprovou` : `${p.cliente || 'Cliente'} pediu alteração`, texto: aprovou ? titulo : `${titulo}${p.comentario ? ': “' + String(p.comentario).slice(0, 120) + '”' : ''}`,
     acao: t ? `prdAbrirNoKanban('${escapeParaOnclick(t.id)}')` : (c ? `dshIrConteudo('${escapeParaOnclick(c.id)}')` : '') });
 }
@@ -10454,6 +10593,8 @@ function estIniciar() {
   cloudWatch(EST_MOV_KEY, [], (d) => { CADASTROS_DATA['lancamento-estoque'] = Array.isArray(d) ? d : []; estAgendar(); });
   if (!CADASTROS_DATA['produto']) cloudWatch('eagles_produtos_v1', [], (d) => { CADASTROS_DATA['produto'] = Array.isArray(d) ? d : []; estAgendar(); });
   if (!CADASTROS_DATA['pedido-venda']) cloudWatch('eagles_pedidos_venda_v1', [], (d) => { CADASTROS_DATA['pedido-venda'] = Array.isArray(d) ? d : []; estAgendar(); });
+  if (!CADASTROS_DATA['pedido-compra']) cloudWatch('eagles_pedido_compras_v1', [], (d) => { CADASTROS_DATA['pedido-compra'] = Array.isArray(d) ? d : []; estAgendar(); });
+  if (!CADASTROS_DATA['nota-fiscal']) cloudWatch('eagles_notas_fiscais_entrada_v1', [], (d) => { CADASTROS_DATA['nota-fiscal'] = Array.isArray(d) ? d : []; estAgendar(); });
 }
 function estPronto() { return ['eagles_produtos_v1', 'eagles_pedidos_venda_v1', EST_MOV_KEY].every((k) => chaveCarregadaNaNuvem(k)) && Array.isArray(CADASTROS_DATA['produto']); }
 // aplica várias mudanças de saldo e grava produtos + histórico de uma vez
@@ -10517,7 +10658,7 @@ function estSincronizarPedidos() {
   });
   if (mexeu) cloudSet('eagles_pedidos_venda_v1', pedidos);
 }
-function estAgendar() { clearTimeout(EST_TIMER); EST_TIMER = setTimeout(() => { try { estSincronizarPedidos(); } catch (e) { console.error(e); } estRenderPosicao(); }, 300); }
+function estAgendar() { clearTimeout(EST_TIMER); EST_TIMER = setTimeout(() => { try { estSincronizarPedidos(); } catch (e) { console.error(e); } try { if (typeof estSincronizarCompras === 'function') estSincronizarCompras(); } catch (e) { console.error(e); } estRenderPosicao(); if (typeof invRender === 'function' && document.getElementById('inv-app')) invRender(); }, 300); }
 
 // ---------- ganchos do cadastro ----------
 // produto novo com estoque inicial → registra o "saldo inicial" no histórico
@@ -10683,7 +10824,7 @@ let SIS_CARREGADO = false;
 let SIS_WIZ = null;      // estado do assistente aberto
 const SIS_MODULOS = {
   estoque: 'Estoque e posição de estoque', compras: 'Compras e notas de entrada', envio: 'Objetos de postagem (envios)', contratos: 'Contratos', nfse: 'NFS-e',
-  conteudos: 'Conteúdos e produção', portal: 'Portal do cliente', briefings: 'Briefings', agenda: 'Agenda', atendimento: 'Atendimento e automações de WhatsApp', agentes: 'Agentes de IA',
+  conteudos: 'Conteúdos e produção', meta: 'Instagram e anúncios (Meta)', portal: 'Portal do cliente', briefings: 'Briefings', agenda: 'Agenda', atendimento: 'Atendimento e automações de WhatsApp', agentes: 'Agentes de IA',
 };
 const SIS_VERSOES = {
   agencia: {
@@ -10819,7 +10960,7 @@ function sisModuloNoPlano(k) { if (!TENANT_PLANO || TENANT_PLANO === 'ambos') re
 function sisModuloAtivo(nome) { const c = sisCache(); return !c || !c.modulos || c.modulos[nome] !== false; }
 function sisTermo(qual, padrao) { const c = sisCache(); return (c && c.termos && c.termos[qual]) || padrao; }
 // menu, nomes e etapas do funil conforme a versão
-const SIS_CRM_MENU = { conteudos: 'conteudos', 'portal-cliente': 'portal', automacoes: 'atendimento', whatsapp: 'atendimento', atendentes: 'atendimento', 'monitor-grupos': 'atendimento', briefings: 'briefings', agenda: 'agenda', 'agente-analista': 'agentes', 'agente-copywriter': 'agentes', 'agente-designer': 'agentes' };
+const SIS_CRM_MENU = { meta: 'meta', conteudos: 'conteudos', 'portal-cliente': 'portal', automacoes: 'atendimento', whatsapp: 'atendimento', atendentes: 'atendimento', 'monitor-grupos': 'atendimento', briefings: 'briefings', agenda: 'agenda', 'agente-analista': 'agentes', 'agente-copywriter': 'agentes', 'agente-designer': 'agentes' };
 function sisAplicarVisual() {
   const c = sisCache();
   try { renderTopbar(PAGINA_ATIVA_KEY); } catch (e) {}
@@ -10854,7 +10995,8 @@ function sisTalvezAbrir() {
   if (SIS && (SIS.concluidoEm || SIS.pulado)) return;
   if (!chaveCarregadaNaNuvem(PERFIL_KEY)) { setTimeout(sisTalvezAbrir, 700); return; }
   // empresa que já usava o sistema: só um aviso no Painel (não obriga)
-  const jaUsava = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || perfilOpDefinido();
+  // conta criada pela página de vendas: o questionário abre mesmo com o nome já preenchido
+  const jaUsava = ((PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) && !(PERFIL_DATA && PERFIL_DATA.novoCadastro)) || perfilOpDefinido();
   if (jaUsava && !(SIS && SIS.progresso)) { sisRenderPainel(); return; }
   sisAbrirAssistente();
 }
@@ -10992,7 +11134,7 @@ async function sisConcluir() {
     // dados da empresa
     const e = r.empresa || {};
     const doc = String(e.doc || '').replace(/\D/g, '');
-    const perfil = Object.assign({}, PERFIL_DATA, { nomeFantasia: e.nomeFantasia || PERFIL_DATA.nomeFantasia, nomeEmpresa: e.nomeEmpresa || PERFIL_DATA.nomeEmpresa, telefone1: e.telefone1 || PERFIL_DATA.telefone1, email: e.email || PERFIL_DATA.email, cidade: e.cidade || PERFIL_DATA.cidade, estado: e.estado || PERFIL_DATA.estado });
+    const perfil = Object.assign({}, PERFIL_DATA, { novoCadastro: false, nomeFantasia: e.nomeFantasia || PERFIL_DATA.nomeFantasia, nomeEmpresa: e.nomeEmpresa || PERFIL_DATA.nomeEmpresa, telefone1: e.telefone1 || PERFIL_DATA.telefone1, email: e.email || PERFIL_DATA.email, cidade: e.cidade || PERFIL_DATA.cidade, estado: e.estado || PERFIL_DATA.estado });
     if (doc.length === 14) { perfil.cnpj = e.doc; perfil.tipoPessoa = 'PJ'; } else if (doc.length === 11) { perfil.cpf = e.doc; perfil.tipoPessoa = 'PF'; }
     if (cloudSet(PERFIL_KEY, perfil) !== false) PERFIL_DATA = perfil;
     // perfil de operação (Serviços / Produtos / os dois)
@@ -11067,6 +11209,7 @@ const SIS_PASSOS = {
   ia: { t: 'Conectar uma IA para os agentes', href: 'crm.html' },
 };
 let SIS_PAINEL_DADOS = null;
+let SIS_FIN_ESCUTANDO = false;
 async function sisColetarPainel() {
   const ler = async (k) => { try { const v = await cloudGetForce(k, []); return v || []; } catch (e) { return []; } };
   const [prods, pedidos, clientes, contratos, compras, atd] = await Promise.all(['eagles_produtos_v1', 'eagles_pedidos_venda_v1', CLIENTES_FORN_KEY, 'eagles_contratos_v1', 'eagles_pedido_compras_v1', ATD_CFG_KEY].map(ler));
@@ -11107,22 +11250,26 @@ async function sisRenderPainel() {
   if (!el) return;
   const c = SIS;
   if (!SIS_CARREGADO) return;
+  const avisoAss = typeof assHtmlAviso === 'function' ? assHtmlAviso() : '';
   // quem já usava e não respondeu: convite, sem obrigar
   if (!c || (!c.concluidoEm && !c.pulado)) {
-    el.innerHTML = (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) ? '' : `<div class="atd-banner" style="margin-bottom:16px;">${ic('brilho', 'ic-herda')}<div><strong>Personalize o seu sistema.</strong> Responda 2 minutos de perguntas e o sistema mostra só as ferramentas do seu tipo de negócio, com categorias, modelos e lembretes prontos. <button type="button" class="btn btn-small btn-primary" style="margin-left:6px;" onclick="sisAbrirAssistente()">Começar</button></div></div>`;
+    el.innerHTML = avisoAss + ((FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) ? '' : `<div class="atd-banner" style="margin-bottom:16px;">${ic('brilho', 'ic-herda')}<div><strong>Personalize o seu sistema.</strong> Responda 2 minutos de perguntas e o sistema mostra só as ferramentas do seu tipo de negócio, com categorias, modelos e lembretes prontos. <button type="button" class="btn btn-small btn-primary" style="margin-left:6px;" onclick="sisAbrirAssistente()">Começar</button></div></div>`);
     return;
   }
   const V = SIS_VERSOES[c.versao] || SIS_VERSOES.generico;
   const d = SIS_PAINEL_DADOS && Date.now() - (SIS_PAINEL_DADOS.em || 0) < 30000 ? SIS_PAINEL_DADOS : await sisColetarPainel();
   const noCrm = PAGINA_ATIVA_KEY === 'crm';
- const ordem = noCrm ? [] : (V.hoje || []).filter((k) => !(k === 'agendaHoje' && typeof planoTemCrm === 'function' && !planoTemCrm()) && !(['estoqueAlerta', 'comprasReceber'].includes(k) && !sisModuloAtivo('estoque')) && !(['contratosVencendo', 'notasMes'].includes(k) && !sisModuloAtivo('contratos')));
+ const FIN_CARTOES = ['receberHoje', 'vencidosReceber', 'pagarHoje'];
+  if (!noCrm && typeof finEscutar === 'function' && sisFinPronto() && !SIS_FIN_ESCUTANDO) { SIS_FIN_ESCUTANDO = true; finEscutar(() => { SIS_PAINEL_DADOS = null; sisRenderPainel(); }); }
+  const ordem = noCrm ? [] : (V.hoje || []).filter((k) => SIS_HOJE[k] && !(FIN_CARTOES.includes(k) && !sisFinPronto()) && !(k === 'agendaHoje' && typeof planoTemCrm === 'function' && !planoTemCrm()) && !(['estoqueAlerta', 'comprasReceber'].includes(k) && !sisModuloAtivo('estoque')) && !(['contratosVencendo', 'notasMes'].includes(k) && !sisModuloAtivo('contratos')));
   const semCrm = typeof planoTemCrm === 'function' && !planoTemCrm();
   const passos = (V.passos || []).filter((p) => !(semCrm && ['automacao', 'whatsapp', 'agenda', 'ia'].includes(p)) && !(p === 'estoque' && !sisModuloAtivo('estoque')) && !(p === 'contrato' && !sisModuloAtivo('contratos')) && !(p === 'agenda' && !sisModuloAtivo('agenda')) && !(['automacao', 'whatsapp'].includes(p) && !sisModuloAtivo('atendimento')));
   const feitos = passos.filter((p) => sisPassoFeito(p, d)).length;
   const escondido = (c.checklistOculto || false) || (feitos === passos.length && passos.length);
   const exemplos = d.prods.filter((p) => p.exemplo).length;
-  el.innerHTML = `
+  el.innerHTML = `${avisoAss}
     ${ordem.length ? `<div class="sis-hoje">${ordem.map((k) => { const x = SIS_HOJE[k](d); return `<a class="sis-hoje-card${x.alerta ? ' alerta' : ''}" href="${x.href}"><span>${escapeHtml(x.r)}</span><b>${escapeHtml(x.v)}</b></a>`; }).join('')}</div>` : ''}
+    ${noCrm ? '' : sisHtmlAtencao(d)}
     ${!escondido && passos.length ? `<div class="sis-passos">
       <div class="sis-passos-cab"><strong>${ic('aprovado', 'ic-herda')} Primeiros passos</strong><span>${feitos} de ${passos.length}</span><span class="kb-espaco"></span>${nivelEhDiretor() || !FIREBASE_PRONTO ? '<button type="button" class="kb-link" onclick="sisOcultarChecklist()">Ocultar</button>' : ''}</div>
       <div class="sis-progresso pequeno"><span style="width:${Math.round((feitos / passos.length) * 100)}%"></span></div>
@@ -11140,14 +11287,12 @@ async function sisApagarExemplos() {
 }
 
 // ---------- Configurações → Meu sistema ----------
-function sisAbrirMeuSistema() {
+function sisHtmlMeuSistema() {
   const c = SIS || {};
   const V = SIS_VERSOES[c.versao] || SIS_VERSOES.generico;
   const m = Object.assign({}, V.modulos, c.modulos || {});
   const pode = !FIREBASE_PRONTO || !TENANT_ID || nivelEhDiretor();
-  const ov = srvGarantirModal();
-  ov.innerHTML = `<div class="modal kb-modal" style="max-width:640px;" role="dialog" aria-modal="true">
-    <div class="modal-header"><h2>Meu sistema</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+  return `
     <div class="sis-versao"><span class="sis-versao-ic">${ic(V.icone, 'ic-herda')}</span><div><b>${escapeHtml(c.versao ? V.nome : 'Ainda não escolhida')}</b><small>${escapeHtml(c.versao ? V.desc : 'Responda o questionário para o sistema se adaptar ao seu negócio.')}</small></div></div>
     <div class="sis-tit">Ferramentas ${pode ? '<small>toque para ligar ou desligar</small>' : ''}</div>
     <div class="sis-mods">${Object.keys(SIS_MODULOS).filter(sisModuloNoPlano).map((k) => `<button type="button" class="sis-mod${m[k] !== false ? ' on' : ''}" ${pode ? `onclick="sisAlternarModulo('${k}')"` : 'disabled'}>${m[k] !== false ? '✓' : '+'} ${escapeHtml(SIS_MODULOS[k])}</button>`).join('')}</div>
@@ -11155,8 +11300,14 @@ function sisAbrirMeuSistema() {
     <div class="cw-grade2"><div class="field"><label>Quem compra de você é chamado de</label><input type="text" id="sis-t-cliente" maxlength="20" value="${escapeHtml(sisTermo('cliente', 'Cliente'))}" ${pode ? '' : 'disabled'}></div>
       <div class="field"><label>Pedido de venda é chamado de</label><input type="text" id="sis-t-pedido" maxlength="20" value="${escapeHtml(sisTermo('pedido', 'Pedido'))}" ${pode ? '' : 'disabled'}></div></div>
     <p class="kb-vazio-mini">Os nomes aparecem no menu. Plano contratado: ${escapeHtml(TENANT_PLANO === 'ambos' ? 'ERP + CRM' : (TENANT_PLANO || 'ERP + CRM').toUpperCase())} — as ferramentas fora do plano não aparecem, mesmo ligadas.</p>
-    ${pode ? `<div class="cfg-modal-rodape"><button type="button" class="btn" onclick="srvFecharModal(); sisAbrirAssistente(true)">${ic('repetir', 'ic-herda')} Refazer o questionário</button><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="sisSalvarNomes()">Salvar</button></div>` : '<p class="kb-vazio-mini">Só o Diretor muda o sistema.</p>'}
-  </div>`;
+    ${pode ? `<div class="cfg-modal-rodape"><button type="button" class="btn" onclick="if (document.getElementById('modal-srv')) srvFecharModal(); sisAbrirAssistente(true)">${ic('repetir', 'ic-herda')} Refazer o questionário</button><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="sisSalvarNomes()">Salvar</button></div>` : '<p class="kb-vazio-mini">Só o Diretor muda o sistema.</p>'}
+`;
+}
+// em Configurações vira aba; no resto do sistema abre como janela
+function sisAbrirMeuSistema() {
+  if (document.getElementById('cfg-abas') && document.getElementById('cfg-conteudo-aba')) { mostrarAbaConfig('meusistema'); return; }
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:640px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>Meu sistema</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>${sisHtmlMeuSistema()}</div>`;
   openModal('modal-srv');
 }
 function sisAlternarModulo(k) {
@@ -11173,7 +11324,7 @@ function sisSalvarNomes() {
   const c = Object.assign({ versao: 'generico' }, SIS || {});
   c.termos = Object.assign({}, c.termos || {}, { cliente: ((document.getElementById('sis-t-cliente') || {}).value || '').trim() || 'Cliente', pedido: ((document.getElementById('sis-t-pedido') || {}).value || '').trim() || 'Pedido' });
   if (cloudSet(SIS_KEY, c) === false) return;
-  SIS = c; sisAplicarVisual(); srvFecharModal();
+  SIS = c; sisAplicarVisual(); if (document.getElementById('cfg-abas')) { mostrarAbaConfig('meusistema'); avisar('Nomes salvos.', 'Meu sistema'); } else srvFecharModal();
 }
 
 // ---------- super administrador: relatório e montar a versão de um cliente ----------
@@ -11306,6 +11457,1401 @@ function erpAbrirCriar() {
   ov.innerHTML = `<div class="modal kb-modal erp-criar" role="dialog" aria-modal="true"><div class="modal-header"><h2>Criar</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
     <div class="erp-criar-lista">${op.map(([h, i, t]) => `<a class="erp-criar-op" href="${h}"><span class="crm-home-ic">${ic(i, 'ic-herda')}</span><b>${escapeHtml(t)}</b></a>`).join('')}</div></div>`;
   openModal('modal-srv');
+}
+
+// =====================================================================
+// ---------- Compras e notas de entrada com itens (somam no estoque) ----------
+// =====================================================================
+// Cada compra ou nota ganha uma lista de itens (produto, quantidade e
+// custo). Quando a compra fica "Recebido", ou a nota "Lançada", os itens
+// entram no estoque sozinhos; se voltar atrás, sai de novo. Uma nota ligada
+// a uma compra que já deu entrada não soma duas vezes.
+let CMP_ED = null; // { modulo, id, itens, pedidoCompraId }
+let CMP_SALVAR_PENDENTE = null;
+const CMP_DEF = {
+  'pedido-compra': { chave: 'eagles_pedido_compras_v1', nome: 'compra', recebido: (r) => r.status === 'recebido', titulo: (r) => `Pedido de compra nº ${r.numero || ''}` },
+  'nota-fiscal': { chave: 'eagles_notas_fiscais_entrada_v1', nome: 'nota de entrada', recebido: (r) => r.status === 'lancada', titulo: (r) => `NF-e nº ${r.numeroNota || ''}` },
+};
+function cmpLista(modulo) { return CADASTROS_DATA[modulo] || []; }
+function cmpTotal(itens) { return Math.round((itens || []).reduce((a, i) => a + estNum(i.quantidade) * estNum(i.custo), 0) * 100) / 100; }
+function cmpAbrirItens(modulo, id) {
+  const r = cmpLista(modulo).find((x) => x.id === id);
+  if (!r) return;
+  CMP_ED = { modulo, id, itens: JSON.parse(JSON.stringify(r.itens || [])), pedidoCompraId: r.pedidoCompraId || '' };
+  if (!CMP_ED.itens.length) CMP_ED.itens.push({ descricao: '', quantidade: 1, custo: 0 });
+  cmpRenderItens();
+  openModal('modal-srv');
+}
+function cmpRenderItens() {
+  const e = CMP_ED, d = CMP_DEF[e.modulo], r = cmpLista(e.modulo).find((x) => x.id === e.id) || {};
+  const prods = estProdutos().filter((p) => p.situacao !== 'inativo' && estNatureza(p) === 'produto');
+  const compras = e.modulo === 'nota-fiscal' ? cmpLista('pedido-compra').filter((c) => (c.itens || []).length && c.status !== 'cancelado') : [];
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:760px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Itens · ${escapeHtml(d.titulo(r))}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub">${escapeHtml(r.fornecedor || '')}${r.fornecedor ? ' · ' : ''}Os produtos entram no estoque quando ${e.modulo === 'nota-fiscal' ? 'a nota ficar "Lançada"' : 'a compra ficar "Recebido"'}.${r.estoqueEntrada ? ' <b>Já deu entrada no estoque.</b>' : ''}</p>
+    ${e.modulo === 'nota-fiscal' ? `<div class="field full"><label>Ligada ao pedido de compra (opcional)</label><select class="srv-select" onchange="cmpLigarCompra(this.value)"><option value="">Nenhum</option>${compras.map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === e.pedidoCompraId ? 'selected' : ''}>Nº ${escapeHtml(c.numero || '')} · ${escapeHtml(c.fornecedor || '')} · ${formatMoney(c.valor)}</option>`).join('')}</select><small class="kb-vazio-mini">Escolhendo o pedido, os itens dele vêm para cá, e o estoque não soma duas vezes.</small></div>` : ''}
+    <datalist id="cmp-produtos">${prods.map((p) => `<option value="${escapeHtml(p.nome)}">${escapeHtml(p.sku || '')}</option>`).join('')}</datalist>
+    <div class="table-scroll"><table class="cmp-itens"><thead><tr><th>Produto</th><th style="width:90px;">Qtd.</th><th style="width:120px;">Custo unit.</th><th style="width:110px; text-align:right;">Subtotal</th><th style="width:36px;"></th></tr></thead><tbody>
+      ${e.itens.map((i, k) => { const p = estAcharProduto(i); return `<tr><td><input type="text" list="cmp-produtos" value="${escapeHtml(i.descricao || '')}" placeholder="Nome do produto" oninput="cmpCampo(${k},'descricao',this.value)">${i.descricao && !p ? '<small class="cmp-aviso">não está no cadastro: não mexe no estoque</small>' : p && !estControla(p) ? '<small class="cmp-aviso">sem controle de estoque</small>' : ''}</td>
+        <td><input type="number" min="0" step="any" value="${estNum(i.quantidade)}" oninput="cmpCampo(${k},'quantidade',this.value)"></td>
+        <td><input type="number" min="0" step="0.01" value="${estNum(i.custo)}" oninput="cmpCampo(${k},'custo',this.value)"></td>
+        <td style="text-align:right;" id="cmp-sub-${k}">${formatMoney(estNum(i.quantidade) * estNum(i.custo))}</td>
+        <td><button type="button" class="cw-x" aria-label="Tirar" onclick="CMP_ED.itens.splice(${k},1); cmpRenderItens()">✕</button></td></tr>`; }).join('')}
+    </tbody></table></div>
+    <div class="cmp-rodape"><button type="button" class="btn btn-small" onclick="CMP_ED.itens.push({ descricao: '', quantidade: 1, custo: 0 }); cmpRenderItens()">+ Item</button><span class="kb-espaco"></span><span>Total dos itens: <b id="cmp-total">${formatMoney(cmpTotal(e.itens))}</b></span></div>
+    <label class="sis-check"><input type="checkbox" id="cmp-usar-total" checked> Usar o total dos itens como valor ${e.modulo === 'nota-fiscal' ? 'da nota' : 'da compra'} (hoje: ${formatMoney(r.valor)})</label>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="cmpSalvarItens()">Salvar itens</button></div>
+  </div>`;
+}
+function cmpCampo(k, campo, v) {
+  const i = CMP_ED.itens[k]; if (!i) return;
+  i[campo] = campo === 'descricao' ? v : estNum(v);
+  if (campo === 'descricao') { const p = estProdutos().find((x) => x.nome === v); if (p) { i.produtoId = p.id; if (!estNum(i.custo) && estNum(p.ultimoCusto)) i.custo = estNum(p.ultimoCusto); } else delete i.produtoId; }
+  const sub = document.getElementById('cmp-sub-' + k); if (sub) sub.textContent = formatMoney(estNum(i.quantidade) * estNum(i.custo));
+  const t = document.getElementById('cmp-total'); if (t) t.textContent = formatMoney(cmpTotal(CMP_ED.itens));
+}
+function cmpLigarCompra(compraId) {
+  CMP_ED.pedidoCompraId = compraId;
+  const c = cmpLista('pedido-compra').find((x) => x.id === compraId);
+  if (c && (c.itens || []).length && (!CMP_ED.itens.some((i) => i.descricao) || confirm('Trazer os itens do pedido de compra para esta nota?'))) CMP_ED.itens = JSON.parse(JSON.stringify(c.itens));
+  cmpRenderItens();
+}
+function cmpSalvarItens() {
+  if (!exigirPodeOperar('salvar os itens')) return;
+  const e = CMP_ED, d = CMP_DEF[e.modulo];
+  const lista = cmpLista(e.modulo), r = lista.find((x) => x.id === e.id);
+  if (!r) return;
+  const itens = e.itens.filter((i) => String(i.descricao || '').trim() && estNum(i.quantidade) > 0).map((i) => { const p = estAcharProduto(i); return { descricao: String(i.descricao).trim(), produtoId: p ? p.id : '', quantidade: estNum(i.quantidade), custo: estNum(i.custo) }; });
+  const usarTotal = (document.getElementById('cmp-usar-total') || {}).checked;
+  const salvar = (darEntradaAgora) => {
+    r.itens = itens; r.estoqueControlado = true; r.atualizadoEm = new Date().toISOString();
+    if (e.modulo === 'nota-fiscal') r.pedidoCompraId = e.pedidoCompraId || '';
+    if (usarTotal && itens.length) r.valor = cmpTotal(itens);
+    // já estava recebida antes de ter itens: a pessoa decide se soma agora
+    if (d.recebido(r) && !r.estoqueEntrada && !darEntradaAgora) { r.estoqueEntrada = true; r.estoqueEntradaItens = []; r.estoqueSemEntrada = true; }
+    if (cloudSet(d.chave, lista) === false) return;
+    srvFecharModal();
+    renderCadastroTabela(e.modulo);
+  };
+  if (d.recebido(r) && !r.estoqueEntrada && itens.some((i) => i.produtoId)) {
+    CMP_SALVAR_PENDENTE = salvar;
+    const ov = srvGarantirModal();
+    ov.innerHTML = `<div class="modal kb-modal" style="max-width:460px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>Somar no estoque?</h2></div>
+      <p class="cfg-modal-sub">Esta ${d.nome} já está como ${e.modulo === 'nota-fiscal' ? 'lançada' : 'recebida'}. Somar estes itens no estoque agora?</p>
+      <p class="kb-vazio-mini">Se o estoque desses produtos já foi acertado à mão, escolha "Só registrar os itens".</p>
+      <div class="cfg-modal-rodape"><button type="button" class="btn" onclick="CMP_SALVAR_PENDENTE(false)">Só registrar os itens</button><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="CMP_SALVAR_PENDENTE(true)">Somar no estoque</button></div></div>`;
+    return;
+  }
+  salvar(true);
+}
+// confere compras e notas: recebida e ainda sem entrada → soma; deixou de ser → tira
+function estSincronizarCompras() {
+  if (!estPronto() || !perfilOpVendeProdutos() || (FIREBASE_PRONTO && TENANT_ID && !nivelPodeOperar())) return;
+  if (!chaveCarregadaNaNuvem('eagles_pedido_compras_v1') || !chaveCarregadaNaNuvem('eagles_notas_fiscais_entrada_v1')) return;
+  const notas = cmpLista('nota-fiscal'), compras = cmpLista('pedido-compra');
+  ['pedido-compra', 'nota-fiscal'].forEach((modulo) => {
+    const d = CMP_DEF[modulo], lista = cmpLista(modulo);
+    let mexeu = false;
+    lista.forEach((r) => {
+      if (!r.estoqueControlado) return;
+      // registrada sem mexer no estoque (a pessoa escolheu): só limpa a marca se deixar de estar recebida
+      if (r.estoqueSemEntrada) { if (!d.recebido(r)) { r.estoqueSemEntrada = false; r.estoqueEntrada = false; mexeu = true; } return; }
+      // não soma duas vezes a mesma mercadoria (compra e nota ligadas)
+      const jaEntrou = modulo === 'nota-fiscal' ? !!(r.pedidoCompraId && (compras.find((c) => c.id === r.pedidoCompraId) || {}).estoqueEntrada) : notas.some((n) => n.pedidoCompraId === r.id && n.estoqueEntrada && !n.estoqueSemEntrada);
+      const quer = d.recebido(r) && !jaEntrou;
+      if (quer && !r.estoqueEntrada) {
+        const itens = (r.itens || []).map((i) => ({ produtoId: (estAcharProduto(i) || {}).id, qtd: estNum(i.quantidade), custo: estNum(i.custo) })).filter((x) => x.produtoId && x.qtd > 0);
+        r.estoqueEntrada = true; r.estoqueEntradaItens = itens; mexeu = true;
+        if (itens.length) {
+          estAplicar(itens.map((x) => ({ produtoId: x.produtoId, delta: x.qtd, tipo: 'entrada', motivo: `${d.titulo(r)}${r.fornecedor ? ' · ' + r.fornecedor : ''}`, origem: { tipo: modulo, id: r.id } })));
+          const ps = estProdutos(); itens.forEach((x) => { const p = ps.find((y) => y.id === x.produtoId); if (p && x.custo) p.ultimoCusto = x.custo; });
+          cloudSet('eagles_produtos_v1', ps);
+        }
+      } else if (!quer && r.estoqueEntrada && !(modulo === 'nota-fiscal' && jaEntrou && !(r.estoqueEntradaItens || []).length)) {
+        const itens = r.estoqueEntradaItens || [];
+        r.estoqueEntrada = false; r.estoqueEntradaItens = []; mexeu = true;
+        if (itens.length) estAplicar(itens.map((x) => ({ produtoId: x.produtoId, delta: -x.qtd, tipo: 'saida', motivo: `${d.titulo(r)} ${r.status === 'cancelado' ? 'cancelado(a)' : 'voltou atrás'}: estorno da entrada`, origem: { tipo: modulo, id: r.id } })));
+      }
+    });
+    if (mexeu) cloudSet(d.chave, lista);
+  });
+}
+function cmpAcoes(modulo) {
+  return (item) => {
+    const id = escapeParaOnclick(item.id), n = (item.itens || []).length;
+    return `<button type="button" class="btn btn-small btn-ghost" onclick="cmpAbrirItens('${modulo}','${id}')">${n ? `${n} ${n === 1 ? 'item' : 'itens'}` : '+ Itens'}${item.estoqueEntrada && !item.estoqueSemEntrada ? ' ✓' : ''}</button>
+      <button type="button" class="btn btn-small btn-ghost" onclick="abrirCadastroModal('${modulo}','${id}')">Editar</button>
+      <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirCadastroItem('${modulo}','${id}')">Excluir</button>`;
+  };
+}
+
+// =====================================================================
+// ---------- Inventário (no lugar da Conferência de estoque) ----------
+// =====================================================================
+// Conta vários produtos de uma vez. O que foi contado fica guardado neste
+// aparelho até concluir (dá para contar aos poucos). Ao concluir, o saldo
+// de cada produto contado é ajustado e o inventário fica no histórico.
+const INV_KEY = 'eagles_conferencia_estoque_v1';
+let INV = { busca: '', filtro: '', verId: '' };
+function invRascunhoKey() { return chaveLocalTenant('eagles_inventario_rascunho_v1'); }
+function invRascunho() { return lsLoad(invRascunhoKey(), { contagens: {}, iniciadoEm: '' }); }
+function invSalvarRascunho(r) { lsSave(invRascunhoKey(), r); }
+function invIniciar() {
+  estIniciar();
+  cloudWatch(INV_KEY, [], (d) => { CADASTROS_DATA['conferencia-estoque'] = Array.isArray(d) ? d : []; invRender(); });
+  const esperar = () => { if (estPronto()) invRender(); else setTimeout(esperar, 400); };
+  esperar();
+}
+function invContar(id, v) {
+  const r = invRascunho();
+  if (!r.iniciadoEm) r.iniciadoEm = new Date().toISOString();
+  if (v === '' || v === null) delete r.contagens[id]; else r.contagens[id] = estNum(v);
+  invSalvarRascunho(r);
+  const p = estProdutos().find((x) => x.id === id);
+  const cel = document.getElementById('inv-dif-' + id);
+  if (cel && p) { const dif = v === '' ? null : Math.round((estNum(v) - estNum(p.estoque)) * 1000) / 1000; cel.innerHTML = dif === null ? '—' : `<b class="${dif === 0 ? 'fin-verde' : 'fin-vermelho'}">${dif > 0 ? '+' : ''}${dif}</b>`; }
+  invRenderResumo();
+}
+function invRenderResumo() {
+  const el = document.getElementById('inv-resumo');
+  if (!el) return;
+  const r = invRascunho(), ps = estProdutos();
+  const ids = Object.keys(r.contagens).filter((id) => ps.some((p) => p.id === id));
+  const div = ids.filter((id) => { const p = ps.find((x) => x.id === id); return estNum(r.contagens[id]) !== estNum(p.estoque); });
+  el.innerHTML = `<span><b>${ids.length}</b> contado(s)</span><span><b class="${div.length ? 'fin-vermelho' : ''}">${div.length}</b> com diferença</span>${r.iniciadoEm ? `<span class="kb-vazio-mini">começou em ${escapeHtml(formatDatePt(r.iniciadoEm.slice(0, 10)))}</span>` : ''}`;
+}
+function invRender() {
+  const el = document.getElementById('inv-app');
+  if (!el) return;
+  if (!estPronto()) { el.innerHTML = '<p class="kb-vazio">Carregando o estoque...</p>'; return; }
+  const foco = document.activeElement && document.activeElement.id;
+  const r = invRascunho();
+  const q = ttSemAcento(INV.busca);
+  const todos = estProdutos().filter((p) => p.situacao !== 'inativo' && estControla(p)).sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+  const lista = todos.filter((p) => (!q || ttSemAcento(p.nome + ' ' + (p.sku || '')).includes(q)) && (INV.filtro !== 'faltam' || r.contagens[p.id] === undefined) && (INV.filtro !== 'diferenca' || (r.contagens[p.id] !== undefined && estNum(r.contagens[p.id]) !== estNum(p.estoque))));
+  const hist = (CADASTROS_DATA['conferencia-estoque'] || []).filter((x) => x.tipo === 'inventario').sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  const antigas = (CADASTROS_DATA['conferencia-estoque'] || []).filter((x) => x.tipo !== 'inventario');
+  el.innerHTML = `
+    <div class="panel">
+      <div class="fin-painel-cab" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;"><strong>Contagem</strong><span class="kb-espaco"></span><div class="inv-resumo" id="inv-resumo"></div></div>
+      <div class="est-filtros"><input type="search" id="inv-busca" placeholder="Buscar produto ou SKU..." value="${escapeHtml(INV.busca)}" oninput="INV.busca = this.value; invRender()">
+        <select class="srv-select" onchange="INV.filtro = this.value; invRender()"><option value="">Todos</option><option value="faltam" ${INV.filtro === 'faltam' ? 'selected' : ''}>Ainda não contados</option><option value="diferenca" ${INV.filtro === 'diferenca' ? 'selected' : ''}>Com diferença</option></select></div>
+      <div class="table-scroll"><table><thead><tr><th>Produto</th><th>SKU</th><th style="text-align:right;">No sistema</th><th style="width:130px;">Contado</th><th style="text-align:right;">Diferença</th></tr></thead><tbody>
+        ${lista.length ? lista.map((p) => { const c = r.contagens[p.id], dif = c === undefined ? null : Math.round((estNum(c) - estNum(p.estoque)) * 1000) / 1000; return `<tr><td><strong>${escapeHtml(p.nome)}</strong></td><td>${escapeHtml(p.sku || '—')}</td><td style="text-align:right;">${estNum(p.estoque)}</td>
+          <td><input type="number" min="0" step="any" class="inv-input" id="inv-c-${escapeHtml(p.id)}" value="${c === undefined ? '' : c}" placeholder="—" oninput="invContar('${escapeParaOnclick(p.id)}', this.value)"></td>
+          <td style="text-align:right;" id="inv-dif-${escapeHtml(p.id)}">${dif === null ? '—' : `<b class="${dif === 0 ? 'fin-verde' : 'fin-vermelho'}">${dif > 0 ? '+' : ''}${dif}</b>`}</td></tr>`; }).join('') : `<tr><td colspan="5" style="text-align:center; padding:26px; color:var(--text-soft);">${todos.length ? 'Nada com esse filtro.' : 'Nenhum produto com controle de estoque.'}</td></tr>`}
+      </tbody></table></div>
+      <div class="cmp-rodape" style="margin-top:12px;"><button type="button" class="btn btn-small btn-ghost" onclick="invDescartar()">Descartar a contagem</button><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="invConcluir()">Concluir inventário</button></div>
+      <p class="kb-vazio-mini" style="margin:8px 0 0;">A contagem fica guardada neste aparelho enquanto você conta. Só os produtos contados são ajustados.</p>
+    </div>
+    <div class="panel"><strong>Inventários concluídos</strong>
+      ${hist.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th>Data</th><th>Por</th><th style="text-align:right;">Contados</th><th style="text-align:right;">Com diferença</th><th style="text-align:right;">Ajuste</th><th></th></tr></thead><tbody>${hist.map((h) => `<tr><td>${escapeHtml(formatDatePt(String(h.data).slice(0, 10)))}</td><td>${escapeHtml(h.por || '')}</td><td style="text-align:right;">${(h.itens || []).length}</td><td style="text-align:right;">${h.divergencias || 0}</td><td style="text-align:right;">${h.ajusteUnidades > 0 ? '+' : ''}${h.ajusteUnidades || 0} un.</td><td><button type="button" class="btn btn-small btn-ghost" onclick="invVer('${escapeParaOnclick(h.id)}')">Ver</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="kb-vazio-mini" style="margin:8px 0 0;">Nenhum inventário concluído ainda.</p>'}
+      ${antigas.length ? `<details style="margin-top:10px;"><summary class="kb-vazio-mini">Conferências antigas (${antigas.length})</summary><div class="table-scroll"><table><thead><tr><th>Produto</th><th>Data</th><th>Sistema</th><th>Contado</th></tr></thead><tbody>${antigas.map((a) => `<tr><td>${escapeHtml(a.produto || '')}</td><td>${escapeHtml(formatDatePt(a.data))}</td><td>${escapeHtml(String(a.estoqueSistema ?? ''))}</td><td>${escapeHtml(String(a.estoqueContado ?? ''))}</td></tr>`).join('')}</tbody></table></div></details>` : ''}
+    </div>`;
+  invRenderResumo();
+  if (foco) { const f = document.getElementById(foco); if (f) { f.focus(); try { f.setSelectionRange(f.value.length, f.value.length); } catch (e) {} } }
+}
+function invDescartar() { confirmarAcao('Descartar tudo o que foi contado até agora?', () => { invSalvarRascunho({ contagens: {}, iniciadoEm: '' }); invRender(); }, 'Inventário'); }
+function invConcluir() {
+  if (!exigirPodeOperar('concluir o inventário')) return;
+  const r = invRascunho(), ps = estProdutos();
+  const itens = Object.keys(r.contagens).map((id) => { const p = ps.find((x) => x.id === id); return p && estControla(p) ? { produtoId: id, nome: p.nome, sistema: estNum(p.estoque), contado: estNum(r.contagens[id]) } : null; }).filter(Boolean);
+  if (!itens.length) { avisar('Conte pelo menos um produto antes de concluir.'); return; }
+  const dif = itens.filter((i) => i.contado !== i.sistema);
+  confirmarAcao(`Concluir o inventário?\n\n${itens.length} produto(s) contado(s), ${dif.length} com diferença. O saldo desses produtos passa a ser o contado.`, () => {
+    const data = new Date().toISOString();
+    if (dif.length) estAplicar(dif.map((i) => ({ produtoId: i.produtoId, delta: Math.round((i.contado - i.sistema) * 1000) / 1000, tipo: 'ajuste', motivo: `Inventário de ${formatDatePt(data.slice(0, 10))}`, origem: { tipo: 'inventario' } })));
+    const reg = { id: genId('inv'), tipo: 'inventario', data, por: USUARIO_NOME || '', itens: itens.map((i) => Object.assign(i, { diferenca: Math.round((i.contado - i.sistema) * 1000) / 1000 })), divergencias: dif.length, ajusteUnidades: Math.round(dif.reduce((a, i) => a + (i.contado - i.sistema), 0) * 1000) / 1000, criadoEm: data };
+    const lista = (CADASTROS_DATA['conferencia-estoque'] || []).concat([reg]);
+    if (cloudSet(INV_KEY, lista) === false) return;
+    CADASTROS_DATA['conferencia-estoque'] = lista;
+    invSalvarRascunho({ contagens: {}, iniciadoEm: '' });
+    invRender();
+    avisar(`Inventário concluído: ${dif.length} produto(s) ajustado(s). Cada ajuste aparece no histórico do produto.`, 'Inventário');
+  }, 'Inventário');
+}
+function invVer(id) {
+  const h = (CADASTROS_DATA['conferencia-estoque'] || []).find((x) => x.id === id);
+  if (!h) return;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:620px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>Inventário de ${escapeHtml(formatDatePt(String(h.data).slice(0, 10)))}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="table-scroll"><table><thead><tr><th>Produto</th><th style="text-align:right;">Sistema</th><th style="text-align:right;">Contado</th><th style="text-align:right;">Diferença</th></tr></thead><tbody>${(h.itens || []).map((i) => `<tr><td>${escapeHtml(i.nome)}</td><td style="text-align:right;">${i.sistema}</td><td style="text-align:right;">${i.contado}</td><td style="text-align:right;"><b class="${i.diferenca === 0 ? 'fin-verde' : 'fin-vermelho'}">${i.diferenca > 0 ? '+' : ''}${i.diferenca}</b></td></tr>`).join('')}</tbody></table></div></div>`;
+  openModal('modal-srv');
+}
+
+// =====================================================================
+// ---------- Painel do ERP: mais números do dia + "precisa de atenção" ----------
+// =====================================================================
+function sisFinPronto() { return (!FIREBASE_PRONTO || !TENANT_ID || nivelVeFinanceiro()) && typeof FIN_LANC !== 'undefined'; }
+function sisFinAbertos(tipo) { return (sisFinPronto() ? FIN_LANC : []).filter((l) => l.tipo === tipo && (l.status === 'pendente' || l.status === 'parcial')); }
+Object.assign(SIS_HOJE, {
+  aFaturar: (d) => { const l = d.pedidos.filter((p) => p.status === 'aberto'); return { r: 'A faturar (pedidos abertos)', v: formatMoney(l.reduce((a, p) => a + (Number(p.valor) || 0), 0)), href: 'pedidos-venda.html', alerta: l.length > 0 }; },
+  receberHoje: () => { const h = isoHoje(), l = sisFinAbertos('receber').filter((x) => x.vencimento === h); return { r: `A receber hoje (${l.length})`, v: formatMoney(l.reduce((a, x) => a + finRestante(x), 0)), href: 'financeiro.html', fin: true }; },
+  vencidosReceber: () => { const h = isoHoje(), l = sisFinAbertos('receber').filter((x) => x.vencimento && x.vencimento < h); return { r: `Recebimentos atrasados (${l.length})`, v: formatMoney(l.reduce((a, x) => a + finRestante(x), 0)), href: 'financeiro.html', alerta: l.length > 0, fin: true }; },
+  pagarHoje: () => { const h = isoHoje(), l = sisFinAbertos('pagar').filter((x) => x.vencimento && x.vencimento <= h); return { r: `A pagar hoje e atrasado (${l.length})`, v: formatMoney(l.reduce((a, x) => a + finRestante(x), 0)), href: 'financeiro.html', alerta: l.length > 0, fin: true }; },
+  ticketMes: (d) => { const m = isoHoje().slice(0, 7), l = d.pedidos.filter((p) => p.status === 'faturado' && String(p.data || '').startsWith(m)); return { r: `Ticket médio do mês (${l.length} venda${l.length === 1 ? '' : 's'})`, v: formatMoney(l.length ? l.reduce((a, p) => a + (Number(p.valor) || 0), 0) / l.length : 0), href: 'pedidos-venda.html' }; },
+  comprasAtrasadas: (d) => { const lim = atdMaisDias(isoHoje(), -15), n = d.compras.filter((c) => c.status === 'aberto' && c.data && c.data < lim).length; return { r: 'Compras abertas há +15 dias', v: String(n), href: 'pedido-compras.html', alerta: n > 0 }; },
+});
+const SIS_HOJE_VERSAO = {
+  agencia: ['receberHoje', 'vencidosReceber', 'contratosVencendo', 'notasMes', 'pagarHoje', 'pedidosAbertos'],
+  consultoria: ['receberHoje', 'vencidosReceber', 'contratosVencendo', 'notasMes', 'pagarHoje', 'aReceber'],
+  agenda: ['agendaHoje', 'receberHoje', 'vencidosReceber', 'clientesParados', 'pagarHoje', 'pedidosAbertos'],
+  comercio: ['vendasHoje', 'aFaturar', 'ticketMes', 'estoqueAlerta', 'comprasReceber', 'receberHoje', 'vencidosReceber', 'pagarHoje'],
+  producao: ['pedidosAbertos', 'aFaturar', 'estoqueAlerta', 'comprasAtrasadas', 'receberHoje', 'vencidosReceber', 'pagarHoje', 'contratosVencendo'],
+  generico: ['vendasHoje', 'aFaturar', 'receberHoje', 'vencidosReceber', 'pagarHoje', 'estoqueAlerta'],
+};
+Object.keys(SIS_HOJE_VERSAO).forEach((k) => { if (SIS_VERSOES[k]) SIS_VERSOES[k].hoje = SIS_HOJE_VERSAO[k]; });
+// telefone do cliente na ficha (ERP ou CRM) para o lembrete no WhatsApp
+function sisTelefoneCliente(nome, d) {
+  const n = ttSemAcento(nome);
+  const erp = (d.clientes || []).find((c) => ttSemAcento(c.nome || c.razaoSocial) === n || ttSemAcento(c.fantasia) === n) || {};
+  const crm = (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : []).find((c) => ttSemAcento(c.nome) === n) || {};
+  return erp.whatsapp || erp.telefone1 || erp.telefone || crm.whatsapp || crm.telefone || '';
+}
+function sisLinkLembrete(l, tel) {
+  const num = atdWaNumero(tel); if (!num) return '';
+  const h = isoHoje(), quando = l.vencimento === h ? 'que vence hoje' : l.vencimento < h ? `que venceu em ${formatDatePt(l.vencimento)}` : `com vencimento em ${formatDatePt(l.vencimento)}`;
+  const empresa = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '';
+  const txt = `Olá, ${atdPrimeiroNome(l.cliente || '')}! Tudo bem? ${empresa ? 'Aqui é da ' + empresa + '. ' : ''}Passando para lembrar do pagamento de ${formatMoney(finRestante(l))}${l.descricao ? ' (' + l.descricao + ')' : ''}, ${quando}. Qualquer dúvida, estou à disposição.`;
+  return `https://wa.me/${num}?text=${encodeURIComponent(txt)}`;
+}
+function sisHtmlAtencao(d) {
+  const h = isoHoje(), em3 = atdMaisDias(h, 3), linhas = [];
+  sisFinAbertos('receber').filter((l) => l.vencimento && l.vencimento <= em3).sort((a, b) => a.vencimento.localeCompare(b.vencimento)).slice(0, 6).forEach((l) => {
+    const tel = sisTelefoneCliente(l.cliente, d), link = sisLinkLembrete(l, tel);
+    linhas.push(`<div class="sis-atencao-linha${l.vencimento < h ? ' atrasado' : ''}"><div><b>${escapeHtml(l.cliente || 'Sem cliente')}</b><span>${formatMoney(finRestante(l))} · ${l.vencimento < h ? 'atrasado desde ' + escapeHtml(formatDatePt(l.vencimento)) : l.vencimento === h ? 'vence hoje' : 'vence ' + escapeHtml(formatDatePt(l.vencimento))}${l.descricao ? ' · ' + escapeHtml(l.descricao) : ''}</span></div>
+      ${link ? `<a class="btn btn-small sis-whats" href="${escapeHtml(link)}" target="_blank" rel="noopener">${ic('conversa', 'ic-herda')} Lembrar no WhatsApp</a>` : '<span class="kb-vazio-mini">sem WhatsApp na ficha</span>'}</div>`);
+  });
+  if (sisModuloAtivo('estoque') && perfilOpVendeProdutos()) d.prods.filter((p) => estControla(p) && p.situacao !== 'inativo' && estNum(p.estoque) <= 0).slice(0, 3).forEach((p) => linhas.push(`<div class="sis-atencao-linha"><div><b>${escapeHtml(p.nome)}</b><span>estoque zerado</span></div><a class="btn btn-small" href="estoque.html">Ver estoque</a></div>`));
+  const lim = atdMaisDias(h, -7);
+  d.pedidos.filter((p) => p.status === 'aberto' && p.data && p.data < lim).slice(0, 3).forEach((p) => linhas.push(`<div class="sis-atencao-linha"><div><b>${sisTermo('pedido', 'Pedido')} nº ${escapeHtml(p.numero || '')} · ${escapeHtml(p.cliente || '')}</b><span>aberto desde ${escapeHtml(formatDatePt(p.data))} · ${formatMoney(p.valor)}</span></div><a class="btn btn-small" href="pedidos-venda.html">Abrir</a></div>`));
+  return linhas.length ? `<div class="sis-atencao"><div class="sis-passos-cab"><strong>${ic('alerta', 'ic-herda')} Precisa de atenção</strong><span>recebimentos dos próximos 3 dias, estoque e pedidos parados</span></div>${linhas.join('')}</div>` : '';
+}
+
+// =====================================================================
+// ---------- Conciliação bancária (extrato OFX) ----------
+// =====================================================================
+// Lê o extrato OFX do banco, sugere para cada movimento o lançamento que
+// bate (mesmo tipo, mesmo valor, data perto) e, ao confirmar, dá baixa
+// no lançamento em aberto, marca o já pago como conferido ou cria um
+// lançamento novo. Cada movimento fica marcado pelo código do banco
+// (FITID): importar o mesmo extrato de novo não duplica nada.
+let OFX = null; // { caixaId, movs: [{fitid, data, valor, tipo, memo, escolha, sugestoes}] }
+function ofxLerTexto(buf) {
+  const cab = new TextDecoder('ascii').decode(buf.slice(0, 600));
+  const latin = /CHARSET:\s*(1252|ISO-?8859-?1)|ENCODING:\s*USASCII/i.test(cab);
+  try { return new TextDecoder(latin ? 'windows-1252' : 'utf-8', { fatal: !latin }).decode(buf); } catch (e) { return new TextDecoder('windows-1252').decode(buf); }
+}
+function ofxParse(texto) {
+  const campo = (bloco, tag) => { const m = bloco.match(new RegExp('<' + tag + '>([^<\\r\\n]*)', 'i')); return m ? m[1].trim() : ''; };
+  const data = (s) => (/^\d{8}/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : '');
+  const movs = [];
+  const re = /<STMTTRN>([\s\S]*?)(?=<\/STMTTRN>|<STMTTRN>|<\/BANKTRANLIST>)/gi;
+  let m;
+  while ((m = re.exec(texto))) {
+    const b = m[1];
+    const valor = Number(campo(b, 'TRNAMT').replace(',', '.'));
+    if (!isFinite(valor) || !valor) continue;
+    const memo = [campo(b, 'NAME'), campo(b, 'MEMO')].filter(Boolean).join(' · ').replace(/\s+/g, ' ').slice(0, 140);
+    const d = data(campo(b, 'DTPOSTED'));
+    const fitid = (campo(b, 'FITID') || `${d}_${valor}_${memo}`).slice(0, 80);
+    movs.push({ fitid, data: d, valor: Math.round(Math.abs(valor) * 100) / 100, tipo: valor > 0 ? 'receber' : 'pagar', memo });
+  }
+  const banco = campo(texto, 'ORG') || campo(texto, 'BANKID');
+  return { movs, banco };
+}
+function ofxDias(a, b) { return Math.abs((new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 86400000); }
+// lançamentos que podem ser esse movimento, do mais provável para o menos
+function ofxSugestoes(mv, usados) {
+  return FIN_LANC.filter((l) => l.tipo === mv.tipo && l.status !== 'cancelado' && !l.conciliadoFitid && !usados.has(l.id)).map((l) => {
+    const aberto = l.status === 'pendente' || l.status === 'parcial';
+    const alvo = aberto ? finRestante(l) : Number(l.valorPago) || 0;
+    if (Math.abs(alvo - mv.valor) > 0.01) return null;
+    const ref = aberto ? l.vencimento : (l.dataPagamento || l.vencimento);
+    const dist = ref ? ofxDias(ref, mv.data) : 30;
+    if (dist > (aberto ? 20 : 5)) return null;
+    return { l, aberto, dist };
+  }).filter(Boolean).sort((a, b) => a.dist - b.dist).slice(0, 3);
+}
+function ofxAbrir() {
+  if (!FIN_CAIXAS.caixas.length) { avisar('Crie um caixa (a conta do banco) antes de conciliar o extrato.'); return; }
+  OFX = { caixaId: (finCaixaPadrao() || {}).id, movs: [], banco: '' };
+  ofxRender();
+  openModal('modal-srv');
+}
+async function ofxLerArquivo(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  try {
+    const { movs, banco } = ofxParse(ofxLerTexto(new Uint8Array(await f.arrayBuffer())));
+    if (!movs.length) { avisar('Não encontrei movimentações nesse arquivo. Confira se é um extrato no formato OFX (o banco chama de "Money" ou "OFX").'); return; }
+    const cx = finCaixa(OFX.caixaId) || {};
+    const ignorados = new Set(cx.ofxIgnorados || []);
+    const usados = new Set();
+    OFX.banco = banco;
+    OFX.movs = movs.sort((a, b) => a.data.localeCompare(b.data)).map((mv) => {
+      const ja = FIN_LANC.find((l) => l.conciliadoFitid === mv.fitid);
+      if (ja) return Object.assign(mv, { estado: 'feito', ja });
+      if (ignorados.has(mv.fitid)) return Object.assign(mv, { estado: 'ignorado' });
+      const sug = ofxSugestoes(mv, usados);
+      if (sug[0]) usados.add(sug[0].l.id);
+      return Object.assign(mv, { estado: 'novo', sugestoes: sug, escolha: sug[0] ? 'l:' + sug[0].l.id : 'criar' });
+    });
+    ofxRender();
+  } catch (e) { console.error(e); avisar('Não foi possível ler esse arquivo.'); }
+}
+function ofxRender() {
+  const ov = srvGarantirModal();
+  const novos = OFX.movs.filter((m) => m.estado === 'novo');
+  const nome = (l) => `${l.cliente || l.fornecedor || l.descricao || 'Lançamento'} · ${l.status === 'pago' ? 'já pago' : 'vence ' + formatDatePt(l.vencimento)}`;
+  ov.innerHTML = `<div class="modal kb-modal ofx" style="max-width:900px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>Conciliar extrato (OFX)</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <p class="cfg-modal-sub">No internet banking, exporte o extrato em <b>OFX</b> e escolha o arquivo aqui. O sistema sugere o lançamento de cada movimento; confira e toque em Conciliar.</p>
+    <div class="ofx-topo"><div class="field"><label>Conta (caixa) do extrato</label><select class="srv-select" onchange="OFX.caixaId = this.value">${FIN_CAIXAS.caixas.map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === OFX.caixaId ? 'selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}</select></div>
+      <div class="field"><label>Arquivo OFX</label><input type="file" accept=".ofx,.OFX,application/x-ofx,text/plain" onchange="ofxLerArquivo(this)"></div></div>
+    ${OFX.movs.length ? `<div class="ofx-resumo">${OFX.movs.length} movimento(s)${OFX.banco ? ' · ' + escapeHtml(OFX.banco) : ''} · <b>${novos.filter((m) => m.escolha.startsWith('l:')).length}</b> com lançamento encontrado · <b>${novos.filter((m) => m.escolha === 'criar').length}</b> para criar · ${OFX.movs.filter((m) => m.estado === 'feito').length} já conciliado(s)</div>
+      <div class="table-scroll"><table class="ofx-tabela"><thead><tr><th>Data</th><th>No extrato</th><th style="text-align:right;">Valor</th><th>O que fazer</th></tr></thead><tbody>
+      ${OFX.movs.map((m, i) => `<tr class="${m.estado !== 'novo' ? 'ofx-feito' : ''}"><td style="white-space:nowrap;">${escapeHtml(formatDatePt(m.data))}</td><td>${escapeHtml(m.memo || '—')}</td>
+        <td style="text-align:right; white-space:nowrap;" class="${m.tipo === 'receber' ? 'fin-verde' : 'fin-vermelho'}">${m.tipo === 'receber' ? '+' : '−'} ${formatMoney(m.valor)}</td>
+        <td>${m.estado === 'feito' ? `<span class="kb-vazio-mini">✓ já conciliado: ${escapeHtml(nome(m.ja))}</span>` : m.estado === 'ignorado' ? '<span class="kb-vazio-mini">ignorado antes</span>'
+          : `<select class="srv-select ofx-escolha" onchange="OFX.movs[${i}].escolha = this.value; ofxRender()">${m.sugestoes.map((s) => `<option value="l:${escapeHtml(s.l.id)}" ${m.escolha === 'l:' + s.l.id ? 'selected' : ''}>${s.aberto ? 'Dar baixa em' : 'Conferir'}: ${escapeHtml(nome(s.l))}</option>`).join('')}
+            <option value="criar" ${m.escolha === 'criar' ? 'selected' : ''}>Criar ${m.tipo === 'receber' ? 'receita' : 'despesa'} nova (já paga)</option><option value="ignorar" ${m.escolha === 'ignorar' ? 'selected' : ''}>Ignorar (não entra no financeiro)</option></select>`}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="ofxConciliar()" ${novos.length ? '' : 'disabled'}>Conciliar ${novos.filter((m) => m.escolha !== 'ignorar').length} movimento(s)</button></div>` : ''}
+  </div>`;
+}
+function ofxConciliar() {
+  if (!nivelVeFinanceiro() && FIREBASE_PRONTO && TENANT_ID) { avisarSemPermissaoNivel('conciliar o extrato'); return; }
+  const agora = new Date().toISOString();
+  let baixas = 0, conferidos = 0, criados = 0, ignorados = 0;
+  const ign = [];
+  OFX.movs.filter((m) => m.estado === 'novo').forEach((m) => {
+    if (m.escolha === 'ignorar') { ign.push(m.fitid); ignorados++; return; }
+    if (m.escolha.startsWith('l:')) {
+      const l = FIN_LANC.find((x) => x.id === m.escolha.slice(2));
+      if (!l) return;
+      if (l.status === 'pendente' || l.status === 'parcial') {
+        const pago = Math.round(((Number(l.valorPago) || 0) + m.valor) * 100) / 100;
+        finAtualizar(l.id, { valorPago: pago, status: pago >= (Number(l.valor) || 0) - 0.009 ? 'pago' : 'parcial', dataPagamento: m.data, caixaId: OFX.caixaId, conciliadoFitid: m.fitid, conciliadoEm: agora });
+        baixas++;
+      } else { finAtualizar(l.id, { conciliadoFitid: m.fitid, conciliadoEm: agora, caixaId: l.caixaId || OFX.caixaId }); conferidos++; }
+      return;
+    }
+    const id = 'ofx_' + String(m.fitid).replace(/[^\w-]/g, '').slice(0, 60);
+    finCriar({ id, tipo: m.tipo, descricao: m.memo || 'Movimento do extrato', valor: m.valor, vencimento: m.data, competencia: m.data.slice(0, 7), status: 'pago', valorPago: m.valor, dataPagamento: m.data, caixaId: OFX.caixaId,
+      subtipo: m.tipo === 'pagar' ? 'variavel' : '', conciliadoFitid: m.fitid, conciliadoEm: agora, origem: { tipo: 'ofx' } });
+    criados++;
+  });
+  if (ign.length) {
+    const caixas = FIN_CAIXAS.caixas.map((c) => (c.id === OFX.caixaId ? Object.assign({}, c, { ofxIgnorados: Array.from(new Set((c.ofxIgnorados || []).concat(ign))).slice(-3000) }) : c));
+    finSalvarCaixas(Object.assign({}, FIN_CAIXAS, { caixas }));
+  }
+  srvFecharModal();
+  avisar(`Extrato conciliado: ${baixas} baixa(s), ${conferidos} conferido(s), ${criados} lançamento(s) criado(s)${ignorados ? `, ${ignorados} ignorado(s)` : ''}. Importar o mesmo extrato de novo não duplica nada.`, 'Conciliação');
+}
+
+// =====================================================================
+// ---------- Fluxo de caixa projetado (aba nova do Financeiro) ----------
+// =====================================================================
+let FLX = { dias: 90, atrasados: true };
+function flxProjetar() {
+  const hoje = finHoje(), fim = atdMaisDias(hoje, FLX.dias);
+  const saldo0 = Math.round(FIN_CAIXAS.caixas.reduce((a, c) => a + finSaldoCaixa(c.id), 0) * 100) / 100;
+  const ev = []; // { data, valor (+/-), desc }
+  FIN_LANC.filter((l) => (l.status === 'pendente' || l.status === 'parcial') && l.vencimento).forEach((l) => {
+    let d = l.vencimento;
+    if (d < hoje) { if (!FLX.atrasados) return; d = hoje; }
+    if (d > fim) return;
+    ev.push({ data: d, valor: (l.tipo === 'receber' ? 1 : -1) * finRestante(l), desc: l.cliente || l.fornecedor || l.descricao || '', atrasado: l.vencimento < hoje });
+  });
+  // recorrências ativas dos meses que ainda não foram gerados
+  (typeof FIN_REC !== 'undefined' ? FIN_REC : []).filter((r) => r.ativa !== false).forEach((r) => {
+    let m = hoje.slice(0, 7);
+    for (let i = 0; i < 4; i++, m = finSomarMeses(m, 1)) {
+      if (r.inicio && m < r.inicio) continue;
+      if (r.fim && m > r.fim) continue;
+      if (FIN_LANC.some((l) => l.recorrenciaId === r.id && finCompetencia(l) === m)) continue;
+      const ult = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate();
+      const d = `${m}-${String(Math.min(Number(r.dia) || 1, ult)).padStart(2, '0')}`;
+      if (d < hoje || d > fim) continue;
+      ev.push({ data: d, valor: (r.tipo === 'receber' ? 1 : -1) * (Number(r.valor) || 0), desc: (r.descricao || r.cliente || r.fornecedor || 'Recorrente') + ' (recorrente)' });
+    }
+  });
+  ev.sort((a, b) => a.data.localeCompare(b.data));
+  // semanas (segunda a domingo) e saldo dia a dia
+  const semanas = [];
+  let s = saldo0, cur = hoje;
+  const diario = [];
+  while (cur <= fim) {
+    const doDia = ev.filter((e) => e.data === cur);
+    s = Math.round((s + doDia.reduce((a, e) => a + e.valor, 0)) * 100) / 100;
+    diario.push({ data: cur, saldo: s });
+    const dt = new Date(cur + 'T12:00:00'), seg = atdMaisDias(cur, -((dt.getDay() + 6) % 7));
+    let w = semanas.find((x) => x.inicio === seg);
+    if (!w) { w = { inicio: seg, entra: 0, sai: 0, saldo: 0 }; semanas.push(w); }
+    doDia.forEach((e) => { if (e.valor > 0) w.entra += e.valor; else w.sai -= e.valor; });
+    w.saldo = s;
+    cur = atdMaisDias(cur, 1);
+  }
+  const menor = diario.reduce((a, d) => (d.saldo < a.saldo ? d : a), diario[0] || { saldo: saldo0, data: hoje });
+  return { saldo0, ev, semanas, diario, menor, atrasados: ev.filter((e) => e.atrasado).length };
+}
+function finHtmlFluxo() {
+  const p = flxProjetar();
+  const negativo = p.diario.find((d) => d.saldo < 0);
+  return `
+    <div class="fin-painel-cab"><strong style="font-size:17px;">Fluxo de caixa projetado</strong><span class="kb-espaco"></span>
+      <div class="kb-segmento">${[30, 60, 90].map((d) => `<button type="button" class="${FLX.dias === d ? 'ativo' : ''}" onclick="FLX.dias=${d}; finRender()">${d} dias</button>`).join('')}</div></div>
+    <p class="kb-vazio-mini" style="margin:4px 0 12px;">Parte do saldo de hoje nos caixas e soma o que está para receber e para pagar (pelo vencimento), mais as recorrências dos próximos meses.</p>
+    <label class="kb-imp-opcao" style="margin-bottom:12px;"><input type="checkbox" ${FLX.atrasados ? 'checked' : ''} onchange="FLX.atrasados = this.checked; finRender()"> Contar os atrasados como se entrassem/saíssem hoje${p.atrasados ? ` (${p.atrasados})` : ''}</label>
+    <div class="fin-cards">
+      <div class="fin-card"><div class="fin-card-tit">Saldo hoje</div><div class="fin-card-valor">${finV(p.saldo0)}</div></div>
+      <div class="fin-card"><div class="fin-card-tit">Saldo em ${FLX.dias} dias</div><div class="fin-card-valor ${(p.diario[p.diario.length - 1] || {}).saldo >= 0 ? 'fin-verde' : 'fin-vermelho'}">${finV((p.diario[p.diario.length - 1] || { saldo: p.saldo0 }).saldo)}</div></div>
+      <div class="fin-card"><div class="fin-card-tit">Menor saldo no período</div><div class="fin-card-valor ${p.menor.saldo >= 0 ? '' : 'fin-vermelho'}">${finV(p.menor.saldo)}</div><div class="kb-vazio-mini">em ${escapeHtml(formatDatePt(p.menor.data))}</div></div>
+    </div>
+    ${negativo ? `<div class="fin-info fin-info-alerta">${ic('alerta', 'ic-herda')} O saldo fica negativo a partir de <b>${escapeHtml(formatDatePt(negativo.data))}</b>. Vale antecipar recebimentos ou adiar pagamentos dessa época.</div>` : ''}
+    <div class="fin-grafico fin-grafico-evolucao"><canvas id="fin-g-fluxo"></canvas></div>
+    <div class="kb-tabela-wrap"><table class="kb-tabela"><thead><tr><th>Semana</th><th style="text-align:right;">Entra</th><th style="text-align:right;">Sai</th><th style="text-align:right;">Saldo no fim</th></tr></thead><tbody>
+      ${p.semanas.map((w) => `<tr><td>${escapeHtml(formatDatePt(w.inicio))} a ${escapeHtml(formatDatePt(atdMaisDias(w.inicio, 6)))}</td><td style="text-align:right;" class="fin-verde">${finV(w.entra)}</td><td style="text-align:right;" class="fin-vermelho">${finV(w.sai)}</td><td style="text-align:right;" class="${w.saldo >= 0 ? '' : 'fin-vermelho'}"><b>${finV(w.saldo)}</b></td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+function flxDesenhar() {
+  const cv = document.getElementById('fin-g-fluxo');
+  if (!cv || typeof Chart === 'undefined') return;
+  const p = flxProjetar();
+  FIN_GRAFICOS.push(new Chart(cv, { type: 'line', data: { labels: p.diario.map((d) => formatDatePt(d.data).slice(0, 5)), datasets: [{ label: 'Saldo projetado', data: p.diario.map((d) => d.saldo), borderColor: '#3fae12', backgroundColor: 'rgba(63,174,18,.12)', fill: true, tension: 0.25, pointRadius: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => formatMoney(c.parsed.y) } } }, scales: { y: { ticks: { callback: (v) => formatMoney(v) } } } } }));
+}
+
+// =====================================================================
+// ---------- Comissão de vendedores (ERP → Vendedores) ----------
+// =====================================================================
+let COM_MES = '';
+function comPercentual(v) { const n = Number(String(v.comissao || '').replace('%', '').replace(',', '.').trim()); return isFinite(n) && n > 0 ? n : 0; }
+function comCalcular(mes) {
+  const pedidos = (CADASTROS_DATA['pedido-venda'] || []).filter((p) => p.status === 'faturado' && String(p.data || '').startsWith(mes));
+  const vendedores = CADASTROS_DATA['vendedor'] || [];
+  const linhas = vendedores.map((v) => {
+    const meus = pedidos.filter((p) => ttSemAcento(p.vendedor) === ttSemAcento(v.nome));
+    const vendido = meus.reduce((a, p) => a + (Number(p.valor) || 0), 0), pct = comPercentual(v);
+    const id = `com_${v.id}_${mes}`;
+    return { v, pedidos: meus.length, vendido, pct, comissao: Math.round(vendido * pct) / 100, meta: Number(v.metaVendasMensal) || 0, lancamentoId: id, lancado: typeof FIN_LANC !== 'undefined' && FIN_LANC.some((l) => l.id === id && l.status !== 'cancelado') };
+  });
+  const semVendedor = pedidos.filter((p) => !vendedores.some((v) => ttSemAcento(v.nome) === ttSemAcento(p.vendedor)));
+  return { linhas, semVendedor, total: linhas.reduce((a, l) => a + l.comissao, 0) };
+}
+function comRender() {
+  const el = document.getElementById('com-painel');
+  if (!el) return;
+  if (!COM_MES) COM_MES = isoHoje().slice(0, 7);
+  const c = comCalcular(COM_MES);
+  const veFin = !FIREBASE_PRONTO || !TENANT_ID || nivelVeFinanceiro();
+  el.innerHTML = `<div class="panel">
+    <div class="fin-painel-cab" style="flex-wrap:wrap; gap:8px;"><strong style="font-size:16px;">Comissões</strong><span class="kb-espaco"></span>
+      <button type="button" class="btn btn-small" onclick="COM_MES = finSomarMeses(COM_MES, -1); comRender()">‹</button><strong>${escapeHtml(finNomeMes(COM_MES))}</strong><button type="button" class="btn btn-small" onclick="COM_MES = finSomarMeses(COM_MES, 1); comRender()">›</button></div>
+    <p class="kb-vazio-mini" style="margin:4px 0 10px;">Pedidos de venda faturados no mês × o % de comissão de cada vendedor (no cadastro dele).</p>
+    ${c.linhas.length ? `<div class="table-scroll"><table><thead><tr><th>Vendedor</th><th style="text-align:right;">Pedidos</th><th style="text-align:right;">Vendido</th><th style="text-align:right;">Meta</th><th style="text-align:right;">%</th><th style="text-align:right;">Comissão</th><th></th></tr></thead><tbody>
+      ${c.linhas.map((l) => `<tr><td><strong>${escapeHtml(l.v.nome || '')}</strong></td><td style="text-align:right;">${l.pedidos}</td><td style="text-align:right;">${formatMoney(l.vendido)}</td>
+        <td style="text-align:right;">${l.meta ? `${Math.round((l.vendido / l.meta) * 100)}% de ${formatMoney(l.meta)}` : '—'}</td><td style="text-align:right;">${l.pct ? String(l.pct).replace('.', ',') + '%' : '<span class="kb-vazio-mini">sem %</span>'}</td>
+        <td style="text-align:right;"><b>${formatMoney(l.comissao)}</b></td>
+        <td style="text-align:right;">${l.lancado ? '<span class="badge badge-success">Lançada no Financeiro</span>' : l.comissao > 0 && veFin ? `<button type="button" class="btn btn-small" onclick="comLancar('${escapeParaOnclick(l.v.id)}')">Lançar no Financeiro</button>` : ''}</td></tr>`).join('')}
+      <tr><td colspan="5" style="text-align:right;"><b>Total</b></td><td style="text-align:right;"><b>${formatMoney(c.total)}</b></td><td></td></tr></tbody></table></div>` : '<p class="kb-vazio-mini">Cadastre os vendedores (com o % de comissão) para calcular.</p>'}
+    ${c.semVendedor.length ? `<p class="kb-vazio-mini" style="margin:8px 0 0;">${c.semVendedor.length} pedido(s) faturado(s) no mês sem vendedor cadastrado (${formatMoney(c.semVendedor.reduce((a, p) => a + (Number(p.valor) || 0), 0))}).</p>` : ''}
+  </div>`;
+}
+function comLancar(vendedorId) {
+  const l = comCalcular(COM_MES).linhas.find((x) => x.v.id === vendedorId);
+  if (!l || !l.comissao) return;
+  if (typeof finCriar !== 'function' || typeof FIN_CARREGADO === 'undefined' || !FIN_CARREGADO) { avisar('O Financeiro ainda está carregando. Tente de novo em alguns segundos.'); return; }
+  const venc = `${finSomarMeses(COM_MES, 1)}-05`;
+  confirmarAcao(`Lançar ${formatMoney(l.comissao)} de comissão de ${l.v.nome} (${finNomeMes(COM_MES)}) em Contas a pagar, com vencimento em ${formatDatePt(venc)}?`, () => {
+    finCriar({ id: l.lancamentoId, tipo: 'pagar', descricao: `Comissão ${finNomeMes(COM_MES)} · ${l.v.nome}`, fornecedor: l.v.nome, valor: l.comissao, vencimento: venc, competencia: COM_MES, status: 'pendente', subtipo: 'variavel', origem: { tipo: 'comissao', vendedorId, mes: COM_MES } });
+    comRender();
+  }, 'Comissão');
+}
+
+let COM_INICIADO = false;
+function comIniciar() {
+  if (COM_INICIADO) { comRender(); return; }
+  COM_INICIADO = true;
+  if (!CADASTROS_DATA['pedido-venda']) cloudWatch('eagles_pedidos_venda_v1', [], (d) => { CADASTROS_DATA['pedido-venda'] = Array.isArray(d) ? d : []; comRender(); });
+  if ((!FIREBASE_PRONTO || !TENANT_ID || nivelVeFinanceiro()) && typeof finEscutar === 'function') finEscutar(() => comRender());
+  comRender();
+}
+
+// =====================================================================
+// ---------- Páginas extras: Link da Bio, Formulários, Captura e Agendamento ----------
+// =====================================================================
+// Cada página fica na configuração da empresa (eagles_paginas_extras_v1) e
+// é publicada em paginas_publicas/{endereço} (a mesma coleção do site), com
+// um "tipo". O visitante abre pagina.html?u=<endereço>. Formulários, captura
+// e link da bio mandam o contato para leads_publicos (o mesmo caminho do
+// site): o CRM transforma em cliente + negócio, com a origem certa. O
+// agendamento grava em agendamentos_publicos e vira compromisso na Agenda.
+const PGX_KEY = 'eagles_paginas_extras_v1';
+const PGX_TIPOS = {
+  linkbio: { nome: 'Link da Bio', icone: 'link', desc: 'Uma página com seus links para o Instagram e o TikTok.' },
+  form: { nome: 'Formulário', icone: 'tarefas', desc: 'Perguntas do seu jeito; cada resposta vira lead no Pipeline.' },
+  captura: { nome: 'Página de captura', icone: 'raio', desc: 'Página focada em transformar visitante em lead (com isca opcional).' },
+  agenda: { nome: 'Agendamento', icone: 'calendario', desc: 'O cliente escolhe o horário livre e o compromisso cai na Agenda.' },
+};
+const PGX_ABA_TIPO = { linkbio: 'linkbio', formularios: 'form', captura: 'captura', agendamento: 'agenda' };
+let PGX = { itens: [] };
+let PGX_INICIADO = false;
+let PGX_ED = null;
+function pgxIniciar() {
+  if (PGX_INICIADO) return;
+  PGX_INICIADO = true;
+  cloudWatch(PGX_KEY, { itens: [] }, (d) => { PGX = d && Array.isArray(d.itens) ? d : { itens: [] }; if (typeof pagRender === 'function') pagRender(); if (typeof pagProcessarLeads === 'function') pagProcessarLeads(); pgxAgendarOcupados(); });
+}
+function pgxSalvar() { return cloudSet(PGX_KEY, PGX) !== false; }
+function pgxPorSlug(slug) { return (PGX.itens || []).find((x) => x.slug === slug); }
+function pgxLink(slug) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'pagina.html?u=' + encodeURIComponent(slug); }
+function pgxOrigem(p) { return p.tipo === 'linkbio' ? 'Link da bio' : p.tipo === 'form' ? `Formulário: ${p.titulo}` : p.tipo === 'captura' ? `Captura: ${p.titulo}` : `Agendamento: ${p.titulo}`; }
+function pgxSlugValido(s) { return /^[a-z0-9](?:[a-z0-9-]{1,48}[a-z0-9])$/.test(s); }
+function pgxNovo(tipo) {
+  const empresa = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '';
+  const base = kbNomeNorm(empresa || 'minha-empresa').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'minha-empresa';
+  const suf = { linkbio: 'links', form: 'contato', captura: 'oferta', agenda: 'agendar' }[tipo];
+  const comum = { id: genId('pg'), tipo, slug: `${base}-${suf}`, ativa: true, titulo: { linkbio: empresa || 'Meus links', form: 'Fale com a gente', captura: 'Receba nosso material gratuito', agenda: 'Agende seu horário' }[tipo],
+    descricao: '', cor: '#3fae12', fotoUrl: (PERFIL_DATA && PERFIL_DATA.logoUrl) || '', etapa: 'lead', tags: [], sucesso: 'Recebemos! Em breve entraremos em contato.', criadoEm: new Date().toISOString() };
+  if (tipo === 'linkbio') Object.assign(comum, { links: [{ rotulo: 'Fale no WhatsApp', url: '' }, { rotulo: 'Nosso site', url: '' }], whatsapp: (PERFIL_DATA && (PERFIL_DATA.whatsapp || PERFIL_DATA.telefone1)) || '', pedirContato: true, descricao: 'Toque num link abaixo 👇' });
+  if (tipo === 'form') Object.assign(comum, { campos: [{ rotulo: 'Nome', tipo: 'nome', obrigatorio: true }, { rotulo: 'WhatsApp', tipo: 'telefone', obrigatorio: true }, { rotulo: 'E-mail', tipo: 'email', obrigatorio: false }, { rotulo: 'Como podemos ajudar?', tipo: 'longo', obrigatorio: false }], botao: 'Enviar' });
+  if (tipo === 'captura') Object.assign(comum, { subtitulo: 'Preencha e receba agora no seu e-mail e WhatsApp.', beneficios: ['Conteúdo prático, direto ao ponto', 'Feito para o seu tipo de negócio'], botao: 'Quero receber', isca: '', imagemUrl: '' });
+  if (tipo === 'agenda') Object.assign(comum, { duracao: 60, dias: [1, 2, 3, 4, 5], inicio: '09:00', fim: '18:00', almoco: '12:00-13:00', antecedencia: 2, janela: 30, servicos: [], sucesso: 'Horário reservado! Você vai receber a confirmação pelo WhatsApp.', criarNegocio: false });
+  return comum;
+}
+// ---------- telas dentro de CRM → Páginas ----------
+function pgxHtmlAba(aba) {
+  pgxIniciar();
+  const tipo = PGX_ABA_TIPO[aba], T = PGX_TIPOS[tipo];
+  if (!chaveCarregadaNaNuvem(PGX_KEY) && FIREBASE_PRONTO && TENANT_ID) return '<p class="kb-vazio">Carregando...</p>';
+  const lista = (PGX.itens || []).filter((x) => x.tipo === tipo);
+  const leads = (p) => (typeof CRM_NEGOCIOS_DATA !== 'undefined' ? CRM_NEGOCIOS_DATA : []).filter((n) => n.origem === pgxOrigem(p)).length;
+  return `<div class="pgx">
+    <div class="fin-painel-cab" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;"><p class="kb-vazio-mini" style="margin:0;">${escapeHtml(T.desc)}</p><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="pgxAbrir('', '${tipo}')">${ic('mais', 'ic-herda')} Nova página</button></div>
+    ${lista.length ? `<div class="pgx-lista">${lista.map((p) => { const id = escapeParaOnclick(p.id); return `<div class="pgx-item">
+      <span class="pgx-ic" style="background:${corHexValida(p.cor) || '#3fae12'}">${ic(T.icone, 'ic-herda')}</span>
+      <div class="pgx-txt"><strong>${escapeHtml(p.titulo)}</strong><span>${escapeHtml(pgxLink(p.slug).replace(/^https?:\/\//, ''))}</span><small>${p.publicadoEm ? (p.ativa ? '● Publicada' : '● Desativada') : '● Não publicada'} · ${tipo === 'agenda' ? `${(typeof AG !== 'undefined' ? AG : []).filter((c) => (c.tags || []).includes('agendamento online')).length} agendamento(s)` : `${leads(p)} lead(s)`}</small></div>
+      <div class="pgx-acoes"><button type="button" class="btn btn-small" onclick="pgxCompartilhar('${id}')">${ic('link', 'ic-herda')} Link</button><button type="button" class="btn btn-small" onclick="window.open(pgxLink('${escapeParaOnclick(p.slug)}'), '_blank')">${ic('abrir', 'ic-herda')}</button><button type="button" class="btn btn-small" onclick="pgxAbrir('${id}')">${ic('lapis', 'ic-herda')} Editar</button></div></div>`; }).join('')}</div>`
+    : `<div class="kb-vazio-grande"><div class="ic-circulo">${ic(T.icone)}</div><h3>${escapeHtml(T.nome)}</h3><p>${escapeHtml(T.desc)}</p><button type="button" class="btn btn-primary" onclick="pgxAbrir('', '${tipo}')">Criar agora</button></div>`}
+  </div>`;
+}
+function pgxCompartilhar(id) {
+  const p = PGX.itens.find((x) => x.id === id);
+  if (!p) return;
+  if (!p.publicadoEm) { avisar('Publique a página antes de compartilhar (Editar → Salvar e publicar).'); return; }
+  linkCompartilhar({ titulo: p.titulo, link: pgxLink(p.slug), assunto: p.titulo, texto: p.tipo === 'linkbio' ? 'Cole este link na bio do Instagram e do TikTok.' : 'Mande para os seus clientes ou coloque nas redes.', mensagem: `${p.titulo}: ${pgxLink(p.slug)}` });
+}
+function pgxAbrir(id, tipo) {
+  pgxIniciar();
+  const p = id ? PGX.itens.find((x) => x.id === id) : null;
+  PGX_ED = JSON.parse(JSON.stringify(p || pgxNovo(tipo)));
+  pgxRenderEditor();
+  openModal('modal-srv');
+}
+function pgxRenderEditor() {
+  const e = PGX_ED, T = PGX_TIPOS[e.tipo];
+  const f = (rot, campo, ph, area, extra) => `<div class="field full"><label>${rot}</label>${area ? `<textarea rows="3" maxlength="600" placeholder="${escapeHtml(ph || '')}" oninput="PGX_ED.${campo} = this.value">${escapeHtml(e[campo] || '')}</textarea>` : `<input type="text" maxlength="200" placeholder="${escapeHtml(ph || '')}" value="${escapeHtml(e[campo] === undefined ? '' : String(e[campo]))}" oninput="PGX_ED.${campo} = this.value" ${extra || ''}>`}</div>`;
+  let especifico = '';
+  if (e.tipo === 'linkbio') especifico = `<div class="sis-tit">Links</div>${(e.links || []).map((l, i) => `<div class="pgx-linha"><input type="text" maxlength="60" placeholder="Texto do botão" value="${escapeHtml(l.rotulo)}" oninput="PGX_ED.links[${i}].rotulo = this.value"><input type="url" maxlength="400" placeholder="https://..." value="${escapeHtml(l.url)}" oninput="PGX_ED.links[${i}].url = this.value"><button type="button" class="cw-x" onclick="PGX_ED.links.splice(${i},1); pgxRenderEditor()">✕</button></div>`).join('')}
+      <button type="button" class="btn btn-small" onclick="PGX_ED.links.push({rotulo:'', url:''}); pgxRenderEditor()">+ Link</button>
+      ${f('WhatsApp (vira o botão verde)', 'whatsapp', '(11) 99999-9999')}
+      <label class="sis-check"><input type="checkbox" ${e.pedirContato ? 'checked' : ''} onchange="PGX_ED.pedirContato = this.checked"> Mostrar "Deixe seu contato" (vira lead no Pipeline)</label>`;
+  if (e.tipo === 'form') especifico = `<div class="sis-tit">Perguntas</div>${(e.campos || []).map((c, i) => `<div class="pgx-linha"><input type="text" maxlength="80" value="${escapeHtml(c.rotulo)}" oninput="PGX_ED.campos[${i}].rotulo = this.value">
+      <select onchange="PGX_ED.campos[${i}].tipo = this.value; pgxRenderEditor()" ${c.tipo === 'nome' ? 'disabled' : ''}>${[['nome', 'Nome'], ['telefone', 'Telefone'], ['email', 'E-mail'], ['texto', 'Texto curto'], ['longo', 'Texto longo'], ['opcoes', 'Opções']].map(([v, t]) => `<option value="${v}" ${c.tipo === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <label class="pgx-obrig"><input type="checkbox" ${c.obrigatorio ? 'checked' : ''} ${c.tipo === 'nome' ? 'disabled' : ''} onchange="PGX_ED.campos[${i}].obrigatorio = this.checked"> obrigatória</label>
+      ${c.tipo === 'nome' ? '<span></span>' : `<button type="button" class="cw-x" onclick="PGX_ED.campos.splice(${i},1); pgxRenderEditor()">✕</button>`}
+      ${c.tipo === 'opcoes' ? `<input type="text" class="pgx-opcoes" maxlength="300" placeholder="Opções separadas por vírgula" value="${escapeHtml((c.opcoes || []).join(', '))}" oninput="PGX_ED.campos[${i}].opcoes = this.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 12)">` : ''}</div>`).join('')}
+      <button type="button" class="btn btn-small" onclick="PGX_ED.campos.push({rotulo:'Nova pergunta', tipo:'texto', obrigatorio:false}); pgxRenderEditor()">+ Pergunta</button>${f('Texto do botão', 'botao', 'Enviar')}`;
+  if (e.tipo === 'captura') especifico = `${f('Subtítulo', 'subtitulo', '', true)}<div class="field full"><label>Benefícios (um por linha)</label><textarea rows="3" maxlength="600" oninput="PGX_ED.beneficios = this.value.split('\\n').map((x) => x.trim()).filter(Boolean).slice(0, 6)">${escapeHtml((e.beneficios || []).join('\n'))}</textarea></div>
+      ${f('Imagem (link)', 'imagemUrl', 'https://...')}${f('Texto do botão', 'botao', 'Quero receber')}${f('Link da isca (material entregue depois do envio, opcional)', 'isca', 'https://drive.google.com/...')}`;
+  if (e.tipo === 'agenda') especifico = `<div class="sis-tit">Horários</div>
+      <div class="atd-chips">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => `<button type="button" class="${(e.dias || []).includes(i) ? 'ativo' : ''}" onclick="PGX_ED.dias = PGX_ED.dias.includes(${i}) ? PGX_ED.dias.filter((x) => x !== ${i}) : PGX_ED.dias.concat([${i}]).sort(); pgxRenderEditor()">${d}</button>`).join('')}</div>
+      <div class="cw-grade2"><div class="field"><label>Das</label><input type="time" value="${escapeHtml(e.inicio)}" onchange="PGX_ED.inicio = this.value"></div><div class="field"><label>Até</label><input type="time" value="${escapeHtml(e.fim)}" onchange="PGX_ED.fim = this.value"></div>
+        <div class="field"><label>Duração de cada horário (min)</label><input type="number" min="10" max="480" step="5" value="${Number(e.duracao) || 60}" onchange="PGX_ED.duracao = Math.max(10, Number(this.value) || 60)"></div><div class="field"><label>Pausa (ex.: 12:00-13:00)</label><input type="text" maxlength="11" value="${escapeHtml(e.almoco || '')}" oninput="PGX_ED.almoco = this.value"></div>
+        <div class="field"><label>Antecedência mínima (horas)</label><input type="number" min="0" max="168" value="${Number(e.antecedencia) || 0}" onchange="PGX_ED.antecedencia = Math.max(0, Number(this.value) || 0)"></div><div class="field"><label>Mostrar os próximos (dias)</label><input type="number" min="1" max="90" value="${Number(e.janela) || 30}" onchange="PGX_ED.janela = Math.max(1, Math.min(90, Number(this.value) || 30))"></div></div>
+      <div class="field full"><label>Serviços para escolher (opcional, separados por vírgula)</label><input type="text" maxlength="400" value="${escapeHtml((e.servicos || []).join(', '))}" oninput="PGX_ED.servicos = this.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 15)"></div>
+      <label class="sis-check"><input type="checkbox" ${e.criarNegocio ? 'checked' : ''} onchange="PGX_ED.criarNegocio = this.checked"> Também criar um negócio no Pipeline para cada agendamento</label>
+      <p class="kb-vazio-mini">Os horários ocupados na Agenda (compromissos e bloqueios) somem da página sozinhos.</p>`;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:640px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${e.criadoEm && PGX.itens.some((x) => x.id === e.id) ? 'Editar' : 'Nova'} · ${escapeHtml(T.nome)}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    ${f('Título', 'titulo', '')}${e.tipo !== 'captura' ? f('Descrição', 'descricao', '', true) : ''}
+    <div class="cw-grade2"><div class="field"><label>Endereço da página</label><input type="text" maxlength="50" value="${escapeHtml(e.slug)}" oninput="PGX_ED.slug = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '')"><small class="kb-vazio-mini">pagina.html?u=<b>${escapeHtml(e.slug)}</b></small></div>
+      <div class="field"><label>Cor</label><input type="color" value="${expandirHex(e.cor) || '#3fae12'}" oninput="PGX_ED.cor = this.value" style="height:42px; padding:3px;"></div></div>
+    ${f('Foto ou logo (link)', 'fotoUrl', 'https://...')}
+    ${especifico}
+    ${e.tipo !== 'linkbio' || e.pedirContato ? f('Mensagem depois do envio', 'sucesso', '', true) : ''}
+    ${e.tipo !== 'agenda' || e.criarNegocio ? `<div class="field full"><label>Os leads entram na etapa</label><select onchange="PGX_ED.etapa = this.value">${CRM_ETAPAS.filter((x) => !['fechado', 'perdido'].includes(x.key)).map((x) => `<option value="${x.key}" ${e.etapa === x.key ? 'selected' : ''}>${escapeHtml(x.label)}</option>`).join('')}</select></div>` : ''}
+    <label class="sis-check"><input type="checkbox" ${e.ativa ? 'checked' : ''} onchange="PGX_ED.ativa = this.checked"> Página ativa (desmarque para tirar do ar)</label>
+    <div class="cfg-modal-rodape">${PGX.itens.some((x) => x.id === e.id) ? `<button type="button" class="btn btn-ghost kb-btn-perigo" onclick="pgxExcluir('${escapeParaOnclick(e.id)}')">Excluir</button>` : ''}<span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" id="pgx-salvar" onclick="pgxSalvarPublicar()">Salvar e publicar</button></div>
+  </div>`;
+}
+function pgxPublico(p) {
+  const base = { tenantId: TENANT_ID, ativa: !!p.ativa, tipo: p.tipo, slug: p.slug, titulo: String(p.titulo || '').slice(0, 120), descricao: String(p.descricao || '').slice(0, 600), cor: corHexValida(p.cor) || '#3fae12', fotoUrl: /^https:\/\//i.test(p.fotoUrl || '') ? p.fotoUrl : '',
+    sucesso: String(p.sucesso || '').slice(0, 400), empresaNome: (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '', atualizadoEm: new Date().toISOString() };
+  if (p.tipo === 'linkbio') Object.assign(base, { links: (p.links || []).filter((l) => l.rotulo && /^https?:\/\//i.test(l.url || '')).slice(0, 20), whatsapp: atdWaNumero(p.whatsapp) || '', pedirContato: !!p.pedirContato });
+  if (p.tipo === 'form') Object.assign(base, { campos: (p.campos || []).slice(0, 15), botao: String(p.botao || 'Enviar').slice(0, 40) });
+  if (p.tipo === 'captura') Object.assign(base, { subtitulo: String(p.subtitulo || '').slice(0, 300), beneficios: (p.beneficios || []).slice(0, 6), botao: String(p.botao || 'Quero receber').slice(0, 40), isca: /^https:\/\//i.test(p.isca || '') ? p.isca : '', imagemUrl: /^https:\/\//i.test(p.imagemUrl || '') ? p.imagemUrl : '' });
+  if (p.tipo === 'agenda') Object.assign(base, { duracao: Number(p.duracao) || 60, dias: p.dias || [], inicio: p.inicio || '09:00', fim: p.fim || '18:00', almoco: p.almoco || '', antecedencia: Number(p.antecedencia) || 0, janela: Number(p.janela) || 30, servicos: p.servicos || [], ocupados: pgxOcupados(p) });
+  return base;
+}
+async function pgxSalvarPublicar() {
+  const e = PGX_ED;
+  if (!exigirPodeOperar('publicar páginas')) return;
+  if (!String(e.titulo || '').trim()) { avisar('Dê um título à página.'); return; }
+  if (!pgxSlugValido(e.slug)) { avisar('O endereço precisa ter de 3 a 50 letras minúsculas, números ou hífen.'); return; }
+  if (e.tipo === 'agenda' && !(e.dias || []).length) { avisar('Escolha pelo menos um dia da semana.'); return; }
+  const antigo = PGX.itens.find((x) => x.id === e.id);
+  if (PGX.itens.some((x) => x.slug === e.slug && x.id !== e.id) || (PAG && PAG.slug === e.slug)) { avisar('Esse endereço já é usado por outra página sua. Escolha outro.'); return; }
+  const btn = document.getElementById('pgx-salvar'); if (btn) { btn.disabled = true; btn.textContent = 'Publicando...'; }
+  try {
+    if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
+      const ref = firestoreDb.collection(PAG_COLECAO).doc(e.slug);
+      try { await ref.set(finLimpar(pgxPublico(e))); }
+      catch (err) { avisar('Esse endereço já está em uso por outra empresa. Escolha outro.'); return; }
+      if (antigo && antigo.slug !== e.slug) firestoreDb.collection(PAG_COLECAO).doc(antigo.slug).delete().catch(() => {});
+    }
+    e.publicadoEm = new Date().toISOString();
+    PGX.itens = antigo ? PGX.itens.map((x) => (x.id === e.id ? e : x)) : PGX.itens.concat([e]);
+    if (!pgxSalvar()) return;
+    srvFecharModal();
+    pagRender();
+    pgxCompartilhar(e.id);
+  } finally { const b = document.getElementById('pgx-salvar'); if (b) { b.disabled = false; b.textContent = 'Salvar e publicar'; } }
+}
+function pgxExcluir(id) {
+  const p = PGX.itens.find((x) => x.id === id);
+  confirmarAcao(`Excluir "${p.titulo}"? O link para de funcionar.`, () => {
+    if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) firestoreDb.collection(PAG_COLECAO).doc(p.slug).delete().catch(() => {});
+    PGX.itens = PGX.itens.filter((x) => x.id !== id);
+    pgxSalvar(); srvFecharModal(); pagRender();
+  }, 'Excluir página');
+}
+
+// ---------- agendamento: horários ocupados e pedidos que chegam ----------
+function pgxOcupados(p) {
+  const hoje = isoHoje(), ate = atdMaisDias(hoje, Number(p.janela) || 30);
+  const out = [];
+  (typeof AG !== 'undefined' ? AG : []).forEach((c) => {
+    if (typeof agOcorrencias !== 'function') return;
+    agOcorrencias(c, hoje, ate).forEach((o) => {
+      const d = o._data || o.data;
+      if (c.tipo === 'bloqueio' || !c.hora) out.push({ d, h: '00:00', m: 1440 });
+      else out.push({ d, h: c.hora, m: Number(c.duracao) || 60 });
+    });
+  });
+  return out.slice(0, 600);
+}
+let PGX_OCUP_TIMER = null;
+const PGX_OCUP_FEITO = {};
+function pgxAgendarOcupados() {
+  clearTimeout(PGX_OCUP_TIMER);
+  PGX_OCUP_TIMER = setTimeout(() => {
+    if (!FIREBASE_PRONTO || !TENANT_ID || !firestoreDb || !nivelPodeOperar() || typeof AG_CARREGADO === 'undefined' || !AG_CARREGADO) return;
+    (PGX.itens || []).filter((p) => p.tipo === 'agenda' && p.publicadoEm && p.ativa).forEach((p) => {
+      const oc = pgxOcupados(p), ass = JSON.stringify(oc);
+      if (PGX_OCUP_FEITO[p.slug] === ass) return;
+      PGX_OCUP_FEITO[p.slug] = ass;
+      firestoreDb.collection(PAG_COLECAO).doc(p.slug).set({ ocupados: oc, atualizadoEm: new Date().toISOString() }, { merge: true }).catch((e) => { delete PGX_OCUP_FEITO[p.slug]; console.error(e); });
+    });
+  }, 1500);
+}
+let PGX_AG_ESCUTANDO = false;
+function pgxIniciarAgendamentos() {
+  if (PGX_AG_ESCUTANDO || !FIREBASE_PRONTO || !TENANT_ID || !firestoreDb || !nivelPodeOperar()) return;
+  PGX_AG_ESCUTANDO = true;
+  if (typeof agIniciarDados === 'function') agIniciarDados();
+  firestoreDb.collection('agendamentos_publicos').where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
+    snap.forEach((d) => pgxProcessarAgendamento(d.ref, d.data()));
+  }, (err) => console.error('Erro ao ler agendamentos:', err));
+}
+function pgxProcessarAgendamento(ref, a) {
+  if (!chaveCarregadaNaNuvem(PGX_KEY) || !chaveCarregadaNaNuvem('eagles_crm_clientes_v1')) { setTimeout(() => pgxProcessarAgendamento(ref, a), 1500); return; }
+  firestoreDb.runTransaction(async (tx) => { const d = await tx.get(ref); if (!d.exists) return false; tx.delete(ref); return true; }).then(async (ganhou) => {
+    if (!ganhou) return;
+    const p = pgxPorSlug(a.pagina) || { titulo: 'Agendamento', duracao: 60 };
+    const nome = String(a.nome || 'Cliente').slice(0, 100);
+    const conflito = (typeof AG !== 'undefined' ? AG : []).some((c) => c.data === a.data && c.hora === a.hora && c.tipo !== 'bloqueio');
+    const c = { id: genId('ag'), titulo: `${a.servico ? a.servico + ' · ' : ''}${nome}`.slice(0, 120), descricao: [`Agendado pela página "${p.titulo}"`, a.telefone ? 'WhatsApp: ' + a.telefone : '', a.email ? 'E-mail: ' + a.email : '', a.observacao ? 'Obs.: ' + a.observacao : '', conflito ? '⚠️ Já havia outro compromisso neste horário.' : ''].filter(Boolean).join('\n'),
+      data: a.data, hora: a.hora, duracao: Number(a.duracao) || Number(p.duracao) || 60, local: '', tipo: 'compromisso', dataFim: '', repetir: null, cliente: nome, projetoId: '', tarefaPaiId: '', tags: ['agendamento online'], responsaveis: [], sincronizarGoogle: false,
+      criadoEm: new Date().toISOString(), criadoPor: 'agendamento-online', google: null, kanbanTarefaId: '' };
+    try { await agRef().doc(c.id).set(finLimpar(c)); } catch (e) { console.error(e); }
+    // cliente no CRM (sem duplicar) e, se a página pedir, um negócio
+    const existe = CRM_CLIENTES_INDEP_DATA.find((x) => (a.email && kbNomeNorm(x.email) === kbNomeNorm(a.email)) || kbNomeNorm(x.nome) === kbNomeNorm(nome));
+    if (!existe) { const l = CRM_CLIENTES_INDEP_DATA.concat([{ id: genId('ci'), nome, email: String(a.email || '').slice(0, 120), telefone: String(a.telefone || '').slice(0, 30), origem: pgxOrigem(p), criadoEm: new Date().toISOString() }]); if (cloudSet('eagles_crm_clientes_v1', l) !== false) CRM_CLIENTES_INDEP_DATA = l; }
+    if (p.criarNegocio) { CRM_NEGOCIOS_DATA.push({ id: genId('cr'), nome: `Agendamento: ${nome}`, cliente: (existe && existe.nome) || nome, valor: 0, etapa: CRM_ETAPAS.some((e) => e.key === p.etapa) ? p.etapa : 'lead', email: a.email || '', telefone: a.telefone || '', origem: pgxOrigem(p), obs: `${formatDatePt(a.data)} às ${a.hora}${a.servico ? ' · ' + a.servico : ''}`, criadoEm: new Date().toISOString() }); cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA); }
+    if (typeof notifRegistrar === 'function') notifRegistrar({ cat: 'agendamento', id: 'agd_' + ref.id, em: a.criadoEm || new Date().toISOString(), tipo: conflito ? 'alerta' : 'ok', titulo: `${nome} agendou${conflito ? ' (horário em conflito)' : ''}`, texto: `${formatDatePt(a.data)} às ${a.hora}${a.servico ? ' · ' + a.servico : ''}`, acao: "mostrarSecaoCrm('agenda', document.querySelector('[data-menu-id=&quot;agenda&quot;]'))" });
+    pgxAgendarOcupados();
+  }).catch((e) => console.error('Agendamento:', e));
+}
+
+// ---------- página pública (pagina.html) ----------
+let PGX_PUB = null;
+async function pgxPublicoIniciar() {
+  initFirebase();
+  const slug = String(new URLSearchParams(location.search).get('u') || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
+  const el = document.getElementById('pp-conteudo');
+  const msg = (t, s) => { el.innerHTML = `<div class="pgxp-caixa"><h1>${escapeHtml(t)}</h1><p>${escapeHtml(s || '')}</p></div>`; };
+  if (!slug || !firestoreDb) { msg('Página não encontrada', 'Confira o endereço.'); return; }
+  try {
+    const s = await firestoreDb.collection(PAG_COLECAO).doc(slug).get();
+    if (!s.exists || !s.data().ativa || !s.data().tipo) { msg('Página indisponível', 'Ela pode ter sido desativada.'); return; }
+    PGX_PUB = Object.assign({ slug }, s.data());
+    document.title = PGX_PUB.titulo + (PGX_PUB.empresaNome ? ' · ' + PGX_PUB.empresaNome : '');
+    pgxPublicoRender();
+  } catch (e) { msg('Página indisponível', 'Tente de novo em instantes.'); }
+}
+function pgxPublicoRender() {
+  const p = PGX_PUB, el = document.getElementById('pp-conteudo');
+  document.documentElement.style.setProperty('--pgx-cor', p.cor || '#3fae12');
+  const topo = `${p.fotoUrl ? `<img class="pgxp-foto" src="${escapeHtml(p.fotoUrl)}" alt="">` : ''}<h1>${escapeHtml(p.titulo)}</h1>${p.descricao ? `<p class="pgxp-desc">${escapeHtml(p.descricao)}</p>` : ''}`;
+  const formContato = (botao) => `<form class="pgxp-form" onsubmit="return pgxEnviarLead(event)"><input type="text" name="site" class="pgxp-armadilha" tabindex="-1" autocomplete="off">
+    <input type="text" name="nome" placeholder="Seu nome" required maxlength="100"><input type="tel" name="telefone" placeholder="Seu WhatsApp" maxlength="30"><input type="email" name="email" placeholder="Seu e-mail" maxlength="120">
+    <button type="submit">${escapeHtml(botao || 'Enviar')}</button><p class="pgxp-msg"></p></form>`;
+  let corpo = '';
+  if (p.tipo === 'linkbio') corpo = `${topo}<div class="pgxp-links">${p.whatsapp ? `<a class="pgxp-link pgxp-whats" href="https://wa.me/${escapeHtml(p.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${(p.links || []).map((l) => `<a class="pgxp-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.rotulo)}</a>`).join('')}</div>${p.pedirContato ? `<details class="pgxp-contato"><summary>Deixe seu contato</summary>${formContato('Quero que entrem em contato')}</details>` : ''}`;
+  if (p.tipo === 'form') corpo = `${topo}<form class="pgxp-form" onsubmit="return pgxEnviarLead(event)"><input type="text" name="site" class="pgxp-armadilha" tabindex="-1" autocomplete="off">
+    ${(p.campos || []).map((c, i) => { const nome = c.tipo === 'nome' ? 'nome' : c.tipo === 'email' ? 'email' : c.tipo === 'telefone' ? 'telefone' : 'c' + i; const req = c.obrigatorio || c.tipo === 'nome' ? 'required' : '';
+      return `<label class="pgxp-rot">${escapeHtml(c.rotulo)}${req ? ' *' : ''}</label>${c.tipo === 'longo' ? `<textarea name="${nome}" rows="4" maxlength="600" ${req}></textarea>` : c.tipo === 'opcoes' ? `<select name="${nome}" ${req}><option value="">Escolha...</option>${(c.opcoes || []).map((o) => `<option>${escapeHtml(o)}</option>`).join('')}</select>` : `<input type="${c.tipo === 'email' ? 'email' : c.tipo === 'telefone' ? 'tel' : 'text'}" name="${nome}" maxlength="${c.tipo === 'email' ? 120 : 200}" ${req}>`}`; }).join('')}
+    <button type="submit">${escapeHtml(p.botao || 'Enviar')}</button><p class="pgxp-msg"></p></form>`;
+  if (p.tipo === 'captura') corpo = `${p.imagemUrl ? `<img class="pgxp-hero" src="${escapeHtml(p.imagemUrl)}" alt="">` : ''}<h1>${escapeHtml(p.titulo)}</h1>${p.subtitulo ? `<p class="pgxp-desc">${escapeHtml(p.subtitulo)}</p>` : ''}${(p.beneficios || []).length ? `<ul class="pgxp-benef">${p.beneficios.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}${formContato(p.botao)}`;
+  if (p.tipo === 'agenda') corpo = `${topo}<div id="pgxp-agenda"></div>`;
+  el.innerHTML = `<div class="pgxp-caixa pgxp-${p.tipo}">${corpo}<p class="pgxp-rodape">${escapeHtml(p.empresaNome || '')}</p></div>`;
+  if (p.tipo === 'agenda') pgxAgendaRender();
+}
+async function pgxEnviarLead(ev) {
+  ev.preventDefault();
+  const form = ev.target, p = PGX_PUB, msg = form.querySelector('.pgxp-msg');
+  const v = (n) => String((form.elements[n] && form.elements[n].value) || '').trim();
+  if (v('site')) return false;
+  const nome = v('nome'), email = v('email'), tel = v('telefone');
+  if (!nome) { msg.textContent = 'Diga o seu nome.'; return false; }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = 'Confira o e-mail.'; return false; }
+  if (!email && !tel) { msg.textContent = 'Deixe um WhatsApp ou um e-mail para a gente responder.'; return false; }
+  const extras = p.tipo === 'form' ? (p.campos || []).map((c, i) => (['nome', 'email', 'telefone'].includes(c.tipo) ? '' : v('c' + i) ? `${c.rotulo}: ${v('c' + i)}` : '')).filter(Boolean).join('\n') : '';
+  const btn = form.querySelector('button[type="submit"]'); if (btn) btn.disabled = true;
+  try {
+    await firestoreDb.collection(PAG_LEADS_COLECAO).add({ tenantId: p.tenantId, pagina: p.slug, nome: nome.slice(0, 100), email: email.slice(0, 120), telefone: tel.slice(0, 30), mensagem: extras.slice(0, 1000), servicos: [], criadoEm: new Date().toISOString() });
+    form.outerHTML = `<div class="pgxp-ok"><h2>Enviado ✓</h2><p>${escapeHtml(p.sucesso || 'Em breve entraremos em contato.')}</p>${p.isca ? `<a class="pgxp-link" href="${escapeHtml(p.isca)}" target="_blank" rel="noopener">Acessar o material</a>` : ''}</div>`;
+  } catch (e) { msg.textContent = 'Não foi possível enviar agora. Tente de novo em instantes.'; if (btn) btn.disabled = false; }
+  return false;
+}
+// horários livres: dias e faixa da página − ocupados − pausa − antecedência
+let PGXA = { dia: '', hora: '' };
+function pgxMin(h) { const [a, b] = String(h || '0:0').split(':').map(Number); return (a || 0) * 60 + (b || 0); }
+function pgxHora(m) { return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+function pgxSlots(p, dia) {
+  const dt = new Date(dia + 'T12:00:00');
+  if (!(p.dias || []).includes(dt.getDay())) return [];
+  const dur = Number(p.duracao) || 60, ini = pgxMin(p.inicio), fim = pgxMin(p.fim);
+  const [pa, pb] = String(p.almoco || '').split('-').map((x) => (x && x.includes(':') ? pgxMin(x) : null));
+  const agora = new Date(), limite = new Date(agora.getTime() + (Number(p.antecedencia) || 0) * 3600000);
+  const oc = (p.ocupados || []).filter((o) => o.d === dia).map((o) => [pgxMin(o.h), pgxMin(o.h) + (Number(o.m) || 60)]);
+  const out = [];
+  for (let m = ini; m + dur <= fim; m += dur) {
+    if (pa !== null && pb !== null && m < pb && m + dur > pa) continue;
+    if (oc.some(([a, b]) => m < b && m + dur > a)) continue;
+    const quando = new Date(`${dia}T${pgxHora(m)}:00`);
+    if (quando < limite) continue;
+    out.push(pgxHora(m));
+  }
+  return out;
+}
+function pgxAgendaRender() {
+  const p = PGX_PUB, el = document.getElementById('pgxp-agenda');
+  if (!el) return;
+  const dias = [];
+  for (let i = 0; i <= (Number(p.janela) || 30); i++) { const d = atdMaisDias(isoHoje(), i); if (pgxSlots(p, d).length) dias.push(d); }
+  if (!PGXA.dia || !dias.includes(PGXA.dia)) PGXA.dia = dias[0] || '';
+  const slots = PGXA.dia ? pgxSlots(p, PGXA.dia) : [];
+  const nomeDia = (d) => { const x = new Date(d + 'T12:00:00'); return { s: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][x.getDay()], n: formatDatePt(d).slice(0, 5) }; };
+  el.innerHTML = !dias.length ? '<p class="pgxp-desc">Sem horários livres nos próximos dias. Fale com a gente pelo WhatsApp.</p>' : `
+    <div class="pgxp-rot">Escolha o dia</div><div class="pgxp-dias">${dias.map((d) => { const n = nomeDia(d); return `<button type="button" class="${PGXA.dia === d ? 'ativo' : ''}" onclick="PGXA.dia='${d}'; PGXA.hora=''; pgxAgendaRender()"><small>${n.s}</small><b>${n.n}</b></button>`; }).join('')}</div>
+    <div class="pgxp-rot">Escolha o horário</div><div class="pgxp-horas">${slots.map((h) => `<button type="button" class="${PGXA.hora === h ? 'ativo' : ''}" onclick="PGXA.hora='${h}'; pgxAgendaRender()">${h}</button>`).join('')}</div>
+    ${PGXA.hora ? `<form class="pgxp-form" onsubmit="return pgxAgendar(event)"><input type="text" name="site" class="pgxp-armadilha" tabindex="-1" autocomplete="off">
+      <div class="pgxp-escolhido">${escapeHtml(formatDatePt(PGXA.dia))} às <b>${PGXA.hora}</b></div>
+      ${(p.servicos || []).length ? `<select name="servico" required><option value="">Qual serviço?</option>${p.servicos.map((s) => `<option>${escapeHtml(s)}</option>`).join('')}</select>` : ''}
+      <input type="text" name="nome" placeholder="Seu nome" required maxlength="100"><input type="tel" name="telefone" placeholder="Seu WhatsApp" required maxlength="30"><input type="email" name="email" placeholder="Seu e-mail (opcional)" maxlength="120">
+      <textarea name="obs" rows="2" maxlength="300" placeholder="Observação (opcional)"></textarea><button type="submit">Confirmar horário</button><p class="pgxp-msg"></p></form>` : ''}`;
+}
+async function pgxAgendar(ev) {
+  ev.preventDefault();
+  const form = ev.target, p = PGX_PUB, msg = form.querySelector('.pgxp-msg');
+  const v = (n) => String((form.elements[n] && form.elements[n].value) || '').trim();
+  if (v('site')) return false;
+  if (!v('nome') || !v('telefone')) { msg.textContent = 'Preencha nome e WhatsApp.'; return false; }
+  if (!pgxSlots(p, PGXA.dia).includes(PGXA.hora)) { msg.textContent = 'Esse horário acabou de ficar indisponível. Escolha outro.'; return false; }
+  const btn = form.querySelector('button[type="submit"]'); if (btn) btn.disabled = true;
+  try {
+    await firestoreDb.collection('agendamentos_publicos').add({ tenantId: p.tenantId, pagina: p.slug, nome: v('nome').slice(0, 100), telefone: v('telefone').slice(0, 30), email: v('email').slice(0, 120), servico: v('servico').slice(0, 80), observacao: v('obs').slice(0, 300), data: PGXA.dia, hora: PGXA.hora, duracao: Number(p.duracao) || 60, criadoEm: new Date().toISOString() });
+    p.ocupados = (p.ocupados || []).concat([{ d: PGXA.dia, h: PGXA.hora, m: Number(p.duracao) || 60 }]);
+    document.getElementById('pgxp-agenda').innerHTML = `<div class="pgxp-ok"><h2>Horário reservado ✓</h2><p><b>${escapeHtml(formatDatePt(PGXA.dia))} às ${PGXA.hora}</b></p><p>${escapeHtml(p.sucesso || '')}</p></div>`;
+  } catch (e) { msg.textContent = 'Não foi possível agendar agora. Tente de novo.'; if (btn) btn.disabled = false; }
+  return false;
+}
+
+// =====================================================================
+// ---------- Estatísticas do funil ----------
+// =====================================================================
+// O sistema passa a anotar cada mudança de etapa do negócio (com a data).
+// Com isso mede o tempo em cada etapa; a conversão por origem e por
+// vendedor sai dos negócios ganhos e perdidos do período.
+const NEG_ETAPA_CONHECIDA = new Map();
+function negLembrarEtapas(lista) { NEG_ETAPA_CONHECIDA.clear(); (lista || []).forEach((n) => { if (n && n.id) NEG_ETAPA_CONHECIDA.set(n.id, n.etapa); }); }
+function negAnotarHistorico(lista) {
+  const agora = new Date().toISOString();
+  (Array.isArray(lista) ? lista : []).forEach((n) => {
+    if (!n || !n.id) return;
+    const antes = NEG_ETAPA_CONHECIDA.get(n.id);
+    if (!Array.isArray(n.historicoEtapas)) n.historicoEtapas = [];
+    if (antes === undefined) { if (!n.historicoEtapas.length) n.historicoEtapas.push({ etapa: n.etapa, em: n.criadoEm || agora }); }
+    else if (antes !== n.etapa) n.historicoEtapas.push({ etapa: n.etapa, em: agora, de: antes });
+    if (n.historicoEtapas.length > 40) n.historicoEtapas = n.historicoEtapas.slice(-40);
+    if (n.etapa === 'fechado' && !n.fechadoEm) n.fechadoEm = agora;
+    if (n.etapa === 'perdido' && !n.perdidoEm) n.perdidoEm = agora;
+    NEG_ETAPA_CONHECIDA.set(n.id, n.etapa);
+  });
+}
+let FST = { dias: 90 };
+function fstCalcular() {
+  const hoje = isoHoje(), ini = FST.dias ? atdMaisDias(hoje, -FST.dias) : '0000';
+  const neg = typeof CRM_NEGOCIOS_DATA !== 'undefined' ? CRM_NEGOCIOS_DATA : [];
+  const d10 = (x) => String(x || '').slice(0, 10);
+  const ganho = (n) => n.etapa === 'fechado' && d10(n.fechadoEm || n.atualizadoEm || n.criadoEm) >= ini;
+  const perdido = (n) => n.etapa === 'perdido' && d10(n.perdidoEm || n.atualizadoEm || n.criadoEm) >= ini;
+  const novos = neg.filter((n) => d10(n.criadoEm) >= ini);
+  const grupo = (chave) => {
+    const m = {};
+    neg.forEach((n) => {
+      const k = chave(n);
+      const g = m[k] = m[k] || { nome: k, novos: 0, ganhos: 0, perdidos: 0, valor: 0 };
+      if (d10(n.criadoEm) >= ini) g.novos++;
+      if (ganho(n)) { g.ganhos++; g.valor += Number(n.valor) || 0; }
+      if (perdido(n)) g.perdidos++;
+    });
+    return Object.values(m).filter((g) => g.novos || g.ganhos || g.perdidos).map((g) => Object.assign(g, { conv: g.ganhos + g.perdidos ? Math.round((g.ganhos / (g.ganhos + g.perdidos)) * 100) : null })).sort((a, b) => b.ganhos - a.ganhos || b.novos - a.novos);
+  };
+  const tempos = {};
+  neg.forEach((n) => {
+    const h = n.historicoEtapas || [];
+    h.forEach((e, i) => {
+      const fim = h[i + 1] ? h[i + 1].em : (['fechado', 'perdido'].includes(e.etapa) ? null : new Date().toISOString());
+      if (!fim || d10(fim) < ini) return;
+      const dias = (new Date(fim) - new Date(e.em)) / 86400000;
+      if (!(dias >= 0)) return;
+      const t = tempos[e.etapa] = tempos[e.etapa] || { soma: 0, n: 0, abertos: 0 };
+      // a média usa só quem já saiu da etapa (quem ainda está nela conta à parte)
+      if (h[i + 1]) { t.soma += dias; t.n++; } else t.abertos++;
+    });
+  });
+  const fechados = neg.filter(ganho).map((n) => (new Date(n.fechadoEm || n.atualizadoEm) - new Date(n.criadoEm)) / 86400000).filter((x) => x >= 0);
+  const g = neg.filter(ganho).length, p = neg.filter(perdido).length;
+  return { novos: novos.length, ganhos: g, perdidos: p, conv: g + p ? Math.round((g / (g + p)) * 100) : null, valor: neg.filter(ganho).reduce((a, n) => a + (Number(n.valor) || 0), 0),
+    ciclo: fechados.length ? fechados.reduce((a, x) => a + x, 0) / fechados.length : null, origens: grupo((n) => n.origem || 'Não informada'), vendedores: grupo((n) => n.responsavel || 'Sem responsável'),
+    tempos, comHistorico: neg.filter((n) => (n.historicoEtapas || []).length > 1).length, abertosPorEtapa: CRM_ETAPAS.filter((e) => !['fechado', 'perdido'].includes(e.key)).map((e) => ({ e, n: neg.filter((x) => x.etapa === e.key).length })) };
+}
+function fstRender() {
+  const el = document.getElementById('crm-secao-estatisticas-funil');
+  if (!el || el.style.display === 'none') return;
+  const s = fstCalcular();
+  const dias = (x) => (x === null || x === undefined ? '—' : x < 1 ? 'menos de 1 dia' : `${Math.round(x)} dia${Math.round(x) === 1 ? '' : 's'}`);
+  const tab = (titulo, linhas) => `<div class="fin-painel"><strong>${titulo}</strong>${linhas.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th></th><th style="text-align:right;">Novos</th><th style="text-align:right;">Ganhos</th><th style="text-align:right;">Perdidos</th><th style="text-align:right;">Conversão</th><th style="text-align:right;">Valor ganho</th></tr></thead><tbody>${linhas.map((g) => `<tr><td><b>${escapeHtml(g.nome)}</b></td><td style="text-align:right;">${g.novos}</td><td style="text-align:right;" class="fin-verde">${g.ganhos}</td><td style="text-align:right;">${g.perdidos}</td><td style="text-align:right;"><b>${g.conv === null ? '—' : g.conv + '%'}</b></td><td style="text-align:right;">${formatMoney(g.valor)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="kb-vazio-mini">Sem negócios no período.</p>'}</div>`;
+  el.innerHTML = `<div class="fst">
+    <div class="fin-cab"><div><h1>Estatísticas do funil</h1><p>Conversão por origem e por vendedor, e quanto tempo os negócios ficam em cada etapa.</p></div><span class="kb-espaco"></span>
+      <div class="kb-segmento">${[[30, '30 dias'], [90, '90 dias'], [365, '12 meses'], [0, 'Tudo']].map(([d, t]) => `<button type="button" class="${FST.dias === d ? 'ativo' : ''}" onclick="FST.dias=${d}; fstRender()">${t}</button>`).join('')}</div></div>
+    <div class="an-kpis" style="margin-bottom:14px;"><div class="an-kpi"><span>Negócios novos</span><b>${s.novos}</b></div><div class="an-kpi pos"><span>Ganhos</span><b>${s.ganhos}</b></div><div class="an-kpi"><span>Perdidos</span><b>${s.perdidos}</b></div><div class="an-kpi"><span>Conversão</span><b>${s.conv === null ? '—' : s.conv + '%'}</b></div><div class="an-kpi"><span>Valor ganho</span><b>${formatMoney(s.valor)}</b></div><div class="an-kpi"><span>Tempo até ganhar</span><b>${dias(s.ciclo)}</b></div></div>
+    <div class="fin-painel"><strong>Tempo em cada etapa</strong><p class="kb-vazio-mini" style="margin:4px 0 8px;">Média de dias que um negócio fica em cada etapa${s.comHistorico ? '' : ' — o sistema começou a medir agora: os números aparecem conforme os negócios mudam de etapa'}.</p>
+      <div class="fst-etapas">${CRM_ETAPAS.filter((e) => !['fechado', 'perdido'].includes(e.key)).map((e) => { const t = s.tempos[e.key]; const ab = (s.abertosPorEtapa.find((x) => x.e.key === e.key) || {}).n || 0; return `<div class="fst-etapa" style="border-top:3px solid ${e.cor || 'var(--blue-strong)'}"><span>${escapeHtml(e.label)}</span><b>${dias(t && t.n ? t.soma / t.n : null)}</b><small>${ab} aberto(s) agora</small></div>`; }).join('')}</div></div>
+    ${tab('Por origem', s.origens)}${tab('Por vendedor (responsável)', s.vendedores)}
+  </div>`;
+}
+
+// =====================================================================
+// ---------- Monitoramento de erros ----------
+// =====================================================================
+// Erros do sistema no aparelho de quem está logado vão para erros_app
+// (só o super administrador lê). Nada dos cadastros vai junto: só a
+// mensagem do erro, onde aconteceu, a versão e o tipo de aparelho.
+// Cada erro é enviado uma vez por sessão e no máximo 15 por sessão.
+const APP_VERSAO = 'v115';
+const ERR_ENVIADOS = new Set();
+let ERR_CONTA = 0;
+function errAssinatura(t) { let h = 0; const s = String(t || ''); for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; } return 'e' + (h >>> 0).toString(36); }
+function errRegistrar(tipo, msg, pilha) {
+  try {
+    if (typeof FIREBASE_PRONTO === 'undefined' || !FIREBASE_PRONTO || !firestoreDb || !USUARIO_UID) return;
+    const m = String(msg || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    if (!m || /ResizeObserver loop|^Script error\.?$|Extension context|chrome-extension:|moz-extension:|Load failed$|NetworkError when attempting/i.test(m)) return;
+    const pagina = (location.pathname.split('/').pop() || 'index.html') + (location.hash || '').slice(0, 40);
+    const chave = m + '|' + pagina;
+    if (ERR_ENVIADOS.has(chave) || ERR_CONTA >= 15) return;
+    ERR_ENVIADOS.add(chave); ERR_CONTA++;
+    const linha = String(pilha || '').split('\n').find((l) => /script\.js|\.html/.test(l)) || '';
+    firestoreDb.collection('erros_app').add({
+      tenantId: TENANT_ID || '', uid: USUARIO_UID, usuario: String(USUARIO_NOME || '').slice(0, 80), pagina: pagina.slice(0, 120), mensagem: m, pilha: String(pilha || '').slice(0, 1500), tipo: String(tipo).slice(0, 20),
+      navegador: String(navigator.userAgent || '').slice(0, 200), tela: `${window.innerWidth}x${window.innerHeight}`, versao: APP_VERSAO, assinatura: errAssinatura(m + '|' + linha.replace(/:\d+\)?$/, '')), em: new Date().toISOString(),
+    }).catch(() => {});
+  } catch (e) { /* o registro de erro nunca pode quebrar a tela */ }
+}
+if (typeof window !== 'undefined' && !window.__ERR_LIGADO) {
+  window.__ERR_LIGADO = true;
+  window.addEventListener('error', (e) => errRegistrar('erro', e.message, e.error && e.error.stack));
+  window.addEventListener('unhandledrejection', (e) => { const r = e.reason; errRegistrar('promessa', (r && (r.message || r.code)) || String(r), r && r.stack); });
+  // falhas que o próprio sistema já registra no console ("Erro ao salvar...")
+  const original = console.error.bind(console);
+  console.error = function (...args) {
+    original(...args);
+    try { const a = args[0]; if (typeof a === 'string' && /^(Erro|Não foi possível)/.test(a)) { const det = args.slice(1).map((x) => (x && (x.message || x.code)) || (typeof x === 'string' ? x : '')).filter(Boolean).join(' · '); errRegistrar('falha', a + (det ? ' ' + det : ''), args.find((x) => x && x.stack) && args.find((x) => x && x.stack).stack); } } catch (e) {}
+  };
+}
+
+// ---------- super administrador: erros do sistema ----------
+let ERR_SA = { dias: 7, grupos: [], nomes: {} };
+async function errAbrirPainel() {
+  if (nivelUsuario() !== 'superadmin') return;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:980px;"><div class="modal-header"><h2>Erros do sistema</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div><p class="kb-vazio">Carregando...</p></div>`;
+  openModal('modal-srv');
+  try {
+    if (!Object.keys(ERR_SA.nomes).length) { const ts = await firestoreDb.collection('tenants').get(); ts.forEach((t) => { ERR_SA.nomes[t.id] = (t.data() || {}).nomeEmpresa || (t.data() || {}).nome || t.id; }); }
+    const desde = new Date(Date.now() - ERR_SA.dias * 86400000).toISOString();
+    const snap = await firestoreDb.collection('erros_app').where('em', '>=', desde).orderBy('em', 'desc').limit(800).get();
+    const g = {};
+    snap.forEach((d) => {
+      const e = Object.assign({ id: d.id, ref: d.ref }, d.data());
+      const x = g[e.assinatura] = g[e.assinatura] || { assinatura: e.assinatura, mensagem: e.mensagem, tipo: e.tipo, n: 0, empresas: new Set(), usuarios: new Set(), paginas: new Set(), versoes: new Set(), ultimo: e.em, exemplo: e, refs: [] };
+      x.n++; x.empresas.add(e.tenantId); x.usuarios.add(e.usuario || e.uid); x.paginas.add(e.pagina); x.versoes.add(e.versao); x.refs.push(e.ref);
+    });
+    ERR_SA.grupos = Object.values(g).sort((a, b) => b.ultimo.localeCompare(a.ultimo));
+    errRenderPainel();
+  } catch (err) { console.error('Erros do sistema:', err); avisar('Não foi possível ler os erros. Confira se as regras novas foram publicadas.'); }
+}
+function errRenderPainel() {
+  const el = document.querySelector('#modal-srv .modal');
+  if (!el) return;
+  const G = ERR_SA.grupos;
+  el.innerHTML = `<div class="modal-header"><h2>Erros do sistema</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="fin-painel-cab" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;"><span class="kb-vazio-mini">${G.length} tipo(s) de erro · ${G.reduce((a, x) => a + x.n, 0)} ocorrência(s)</span><span class="kb-espaco"></span>
+      <div class="kb-segmento">${[[1, '24 h'], [7, '7 dias'], [30, '30 dias']].map(([d, t]) => `<button type="button" class="${ERR_SA.dias === d ? 'ativo' : ''}" onclick="ERR_SA.dias=${d}; errAbrirPainel()">${t}</button>`).join('')}</div></div>
+    ${G.length ? `<div class="err-lista">${G.map((x, i) => `<details class="err-item"><summary><span class="err-n">${x.n}×</span><span class="err-msg"><b>${escapeHtml(x.mensagem)}</b><small>${escapeHtml([...x.paginas].slice(0, 3).join(', '))} · ${x.empresas.size} empresa(s) · ${x.usuarios.size} pessoa(s) · último ${escapeHtml(new Date(x.ultimo).toLocaleString('pt-BR'))}</small></span></summary>
+      <div class="err-det"><p><b>Empresas:</b> ${escapeHtml([...x.empresas].map((t) => ERR_SA.nomes[t] || t || 'sem empresa').join(', '))}</p><p><b>Versões:</b> ${escapeHtml([...x.versoes].join(', '))} · <b>Aparelho:</b> ${escapeHtml(x.exemplo.navegador || '')} (${escapeHtml(x.exemplo.tela || '')})</p>
+        ${x.exemplo.pilha ? `<pre class="err-pilha">${escapeHtml(x.exemplo.pilha)}</pre>` : ''}<button type="button" class="btn btn-small" onclick="errResolver(${i})">Marcar como resolvido</button></div></details>`).join('')}</div>`
+      : '<div class="atd-vazio">' + ic('aprovado') + '<strong>Nenhum erro no período</strong><span>Quando algo quebrar no aparelho de um cliente, aparece aqui sozinho.</span></div>'}`;
+}
+async function errResolver(i) {
+  const x = ERR_SA.grupos[i];
+  if (!x) return;
+  try {
+    for (let k = 0; k < x.refs.length; k += 400) { const lote = firestoreDb.batch(); x.refs.slice(k, k + 400).forEach((r) => lote.delete(r)); await lote.commit(); }
+    ERR_SA.grupos.splice(i, 1); errRenderPainel();
+  } catch (e) { avisar('Não foi possível apagar agora.'); }
+}
+
+// ---------- super administrador: uso por empresa ----------
+const USO_SUBS = ['dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'conteudos', 'agenda', 'atend_envios', 'portal', 'portal_pedidos',
+  'erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque'];
+async function usoContar(ref) {
+  try { if (typeof ref.count === 'function') { const s = await ref.count().get(); return s.data().count; } } catch (e) {}
+  const s = await ref.get(); return s.size;
+}
+async function usoAbrirPainel() {
+  if (nivelUsuario() !== 'superadmin') return;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:980px;"><div class="modal-header"><h2>Uso por empresa</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div><p class="kb-vazio" id="uso-progresso">Contando... isso lê o banco de cada empresa (pode levar alguns segundos).</p></div>`;
+  openModal('modal-srv');
+  try {
+    const ts = await firestoreDb.collection('tenants').get();
+    const usuarios = await firestoreDb.collection('usuarios').get();
+    const porTenant = {}; usuarios.forEach((u) => { const t = (u.data() || {}).tenantId; if (t) porTenant[t] = (porTenant[t] || 0) + 1; });
+    const linhas = [];
+    let k = 0;
+    for (const t of ts.docs) {
+      k++; const p = document.getElementById('uso-progresso'); if (p) p.textContent = `Contando ${k} de ${ts.size}: ${(t.data() || {}).nomeEmpresa || t.id}...`;
+      const base = firestoreDb.collection('tenants').doc(t.id);
+      const contagens = {};
+      for (const sub of USO_SUBS) { try { contagens[sub] = await usoContar(base.collection(sub)); } catch (e) { contagens[sub] = 0; } }
+      // tamanho aproximado: as configurações e listas (dados) são lidas; o resto estima ~1 KB por documento
+      let bytesDados = 0;
+      try { const d = await base.collection('dados').get(); d.forEach((x) => { bytesDados += JSON.stringify(x.data()).length; }); } catch (e) {}
+      const docs = Object.values(contagens).reduce((a, n) => a + n, 0);
+      const bytes = bytesDados + (docs - (contagens.dados || 0)) * 1024;
+      linhas.push({ id: t.id, nome: (t.data() || {}).nomeEmpresa || t.id, plano: (t.data() || {}).plano || '', ativo: (t.data() || {}).ativo !== false, usuarios: porTenant[t.id] || 0, docs, bytes, contagens });
+    }
+    linhas.sort((a, b) => b.bytes - a.bytes);
+    const total = linhas.reduce((a, l) => a + l.bytes, 0), totalDocs = linhas.reduce((a, l) => a + l.docs, 0);
+    const mb = (b) => (b / 1048576).toFixed(b > 10485760 ? 0 : 1).replace('.', ',') + ' MB';
+    const maiores = (c) => Object.entries(c).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([s, n]) => `${(BKP_NOMES[s] || s).replace(/ \(ERP\)/, '')}: ${n}`).join(' · ');
+    const el = document.querySelector('#modal-srv .modal');
+    el.innerHTML = `<div class="modal-header"><h2>Uso por empresa</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <div class="an-kpis"><div class="an-kpi"><span>Empresas</span><b>${linhas.length}</b></div><div class="an-kpi"><span>Documentos</span><b>${totalDocs.toLocaleString('pt-BR')}</b></div><div class="an-kpi"><span>Armazenamento (estimado)</span><b>${mb(total)}</b></div><div class="an-kpi ${total > 0.8 * 1073741824 ? 'neg' : ''}"><span>Do 1 GB grátis</span><b>${Math.round((total / 1073741824) * 1000) / 10}%</b></div></div>
+      <p class="kb-vazio-mini" style="margin:10px 0;">Plano grátis do Firebase: 1 GB guardado, 50 mil leituras e 20 mil gravações por dia. Leituras e gravações do dia só aparecem no console do Firebase (Uso e faturamento); aqui está o tamanho de cada empresa para você acompanhar o crescimento.</p>
+      <div class="table-scroll"><table><thead><tr><th>Empresa</th><th>Plano</th><th style="text-align:right;">Usuários</th><th style="text-align:right;">Documentos</th><th style="text-align:right;">Tamanho</th><th>Maiores</th></tr></thead><tbody>
+      ${linhas.map((l) => `<tr><td><b>${escapeHtml(l.nome)}</b>${l.ativo ? '' : ' <span class="badge badge-danger">suspensa</span>'}</td><td>${escapeHtml(l.plano)}</td><td style="text-align:right;">${l.usuarios}</td><td style="text-align:right;">${l.docs.toLocaleString('pt-BR')}</td><td style="text-align:right;">${mb(l.bytes)}</td><td style="font-size:12px;">${escapeHtml(maiores(l.contagens))}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  } catch (err) { console.error('Uso por empresa:', err); avisar('Não foi possível contar agora: ' + (err.message || err)); }
+}
+
+
+// =====================================================================
+// ---------- Assinatura, e-mails automáticos e cobrança (Rodada 5) ----------
+// =====================================================================
+// As funções do servidor (pasta functions/, plano Blaze) fazem o trabalho
+// pesado. Aqui ficam as telas: aviso de teste/atraso, e-mails automáticos,
+// planos e cobrança do super administrador.
+function fnChamar(nome, dados) {
+  if (typeof firebase === 'undefined' || !firebase.app || typeof firebase.app().functions !== 'function') return Promise.reject(new Error('O servidor do sistema ainda não está ligado (funções do Firebase).'));
+  return firebase.app().functions('southamerica-east1').httpsCallable(nome)(dados || {}).then((r) => r.data);
+}
+function assHtmlAviso() {
+  const a = TENANT_ASSINATURA;
+  if (!a || !(nivelEhDiretor() || nivelUsuario() === 'superadmin')) return '';
+  const hoje = isoHoje();
+  if (a.status === 'teste' && a.testeAte) {
+    const faltam = Math.max(0, Math.round((new Date(a.testeAte + 'T12:00:00') - new Date(hoje + 'T12:00:00')) / 86400000));
+    return `<div class="atd-banner" style="margin-bottom:14px;">${ic('relogio', 'ic-herda')}<div><strong>Teste grátis: ${faltam === 0 ? 'termina hoje' : `faltam ${faltam} dia${faltam === 1 ? '' : 's'}`}.</strong> Assine para continuar depois do teste — seus dados ficam todos. <a class="btn btn-small btn-primary" style="margin-left:6px;" href="assinatura.html">Assinar</a></div></div>`;
+  }
+  if (a.status === 'pendente' || a.status === 'atrasada') return `<div class="cw-erro" style="margin-bottom:14px;">${ic('alerta', 'ic-herda')} <span><b>Pagamento da assinatura em aberto.</b> Regularize para não ter o acesso suspenso. <a href="assinatura.html">Ver e pagar</a></span></div>`;
+  return '';
+}
+const EMAILS_CFG_KEY = 'eagles_emails_config_v1';
+function emailsAbrir() {
+  cloudGetForce(EMAILS_CFG_KEY, {}).then((d) => {
+    const c = Object.assign({ resumoDiario: true, avisoAprovacao: true, cobrancaClientes: false, antes: true, antesDias: 3, noDia: true, atraso: true, atrasoDias: 2 }, d || {});
+    const pode = !FIREBASE_PRONTO || !TENANT_ID || nivelEhDiretor();
+    const chk = (k, t, sub) => `<label class="cfg-linha-toggle"><div><strong>${t}</strong><span>${sub}</span></div><span class="switch"><input type="checkbox" id="em-${k}" ${c[k] ? 'checked' : ''} ${pode ? '' : 'disabled'}><span class="switch-slider"></span></span></label>`;
+    const ov = srvGarantirModal();
+    ov.innerHTML = `<div class="modal kb-modal" style="max-width:600px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>E-mails automáticos</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub">Enviados pelo servidor, todo dia às 7h, mesmo com o sistema fechado. Precisam do servidor ligado (plano Blaze) — até lá, as escolhas ficam guardadas.</p>
+      ${chk('resumoDiario', 'Resumo do dia para os Diretores', 'A receber hoje, atrasados, a pagar, tarefas atrasadas e aprovações pendentes.')}
+      ${chk('avisoAprovacao', 'Aviso quando o cliente responder a aprovação', 'E-mail na hora em que ele aprova ou pede alteração.')}
+      ${chk('cobrancaClientes', 'Lembrete de pagamento por e-mail para os clientes', 'Usa o e-mail da ficha do cliente (CRM ou ERP).')}
+      <div class="cw-grade2" style="margin-top:6px;"><div class="field"><label>Lembrar quantos dias antes</label><input type="number" id="em-antesDias" min="1" max="15" value="${c.antesDias}" ${pode ? '' : 'disabled'}></div><div class="field"><label>Cobrar quantos dias depois</label><input type="number" id="em-atrasoDias" min="1" max="30" value="${c.atrasoDias}" ${pode ? '' : 'disabled'}></div></div>
+      ${chk('noDia', 'Também no dia do vencimento', '')}
+      ${pode ? `<div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="emailsSalvar()">Salvar</button></div>` : '<p class="kb-vazio-mini">Só o Diretor muda os e-mails automáticos.</p>'}</div>`;
+    openModal('modal-srv');
+  });
+}
+function emailsSalvar() {
+  const v = (k) => (document.getElementById('em-' + k) || {}).checked;
+  const n = (k, a, b, p) => Math.max(a, Math.min(b, Number((document.getElementById('em-' + k) || {}).value) || p));
+  const c = { resumoDiario: v('resumoDiario'), avisoAprovacao: v('avisoAprovacao'), cobrancaClientes: v('cobrancaClientes'), antes: true, antesDias: n('antesDias', 1, 15, 3), noDia: v('noDia'), atraso: true, atrasoDias: n('atrasoDias', 1, 30, 2), atualizadoEm: new Date().toISOString() };
+  if (cloudSet(EMAILS_CFG_KEY, c) !== false) { srvFecharModal(); avisar('E-mails automáticos salvos.', 'E-mails'); }
+}
+// ---------- super administrador: planos e cobrança ----------
+async function cobAbrirPlanos() {
+  if (nivelUsuario() !== 'superadmin') return;
+  const s = await firestoreDb.collection('config').doc('cobranca').get().catch(() => null);
+  const c = Object.assign({ planos: { erp: { nome: 'ERP', valor: 97, limiteUsuarios: 3 }, crm: { nome: 'CRM', valor: 97, limiteUsuarios: 3 }, ambos: { nome: 'ERP + CRM', valor: 167, limiteUsuarios: 5 } }, testeDias: 14, toleranciaDias: 5, provedores: ['asaas', 'mercadopago'], provedorPadrao: 'asaas', cadastroAberto: true }, s && s.exists ? s.data() : {});
+  const base = 'https://southamerica-east1-labz-18246.cloudfunctions.net';
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:680px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>Planos e cobrança</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="table-scroll"><table><thead><tr><th>Plano</th><th>Nome na página de vendas</th><th>Valor mensal (R$)</th><th>Usuários</th></tr></thead><tbody>
+    ${['erp', 'crm', 'ambos'].map((k) => `<tr><td><b>${k.toUpperCase()}</b></td><td><input type="text" id="cob-n-${k}" maxlength="40" value="${escapeHtml(c.planos[k].nome)}"></td><td><input type="number" id="cob-v-${k}" min="0" step="0.01" value="${Number(c.planos[k].valor) || 0}" style="width:110px;"></td><td><input type="number" id="cob-u-${k}" min="1" max="50" value="${Number(c.planos[k].limiteUsuarios) || 3}" style="width:80px;"></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="cw-grade2" style="margin-top:10px;"><div class="field"><label>Dias de teste grátis</label><input type="number" id="cob-teste" min="0" max="60" value="${c.testeDias}"></div><div class="field"><label>Tolerância depois do vencimento (dias)</label><input type="number" id="cob-tol" min="0" max="30" value="${c.toleranciaDias}"></div></div>
+    <div class="sis-tit">Meios de pagamento oferecidos</div>
+    <label class="sis-check"><input type="checkbox" id="cob-asaas" ${c.provedores.includes('asaas') ? 'checked' : ''}> Asaas (boleto, PIX e cartão)</label>
+    <label class="sis-check"><input type="checkbox" id="cob-mp" ${c.provedores.includes('mercadopago') ? 'checked' : ''}> Mercado Pago (cartão recorrente)</label>
+    <label class="sis-check"><input type="checkbox" id="cob-aberto" ${c.cadastroAberto ? 'checked' : ''}> Cadastro pela página de vendas aberto</label>
+    <div class="sis-tit">Endereços para configurar nos meios de pagamento</div>
+    <p class="kb-vazio-mini" style="margin:0;">Asaas (Integrações → Webhooks): <code>${base}/webhookAsaas</code><br>Mercado Pago (Suas integrações → Webhooks): <code>${base}/webhookMercadoPago</code><br>Página de vendas: <code>${escapeHtml(location.origin + location.pathname.replace(/[^/]*$/, ''))}vendas.html</code></p>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="cobSalvarPlanos()">Salvar</button></div></div>`;
+  openModal('modal-srv');
+}
+async function cobSalvarPlanos() {
+  const v = (id) => (document.getElementById(id) || {}).value;
+  const planos = {};
+  ['erp', 'crm', 'ambos'].forEach((k) => { planos[k] = { nome: String(v('cob-n-' + k) || k).slice(0, 40), valor: Math.max(0, Number(v('cob-v-' + k)) || 0), limiteUsuarios: Math.max(1, Math.min(50, Number(v('cob-u-' + k)) || 3)) }; });
+  const provedores = [document.getElementById('cob-asaas').checked && 'asaas', document.getElementById('cob-mp').checked && 'mercadopago'].filter(Boolean);
+  if (!provedores.length) { avisar('Deixe pelo menos um meio de pagamento.'); return; }
+  try {
+    await firestoreDb.collection('config').doc('cobranca').set({ planos, testeDias: Math.max(0, Number(v('cob-teste')) || 0), toleranciaDias: Math.max(0, Number(v('cob-tol')) || 0), provedores, provedorPadrao: provedores[0], cadastroAberto: document.getElementById('cob-aberto').checked, atualizadoEm: new Date().toISOString() });
+    srvFecharModal(); avisar('Planos e cobrança salvos.', 'Cobrança');
+  } catch (e) { avisar('Não foi possível salvar: ' + mensagemErroFirestore(e)); }
+}
+async function cobCortesia(tenantId, ligar) {
+  const t = TENANTS_DATA.find((x) => x.id === tenantId) || {};
+  const a = Object.assign({}, t.assinatura || {}, { status: ligar ? 'cortesia' : 'pendente', atualizadoEm: new Date().toISOString() });
+  try { await firestoreDb.collection('tenants').doc(tenantId).set(Object.assign({ assinatura: a }, ligar ? { ativo: true } : {}), { merge: true }); avisar(ligar ? 'Empresa em cortesia: nunca é bloqueada por pagamento.' : 'Cortesia retirada: a empresa passa a pagar pelo sistema.', 'Cobrança'); }
+  catch (e) { avisar('Não foi possível salvar: ' + mensagemErroFirestore(e)); }
+}
+function cobBadge(t) {
+  const a = t.assinatura;
+  if (!a) return '';
+  const m = { teste: ['Teste até ' + formatDatePt(a.testeAte || ''), 'badge-blue'], ativa: ['Paga', 'badge-success'], pendente: ['Pagamento pendente', 'badge-warning'], atrasada: ['Em atraso', 'badge-danger'], cancelada: ['Assinatura cancelada', 'badge-danger'], cortesia: ['Cortesia', 'badge-neutral'] }[a.status];
+  return m ? ` <span class="badge ${m[1]}" style="font-size:10.5px;">${escapeHtml(m[0])}</span>` : '';
+}
+
+
+// ---------- assinatura.html (situação e pagamento) ----------
+let ASS = { t: null, u: null, cfg: null, carregando: '' };
+function assIniciarPagina() {
+  initFirebase();
+  const el = document.getElementById('ass-app');
+  if (!firestoreDb) { el.innerHTML = '<p class="kb-vazio">Sem conexão com o servidor.</p>'; return; }
+  firebase.auth().onAuthStateChanged(async (user) => {
+    if (!user) { window.location.href = 'login.html?voltar=assinatura.html'; return; }
+    try {
+      const u = (await firestoreDb.collection('usuarios').doc(user.uid).get()).data() || {};
+      USUARIO_UID = user.uid; USUARIO_ROLE = u.role || ''; USUARIO_NOME = u.nome || '';
+      const t = await firestoreDb.collection('tenants').doc(u.tenantId).get();
+      const c = await firestoreDb.collection('config').doc('cobranca').get().catch(() => null);
+      ASS = { t: Object.assign({ id: u.tenantId }, t.data() || {}), u, cfg: Object.assign({ planos: {}, provedores: ['asaas', 'mercadopago'], toleranciaDias: 5 }, c && c.exists ? c.data() : {}), carregando: '' };
+      assRender();
+    } catch (e) { el.innerHTML = '<p class="kb-vazio">Não foi possível carregar a assinatura. Tente de novo.</p>'; }
+  });
+}
+function assRender() {
+  const el = document.getElementById('ass-app'), t = ASS.t, a = t.assinatura || {}, cfg = ASS.cfg;
+  const plano = (cfg.planos || {})[t.plano] || {};
+  const diretor = ASS.u.role === 'Diretor' || ASS.u.titular;
+  const st = { teste: ['Período de teste', 'badge-blue'], ativa: ['Em dia', 'badge-success'], pendente: ['Pagamento pendente', 'badge-warning'], atrasada: ['Em atraso', 'badge-danger'], cancelada: ['Cancelada', 'badge-danger'], cortesia: ['Cortesia', 'badge-neutral'] }[a.status] || ['Sem assinatura pelo sistema', 'badge-neutral'];
+  const bloqueada = t.ativo === false;
+  el.innerHTML = `<div class="ass-caixa">
+    <img src="assets/favicon-eagles.png" alt="" class="ass-logo"><h1>${escapeHtml(t.nomeEmpresa || 'Sua empresa')}</h1>
+    <p><span class="badge ${st[1]}">${st[0]}</span></p>
+    ${bloqueada ? `<div class="cw-erro">${ic('alerta', 'ic-herda')} <span><b>Acesso suspenso por falta de pagamento.</b> Os seus dados estão guardados: assim que o pagamento for confirmado, o acesso volta sozinho.</span></div>` : ''}
+    <div class="ass-linhas">
+      <div><span>Plano</span><b>${escapeHtml(plano.nome || t.plano || '—')}${plano.valor ? ' · ' + formatMoney(plano.valor) + '/mês' : ''}</b></div>
+      ${a.status === 'teste' ? `<div><span>Teste grátis até</span><b>${escapeHtml(formatDatePt(a.testeAte || ''))}</b></div>` : ''}
+      ${a.proximoVencimento ? `<div><span>Próximo vencimento</span><b>${escapeHtml(formatDatePt(a.proximoVencimento))}</b></div>` : ''}
+      ${a.ultimoPagamentoEm ? `<div><span>Último pagamento</span><b>${escapeHtml(formatDatePt(a.ultimoPagamentoEm.slice(0, 10)))}</b></div>` : ''}
+    </div>
+    ${a.status === 'cortesia' ? '<p class="kb-vazio-mini">Esta conta não tem cobrança.</p>' : diretor ? `
+      ${a.linkPagamento && ['pendente', 'atrasada'].includes(a.status) ? `<a class="btn btn-primary ass-btn" href="${escapeHtml(a.linkPagamento)}" target="_blank" rel="noopener">Abrir a cobrança</a>` : ''}
+      <div class="ass-pagar">${(cfg.provedores || []).map((p) => `<button type="button" class="btn ${a.linkPagamento ? '' : 'btn-primary'} ass-btn" onclick="assPagar('${p}')" ${ASS.carregando ? 'disabled' : ''}>${ASS.carregando === p ? 'Gerando...' : p === 'asaas' ? 'Pagar com boleto, PIX ou cartão (Asaas)' : 'Pagar com cartão recorrente (Mercado Pago)'}</button>`).join('')}</div>
+      <button type="button" class="btn btn-ghost" onclick="location.reload()">Já paguei, atualizar</button>` : '<p class="kb-vazio-mini">Só o Diretor da empresa faz o pagamento. Avise o responsável.</p>'}
+    <p class="ass-rodape">${bloqueada ? '' : '<a href="index.html">Voltar ao sistema</a> · '}<a href="suporte.html">Suporte</a> · <a href="#" onclick="firebase.auth().signOut().then(() => location.href = \'login.html\'); return false;">Sair</a></p>
+  </div>`;
+}
+async function assPagar(provedor) {
+  ASS.carregando = provedor; assRender();
+  try {
+    const r = await fnChamar('criarAssinatura', { provedor });
+    if (r && r.link) { window.location.href = r.link; return; }
+    avisar('A cobrança foi criada. O link de pagamento chega também por e-mail.', 'Assinatura');
+  } catch (e) { avisar((e && e.message) || 'Não foi possível gerar a cobrança agora.', 'Assinatura'); }
+  ASS.carregando = ''; assRender();
+}
+
+// ---------- vendas.html (planos + cadastro sozinho) ----------
+let VND = { cfg: null, plano: 'ambos', enviando: false };
+async function vendIniciar() {
+  initFirebase();
+  try { const c = await firestoreDb.collection('config').doc('cobranca').get(); VND.cfg = c.exists ? c.data() : null; } catch (e) { VND.cfg = null; }
+  const cfg = Object.assign({ planos: { erp: { nome: 'ERP', valor: 97 }, crm: { nome: 'CRM', valor: 97 }, ambos: { nome: 'ERP + CRM', valor: 167 } }, testeDias: 14, cadastroAberto: true }, VND.cfg || {});
+  VND.cfg = cfg;
+  const p = new URLSearchParams(location.search).get('plano');
+  if (['erp', 'crm', 'ambos'].includes(p)) VND.plano = p;
+  vendRender();
+}
+const VND_TEXTO = { erp: ['Para quem vende produtos', 'Estoque que baixa sozinho, pedidos, compras, contratos, NFS-e e financeiro.'], crm: ['Para quem vende serviços', 'Funil, orçamentos, produção de conteúdo com aprovação do cliente, agenda, automações e agentes de IA.'], ambos: ['Tudo em um', 'ERP + CRM juntos: do primeiro contato com o cliente até o estoque e o caixa.'] };
+function vendRender() {
+  const cfg = VND.cfg, el = document.getElementById('vnd-app');
+  el.innerHTML = `
+    <header class="vnd-topo"><img src="assets/favicon-eagles.png" alt=""><b>Eagles Labz</b><span class="kb-espaco"></span><a href="login.html">Entrar</a></header>
+    <section class="vnd-hero"><h1>O sistema que se monta para o seu negócio</h1><p>Responda 2 minutos de perguntas e ele mostra só o que você usa: vendas, estoque, financeiro, clientes e produção. Teste grátis por ${Number(cfg.testeDias) || 14} dias, sem cartão.</p></section>
+    <section class="vnd-planos">${['crm', 'ambos', 'erp'].map((k) => { const pl = cfg.planos[k] || {}; return `<button type="button" class="vnd-plano${VND.plano === k ? ' ativo' : ''}${k === 'ambos' ? ' destaque' : ''}" onclick="VND.plano='${k}'; vendRender(); document.getElementById('vnd-form').scrollIntoView({behavior:'smooth'})">${k === 'ambos' ? '<span class="vnd-selo">Mais completo</span>' : ''}<b>${escapeHtml(pl.nome || k)}</b><span class="vnd-preco">${formatMoney(pl.valor)}<small>/mês</small></span><small>${escapeHtml(VND_TEXTO[k][0])}</small><p>${escapeHtml(VND_TEXTO[k][1])}</p></button>`; }).join('')}</section>
+    <section class="vnd-form" id="vnd-form">${cfg.cadastroAberto === false ? '<h2>Cadastros fechados no momento</h2><p>Fale com a gente pela página de <a href="suporte.html">Suporte</a>.</p>' : `
+      <h2>Comece o teste grátis</h2><p class="vnd-sub">Plano escolhido: <b>${escapeHtml((cfg.planos[VND.plano] || {}).nome || VND.plano)}</b> · ${Number(cfg.testeDias) || 14} dias grátis</p>
+      <form onsubmit="return vendCadastrar(event)"><input type="text" name="site" class="pgxp-armadilha" tabindex="-1" autocomplete="off">
+        <input type="text" name="empresa" placeholder="Nome da empresa" required maxlength="100"><input type="text" name="nome" placeholder="Seu nome" required maxlength="80">
+        <input type="email" name="email" placeholder="Seu e-mail (vai ser o login)" required maxlength="120"><input type="tel" name="telefone" placeholder="WhatsApp" maxlength="30">
+        <input type="password" name="senha" placeholder="Crie uma senha (mínimo 8)" required minlength="8" maxlength="60" autocomplete="new-password">
+        <label class="vnd-aceite"><input type="checkbox" name="aceite" required><span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a>, a <a href="privacidade.html" target="_blank">Política de Privacidade</a> e o <a href="dpa.html" target="_blank">Acordo de Tratamento de Dados</a>.</span></label>
+        <button type="submit" ${VND.enviando ? 'disabled' : ''}>${VND.enviando ? 'Criando a sua conta...' : 'Criar conta e começar'}</button><p class="vnd-msg" id="vnd-msg"></p></form>`}</section>
+    <footer class="vnd-rodape"><a href="privacidade.html">Privacidade</a> · <a href="termos.html">Termos</a> · <a href="dpa.html">Tratamento de dados</a> · <a href="suporte.html">Suporte</a></footer>`;
+}
+async function vendCadastrar(ev) {
+  ev.preventDefault();
+  const f = ev.target, v = (n) => String((f.elements[n] && f.elements[n].value) || '').trim();
+  if (v('site')) return false;
+  const dados = { empresa: v('empresa'), nome: v('nome'), email: v('email'), telefone: v('telefone'), senha: (f.elements.senha || {}).value || '', plano: VND.plano, aceite: !!(f.elements.aceite || {}).checked, origem: new URLSearchParams(location.search).get('origem') || '' };
+  const msg = document.getElementById('vnd-msg');
+  VND.enviando = true; const btn = f.querySelector('button[type=submit]'); if (btn) { btn.disabled = true; btn.textContent = 'Criando a sua conta...'; }
+  try {
+    await fnChamar('cadastroPublico', dados);
+    await firebase.auth().signInWithEmailAndPassword(dados.email, dados.senha);
+    window.location.href = VND.plano === 'crm' ? 'crm.html' : 'index.html';
+  } catch (e) {
+    VND.enviando = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Criar conta e começar'; }
+    if (msg) msg.textContent = (e && e.message) || 'Não foi possível criar a conta agora. Tente de novo.';
+  }
+  return false;
+}
+
+// =====================================================================
+// ---------- Meta: Instagram e anúncios (CRM → Operacional → Instagram e anúncios) ----------
+// =====================================================================
+// O navegador nunca vê as chaves da Meta: conectar, trocar a conta, publicar
+// e puxar relatórios é tudo feito pelas funções do servidor (functions/).
+// Aqui: o resumo da conexão (dados/eagles_meta_v1), os relatórios
+// (dados/eagles_meta_relatorio_v1) e a fila de publicações (meta_agendados).
+const META_KEY = 'eagles_meta_v1', META_REL_KEY = 'eagles_meta_relatorio_v1';
+let META = { conn: null, rel: null, ag: [], aba: 'conexao', carregando: '', iniciado: false, agCarregado: false };
+let META_ED = null;
+function metaIniciar() {
+  if (META.iniciado) return;
+  META.iniciado = true;
+  cloudWatch(META_KEY, {}, (d) => { META.conn = d || {}; metaRender(); });
+  cloudWatch(META_REL_KEY, null, (d) => { META.rel = d; metaRender(); });
+  if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
+    firestoreDb.collection('tenants').doc(TENANT_ID).collection('meta_agendados').onSnapshot((s) => {
+      META.ag = s.docs.map((d) => Object.assign({ id: d.id }, d.data())).sort((a, b) => String(b.quando).localeCompare(String(a.quando)));
+      META.agCarregado = true; metaRender();
+    }, (e) => console.error('Erro ao ler agendamentos do Instagram:', e));
+  } else { META.ag = lsLoad(chaveLocalTenant('eagles_meta_agendados_local_v1'), []); META.agCarregado = true; }
+  window.addEventListener('message', (ev) => { if (ev.data && ev.data.meta !== undefined) { META.carregando = ''; metaRender(); } });
+}
+function metaMontar(el) {
+  metaIniciar();
+  el.innerHTML = '<div id="meta-app"></div>';
+  metaRender();
+}
+function metaConectado() { return !!(META.conn && META.conn.conectado); }
+function metaIg() { const c = META.conn || {}; const p = (c.paginas || []).find((x) => x.id === (c.selecionado || {}).paginaId); return p && p.ig ? Object.assign({ pagina: p.nome }, p.ig) : null; }
+function metaRender() {
+  const el = document.getElementById('meta-app');
+  if (!el) return;
+  const ig = metaIg();
+  el.innerHTML = `
+    <div class="fin-cab"><div><h1>Instagram e anúncios</h1><p>Agende posts direto no Instagram e acompanhe o desempenho do perfil e dos anúncios.</p></div><span class="kb-espaco"></span>
+      ${ig ? `<span class="meta-perfil">${ig.foto ? `<img src="${escapeHtml(ig.foto)}" alt="">` : ''}@${escapeHtml(ig.usuario)}</span>` : ''}</div>
+    <div class="fin-abas">${[['conexao', 'Conexão', 'link'], ['agendados', 'Publicações', 'calendario'], ['relatorios', 'Relatórios', 'grafico']].map(([k, t, i]) => `<button type="button" class="fin-aba${META.aba === k ? ' ativo' : ''}" onclick="META.aba='${k}'; metaRender()">${ic(i, 'ic-herda')}<span>${t}</span></button>`).join('')}</div>
+    <div class="fin-corpo">${META.aba === 'agendados' ? metaHtmlAgendados() : META.aba === 'relatorios' ? metaHtmlRelatorios() : metaHtmlConexao()}</div>`;
+}
+function metaHtmlConexao() {
+  const c = META.conn || {};
+  const pode = !FIREBASE_PRONTO || !TENANT_ID || nivelPodeOperar();
+  if (!metaConectado()) return `<div class="kb-vazio-grande"><div class="ic-circulo">${ic('link')}</div><h3>Conecte o Instagram e os anúncios</h3>
+    <p>Você entra com o Facebook que administra a página da empresa. É preciso um Instagram <b>profissional</b> (comercial ou criador) ligado a essa página.</p>
+    ${pode ? `<button type="button" class="btn btn-primary" onclick="metaConectar()" ${META.carregando ? 'disabled' : ''}>${META.carregando === 'conectar' ? 'Abrindo a Meta...' : 'Conectar com a Meta'}</button>` : '<p class="kb-vazio-mini">Peça ao Diretor ou ao Administrativo para conectar.</p>'}
+    <p class="kb-vazio-mini" style="margin-top:12px;">Precisa do servidor do sistema ligado (plano Blaze) e do app da Meta configurado. Veja functions/README-META.md.</p></div>`;
+  const dias = c.expiraEm ? Math.round((new Date(c.expiraEm) - new Date()) / 86400000) : null;
+  const sel = c.selecionado || {};
+  return `<div class="fin-painel">
+    ${dias !== null && dias <= 7 ? `<div class="cw-erro" style="margin-bottom:10px;">${ic('alerta', 'ic-herda')} <span>A conexão vence em ${Math.max(0, dias)} dia(s). <a href="#" onclick="metaConectar(); return false;">Reconectar agora</a></span></div>` : ''}
+    <div class="cw-grade2"><div class="field"><label>Página do Facebook (e o Instagram dela)</label><select class="srv-select" id="meta-pagina" ${pode ? '' : 'disabled'}>${(c.paginas || []).map((p) => `<option value="${escapeHtml(p.id)}" ${p.id === sel.paginaId ? 'selected' : ''}>${escapeHtml(p.nome)}${p.ig ? ' · @' + escapeHtml(p.ig.usuario) : ' · sem Instagram'}</option>`).join('')}</select></div>
+      <div class="field"><label>Conta de anúncios</label><select class="srv-select" id="meta-ads" ${pode ? '' : 'disabled'}><option value="">Nenhuma</option>${(c.contasAnuncio || []).map((a) => `<option value="${escapeHtml(a.id)}" ${a.id === sel.adAccountId ? 'selected' : ''}>${escapeHtml(a.nome)}${a.ativa ? '' : ' (inativa)'}</option>`).join('')}</select></div></div>
+    <p class="kb-vazio-mini">Conectado em ${escapeHtml(formatDatePt(String(c.conectadoEm || '').slice(0, 10)))}${dias !== null ? ` · renovar em ${Math.max(0, dias)} dias` : ''}.</p>
+    ${pode ? `<div class="cfg-modal-rodape"><button type="button" class="btn btn-ghost kb-btn-perigo" onclick="metaDesconectar()">Desconectar</button><span class="kb-espaco"></span><button type="button" class="btn" onclick="metaConectar()">Reconectar</button><button type="button" class="btn btn-primary" onclick="metaSalvarSelecao()" ${META.carregando ? 'disabled' : ''}>${META.carregando === 'selecao' ? 'Salvando...' : 'Salvar escolha'}</button></div>` : ''}
+  </div>`;
+}
+async function metaConectar() {
+  META.carregando = 'conectar'; metaRender();
+  const janela = window.open('', 'eagles-meta', 'width=620,height=760');
+  try {
+    const r = await fnChamar('metaUrlConexao', {});
+    if (janela) janela.location.href = r.url; else window.location.href = r.url;
+  } catch (e) { if (janela) janela.close(); avisar((e && e.message) || 'Não foi possível abrir a Meta agora.', 'Meta'); }
+  META.carregando = ''; metaRender();
+}
+async function metaSalvarSelecao() {
+  META.carregando = 'selecao'; metaRender();
+  try { await fnChamar('metaSelecionar', { paginaId: document.getElementById('meta-pagina').value, adAccountId: document.getElementById('meta-ads').value }); avisar('Escolha salva. Os relatórios são atualizados em instantes.', 'Meta'); }
+  catch (e) { avisar((e && e.message) || 'Não foi possível salvar.', 'Meta'); }
+  META.carregando = ''; metaRender();
+}
+function metaDesconectar() { confirmarAcao('Desconectar a Meta? Os posts agendados param de sair até conectar de novo.', async () => { try { await fnChamar('metaDesconectar', {}); } catch (e) { avisar((e && e.message) || 'Não foi possível desconectar.'); } }, 'Meta'); }
+
+// ---------- publicações agendadas ----------
+const META_ST = { agendado: ['Agendado', 'badge-blue'], publicando: ['Publicando...', 'badge-warning'], publicado: ['Publicado', 'badge-success'], erro: ['Erro', 'badge-danger'] };
+function metaHtmlAgendados() {
+  const pode = !FIREBASE_PRONTO || !TENANT_ID || nivelPodeOperar();
+  return `<div class="fin-painel-cab" style="margin-bottom:10px;"><p class="kb-vazio-mini" style="margin:0;">O servidor publica no horário marcado (confere a cada 10 minutos).</p><span class="kb-espaco"></span>${pode ? `<button type="button" class="btn btn-primary" onclick="metaNovoAgendamento()" ${metaIg() ? '' : 'disabled title="Conecte um Instagram primeiro"'}>${ic('mais', 'ic-herda')} Agendar publicação</button>` : ''}</div>
+    ${!META.agCarregado ? '<p class="kb-vazio">Carregando...</p>' : META.ag.length ? `<div class="pgx-lista">${META.ag.map((a) => { const st = META_ST[a.status] || META_ST.agendado; return `<div class="pgx-item">
+      ${(a.urls || [])[0] ? `<img class="meta-thumb" src="${escapeHtml(a.urls[0])}" alt="" onerror="this.style.visibility='hidden'">` : `<span class="pgx-ic" style="background:#8b5cf6">${ic('imagem', 'ic-herda')}</span>`}
+      <div class="pgx-txt"><strong>${escapeHtml(String(a.legenda || 'Sem legenda').slice(0, 80))}</strong><small>${escapeHtml(new Date(a.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }))} · ${(a.urls || []).length > 1 ? `carrossel (${a.urls.length})` : a.tipo === 'reels' ? 'reels' : 'imagem'}${a.erro ? ' · ' + escapeHtml(a.erro) : ''}</small></div>
+      <span class="badge ${st[1]}">${st[0]}</span>
+      <div class="pgx-acoes">${a.link ? `<a class="btn btn-small" href="${escapeHtml(a.link)}" target="_blank" rel="noopener">${ic('abrir', 'ic-herda')} Ver</a>` : ''}${pode && ['agendado', 'erro'].includes(a.status) ? `<button type="button" class="btn btn-small" onclick="metaNovoAgendamento('${escapeParaOnclick(a.id)}')">${ic('lapis', 'ic-herda')}</button><button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="metaCancelar('${escapeParaOnclick(a.id)}')">✕</button>` : ''}</div></div>`; }).join('')}</div>`
+    : `<div class="atd-vazio">${ic('calendario')}<strong>Nada agendado</strong><span>Agende aqui ou direto pelo conteúdo (Conteúdos → abrir → "Agendar no Instagram").</span></div>`}`;
+}
+function metaUrlsDoConteudo(c) {
+  const t = (CNT_TIPOS[c.tipo] || {}).midia, m = c.midia || {};
+  if (t === 'paginas') return { urls: (m.paginas || []).filter(Boolean), tipo: 'carrossel' };
+  if (t === 'video') return { urls: [m.url].filter(Boolean), tipo: 'reels' };
+  return { urls: [m.url].filter(Boolean), tipo: 'imagem' };
+}
+function metaNovoAgendamento(id, conteudo) {
+  metaIniciar();
+  const a = id ? META.ag.find((x) => x.id === id) : null;
+  const doCnt = conteudo ? metaUrlsDoConteudo(conteudo) : null;
+  const amanha = new Date(Date.now() + 86400000); amanha.setHours(10, 0, 0, 0);
+  const pub = conteudo && conteudo.publicacao ? new Date(`${conteudo.publicacao}T${conteudo.entregaHora || '10:00'}:00`) : null;
+  META_ED = a ? JSON.parse(JSON.stringify(a)) : { id: '', urls: doCnt ? doCnt.urls : [''], tipo: doCnt ? doCnt.tipo : 'imagem', legenda: conteudo ? (conteudo.legenda || '') : '', quando: (pub && pub > new Date() ? pub : amanha).toISOString(), conteudoId: conteudo ? conteudo.id : '', cliente: conteudo ? conteudo.cliente || '' : '' };
+  metaRenderEditor();
+  openModal('modal-srv');
+}
+function metaRenderEditor() {
+  const e = META_ED, local = new Date(e.quando), pad = (n) => String(n).padStart(2, '0');
+  const dl = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}T${pad(local.getHours())}:${pad(local.getMinutes())}`;
+  const avisoDrive = (e.urls || []).some((u) => /drive\.google\.com|dropbox\.com/i.test(u));
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:620px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>${e.id ? 'Editar' : 'Agendar'} publicação no Instagram</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="field full"><label>Tipo</label><div class="atd-chips">${[['imagem', 'Imagem'], ['carrossel', 'Carrossel'], ['reels', 'Reels']].map(([k, t]) => `<button type="button" class="${e.tipo === k ? 'ativo' : ''}" onclick="META_ED.tipo='${k}'; if ('${k}' !== 'carrossel') META_ED.urls = META_ED.urls.slice(0, 1); metaRenderEditor()">${t}</button>`).join('')}</div></div>
+    <div class="field full"><label>${e.tipo === 'carrossel' ? 'Links das imagens (na ordem, de 2 a 10)' : e.tipo === 'reels' ? 'Link do vídeo (MP4)' : 'Link da imagem (JPG ou PNG)'}</label>
+      ${(e.urls || []).map((u, i) => `<div class="pgx-linha" style="grid-template-columns:1fr auto;"><input type="url" maxlength="600" placeholder="https://..." value="${escapeHtml(u)}" oninput="META_ED.urls[${i}] = this.value.trim()" onchange="metaRenderEditor()">${e.urls.length > 1 ? `<button type="button" class="cw-x" onclick="META_ED.urls.splice(${i},1); metaRenderEditor()">✕</button>` : '<span></span>'}</div>`).join('')}
+      ${e.tipo === 'carrossel' && e.urls.length < 10 ? `<button type="button" class="btn btn-small" onclick="META_ED.urls.push(''); metaRenderEditor()">+ Imagem</button>` : ''}
+      <small class="kb-vazio-mini">O link precisa abrir direto o arquivo, e o arquivo precisa estar público. ${avisoDrive ? '<b>Google Drive e Dropbox:</b> o arquivo precisa estar como "Qualquer pessoa com o link" — o sistema converte o link sozinho.' : ''}</small></div>
+    <div class="field full"><label>Legenda</label><textarea rows="5" maxlength="2200" oninput="META_ED.legenda = this.value; document.getElementById('meta-cont').textContent = this.value.length">${escapeHtml(e.legenda || '')}</textarea><small class="kb-vazio-mini"><span id="meta-cont">${(e.legenda || '').length}</span>/2200</small></div>
+    <div class="field full"><label>Publicar em</label><input type="datetime-local" value="${dl}" onchange="if (this.value) META_ED.quando = new Date(this.value).toISOString()"></div>
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="metaSalvarAgendamento()">${e.id ? 'Salvar' : 'Agendar'}</button></div></div>`;
+}
+async function metaSalvarAgendamento() {
+  if (!exigirPodeOperar('agendar publicações')) return;
+  const e = META_ED;
+  const urls = (e.urls || []).map((u) => String(u || '').trim()).filter(Boolean);
+  if (!urls.length || urls.some((u) => !/^https:\/\//i.test(u))) { avisar('Cole o link da mídia (começando com https://).'); return; }
+  if (e.tipo === 'carrossel' && urls.length < 2) { avisar('O carrossel precisa de pelo menos 2 imagens.'); return; }
+  if (new Date(e.quando) < new Date(Date.now() - 60000)) { avisar('Escolha um horário daqui para frente.'); return; }
+  const doc = { tipo: e.tipo, urls, legenda: String(e.legenda || '').slice(0, 2200), quando: new Date(e.quando).toISOString(), status: 'agendado', conteudoId: e.conteudoId || '', cliente: e.cliente || '', criadoPor: USUARIO_NOME || '', criadoEm: e.criadoEm || new Date().toISOString(), atualizadoEm: new Date().toISOString() };
+  try {
+    if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
+      const ref = firestoreDb.collection('tenants').doc(TENANT_ID).collection('meta_agendados');
+      if (e.id) await ref.doc(e.id).set(Object.assign(doc, { erro: firebase.firestore.FieldValue.delete() }), { merge: true }); else await ref.add(doc);
+    } else {
+      const l = META.ag.filter((x) => x.id !== e.id).concat([Object.assign({ id: e.id || genId('mt') }, doc)]);
+      META.ag = l; lsSave(chaveLocalTenant('eagles_meta_agendados_local_v1'), l);
+    }
+    srvFecharModal(); META.aba = 'agendados'; metaRender();
+    avisar(`Agendado para ${new Date(doc.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}.`, 'Instagram');
+  } catch (err) { avisar('Não foi possível agendar: ' + mensagemErroFirestore(err)); }
+}
+function metaCancelar(id) {
+  confirmarAcao('Cancelar esta publicação agendada?', async () => {
+    if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) await firestoreDb.collection('tenants').doc(TENANT_ID).collection('meta_agendados').doc(id).delete().catch((e) => avisar(mensagemErroFirestore(e)));
+    else { META.ag = META.ag.filter((x) => x.id !== id); lsSave(chaveLocalTenant('eagles_meta_agendados_local_v1'), META.ag); metaRender(); }
+  }, 'Instagram');
+}
+
+// ---------- relatórios ----------
+function metaHtmlRelatorios() {
+  const r = META.rel;
+  if (!metaConectado()) return `<div class="atd-vazio">${ic('grafico')}<strong>Conecte a Meta para ver os relatórios</strong><span>Aba Conexão → "Conectar com a Meta".</span></div>`;
+  if (!r) return `<div class="atd-vazio">${ic('relogio')}<strong>Buscando os números...</strong><span>A primeira busca leva alguns minutos depois de conectar.</span></div>`;
+  const n = (v) => (v === null || v === undefined ? '—' : Number(v).toLocaleString('pt-BR'));
+  const melhores = (r.melhores || []).map((id) => (r.posts || []).find((p) => p.id === id)).filter(Boolean);
+  const ads = r.anuncios || {};
+  const pode = !FIREBASE_PRONTO || !TENANT_ID || nivelPodeOperar();
+  return `<div class="fin-painel-cab" style="margin-bottom:10px;"><span class="kb-vazio-mini">Atualizado em ${escapeHtml(new Date(r.atualizadoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }))} · todo dia às 6h</span><span class="kb-espaco"></span>${pode ? `<button type="button" class="btn btn-small" onclick="metaAtualizar()" ${META.carregando ? 'disabled' : ''}>${META.carregando === 'atualizar' ? 'Atualizando...' : 'Atualizar agora'}</button>` : ''}</div>
+    <div class="an-kpis"><div class="an-kpi"><span>Seguidores</span><b>${n(r.seguidores)}</b></div><div class="an-kpi"><span>Alcance (28 dias)</span><b>${n(r.alcance28)}</b></div><div class="an-kpi"><span>Visitas ao perfil (28 dias)</span><b>${n(r.visitasPerfil28)}</b></div><div class="an-kpi"><span>Contas engajadas (28 dias)</span><b>${n(r.contasEngajadas28)}</b></div></div>
+    ${melhores.length ? `<div class="fin-painel"><strong>Melhores posts recentes</strong><div class="meta-melhores">${melhores.map((p) => `<a class="meta-post" href="${escapeHtml(p.link || '#')}" target="_blank" rel="noopener">${p.imagem ? `<img src="${escapeHtml(p.imagem)}" alt="" loading="lazy">` : '<span class="meta-sem">sem prévia</span>'}<span>${ic('coracao', 'ic-herda')} ${n(p.curtidas)} · 💬 ${n(p.comentarios)}${p.alcance ? ' · alcance ' + n(p.alcance) : ''}</span></a>`).join('')}</div></div>` : ''}
+    ${(r.posts || []).length ? `<div class="fin-painel"><strong>Posts recentes</strong><div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th>Data</th><th>Post</th><th style="text-align:right;">Alcance</th><th style="text-align:right;">Curtidas</th><th style="text-align:right;">Coment.</th><th style="text-align:right;">Salvos</th><th style="text-align:right;">Compart.</th></tr></thead><tbody>
+      ${r.posts.map((p) => `<tr><td>${escapeHtml(formatDatePt(p.data))}</td><td>${p.link ? `<a href="${escapeHtml(p.link)}" target="_blank" rel="noopener">` : ''}${escapeHtml(p.legenda || p.tipo || 'Post').slice(0, 60)}${p.link ? '</a>' : ''}</td><td style="text-align:right;">${n(p.alcance)}</td><td style="text-align:right;">${n(p.curtidas)}</td><td style="text-align:right;">${n(p.comentarios)}</td><td style="text-align:right;">${n(p.salvos)}</td><td style="text-align:right;">${n(p.compart)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+    <div class="fin-painel"><strong>Anúncios (últimos 30 dias)</strong>${(ads.campanhas || []).length ? `
+      <div class="an-kpis" style="margin-top:8px;"><div class="an-kpi"><span>Investido</span><b>${formatMoney(ads.gasto)}</b></div><div class="an-kpi"><span>Impressões</span><b>${n(ads.impressoes)}</b></div><div class="an-kpi"><span>Cliques</span><b>${n(ads.cliques)}</b></div><div class="an-kpi"><span>Custo por clique</span><b>${ads.cliques ? formatMoney(ads.gasto / ads.cliques) : '—'}</b></div><div class="an-kpi"><span>Resultados</span><b>${n(ads.resultados)}</b></div><div class="an-kpi"><span>Custo por resultado</span><b>${ads.resultados ? formatMoney(ads.gasto / ads.resultados) : '—'}</b></div></div>
+      <div class="table-scroll"><table><thead><tr><th>Campanha</th><th style="text-align:right;">Investido</th><th style="text-align:right;">Alcance</th><th style="text-align:right;">Cliques</th><th style="text-align:right;">CTR</th><th style="text-align:right;">CPC</th><th style="text-align:right;">Resultados</th></tr></thead><tbody>
+      ${ads.campanhas.map((c) => `<tr><td><b>${escapeHtml(c.nome)}</b></td><td style="text-align:right;">${formatMoney(c.gasto)}</td><td style="text-align:right;">${n(c.alcance)}</td><td style="text-align:right;">${n(c.cliques)}</td><td style="text-align:right;">${c.ctr.toFixed(2).replace('.', ',')}%</td><td style="text-align:right;">${formatMoney(c.cpc)}</td><td style="text-align:right;">${n(c.resultados)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="kb-vazio-mini" style="margin:6px 0 0;">Sem campanhas no período (ou nenhuma conta de anúncios escolhida na aba Conexão).</p>'}</div>`;
+}
+async function metaAtualizar() {
+  META.carregando = 'atualizar'; metaRender();
+  try { await fnChamar('metaAtualizarAgora', {}); } catch (e) { avisar((e && e.message) || 'Não foi possível atualizar agora.', 'Meta'); }
+  META.carregando = ''; metaRender();
 }
 
 function renderCrmEmConstrucao(secao) {
@@ -12456,6 +14002,7 @@ function kbIniciarDados() {
       snap.forEach((doc) => lista.push(Object.assign({}, doc.data(), { id: doc.id })));
       KB_TAREFAS = lista;
       KB_CARREGADO = true;
+      try { notifChecarAtribuicoes('tarefa', snap); setTimeout(notifChecarPrazos, 1500); } catch (e) {}
       renderKanbanConteudo();
       if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard();
     }, (err) => {
@@ -16349,7 +17896,7 @@ let FIN_FILTRO = { tipo: '', status: '', categoria: '', de: '', ate: '', busca: 
 let FIN_SELECAO = new Set();
 const FIN_ABAS = [
   ['visao', 'Visão Geral', 'grafico'], ['receber', 'Receber', 'tendencia'], ['pagar', 'Pagar', 'carteira'], ['clientes', 'Clientes', 'pessoas'],
-  ['fornecedores', 'Fornecedores', 'pacote'], ['pix', 'PIX', 'dinheiro'], ['recorrentes', 'Recorrentes', 'recorrente'], ['caixa', 'Caixa', 'banco'], ['relatorios', 'Relatórios', 'grafico'],
+  ['fornecedores', 'Fornecedores', 'pacote'], ['pix', 'PIX', 'dinheiro'], ['recorrentes', 'Recorrentes', 'recorrente'], ['caixa', 'Caixa', 'banco'], ['fluxo', 'Fluxo de caixa', 'tendencia'], ['relatorios', 'Relatórios', 'grafico'],
 ];
 const FIN_ABAS_DEPOIS = {};
 
@@ -16390,7 +17937,7 @@ function finRender() {
     return;
   }
   const corpo = FIN_ABAS_DEPOIS[FIN_ABA] ? finHtmlEmBreve(FIN_ABA) : ({ visao: finHtmlVisao, receber: () => finHtmlContas('receber'), pagar: () => finHtmlContas('pagar'),
-    clientes: () => finHtmlPessoas('receber'), fornecedores: () => finHtmlPessoas('pagar'), recorrentes: finHtmlRecorrentes, caixa: finHtmlCaixa, relatorios: finHtmlRelatorios, pix: finHtmlPix }[FIN_ABA] || finHtmlVisao)();
+    clientes: () => finHtmlPessoas('receber'), fornecedores: () => finHtmlPessoas('pagar'), recorrentes: finHtmlRecorrentes, caixa: finHtmlCaixa, fluxo: finHtmlFluxo, relatorios: finHtmlRelatorios, pix: finHtmlPix }[FIN_ABA] || finHtmlVisao)();
   host.innerHTML = `
     <div class="fin${finOcultoAtivo() ? ' fin-oculto' : ''}">
       <div class="fin-cab">
@@ -16409,6 +17956,7 @@ function finRender() {
     </div>`;
   if (foco) { const i = document.getElementById(foco); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} } }
   if (FIN_ABA === 'relatorios') setTimeout(finDesenharGraficos, 0);
+  if (FIN_ABA === 'fluxo') setTimeout(() => { finDesenharGraficos(); flxDesenhar(); }, 0);
 }
 
 function finHtmlEmBreve(aba) {
@@ -17110,6 +18658,7 @@ function finHtmlCaixa() {
   const movMes = (cid, tipo) => FIN_LANC.filter((l) => l.caixaId === cid && l.tipo === tipo && (l.dataPagamento || '').slice(0, 7) === mes && l.status !== 'cancelado').reduce((a, l) => a + (Number(l.valorPago) || 0), 0);
   return `
     <div class="fin-painel-cab"><strong style="font-size:17px;">Caixas</strong><span class="kb-espaco"></span>
+      <button type="button" class="btn" onclick="ofxAbrir()" ${caixas.length ? '' : 'disabled title="Crie um caixa primeiro"'}>${ic('subir', 'ic-herda')} Conciliar extrato (OFX)</button>
       <button type="button" class="btn" onclick="finAbrirRegras()" ${caixas.length ? '' : 'disabled title="Crie um caixa primeiro"'}>${ic('configuracoes', 'ic-herda')} Regras de roteamento</button>
       <button type="button" class="btn btn-primary" onclick="finAbrirCaixa(null)">${ic('mais', 'ic-herda')} Novo Caixa</button></div>
     ${caixas.length ? `<div class="fin-cards">${caixas.map((c) => { const id = escapeParaOnclick(c.id); return `<div class="fin-card" style="border-top:3px solid ${corHexValida(c.cor) || '#22c55e'};">
@@ -17875,6 +19424,7 @@ function pagIniciarDados() {
   PAG_INICIADO = true;
   cloudWatch(PAG_KEY, null, (d) => { PAG = d && Array.isArray(d.secoes) ? Object.assign(pagPadrao(), d) : (PAG || null); if (typeof pagRender === 'function') pagRender(); });
   cloudWatch(PAG_PIXELS_KEY, PAG_PIXELS, (d) => { PAG_PIXELS = Object.assign({ meta: {}, ga: {} }, d || {}); });
+  pgxIniciar();
   if (typeof srvIniciarDados === 'function') srvIniciarDados();
 }
 function pagDados() { if (!PAG) PAG = pagPadrao(); return PAG; }
@@ -18040,7 +19590,7 @@ function pagIniciarLeads() {
   } catch (err) { console.error('Não foi possível acompanhar os leads do site:', err); }
 }
 function pagProcessarLeads() {
-  if (!PAG_LEADS_FILA.length || !chaveCarregadaNaNuvem(CRM_NEGOCIOS_KEY) || !chaveCarregadaNaNuvem('eagles_crm_clientes_v1') || !chaveCarregadaNaNuvem(PAG_KEY)) return;
+  if (!PAG_LEADS_FILA.length || !chaveCarregadaNaNuvem(CRM_NEGOCIOS_KEY) || !chaveCarregadaNaNuvem('eagles_crm_clientes_v1') || !chaveCarregadaNaNuvem(PAG_KEY) || !chaveCarregadaNaNuvem(PGX_KEY)) return;
   const fila = PAG_LEADS_FILA.splice(0);
   const cap = (PAG && PAG.captura) || {};
   fila.forEach((lead) => {
@@ -18050,15 +19600,18 @@ function pagProcessarLeads() {
     reivindicar.then((ganhou) => {
       if (!ganhou) return;
       const nome = String(lead.nome || 'Lead do site').slice(0, 100), email = String(lead.email || '').slice(0, 120);
+      const extra = typeof pgxPorSlug === 'function' ? pgxPorSlug(lead.pagina) : null;
+      const origemLead = extra ? pgxOrigem(extra) : 'Página pública';
       const existe = CRM_CLIENTES_INDEP_DATA.find((c) => (email && kbNomeNorm(c.email) === kbNomeNorm(email)) || kbNomeNorm(c.nome) === kbNomeNorm(nome));
       if (!existe) {
-        const lista = CRM_CLIENTES_INDEP_DATA.concat([{ id: genId('ci'), nome, email, telefone: String(lead.telefone || '').slice(0, 30), ultimaReuniao: null, nps: null, origem: 'Página pública', tags: (cap.tags || []).slice(0, 10), criadoEm: new Date().toISOString() }]);
+        const lista = CRM_CLIENTES_INDEP_DATA.concat([{ id: genId('ci'), nome, email, telefone: String(lead.telefone || '').slice(0, 30), ultimaReuniao: null, nps: null, origem: origemLead, tags: (cap.tags || []).slice(0, 10), criadoEm: new Date().toISOString() }]);
         if (cloudSet('eagles_crm_clientes_v1', lista) !== false) CRM_CLIENTES_INDEP_DATA = lista;
       }
-      const etapa = CRM_ETAPAS.some((e) => e.key === cap.etapa) ? cap.etapa : 'lead';
+      const etapa = extra && CRM_ETAPAS.some((e) => e.key === extra.etapa) ? extra.etapa : CRM_ETAPAS.some((e) => e.key === cap.etapa) ? cap.etapa : 'lead';
       const obs = [lead.servicos && lead.servicos.length ? 'Interesse: ' + lead.servicos.join(', ') : '', lead.mensagem ? 'Mensagem: ' + lead.mensagem : ''].filter(Boolean).join('\n');
-      CRM_NEGOCIOS_DATA.push({ id: genId('cr'), nome: 'Site: ' + nome, cliente: (existe && existe.nome) || nome, valor: 0, etapa, email, telefone: String(lead.telefone || '').slice(0, 30), origem: 'Página pública', observacoes: obs, tags: (cap.tags || []).slice(0, 10), criadoEm: lead.criadoEm || new Date().toISOString(), atualizadoEm: new Date().toISOString() });
+      CRM_NEGOCIOS_DATA.push({ id: genId('cr'), nome: (extra ? (extra.tipo === 'linkbio' ? 'Bio: ' : extra.tipo === 'form' ? 'Formulário: ' : 'Captura: ') : 'Site: ') + nome, cliente: (existe && existe.nome) || nome, valor: 0, etapa, email, telefone: String(lead.telefone || '').slice(0, 30), origem: origemLead, observacoes: obs, tags: (cap.tags || []).slice(0, 10), criadoEm: lead.criadoEm || new Date().toISOString(), atualizadoEm: new Date().toISOString() });
       cloudSet(CRM_NEGOCIOS_KEY, CRM_NEGOCIOS_DATA);
+      if (typeof notifRegistrar === 'function') notifRegistrar({ cat: 'lead', id: 'lead_' + (lead.ref && lead.ref.id ? lead.ref.id : genId('ld')), em: lead.criadoEm || new Date().toISOString(), tipo: 'info', titulo: `Novo lead: ${nome}`, texto: origemLead, acao: "mostrarSecaoCrm('pipeline', document.querySelector('[data-menu-id=&quot;pipeline&quot;]'))" });
       if (typeof atualizarSecaoAtivaCrm === 'function') atualizarSecaoAtivaCrm();
     }).catch((err) => console.error('Erro ao processar lead do site:', err));
   });
@@ -18067,8 +19620,8 @@ function pagProcessarLeads() {
 // ---------- tela do módulo (CRM → Páginas) ----------
 let PAG_HOST = null;
 let PAG_ABA = 'pagina';
-const PAG_ABAS = [['portfolio', 'Portfólio', 'imagem'], ['pagina', 'Página Pública', 'globo'], ['linkbio', 'Link da Bio', 'link'], ['formularios', 'Formulários', 'tarefas'], ['agendamento', 'Agendamento', 'calendario'], ['estatisticas', 'Estatísticas', 'grafico'], ['configuracoes', 'Configurações', 'configuracoes']];
-const PAG_SECAO_DA_ABA = { portfolio: 'paginas-portfolio', pagina: 'paginas-landing', linkbio: 'paginas-link-bio', formularios: 'paginas-formularios', agendamento: 'paginas-agendamento' };
+const PAG_ABAS = [['portfolio', 'Portfólio', 'imagem'], ['pagina', 'Página Pública', 'globo'], ['linkbio', 'Link da Bio', 'link'], ['formularios', 'Formulários', 'tarefas'], ['captura', 'Captura', 'raio'], ['agendamento', 'Agendamento', 'calendario'], ['estatisticas', 'Estatísticas', 'grafico'], ['configuracoes', 'Configurações', 'configuracoes']];
+const PAG_SECAO_DA_ABA = { portfolio: 'paginas-portfolio', pagina: 'paginas-landing', linkbio: 'paginas-link-bio', formularios: 'paginas-formularios', captura: 'paginas-captura', agendamento: 'paginas-agendamento' };
 
 function pagMontar(host, aba) {
   PAG_HOST = host;
@@ -18089,8 +19642,8 @@ function pagServicosPublicos() {
 function pagRender() {
   const host = PAG_HOST;
   if (!host || !host.isConnected || (host.style && host.style.display === 'none')) return;
-  const titulos = { portfolio: 'Portfólio', pagina: 'Página Pública', linkbio: 'Link da Bio', formularios: 'Formulários', agendamento: 'Agendamento', estatisticas: 'Estatísticas', configuracoes: 'Configurações' };
-  const corpo = PAG_ABA === 'pagina' ? pagHtmlAbaPagina() : PAG_ABA === 'configuracoes' ? pagHtmlAbaConfig() : pagHtmlEmBreve(PAG_ABA);
+  const titulos = { portfolio: 'Portfólio', pagina: 'Página Pública', linkbio: 'Link da Bio', formularios: 'Formulários', captura: 'Páginas de captura', agendamento: 'Agendamento', estatisticas: 'Estatísticas', configuracoes: 'Configurações' };
+  const corpo = PAG_ABA === 'pagina' ? pagHtmlAbaPagina() : PAG_ABA === 'configuracoes' ? pagHtmlAbaConfig() : PGX_ABA_TIPO[PAG_ABA] ? pgxHtmlAba(PAG_ABA) : pagHtmlEmBreve(PAG_ABA);
   host.innerHTML = `<div class="pag">
     <h1 class="pag-titulo">${titulos[PAG_ABA]}</h1>
     <div class="kb-segmento pag-abas aba-icones">${PAG_ABAS.map(([a, n, i]) => `<button type="button" class="${PAG_ABA === a ? 'ativo' : ''}" title="${n}" aria-label="${n}" onclick="pagIrAba('${a}')">${ic(i, 'ic-herda')} <span class="aba-txt">${n}</span></button>`).join('')}</div>
@@ -18724,7 +20277,7 @@ function cntIniciarDados() {
     try {
       cntRef().onSnapshot((snap) => {
         const l = []; snap.forEach((d) => l.push(Object.assign({}, d.data(), { id: d.id })));
-        CNT = l; CNT_CARREGADO = true; cntRender(); crmAvisarDashboard(); if (typeof aprProcessar === 'function') aprProcessar(); if (typeof portalAgendarPublicacao === 'function') portalAgendarPublicacao();
+        CNT = l; CNT_CARREGADO = true; try { notifChecarAtribuicoes('conteudo', snap); } catch (e) {} cntRender(); crmAvisarDashboard(); if (typeof aprProcessar === 'function') aprProcessar(); if (typeof portalAgendarPublicacao === 'function') portalAgendarPublicacao();
       }, (err) => console.error('Erro ao carregar conteúdos:', err));
       cntEscutarAprovacoes();
     } catch (err) { console.error('Não foi possível carregar os conteúdos:', err); }
@@ -19127,6 +20680,7 @@ function cntRenderEditor() {
     <div class="cnt-ed-rodape">
       ${!e.__novo ? `<button type="button" class="btn btn-ghost" onclick="cntSalvarEditor(true).then((ok) => ok && cntEnviarAprovacao(CNT_ED ? CNT_ED.id : null))">${ic('link', 'ic-herda')} Enviar para aprovação</button>` : ''}
       <button type="button" class="btn btn-ghost" onclick="cntSalvarComoModelo()">${ic('colunas', 'ic-herda')} Salvar como modelo</button>
+      ${!e.__novo && ['reels', 'imagem', 'carrossel'].includes(e.tipo) && sisModuloAtivo('meta') ? `<button type="button" class="btn btn-ghost" onclick="(() => { const c = JSON.parse(JSON.stringify(CNT_ED)); cntSalvarEditor(true).then((ok) => ok && metaNovoAgendamento(null, c)); })()">${ic('calendario', 'ic-herda')} Agendar no Instagram</button>` : ''}
       <span class="kb-espaco"></span>
       <button type="button" class="btn" onclick="srvFecharModal(); CNT_ED = null;">Cancelar</button>
       <button type="button" class="btn" onclick="cntSalvarEditor(true)">${ic('aprovado', 'ic-herda')} Salvar</button>
@@ -19782,7 +21336,7 @@ function portalIniciarProcessamento() {
       const p = d.data();
       if (!p.portalToken || PORTAL_LINKS_CARREGADO && Object.values(PORTAL_LINKS).indexOf(p.portalToken) < 0) { d.ref.set({ processado: true, destino: 'ignorado' }, { merge: true }).catch(() => {}); return; }
       processar(d);
-      notifRegistrar({ id: 'ped_' + d.id, em: p.criadoEm || new Date().toISOString(), tipo: 'info', titulo: `${p.cliente} mandou ${p.tipo === 'servico' ? 'um pedido de serviço' : 'uma ideia'}`, texto: String(p.titulo || '').slice(0, 100), acao: "mostrarSecaoCrm('kanban', document.querySelector('[data-menu-id=&quot;kanban&quot;]'))" });
+      notifRegistrar({ cat: 'pedidoCliente', id: 'ped_' + d.id, em: p.criadoEm || new Date().toISOString(), tipo: 'info', titulo: `${p.cliente} mandou ${p.tipo === 'servico' ? 'um pedido de serviço' : 'uma ideia'}`, texto: String(p.titulo || '').slice(0, 100), acao: "mostrarSecaoCrm('kanban', document.querySelector('[data-menu-id=&quot;kanban&quot;]'))" });
     }), () => {});
   } catch (e) { console.error('Não foi possível acompanhar o portal:', e); }
 }
@@ -20003,6 +21557,7 @@ async function pcEnviarPedido(tipo) {
 let CRM_DASH_TIMER = null;
 function crmAvisarDashboard() {
   if (typeof atdAvisar === 'function' && ATD_INICIADO) atdAvisar();
+  if (typeof pgxAgendarOcupados === 'function' && PGX_INICIADO) pgxAgendarOcupados();
   if (typeof prdReconciliarTodos === 'function') prdReconciliarTodos();
   clearTimeout(CRM_DASH_TIMER);
   CRM_DASH_TIMER = setTimeout(() => {
@@ -21001,6 +22556,20 @@ const CHATBOT_FAQ = [
         { p: 'O que é o questionário de primeiro acesso?', r: 'No primeiro acesso, o Diretor responde algumas perguntas (com barra de progresso): dados da empresa, o que vende, ramo, como cobra, equipe e objetivos. O sistema escolhe a versão mais adequada (Agência, Consultoria, Hora marcada, Comércio, Produção ou Genérico), mostra só as ferramentas certas e já cria categorias do financeiro, modelo de contrato, automações sugeridas (pausadas) e um checklist de primeiros passos. Para mudar depois: Configurações → Meu sistema.' },
         { p: 'Como mudo as ferramentas que aparecem?', r: 'Configurações → Meu sistema: liga e desliga ferramentas (estoque, compras, contratos, NFS-e, conteúdos, portal, agenda, atendimento, agentes de IA), muda os nomes ("Cliente", "Pedido") e permite refazer o questionário. Nada é apagado. Ferramentas fora do plano contratado não aparecem, mesmo ligadas.' },
         { p: 'Como baixo meus dados em Excel?', r: 'Configurações → Backup → "Baixar planilha (Excel)": um arquivo .xlsx com uma aba para cada cadastro (clientes, produtos, pedidos, contratos, compras, estoque, CRM, Kanban, conteúdos, agenda e, para quem vê, o financeiro). O "Baixar backup completo" (.json) é o que serve para restaurar. A restauração é feita pela equipe da Eagles Labz: fale com o suporte.' },
+        { p: 'Como dou entrada no estoque pelas compras?', r: 'Em Estoque → Pedido de compras (ou Notas fiscais de entrada), toque em "+ Itens" na linha e informe produto, quantidade e custo. Quando a compra ficar "Recebido" (ou a nota "Lançada"), os itens entram no estoque sozinhos e o custo fica salvo no produto. Se voltar atrás ou cancelar, sai de novo. Ligando a nota ao pedido de compra, o estoque não soma duas vezes.' },
+        { p: 'Como faço o inventário?', r: 'Estoque → Inventário: digite a quantidade contada de cada produto (dá para contar aos poucos, fica guardado no aparelho), filtre por "ainda não contados" ou "com diferença" e toque em "Concluir inventário". O saldo dos produtos contados é ajustado e o inventário fica no histórico.' },
+        { p: 'Como concilio o extrato do banco?', r: 'Financeiro → Caixa → "Conciliar extrato (OFX)". Exporte o extrato em OFX no internet banking, escolha a conta (caixa) e o arquivo. Para cada movimento o sistema sugere o lançamento que bate (mesmo valor, data perto): confirme para dar baixa, criar um lançamento novo ou ignorar. Importar o mesmo extrato de novo não duplica.' },
+        { p: 'Como vejo o fluxo de caixa projetado?', r: 'Financeiro → aba "Fluxo de caixa": parte do saldo de hoje nos caixas e soma o que vence para receber e pagar (e as recorrências) nos próximos 30, 60 ou 90 dias, com gráfico, saldo por semana e aviso do dia em que o saldo ficaria negativo.' },
+        { p: 'Como calculo a comissão dos vendedores?', r: 'ERP → Cadastros → Vendedores: o painel Comissões mostra, mês a mês, os pedidos faturados de cada vendedor, o % do cadastro dele, a meta e o valor da comissão. "Lançar no Financeiro" cria a conta a pagar (uma por vendedor por mês, sem duplicar).' },
+        { p: 'Como faço o Link da Bio, formulários e páginas de captura?', r: 'CRM → Páginas → abas Link da Bio, Formulários e Captura → "Nova página". Escolha o endereço, o texto, a cor e (nos formulários) as perguntas, e toque em "Salvar e publicar": aparece o link para copiar ou mandar no WhatsApp. Cada contato enviado vira cliente + negócio no Pipeline, com a origem da página (ex.: "Formulário: Orçamento").' },
+        { p: 'Como funciona o agendamento online?', r: 'CRM → Páginas → Agendamento → "Nova página": escolha os dias, o horário, a duração, a pausa e a antecedência. O cliente abre o link, escolhe um horário livre e confirma com nome e WhatsApp: o compromisso cai na Agenda na hora (com a etiqueta "agendamento online") e você recebe a notificação. Os horários ocupados na Agenda somem da página sozinhos.' },
+        { p: 'Onde vejo as estatísticas do funil?', r: 'CRM → Comercial → Estatísticas: negócios novos, ganhos e perdidos, conversão, valor ganho, tempo médio até ganhar, tempo médio em cada etapa e a conversão por origem e por vendedor, em 30 dias, 90 dias, 12 meses ou tudo.' },
+        { p: 'Qual o horário e o prazo do suporte?', r: 'Segunda a sexta, das 9h às 18h, pelo WhatsApp (11) 94678-4626 ou por e-mail. Prazos de primeira resposta: crítico (ninguém entra, sistema fora do ar) até 2 horas úteis; alto até 4 horas úteis; dúvidas até 1 dia útil. Tudo na página Suporte (link no rodapé do login).' },
+        { p: 'Onde está o contrato de tratamento de dados (LGPD)?', r: 'Na página "Tratamento de dados" (dpa.html), ligada aos Termos de Uso: explica que os dados são da sua empresa (Controladora), o que o Eagles Labz faz com eles (Operador), segurança, suboperadores, aviso de incidente em até 48 horas e a devolução dos dados no fim do contrato.' },
+        { p: 'Como pago a assinatura do sistema?', r: 'Configurações → Assinatura (ou o aviso no Painel): escolha Asaas (boleto, PIX ou cartão) ou Mercado Pago (cartão recorrente) e pague pelo link. Quando o pagamento cai, o acesso fica liberado sozinho. Se passar do prazo de tolerância sem pagar, o acesso é suspenso até regularizar — os dados ficam guardados.' },
+        { p: 'Como ligo os e-mails automáticos?', r: 'Configurações → E-mails: resumo do dia para os Diretores (7h), aviso quando o cliente responde a aprovação e lembrete de pagamento por e-mail para os clientes (antes, no dia e depois do vencimento). Precisa do servidor do sistema ligado (plano Blaze).' },
+        { p: 'Como agendo posts no Instagram?', r: 'CRM → Operacional → Instagram e anúncios: conecte com a Meta (Facebook que administra a página, com um Instagram profissional ligado). Depois, em Publicações → "Agendar publicação" (ou abrindo um conteúdo → "Agendar no Instagram"), cole o link da imagem, das imagens do carrossel ou do vídeo, a legenda e o horário. O servidor publica sozinho no horário e o conteúdo fica como publicado.' },
+        { p: 'Onde vejo os relatórios do Instagram e dos anúncios?', r: 'CRM → Instagram e anúncios → Relatórios: seguidores, alcance, visitas ao perfil e contas engajadas dos últimos 28 dias, os melhores posts e os posts recentes com alcance, curtidas, comentários, salvos e compartilhamentos, e os anúncios dos últimos 30 dias (investido, cliques, CTR, CPC e resultados por campanha). Atualiza todo dia às 6h ou no botão "Atualizar agora".' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
@@ -21208,7 +22777,7 @@ function registrarModuloCadastro(moduloKey, def) {
 function initModuloCadastro(moduloKey) {
   const def = CADASTROS_REGISTRO[moduloKey];
   if (new URLSearchParams(location.search).get('novo') === '1' && def && def.modalNovoId && moduloKey !== 'pedido-venda') setTimeout(() => { if (document.getElementById(def.modalNovoId)) openModal(def.modalNovoId); }, 400);
-  if (['produto', 'pedido-venda', 'lancamento-estoque'].includes(moduloKey) && typeof estIniciar === 'function') estIniciar();
+  if (['produto', 'pedido-venda', 'lancamento-estoque', 'pedido-compra', 'nota-fiscal'].includes(moduloKey) && typeof estIniciar === 'function') estIniciar();
   cloudWatch(def.storageKey, def.seed(), (data) => {
     CADASTROS_DATA[moduloKey] = data;
     renderCadastroTabela(moduloKey);
@@ -21422,6 +22991,7 @@ registrarModuloCadastro('vendedor', {
     { key: 'comissao', label: 'Comissão' },
     { key: 'status', label: 'Status', render: (i) => `<span class="badge ${i.status === 'ativo' ? 'badge-blue' : 'badge-neutral'}">${i.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>` },
   ],
+  aposRender: () => { if (typeof comIniciar === 'function') comIniciar(); },
 });
 
 function funcionariosSeed() {
@@ -21593,6 +23163,8 @@ registrarModuloCadastro('pedido-compra', {
     { key: 'valor', label: 'Valor', render: (i) => formatMoney(i.valor) },
     { key: 'status', label: 'Status', render: (i) => `<span class="badge badge-blue">${i.status || '—'}</span>` },
   ],
+  renderAcoes: (i) => cmpAcoes('pedido-compra')(i),
+  aposRender: () => { if (typeof estAgendar === 'function') estAgendar(); },
 });
 
 function notasFiscaisEntradaSeed() { return []; }
@@ -21622,6 +23194,8 @@ registrarModuloCadastro('nota-fiscal', {
     { key: 'valor', label: 'Valor', render: (i) => formatMoney(i.valor) },
     { key: 'status', label: 'Status', render: (i) => `<span class="badge ${i.status === 'lancada' ? 'badge-success' : 'badge-warning'}">${i.status === 'lancada' ? 'Lançada' : 'Pendente'}</span>` },
   ],
+  renderAcoes: (i) => cmpAcoes('nota-fiscal')(i),
+  aposRender: () => { if (typeof estAgendar === 'function') estAgendar(); },
 });
 
 function lancamentosEstoqueSeed() { return []; }
@@ -25270,7 +26844,7 @@ function renderTenantsLista() {
     const planoCores = { erp: 'badge-blue', crm: 'badge-warning', ambos: 'badge-success' };
     return `
     <tr>
-      <td>${escapeHtml(t.nomeEmpresa || t.id)}</td>
+      <td>${escapeHtml(t.nomeEmpresa || t.id)}${typeof cobBadge === 'function' ? cobBadge(t) : ''}</td>
       <td style="font-size:12px; color:var(--text-soft);">${escapeHtml(t.id)}</td>
       <td>${t.criadoEm ? formatDatePt(t.criadoEm.slice(0, 10)) : '—'}</td>
       <td><button type="button" class="btn btn-small btn-ghost" style="padding:0; border:none;" onclick="abrirModalTrocarPlano('${t.id}','${plano}','${escapeParaOnclick(t.nomeEmpresa || '')}')"><span class="badge ${planoCores[plano]}">${planoLabels[plano]} ✎</span></button></td>
@@ -25288,6 +26862,7 @@ function renderTenantsLista() {
         ${ativo
           ? `<button class="btn btn-small btn-ghost" style="color:var(--warning);" onclick="suspenderEmpresa('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Suspender</button>`
           : `<button class="btn btn-small btn-ghost" style="color:var(--success);" onclick="reativarEmpresa('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Reativar</button>`}
+        <button class="btn btn-small btn-ghost" onclick="cobCortesia('${t.id}', ${!(t.assinatura && t.assinatura.status === 'cortesia')})">${t.assinatura && t.assinatura.status === 'cortesia' ? 'Tirar cortesia' : 'Cortesia'}</button>
         <button class="btn btn-small btn-ghost" onclick="bkpAbrirRestauracaoSA('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Restaurar backup</button>
         <button class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirEmpresaCompleta('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Excluir</button>
       </td>
@@ -25379,7 +26954,7 @@ async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
 
     // Páginas e links PÚBLICOS da empresa (site, propostas, briefings,
     // planos, aprovações, leads e PIX): antes ficavam no ar depois da exclusão.
-    for (const col of ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'leads_publicos', 'conteudos_publicos', 'portais_publicos', 'portal_pedidos_publicos']) {
+    for (const col of ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'leads_publicos', 'conteudos_publicos', 'portais_publicos', 'portal_pedidos_publicos', 'agendamentos_publicos']) {
       const snap = await firestoreDb.collection(col).where('tenantId', '==', tenantId).get();
       const docs = []; snap.forEach((d) => docs.push(d.ref));
       for (let i = 0; i < docs.length; i += 400) { const lote = firestoreDb.batch(); docs.slice(i, i + 400).forEach((ref) => lote.delete(ref)); await lote.commit(); }

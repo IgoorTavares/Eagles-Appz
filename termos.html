@@ -54,7 +54,8 @@
     .lg-topo { padding: 10px 16px; }
     .lg-topo { gap: 8px; }
     .lg-marca span { display: none; }
-    .lg-topo nav { flex-wrap: nowrap; gap: 0; }
+    .lg-topo nav { flex-wrap: nowrap; gap: 0; overflow-x: auto; min-width: 0; scrollbar-width: none; }
+    .lg-topo nav::-webkit-scrollbar { display: none; }
     .lg-topo nav a { padding: 6px 8px; font-size: 13.5px; white-space: nowrap; }
   }
   @media print { .lg-topo, .lg-indice, .lg-rodape { display: none; } .lg-wrap { display: block; padding: 0; } }
@@ -66,6 +67,8 @@
   <nav aria-label="Documentos">
     <a href="privacidade.html">Privacidade</a>
     <a href="termos.html" aria-current="page">Termos de uso</a>
+    <a href="dpa.html">Tratamento de dados</a>
+    <a href="suporte.html">Suporte</a>
     <a href="login.html">Entrar</a>
   </nav>
 </header>
@@ -171,6 +174,7 @@
     <p>Estes termos seguem as leis do Brasil. Fica eleito o foro da Comarca de São Paulo/SP para resolver qualquer questão sobre eles, salvo quando a lei garantir ao consumidor o foro do próprio domicílio.</p>
 
     <h2 id="contato">15. Contato</h2>
+    <p>O tratamento dos dados pessoais que a sua empresa cadastra segue o <a href="dpa.html">Acordo de Tratamento de Dados</a>, que faz parte destes termos. Os canais e prazos de atendimento estão na página de <a href="suporte.html">Suporte</a>.</p>
     <p>Dúvidas sobre estes termos: <a href="mailto:tavaresiggoorr77@gmail.com">tavaresiggoorr77@gmail.com</a>.</p>
   </main>
 </div>
@@ -179,6 +183,8 @@
   <span>© 2026 Eagles Labz</span>
   <a href="privacidade.html">Privacidade</a>
   <a href="termos.html">Termos de uso</a>
+  <a href="dpa.html">Tratamento de dados</a>
+  <a href="suporte.html">Suporte</a>
 </footer>
 
 </body>

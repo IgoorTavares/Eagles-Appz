@@ -1,10 +1,10 @@
 // ---------- Service Worker · Eagles Labz ----------
-const CACHE_NAME = 'eagles-cache-v111';
+const CACHE_NAME = 'eagles-cache-v118';
 
 const APP_SHELL = [
   './',
   'index.html', 'login.html', 'financeiro.html', 'meu-negocio.html', 'meu-perfil.html', 'central-ajuda.html', 'configuracoes.html',
-  'usuarios.html', 'empresas.html', 'privacidade.html', 'termos.html', 'tarefas.html', 'estoque.html',
+  'usuarios.html', 'empresas.html', 'privacidade.html', 'termos.html', 'tarefas.html', 'estoque.html', 'suporte.html', 'dpa.html',
   'produtos.html', 'clientes-fornecedores.html', 'vendedores.html', 'funcionarios.html',
   'pedidos-venda.html', 'objetos-postagem.html', 'contratos.html', 'funil-vendas.html', 'crm.html',
   'pedido-compras.html', 'notas-fiscais-entrada.html', 'lancamentos-estoque.html', 'conferencia-estoque.html',

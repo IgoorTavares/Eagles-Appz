@@ -6559,6 +6559,19 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '14/10/2026 · Auditoria ERP e CRM', itens: [
+    { titulo: 'Plano só CRM: primeiros passos no lugar certo', badges: ['corrigido'], texto: 'No Dashboard do CRM, os primeiros passos levavam para telas do ERP (cadastro de clientes, produtos e pedidos), que o plano só CRM não tem, e nunca ficavam marcados. Agora levam para Clientes, Serviços e Pipeline do CRM e contam os dados do CRM.' },
+    { titulo: 'ERP + CRM: estoque pelo CRM no histórico do ERP', badges: ['corrigido'], texto: 'Entradas, saídas e o estoque inicial feitos em CRM → Serviços → Produtos passam a entrar no histórico do produto no ERP (com o saldo depois), como as feitas no ERP. O que no ERP é serviço não aparece mais como produto com estoque no CRM.' },
+    { titulo: 'ERP + CRM: lembrete do WhatsApp para cliente do CRM', badges: ['corrigido'], texto: 'No Painel do ERP, "Lembrar no WhatsApp" passou a achar o telefone de clientes cadastrados só no CRM.' },
+    { titulo: 'Redes sociais sem telas repetidas', badges: ['corrigido'], texto: 'Os itens antigos "Agendamentos", "Relatórios de redes" e "Anúncios Meta" (que diziam "precisa de app aprovado") agora abrem a tela Instagram e anúncios, na aba certa.' },
+    { titulo: 'PIX e extrato nas Integrações do plano só CRM', badges: ['corrigido'], texto: 'O Financeiro também faz parte do CRM: a chave PIX e a conciliação do extrato voltaram a aparecer em Configurações → Integrações para quem tem só o CRM.' },
+  ]},
+  { data: '14/10/2026 · Financeiro, Kanban e Dashboard', itens: [
+    { titulo: 'Categorias fixas Pagamentos e Adiantamentos', badges: ['novo'], texto: 'Em Contas a pagar existem duas categorias fixas (não dá para renomear nem excluir): o que for lançado nelas entra nos cartões "Pagamentos" e "Adiantamentos" do Painel. As outras categorias continuam em "Saídas variáveis".' },
+    { titulo: 'Kanban: Concluir e Excluir no cartão', badges: ['melhoria'], texto: 'Cada cartão ganhou o botão "Concluir" (vai para a coluna final) e a lixeira. No modo Selecionar: "Selecionar as importadas" (do Trello) e "Concluir" em massa.' },
+    { titulo: 'Entregas do Dashboard com as tarefas', badges: ['melhoria'], texto: 'O painel Entregas passou a contar os conteúdos e também as tarefas do Kanban com prazo no mês (sem contar duas vezes as de produção ligadas a um conteúdo).' },
+    { titulo: 'Tarefas pelo celular nas duas listas', badges: ['melhoria'], texto: 'O que é lançado pelo celular vira cartão no Kanban (A Fazer) e aparece nas Tarefas diárias do Dashboard. Concluir em um conclui no outro; excluir o cartão tira da lista do dia.' },
+  ]},
   { data: '13/10/2026 · Recorrências', itens: [
     { titulo: 'Próximo mês no dia do vencimento', badges: ['melhoria'], texto: 'Cada recorrência cria a conta do mês seguinte no dia do vencimento do mês atual (ex.: vence dia 15 → em 15/11 aparece dezembro), mesmo sem o pagamento ter entrado.' },
     { titulo: '"Não recebi" pausa a recorrência', badges: ['novo'], texto: 'Na conta a receber de uma recorrência: ⋮ → "Não recebi". A conta fica marcada como não recebida e a recorrência pausa (nenhum mês novo) até ser reativada em Recorrentes, que volta do mês atual em diante, sem criar os meses parados.' },
@@ -6913,8 +6926,8 @@ function cfgSalvarNotif() {
 // cada integração diz se está ligada e leva direto para onde configura
 const CFG_INTEG = [
   { cat: 'Pagamentos e bancos', itens: [
-    { id: 'pix', nome: 'Chave PIX', icone: 'cifrao', desc: 'Aparece nos recibos, cobranças e no portal do cliente.', plano: 'erp', href: 'financeiro.html#pix' },
-    { id: 'ofx', nome: 'Extrato bancário (OFX)', icone: 'banco', desc: 'Conciliação: importa o extrato e casa com os lançamentos.', plano: 'erp', href: 'financeiro.html#caixa' },
+    { id: 'pix', nome: 'Chave PIX', icone: 'cifrao', desc: 'Aparece nos recibos, cobranças e no portal do cliente.', href: 'financeiro.html#pix' },
+    { id: 'ofx', nome: 'Extrato bancário (OFX)', icone: 'banco', desc: 'Conciliação: importa o extrato e casa com os lançamentos.', href: 'financeiro.html#caixa' },
     { id: 'assinatura', nome: 'Asaas e Mercado Pago', icone: 'cartao', desc: 'Pagamento da assinatura do sistema (boleto, PIX e cartão).', aba: 'assinatura' },
   ]},
   { cat: 'Agenda e comunicação', itens: [
@@ -7216,6 +7229,9 @@ function atualizarSecaoAtivaCrm() {
 }
 
 function mostrarSecaoCrm(secao, btn) {
+  // os três itens antigos de redes sociais agora abrem a tela "Instagram e anúncios"
+  const paraMeta = { agendamentos: 'agendados', 'relatorios-redes': 'relatorios', 'anuncios-meta': 'relatorios' }[secao];
+  if (paraMeta) { if (typeof META !== 'undefined') META.aba = paraMeta; secao = 'meta'; btn = btn || document.querySelector('[data-menu-id="meta"]'); }
   if (typeof crmFecharGaveta === 'function') { crmFecharGaveta(); crmAtualizarTabbar(secao); }
   if (KB_TUTORIAL_PASSO >= 0) kbFecharTutorial();
   document.querySelectorAll('.crm-secao').forEach((el) => { el.style.display = 'none'; });
@@ -10166,6 +10182,7 @@ function ttIniciar() {
   TT.data = isoHoje();
   TT.resp = USUARIO_UID || 'local';
   kbIniciarDados(); // tarefas, projetos e equipe do Kanban
+  cloudWatch(CRM_TAREFAS_KEY, [], (d) => { CRM_TAREFAS_DATA = Array.isArray(d) ? d : []; });
   cloudWatch(CRM_CLIENTES_KEY, [], (d) => { CRM_CLIENTES_INDEP_DATA = Array.isArray(d) ? d : []; ttRender(); });
   cloudWatch(CLIENTES_FORN_KEY, [], (d) => { TT.clientesErp = Array.isArray(d) ? d.filter((c) => c.tipoCadastro !== 'fornecedor').map((c) => c.nome || c.razaoSocial).filter(Boolean) : []; ttRender(); });
   const esperar = () => { if (KB_CARREGADO) { TT.carregado = true; ttRender(); } else setTimeout(esperar, 400); };
@@ -10260,13 +10277,19 @@ function ttLancar() {
   if (!KB_CARREGADO) { avisar('O Kanban ainda está carregando. Tente de novo em alguns segundos.'); return; }
   const status = ttColunaAFazer();
   let n = 0;
+  const nomeDe = (uid) => (ttEquipe().find((u) => u.uid === uid) || {}).nome || '';
   TT.previa.forEach((p) => {
-    if (kbCriarTarefa({ titulo: p.texto.slice(0, 140), cliente: p.clienteFinal || '', responsavel: p.respFinal || '', prazo: p.data, status, etiquetas: ['celular'], origem: 'celular' })) n++;
+    const k = kbCriarTarefa({ titulo: p.texto.slice(0, 140), cliente: p.clienteFinal || '', responsavel: p.respFinal || '', prazo: p.data, status, etiquetas: ['celular'], origem: 'celular' });
+    if (!k) return;
+    n++;
+    // e também nas Tarefas diárias do Dashboard (ligada ao cartão)
+    if (Array.isArray(CRM_TAREFAS_DATA)) CRM_TAREFAS_DATA.push({ id: genId('tf'), texto: p.texto.slice(0, 140), feita: false, data: p.data, responsavel: nomeDe(p.respFinal), kbId: k.id, origem: 'celular', criadoEm: new Date().toISOString() });
   });
+  if (n && Array.isArray(CRM_TAREFAS_DATA)) cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA);
   if (!n) return;
   TT.texto = ''; TT.previa = []; TT.aba = 'lancar';
   ttRender();
-  avisar(`${n} ${n === 1 ? 'cartão criado' : 'cartões criados'} no Kanban, na coluna "A Fazer". Quem foi escolhido como responsável já vê no quadro dele.`, 'Tarefas do dia');
+  avisar(`${n} ${n === 1 ? 'tarefa criada' : 'tarefas criadas'} no Kanban (coluna "A Fazer") e nas Tarefas diárias do Dashboard. Concluir em um lugar conclui no outro.`, 'Tarefas do dia');
 }
 function ttConcluir(id) { try { kbAlternarConcluida(id); } catch (e) { console.error(e); } setTimeout(ttRender, 100); }
 // no Dashboard: o link para abrir no celular (com QR Code)
@@ -11219,11 +11242,30 @@ async function sisColetarPainel() {
   const [prods, pedidos, clientes, contratos, compras, atd] = await Promise.all(['eagles_produtos_v1', 'eagles_pedidos_venda_v1', CLIENTES_FORN_KEY, 'eagles_contratos_v1', 'eagles_pedido_compras_v1', ATD_CFG_KEY].map(ler));
   let agendaHoje = 0, temAgenda = false;
   try { if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) { const s = await firestoreDb.collection('tenants').doc(TENANT_ID).collection('agenda').where('data', '==', isoHoje()).get(); agendaHoje = s.size; temAgenda = s.size > 0 || !(await firestoreDb.collection('tenants').doc(TENANT_ID).collection('agenda').limit(1).get()).empty; } else { const l = lsLoad(chaveLocalTenant('eagles_agenda_local_v1'), []); agendaHoje = l.filter((a) => a.data === isoHoje()).length; temAgenda = l.length > 0; } } catch (e) {}
-  SIS_PAINEL_DADOS = { em: Date.now(), prods: Array.isArray(prods) ? prods : [], pedidos: Array.isArray(pedidos) ? pedidos : [], clientes: Array.isArray(clientes) ? clientes : [], contratos: Array.isArray(contratos) ? contratos : [], compras: Array.isArray(compras) ? compras : [], atd: atd && typeof atd === 'object' ? atd : {}, agendaHoje, temAgenda };
+  let crmClientes = [], crmNegocios = [], crmServicos = [], crmContratos = [];
+  if (!TENANT_PLANO || TENANT_PLANO !== 'erp') {
+    [crmClientes, crmNegocios, crmServicos, crmContratos] = await Promise.all(['eagles_crm_clientes_v1', 'eagles_crm_negocios_v1', 'eagles_servicos_v1', 'eagles_crm_contratos_v1'].map(ler));
+  }
+  SIS_PAINEL_DADOS = { em: Date.now(), crmClientes: Array.isArray(crmClientes) ? crmClientes : [], crmNegocios: Array.isArray(crmNegocios) ? crmNegocios : [], crmServicos: Array.isArray(crmServicos) ? crmServicos : [], crmContratos: Array.isArray(crmContratos) ? crmContratos : [], prods: Array.isArray(prods) ? prods : [], pedidos: Array.isArray(pedidos) ? pedidos : [], clientes: Array.isArray(clientes) ? clientes : [], contratos: Array.isArray(contratos) ? contratos : [], compras: Array.isArray(compras) ? compras : [], atd: atd && typeof atd === 'object' ? atd : {}, agendaHoje, temAgenda };
   return SIS_PAINEL_DADOS;
 }
+function sisPainelNoCrm() { return PAGINA_ATIVA_KEY === 'crm' || TENANT_PLANO === 'crm'; }
+// no CRM, os passos levam para as telas do CRM
+const SIS_PASSOS_CRM = {
+  cliente: { t: 'Cadastrar o primeiro cliente', href: 'crm.html#secao=clientes' },
+  item: { t: 'Cadastrar o primeiro serviço', href: 'crm.html#secao=servicos-servicos' },
+  venda: { t: 'Criar o primeiro negócio no Pipeline', href: 'crm.html#secao=pipeline' },
+  contrato: { t: 'Criar o primeiro contrato', href: 'crm.html#orcamentos-contratos' },
+};
+function sisPasso(p) { return (sisPainelNoCrm() && SIS_PASSOS_CRM[p]) || SIS_PASSOS[p]; }
 function sisPassoFeito(id, d) {
   const reais = (l) => l.filter((x) => !x.exemplo);
+  if (sisPainelNoCrm()) {
+    if (id === 'cliente') return (d.crmClientes || []).length > 0 || (TENANT_PLANO !== 'crm' && reais(d.clientes).some((c) => c.tipoCadastro !== 'fornecedor'));
+    if (id === 'item') return (d.crmServicos || []).length > 0 || reais(d.prods).length > 0;
+    if (id === 'venda') return (d.crmNegocios || []).length > 0 || d.pedidos.length > 0;
+    if (id === 'contrato') return (d.crmContratos || []).length > 0 || d.contratos.length > 0;
+  }
   switch (id) {
     case 'empresa': return !!(PERFIL_DATA.nomeFantasia && (PERFIL_DATA.cnpj || PERFIL_DATA.cpf) && PERFIL_DATA.endereco);
     case 'cliente': return reais(d.clientes).some((c) => c.tipoCadastro !== 'fornecedor');
@@ -11267,7 +11309,7 @@ async function sisRenderPainel() {
   if (!noCrm && typeof finEscutar === 'function' && sisFinPronto() && !SIS_FIN_ESCUTANDO) { SIS_FIN_ESCUTANDO = true; finEscutar(() => { SIS_PAINEL_DADOS = null; sisRenderPainel(); }); }
   const ordem = noCrm ? [] : (V.hoje || []).filter((k) => SIS_HOJE[k] && !(FIN_CARTOES.includes(k) && !sisFinPronto()) && !(k === 'agendaHoje' && typeof planoTemCrm === 'function' && !planoTemCrm()) && !(['estoqueAlerta', 'comprasReceber'].includes(k) && !sisModuloAtivo('estoque')) && !(['contratosVencendo', 'notasMes'].includes(k) && !sisModuloAtivo('contratos')));
   const semCrm = typeof planoTemCrm === 'function' && !planoTemCrm();
-  const passos = (V.passos || []).filter((p) => !(semCrm && ['automacao', 'whatsapp', 'agenda', 'ia'].includes(p)) && !(p === 'estoque' && !sisModuloAtivo('estoque')) && !(p === 'contrato' && !sisModuloAtivo('contratos')) && !(p === 'agenda' && !sisModuloAtivo('agenda')) && !(['automacao', 'whatsapp'].includes(p) && !sisModuloAtivo('atendimento')));
+  const passos = (V.passos || []).filter((p) => !(semCrm && ['automacao', 'whatsapp', 'agenda', 'ia'].includes(p)) && !(p === 'estoque' && (!sisModuloAtivo('estoque') || sisPainelNoCrm())) && !(p === 'contrato' && !sisModuloAtivo('contratos')) && !(p === 'agenda' && !sisModuloAtivo('agenda')) && !(['automacao', 'whatsapp'].includes(p) && !sisModuloAtivo('atendimento')));
   const feitos = passos.filter((p) => sisPassoFeito(p, d)).length;
   const escondido = (c.checklistOculto || false) || (feitos === passos.length && passos.length);
   const exemplos = d.prods.filter((p) => p.exemplo).length;
@@ -11277,7 +11319,7 @@ async function sisRenderPainel() {
     ${!escondido && passos.length ? `<div class="sis-passos">
       <div class="sis-passos-cab"><strong>${ic('aprovado', 'ic-herda')} Primeiros passos</strong><span>${feitos} de ${passos.length}</span><span class="kb-espaco"></span>${nivelEhDiretor() || !FIREBASE_PRONTO ? '<button type="button" class="kb-link" onclick="sisOcultarChecklist()">Ocultar</button>' : ''}</div>
       <div class="sis-progresso pequeno"><span style="width:${Math.round((feitos / passos.length) * 100)}%"></span></div>
-      <div class="sis-passos-lista">${passos.map((p) => { const f = sisPassoFeito(p, d); return `<a class="sis-passo${f ? ' feito' : ''}" href="${SIS_PASSOS[p].href}"><span>${f ? '✓' : ''}</span>${escapeHtml(SIS_PASSOS[p].t)}</a>`; }).join('')}</div>
+      <div class="sis-passos-lista">${passos.map((p) => { const f = sisPassoFeito(p, d), P = sisPasso(p); return `<a class="sis-passo${f ? ' feito' : ''}" href="${P.href}" onclick="if (location.pathname.endsWith('crm.html') && '${P.href}'.startsWith('crm.html#secao=')) { event.preventDefault(); const s='${P.href}'.split('=')[1]; mostrarSecaoCrm(s, document.querySelector('[data-menu-id=&quot;' + s + '&quot;]')); }"><span>${f ? '✓' : ''}</span>${escapeHtml(P.t)}</a>`; }).join('')}</div>
       ${exemplos ? `<p class="kb-vazio-mini" style="margin:8px 0 0;">Tem ${exemplos} item(ns) de exemplo no cadastro. <button type="button" class="kb-link" onclick="sisApagarExemplos()">Apagar exemplos</button></p>` : ''}
     </div>` : ''}`;
 }
@@ -11710,7 +11752,8 @@ Object.keys(SIS_HOJE_VERSAO).forEach((k) => { if (SIS_VERSOES[k]) SIS_VERSOES[k]
 function sisTelefoneCliente(nome, d) {
   const n = ttSemAcento(nome);
   const erp = (d.clientes || []).find((c) => ttSemAcento(c.nome || c.razaoSocial) === n || ttSemAcento(c.fantasia) === n) || {};
-  const crm = (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : []).find((c) => ttSemAcento(c.nome) === n) || {};
+  const crmLista = (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' && CRM_CLIENTES_INDEP_DATA.length ? CRM_CLIENTES_INDEP_DATA : (d.crmClientes || []));
+  const crm = crmLista.find((c) => ttSemAcento(c.nome) === n) || {};
   return erp.whatsapp || erp.telefone1 || erp.telefone || crm.whatsapp || crm.telefone || '';
 }
 function sisLinkLembrete(l, tel) {
@@ -13234,6 +13277,11 @@ function adicionarTarefaCrm() {
 function toggleTarefaCrm(id) {
   const t = CRM_TAREFAS_DATA.find((x) => x.id === id);
   if (!t) return;
+  // tarefa ligada a um cartão do Kanban: conclui (ou reabre) o cartão também
+  if (t.kbId && typeof KB_TAREFAS !== 'undefined' && KB_TAREFAS.some((k) => k.id === t.kbId)) {
+    const k = KB_TAREFAS.find((x) => x.id === t.kbId);
+    if (!!t.feita === kbConcluida(k)) kbAlternarConcluida(t.kbId);
+  }
   const hoje = isoHoje();
   if (!t.recorrencia || t.recorrencia === 'nenhuma') {
     t.feita = !t.feita;
@@ -14006,7 +14054,7 @@ function kbIniciarDados() {
       snap.forEach((doc) => lista.push(Object.assign({}, doc.data(), { id: doc.id })));
       KB_TAREFAS = lista;
       KB_CARREGADO = true;
-      try { notifChecarAtribuicoes('tarefa', snap); setTimeout(notifChecarPrazos, 1500); } catch (e) {}
+      try { notifChecarAtribuicoes('tarefa', snap); setTimeout(notifChecarPrazos, 1500); tdSincronizarComKanban(); } catch (e) {}
       renderKanbanConteudo();
       if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard();
     }, (err) => {
@@ -14055,7 +14103,7 @@ function kbNomeUsuario(uid) {
 // ---------- gravação (uma tarefa por vez) ----------
 function kbLimpar(obj) { return JSON.parse(JSON.stringify(obj)); } // tira undefined (o Firestore recusa)
 
-function kbGravarLocal() { lsSave(kbChaveLocal(), KB_TAREFAS); if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard(); }
+function kbGravarLocal() { lsSave(kbChaveLocal(), KB_TAREFAS); if (typeof crmAvisarDashboard === 'function') crmAvisarDashboard(); if (typeof tdSincronizarComKanban === 'function') tdSincronizarComKanban(); }
 
 function kbCriarTarefa(dados) {
   if (!exigirPodeOperar('criar tarefas')) return null;
@@ -14499,6 +14547,10 @@ function kbCardHtml(t, p) {
         <span class="kb-espaco"></span>
         ${kbTempoBotaoHtml(t)}
       </div>
+      <div class="kb-card-acoes">
+        <button type="button" class="kb-card-btn-concluir${concluida ? ' feito' : ''}" onclick="event.stopPropagation(); kbAlternarConcluida('${id}')">${kbIc('check')} ${concluida ? 'Concluída · reabrir' : 'Concluir'}</button>
+        <button type="button" class="kb-card-btn-lixo" title="Excluir" aria-label="Excluir tarefa" onclick="event.stopPropagation(); kbConfirmarExcluir('${id}')">${kbIc('lixeira')}</button>
+      </div>
       ${compacto ? '' : `<button type="button" class="kb-card-abrir" onclick="event.stopPropagation(); kbAbrirTarefa('${id}')">${kbIc('externo')} Acessar tarefa completa</button>`}
     </div>`;
 }
@@ -14702,6 +14754,25 @@ function kbNavegarCalendario(passo) {
 }
 
 // ---------- ações rápidas ----------
+// a tarefa do dia ligada ao cartão acompanha o cartão (concluída, reaberta ou excluída)
+let TD_SINC_TIMER = null;
+function tdSincronizarComKanban() {
+  clearTimeout(TD_SINC_TIMER);
+  TD_SINC_TIMER = setTimeout(() => {
+    if (typeof CRM_TAREFAS_DATA === 'undefined' || !Array.isArray(CRM_TAREFAS_DATA) || !KB_CARREGADO || !chaveCarregadaNaNuvem(CRM_TAREFAS_KEY)) return;
+    let mexeu = false;
+    CRM_TAREFAS_DATA = CRM_TAREFAS_DATA.filter((t) => {
+      if (!t.kbId) return true;
+      const k = KB_TAREFAS.find((x) => x.id === t.kbId);
+      if (!k) { mexeu = true; return false; }
+      const f = kbConcluida(k);
+      if (!!t.feita !== f) { t.feita = f; mexeu = true; }
+      if (k.titulo && t.texto !== k.titulo) { t.texto = k.titulo; mexeu = true; }
+      return true;
+    });
+    if (mexeu && cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA) !== false) { if (typeof renderCrmTarefas === 'function') renderCrmTarefas(); if (typeof renderDropdownTarefasDiarias === 'function') renderDropdownTarefasDiarias(); }
+  }, 400);
+}
 function kbAlternarConcluida(id) {
   const t = KB_TAREFAS.find((x) => x.id === id);
   if (!t) return;
@@ -15598,12 +15669,14 @@ function kbRenderBarraSelecao() {
   barra.innerHTML = `
     <strong>${n} selecionada${n === 1 ? '' : 's'}</strong>
     <button type="button" class="kb-link" onclick="kbSelecionarTodasVisiveis()">Selecionar todas visíveis</button>
+    ${KB_TAREFAS.some((t) => t.importadoDe) ? `<button type="button" class="kb-link" onclick="kbSelecionarImportadas()">Selecionar as importadas (${KB_TAREFAS.filter((t) => t.importadoDe).length})</button>` : ''}
     <span class="kb-sep-v"></span>
     <select ${n ? '' : 'disabled'} onchange="if(this.value) kbAcaoEmMassa('status', this.value); this.value='';"><option value="">Mover para...</option>${opcoes(kbColunas().map((c) => [c.id, c.nome]))}</select>
     <select ${n ? '' : 'disabled'} onchange="if(this.value) kbAcaoEmMassa('prioridade', this.value); this.value='';"><option value="">Prioridade...</option>${opcoes(Object.entries(KB_PRIORIDADES).map(([k, v]) => [k, v.nome]))}</select>
     <select ${n ? '' : 'disabled'} onchange="if(this.value) kbAcaoEmMassa('responsavel', this.value === '__nenhum' ? '' : this.value); this.value='';"><option value="">Responsável...</option><option value="__nenhum">Sem responsável</option>${opcoes(KB_USUARIOS.map((u) => [u.uid, u.nome]))}</select>
     <input type="date" ${n ? '' : 'disabled'} aria-label="Prazo" title="Definir prazo" onchange="if(this.value) kbAcaoEmMassa('prazo', this.value);">
     <button type="button" class="btn btn-small" ${n ? '' : 'disabled'} onclick="kbAcaoEmMassa('arquivada', ${KB_FILTROS.arquivadas ? 'false' : 'true'})">${kbIc('arquivo')} ${KB_FILTROS.arquivadas ? 'Desarquivar' : 'Arquivar'}</button>
+    <button type="button" class="btn btn-small" ${n ? '' : 'disabled'} onclick="kbConcluirEmMassa()">${kbIc('check')} Concluir</button>
     <button type="button" class="btn btn-small kb-btn-perigo" ${n ? '' : 'disabled'} onclick="kbExcluirEmMassa()">${kbIc('lixeira')} Excluir</button>
     <span class="kb-espaco"></span>
     <button type="button" class="btn btn-small" onclick="kbAlternarSelecao()">Cancelar</button>`;
@@ -15620,6 +15693,17 @@ function kbAcaoEmMassa(campo, valor) {
     kbAtualizar(id, campos);
   });
   if (campo === 'arquivada') KB_SELECAO.clear();
+  renderKanbanConteudo(true);
+}
+function kbSelecionarImportadas() {
+  if (!KB_SELECAO) return;
+  KB_TAREFAS.filter((t) => t.importadoDe).forEach((t) => KB_SELECAO.add(t.id));
+  renderKanbanConteudo(true);
+}
+function kbConcluirEmMassa() {
+  if (!KB_SELECAO || !KB_SELECAO.size) return;
+  Array.from(KB_SELECAO).forEach((id) => { const t = KB_TAREFAS.find((x) => x.id === id); if (t && !kbConcluida(t)) kbAlternarConcluida(id); });
+  KB_SELECAO.clear();
   renderKanbanConteudo(true);
 }
 function kbExcluirEmMassa() {
@@ -17148,7 +17232,7 @@ function srvExcluirCategoria(id) {
 // ---------- aba Produtos ----------
 function srvHtmlProdutos() {
   const erp = crmUsaDadosDoErp();
-  const cards = SRV_PRODUTOS.map((p) => {
+  const cards = SRV_PRODUTOS.filter((p) => !(erp && p.natureza === 'servico')).map((p) => {
     const id = escapeParaOnclick(p.id);
     const preco = Number(p.precoVenda) || 0, custo = Number(p.custo) || 0;
     const margem = preco > 0 && custo > 0 ? Math.round(((preco - custo) / preco) * 100) : null;
@@ -17173,7 +17257,7 @@ function srvHtmlProdutos() {
       <button type="button" class="btn btn-primary" onclick="srvAbrirProduto(null)">${ic('mais', 'ic-herda')} Novo Produto</button></div>`}
     <div class="kb-wiz-caixa srv-historico">
       <div class="srv-historico-cab"><strong>${ic('recorrente')} Histórico de Movimentações</strong><span class="kb-espaco"></span>
-        <select class="srv-select" onchange="SRV_FILTRO.movProduto = this.value; srvRender();"><option value="">Todos os produtos</option>${SRV_PRODUTOS.map((p) => `<option value="${escapeHtml(p.nome)}"${SRV_FILTRO.movProduto === p.nome ? ' selected' : ''}>${escapeHtml(p.nome)}</option>`).join('')}</select>
+        <select class="srv-select" onchange="SRV_FILTRO.movProduto = this.value; srvRender();"><option value="">Todos os produtos</option>${SRV_PRODUTOS.filter((p) => !(erp && p.natureza === 'servico')).map((p) => `<option value="${escapeHtml(p.nome)}"${SRV_FILTRO.movProduto === p.nome ? ' selected' : ''}>${escapeHtml(p.nome)}</option>`).join('')}</select>
         <select class="srv-select" onchange="SRV_FILTRO.movTipo = this.value; srvRender();"><option value="">Todos os tipos</option><option value="entrada"${SRV_FILTRO.movTipo === 'entrada' ? ' selected' : ''}>Entrada</option><option value="saida"${SRV_FILTRO.movTipo === 'saida' ? ' selected' : ''}>Saída</option></select>
       </div>
       ${movs.length ? `<div class="kb-tabela-wrap"><table class="kb-tabela" style="min-width:560px;"><thead><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Qtd.</th><th>Motivo</th></tr></thead><tbody>
@@ -17225,9 +17309,9 @@ function srvSalvarProduto(id) {
     if (antigo && antigo.nome !== dados.nome && SRV_MOVIMENTOS.some((m) => m.produto === antigo.nome)) srvGravar(srvChaveMovimentos(), SRV_MOVIMENTOS.map((m) => (m.produto === antigo.nome ? Object.assign({}, m, { produto: dados.nome }) : m)), 'movimentos');
   } else {
     const estoque = Math.max(0, Math.round(Number(g('srv-p-estoque')) || 0));
-    const novo = Object.assign({ id: genId('prd'), situacao: 'ativo', estoque, criadoEm: new Date().toISOString() }, dados);
+    const novo = Object.assign({ id: genId('prd'), situacao: 'ativo', estoque, natureza: 'produto', controlaEstoque: 'sim', criadoEm: new Date().toISOString() }, dados);
     if (!srvGravar(srvChaveProdutos(), SRV_PRODUTOS.concat([novo]), 'produtos')) return;
-    if (estoque > 0) srvGravar(srvChaveMovimentos(), SRV_MOVIMENTOS.concat([{ id: genId('mov'), produto: novo.nome, tipo: 'entrada', quantidade: estoque, data: kbHoje(), motivo: 'Estoque inicial', criadoEm: new Date().toISOString() }]), 'movimentos');
+    if (estoque > 0) srvGravar(srvChaveMovimentos(), SRV_MOVIMENTOS.concat([{ id: genId('mov'), produto: novo.nome, produtoId: novo.id, saldoApos: estoque, aplicado: true, automatico: true, origem: { tipo: 'cadastro' }, tipo: 'entrada', quantidade: estoque, data: kbHoje(), motivo: 'Estoque inicial', criadoEm: new Date().toISOString() }]), 'movimentos');
   }
   srvFecharModal();
 }
@@ -17275,7 +17359,7 @@ function srvSalvarMovimento(id) {
     mov = { tipo, quantidade: qtd, motivo: motivoDigitado };
   }
   if (!srvGravar(srvChaveProdutos(), SRV_PRODUTOS.map((x) => (x.id === id ? Object.assign({}, x, { estoque: novo }) : x)), 'produtos')) return;
-  srvGravar(srvChaveMovimentos(), SRV_MOVIMENTOS.concat([Object.assign({ id: genId('mov'), produto: p.nome, data: kbHoje(), criadoEm: new Date().toISOString() }, mov)]), 'movimentos');
+  srvGravar(srvChaveMovimentos(), SRV_MOVIMENTOS.concat([Object.assign({ id: genId('mov'), produto: p.nome, produtoId: p.id, saldoApos: novo, aplicado: true, origem: { tipo: 'crm' }, por: USUARIO_NOME || '', data: kbHoje(), criadoEm: new Date().toISOString() }, mov)]), 'movimentos');
   srvFecharModal();
 }
 
@@ -17542,7 +17626,7 @@ let FIN_REC_TODOS = [];
 // são marcados sozinhos (finMarcarLegado).
 function finModuloPagina() {
   const pg = (location.pathname.split('/').pop() || '').toLowerCase();
-  return ['crm.html', 'funil-vendas.html'].includes(pg) ? 'crm' : 'erp';
+  return /(^|[_-])crm\.html$|funil-vendas\.html$/.test(pg) ? 'crm' : 'erp';
 }
 function finCompartilhado() {
   if (!FIREBASE_PRONTO || !TENANT_ID) return true; // modo local (desenvolvimento)
@@ -17605,9 +17689,25 @@ const FIN_CATEGORIAS_PADRAO = {
 function finNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
 function finRef(colecao) { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(colecao); }
 function finChaveLocal(qual) { return chaveLocalTenant('eagles_fin_' + qual + '_local_v1'); }
+// Duas categorias de despesa fixas (não dá para renomear nem excluir): são
+// elas que alimentam os cartões "Pagamentos" e "Adiantamentos" do Painel.
+// Qualquer outra categoria entra em "Saídas variáveis".
+const FIN_CAT_FIXAS = [{ id: 'fix-pagamentos', nome: 'Pagamentos', cor: '#3b82f6', fixa: true, subtipo: 'pagamento' }, { id: 'fix-adiantamentos', nome: 'Adiantamentos', cor: '#f97316', fixa: true, subtipo: 'adiantamento' }];
+function finCatFixa(id) { return FIN_CAT_FIXAS.find((c) => c.id === id); }
 function finCategorias(tipo) {
-  const c = FIN_CATEGORIAS && Array.isArray(FIN_CATEGORIAS[tipo]) ? FIN_CATEGORIAS[tipo] : FIN_CATEGORIAS_PADRAO[tipo];
-  return c && c.length ? c : FIN_CATEGORIAS_PADRAO[tipo];
+  const c0 = FIN_CATEGORIAS && Array.isArray(FIN_CATEGORIAS[tipo]) ? FIN_CATEGORIAS[tipo] : FIN_CATEGORIAS_PADRAO[tipo];
+  const c = c0 && c0.length ? c0 : FIN_CATEGORIAS_PADRAO[tipo];
+  if (tipo !== 'pagar') return c;
+  return FIN_CAT_FIXAS.concat(c.filter((x) => !finCatFixa(x.id)));
+}
+// em que cartão do Painel a despesa entra
+function finTipoSaida(l) {
+  const f = finCatFixa(l.categoriaId);
+  if (f) return f.subtipo;
+  // sem categoria fixa: segue como antes (o que já estava lançado não muda de cartão)
+  if (l.subtipo === 'adiantamento') return 'adiantamento';
+  if (l.subtipo === 'variavel') return 'variavel';
+  return 'pagamento';
 }
 function finCategoria(tipo, id) {
   return finCategorias(tipo).find((c) => c.id === id) || { id: '', nome: 'Sem categoria', cor: '#64748b' };
@@ -17885,9 +17985,9 @@ function getCicloDoMes(mesKey) {
   const st = (l) => (l.status === 'pago' ? 'pago' : 'pendente');
   return {
     receitas: doMes.filter((l) => l.tipo === 'receber').map((l) => ({ id: l.id, cliente: l.cliente || l.descricao, plano: l.descricao, valor: Number(l.valor) || 0, diaAcerto: finDia(l.vencimento), status: st(l), dataPagamento: l.dataPagamento || null, categoriaId: l.categoriaId })),
-    pagamentos: doMes.filter((l) => l.tipo === 'pagar' && l.subtipo !== 'adiantamento' && l.subtipo !== 'variavel').map((l) => ({ id: l.id, cuidador: l.fornecedor || l.descricao, nome: l.descricao, valor: Number(l.valor) || 0, diaPagamento: finDia(l.vencimento), status: st(l), dataPagamento: l.dataPagamento || null, categoriaId: l.categoriaId })),
-    adiantamentos: doMes.filter((l) => l.tipo === 'pagar' && l.subtipo === 'adiantamento').map((l) => ({ id: l.id, cuidador: l.fornecedor || l.descricao, valor: Number(l.valor) || 0, data: l.vencimento, obs: l.observacoes || '' })),
-    variaveis: doMes.filter((l) => l.tipo === 'pagar' && l.subtipo === 'variavel').map((l) => ({ id: l.id, descricao: l.descricao, valor: Number(l.valor) || 0, data: l.vencimento })),
+    pagamentos: doMes.filter((l) => l.tipo === 'pagar' && finTipoSaida(l) === 'pagamento').map((l) => ({ id: l.id, cuidador: l.fornecedor || l.descricao, nome: l.descricao, valor: Number(l.valor) || 0, diaPagamento: finDia(l.vencimento), status: st(l), dataPagamento: l.dataPagamento || null, categoriaId: l.categoriaId })),
+    adiantamentos: doMes.filter((l) => l.tipo === 'pagar' && finTipoSaida(l) === 'adiantamento').map((l) => ({ id: l.id, cuidador: l.fornecedor || l.descricao, valor: Number(l.valor) || 0, data: l.vencimento, obs: l.observacoes || '' })),
+    variaveis: doMes.filter((l) => l.tipo === 'pagar' && finTipoSaida(l) === 'variavel').map((l) => ({ id: l.id, descricao: l.descricao, valor: Number(l.valor) || 0, data: l.vencimento })),
   };
 }
 
@@ -18439,13 +18539,14 @@ function finAbrirCategorias(tipo) {
       <div class="srv-paleta">${FIN_CORES.map((c) => `<button type="button" class="srv-cor${FIN_CAT_COR === c ? ' ativo' : ''}" style="background:${c};" aria-label="Cor ${c}" onclick="FIN_CAT_COR = '${c}'; document.getElementById('fin-cat-cor').value = '${c}'; document.querySelectorAll('#modal-srv .srv-cor').forEach((b) => b.classList.toggle('ativo', b === this));"></button>`).join('')}</div>
       <div style="max-height:320px; overflow-y:auto;">${lista.map((c) => { const usados = FIN_LANC.filter((l) => l.tipo === tipo && l.categoriaId === c.id).length; const cid = escapeParaOnclick(c.id); return `<div class="srv-cat-linha">
         <span class="kb-bolinha" style="background:${corHexValida(c.cor) || '#64748b'};"></span><span style="flex:1;">${escapeHtml(c.nome)}</span><span class="kb-vazio-mini">${usados}</span>
-        <button type="button" class="kb-btn-ic" aria-label="Renomear" onclick="finRenomearCategoria('${tipo}', '${cid}')">${ic('lapis', 'ic-herda')}</button>
-        <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir" onclick="finExcluirCategoria('${tipo}', '${cid}')" ${lista.length <= 1 ? 'disabled' : ''}>${ic('lixeira', 'ic-herda')}</button>
+        ${c.fixa ? `<span class="fin-cat-fixa" title="Categoria fixa: alimenta o cartão &quot;${escapeHtml(c.nome)}&quot; do Painel">${ic('cadeado', 'ic-herda')} fixa</span>` : `<button type="button" class="kb-btn-ic" aria-label="Renomear" onclick="finRenomearCategoria('${tipo}', '${cid}')">${ic('lapis', 'ic-herda')}</button>
+        <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir" onclick="finExcluirCategoria('${tipo}', '${cid}')" ${lista.length <= 1 ? 'disabled' : ''}>${ic('lixeira', 'ic-herda')}</button>`}
       </div>`; }).join('')}</div>
     </div>`;
   openModal('modal-srv');
 }
 function finSalvarCategorias(tipo, lista) {
+  lista = (lista || []).filter((c) => !finCatFixa(c.id)); // as fixas não são gravadas (sempre existem)
   const todas = Object.assign({}, FIN_CATEGORIAS || FIN_CATEGORIAS_PADRAO, { [tipo]: lista });
   if (cloudSet(FIN_CATEGORIAS_KEY, todas) === false) return false;
   FIN_CATEGORIAS = todas;
@@ -18456,11 +18557,12 @@ function finAdicionarCategoria(tipo) {
   const nome = (document.getElementById('fin-cat-nome').value || '').trim();
   if (!nome) { avisar('Escreva o nome da categoria.'); return; }
   if (finCategorias(tipo).some((c) => kbNomeNorm(c.nome) === kbNomeNorm(nome))) { avisar('Já existe uma categoria com esse nome.'); return; }
+  if (tipo === 'pagar' && ['pagamentos', 'adiantamentos'].includes(kbNomeNorm(nome))) { avisar(`"${nome}" já é uma categoria fixa do sistema.`); return; }
   if (finSalvarCategorias(tipo, finCategorias(tipo).concat([{ id: genId('fcat'), nome: nome.slice(0, 30), cor: corHexValida(document.getElementById('fin-cat-cor').value) || '#3b82f6' }]))) finAbrirCategorias(tipo);
 }
 function finRenomearCategoria(tipo, id) {
   const c = finCategorias(tipo).find((x) => x.id === id);
-  if (!c) return;
+  if (!c || c.fixa) return;
   const linha = Array.from(document.querySelectorAll('#modal-srv .srv-cat-linha')).find((el) => el.innerHTML.includes(`'${id}'`));
   if (!linha) return;
   linha.innerHTML = `<input type="text" maxlength="30" value="${escapeHtml(c.nome)}" style="flex:1;" onkeydown="if(event.key==='Enter') this.nextElementSibling.click();"><button type="button" class="btn btn-small btn-primary" onclick="const v = this.previousElementSibling.value.trim(); if (v) { finSalvarCategorias('${tipo}', finCategorias('${tipo}').map((x) => x.id === '${escapeParaOnclick(id)}' ? Object.assign({}, x, { nome: v.slice(0, 30) }) : x)); } finAbrirCategorias('${tipo}');">Salvar</button>`;
@@ -18468,7 +18570,7 @@ function finRenomearCategoria(tipo, id) {
 }
 function finExcluirCategoria(tipo, id) {
   const c = finCategorias(tipo).find((x) => x.id === id);
-  if (!c) return;
+  if (!c || c.fixa) return;
   const usados = FIN_LANC.filter((l) => l.tipo === tipo && l.categoriaId === id);
   confirmarAcao(`Excluir a categoria "${c.nome}"?${usados.length ? ` Os ${usados.length} lançamento(s) dela ficam "Sem categoria".` : ''}`, () => {
     if (!finSalvarCategorias(tipo, finCategorias(tipo).filter((x) => x.id !== id))) return;
@@ -18600,7 +18702,7 @@ function finSalvarForm() {
   const base = { tipo: f.tipo, descricao: descricao.slice(0, 140), categoriaId: f.categoriaId, moeda: f.moeda, observacoes: String(f.observacoes || '').slice(0, 500), origem: { tipo: rec ? 'venda-rapida' : 'manual' } };
   base[rec ? 'cliente' : 'fornecedor'] = quem;
   if (rec && f.itens.length) base.itens = f.itens.map((i) => ({ id: i.id, nome: i.nome, valor: i.valor }));
-  if (!rec) base.subtipo = f.modo === 'recorrente' ? 'pagamento' : 'variavel';
+  if (!rec) base.subtipo = finCatFixa(base.categoriaId) ? finCatFixa(base.categoriaId).subtipo : (f.modo === 'recorrente' ? 'pagamento' : 'variavel');
   let criados = 0;
   if (f.modo === 'avista') {
     const pagoParcial = Math.round((Number(f.valorPago) || 0) * 100) / 100;
@@ -21768,11 +21870,29 @@ function dshPeriodo() {
   return [DSH_ENT.mes || atual, DSH_ENT.mes || atual];
 }
 function dshDataFinal(c) { const h = (c.historico || []).slice().reverse().find((x) => /para "(Publicação|Publicado|Aprovado)"|postado|aprovou/i.test(x.acao)); return h ? h.em : (cntFinalizado(c) ? c.atualizadoEm : ''); }
+const CNT_FINALIZADO_ORIG = (c) => cntFinalizado(c);
+const DSH_DATA_FINAL_ORIG = (c) => dshDataFinal(c);
+function dshEntregaItens() {
+  const conteudos = dshCnt();
+  const ligadas = new Set((typeof CNT !== 'undefined' ? CNT : []).map((c) => c.tarefaId).filter(Boolean));
+  const tarefas = (typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS : []).filter((t) => !t.arquivada && !t.paiId && !ligadas.has(t.id) && dshDoCliente(t.cliente) && (t.prazo || t.concluidaEm)).map((t) => {
+    const feito = kbConcluida(t);
+    const quando = t.prazo || String(t.concluidaEm || '').slice(0, 10);
+    return { id: 'kb_' + t.id, _kb: true, _feito: feito, titulo: t.titulo, cliente: t.cliente, responsavel: t.responsavel, entrega: quando, publicacao: quando, criadoEm: t.criadoEm, atualizadoEm: t.atualizadoEm || t.criadoEm, concluidaEm: t.concluidaEm, historico: [] };
+  });
+  return conteudos.concat(tarefas);
+}
 function renderCrmDashEntregas() {
   const el = document.getElementById('crm-dash-entregas');
   if (!el) return;
   if (typeof CNT === 'undefined') { el.innerHTML = ''; return; }
   const mes = DSH_ENT.mes || finMesAtual();
+  // entregas = conteúdos + tarefas do Kanban (as tarefas de produção que já
+  // têm um conteúdo ligado não contam duas vezes)
+  const itens = dshEntregaItens();
+  const cntFinalizado = (x) => (x._kb ? x._feito : CNT_FINALIZADO_ORIG(x));
+  const dshDataFinal = (x) => (x._kb ? x.concluidaEm : DSH_DATA_FINAL_ORIG(x));
+  const dshCnt = () => itens;
   const doMes = dshCnt().filter((c) => (c.publicacao || c.entrega || '').startsWith(mes));
   const entregues = doMes.filter(cntFinalizado);
   const meta = doMes.length, pct = meta ? Math.round((entregues.length / meta) * 100) : 0;
@@ -21780,7 +21900,7 @@ function renderCrmDashEntregas() {
   // ritmo: quanto do mês já passou × quanto já foi entregue
   const hoje = new Date(), ehAtual = mes === finMesAtual();
   const passou = ehAtual ? hoje.getDate() / new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate() : (mes < finMesAtual() ? 1 : 0);
-  const msg = !meta ? 'Nenhum conteúdo planejado para este mês.' : pct >= 100 ? 'Mês entregue! Parabéns, equipe.' : pct / 100 + 0.1 < passou ? 'Atenção: precisamos acelerar o mês.' : 'No ritmo certo.';
+  const msg = !meta ? 'Nada planejado para este mês (conteúdos e tarefas com prazo).' : pct >= 100 ? 'Mês entregue! Parabéns, equipe.' : pct / 100 + 0.1 < passou ? 'Atenção: precisamos acelerar o mês.' : 'No ritmo certo.';
   const corMsg = !meta ? 'var(--text-soft)' : pct >= 100 ? 'var(--success)' : pct / 100 + 0.1 < passou ? 'var(--warning)' : 'var(--success)';
   // indicadores do período
   const [de, ate] = dshPeriodo();

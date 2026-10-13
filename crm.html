@@ -317,7 +317,7 @@
     <div class="crm-secao" id="crm-secao-clientes" style="display:none;">
       <div class="page-header" style="margin-bottom:16px; padding:0;">
         <div><h1 style="font-size:20px;">Clientes</h1><p id="crm-clientes-subtitulo" style="color:var(--text-soft); margin:0;"></p></div>
-        <div style="display:flex; gap:10px;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <button type="button" id="crm-btn-importar-clientes" class="btn" style="display:none;" onclick="importarClientesDoErp()" title="Copiar os clientes do cadastro do ERP para o CRM"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Importar do ERP</button>
           <button type="button" class="kb-btn kb-btn-tutorial" onclick="iniciarTourCrm('clientes')"><svg class="kb-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg> Tutorial</button>
           <button type="button" class="btn btn-primary" onclick="abrirCadastrarClienteCrm()">+ Cadastrar Cliente</button>

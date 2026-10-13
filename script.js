@@ -6559,6 +6559,10 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '13/10/2026 · Recorrências', itens: [
+    { titulo: 'Próximo mês no dia do vencimento', badges: ['melhoria'], texto: 'Cada recorrência cria a conta do mês seguinte no dia do vencimento do mês atual (ex.: vence dia 15 → em 15/11 aparece dezembro), mesmo sem o pagamento ter entrado.' },
+    { titulo: '"Não recebi" pausa a recorrência', badges: ['novo'], texto: 'Na conta a receber de uma recorrência: ⋮ → "Não recebi". A conta fica marcada como não recebida e a recorrência pausa (nenhum mês novo) até ser reativada em Recorrentes, que volta do mês atual em diante, sem criar os meses parados.' },
+  ]},
   { data: '13/10/2026 · Configurações', itens: [
     { titulo: 'Configurações reorganizadas', badges: ['melhoria'], texto: 'Abas em ordem, sem a barra de rolagem branca. Meu sistema, E-mails e Assinatura viraram abas de verdade. "E-mail" e "E-mails automáticos" viraram uma aba só.' },
     { titulo: 'Notificações que funcionam', badges: ['corrigido'], texto: 'Cada pessoa escolhe o que quer receber (aprovações, pedidos do portal, novos leads, agendamentos, tarefas e conteúdos atribuídos e prazos chegando), se quer a notificação do computador e o som. As escolhas ficam na conta e valem em qualquer aparelho.' },
@@ -17768,8 +17772,19 @@ function finMesesParaGerar(rec, ate) {
   while (m && m <= ate && (!rec.fim || m <= rec.fim) && meses.length < 60) { meses.push(m); m = finSomarMeses(m, 1); }
   return meses;
 }
+// Até que mês a recorrência já deve ter a conta criada: o mês atual e,
+// a partir do dia do vencimento deste mês, também o mês seguinte
+// (ex.: vence dia 15 → no dia 15/11 aparece a conta de dezembro).
+// A primeira conta (mês de início) aparece sempre, na hora.
+function finAteRecorrencia(rec) {
+  const atual = finMesAtual();
+  let ate = atual;
+  if (finHoje() >= finDataDoMes(atual, rec.dia)) ate = finSomarMeses(atual, 1);
+  if (rec.inicio && rec.inicio > ate) ate = rec.inicio;
+  return ate;
+}
 function finGerarParaRecorrencia(rec) {
-  const ate = finSomarMeses(finMesAtual(), 1);
+  const ate = finAteRecorrencia(rec);
   const meses = finMesesParaGerar(rec, ate);
   meses.forEach((mes) => {
     const id = 'rec_' + rec.id + '_' + mes;
@@ -17789,7 +17804,7 @@ function finGerarRecorrencias() {
 function finCriarRecorrencia(dados) {
   if (!finPodeCriar()) return null;
   const rec = Object.assign({ modulo: finModuloPorOrigem(dados || {}) || finModuloPagina(), id: genId('frec'), tipo: 'receber', descricao: '', valor: 0, dia: 10, inicio: finMesAtual(), fim: '', ativa: true, categoriaId: '', cliente: '', fornecedor: '', subtipo: '', moeda: 'BRL', criadoEm: new Date().toISOString() }, dados);
-  const meses = finMesesParaGerar(rec, finSomarMeses(finMesAtual(), 1));
+  const meses = finMesesParaGerar(rec, finAteRecorrencia(rec));
   meses.forEach((mes) => finCriar(finLancamentoDaRecorrencia(rec, mes)));
   if (meses.length) rec.ultimaGeracao = meses[meses.length - 1];
   finGravarRecorrencia(rec);
@@ -18086,6 +18101,7 @@ function finHtmlTransacoes() {
 function finStatusHtml(l) {
   if (l.status === 'cancelado') return '<span class="fin-status cancelado">Cancelado</span>';
   if (l.status === 'pago') return `<span class="fin-status pago">${l.tipo === 'receber' ? 'Recebido' : 'Pago'}</span>`;
+  if (l.naoRecebidoEm && l.status !== 'pago') return '<span class="fin-status vencido" title="Marcado como não recebido: a recorrência está pausada">Não recebido</span>';
   if (finVencido(l)) return '<span class="fin-status vencido">Vencido</span>';
   if (l.status === 'parcial') return '<span class="fin-status parcial">Parcial</span>';
   return '<span class="fin-status pendente">Pendente</span>';
@@ -18249,7 +18265,7 @@ function finHtmlRecorrentesPagar() {
       <span class="kb-bolinha" style="background:${corHexValida(finCategoria('pagar', r.categoriaId).cor) || '#64748b'};"></span>
       <span style="flex:1;"><strong>${escapeHtml(r.descricao)}</strong><small style="display:block; color:var(--text-soft);">${escapeHtml(r.fornecedor || 'Sem fornecedor')} · todo dia ${Number(r.dia) || 1}${r.fim ? ` · até ${escapeHtml(r.fim)}` : ' · até cancelar'}</small></span>
       <strong class="fin-vermelho">${finV(r.valor, r.moeda)}</strong>
-      <label class="switch" title="${r.ativa !== false ? 'Ativa' : 'Pausada'}"><input type="checkbox" ${r.ativa !== false ? 'checked' : ''} onchange="finGravarRecorrencia(FIN_REC.find((x) => x.id === '${id}'), { ativa: this.checked })"><span class="switch-slider"></span></label>
+      <label class="switch" title="${r.ativa !== false ? 'Ativa' : 'Pausada'}"><input type="checkbox" ${r.ativa !== false ? 'checked' : ''} onchange="finAlternarRecorrencia('${id}', this.checked)"><span class="switch-slider"></span></label>
       <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Excluir recorrência" onclick="finConfirmarExcluirRecorrencia('${id}')">${ic('lixeira', 'ic-herda')}</button>
     </div>`; }).join('')}</div>` : `<div class="kb-vazio-grande" style="padding:30px;"><div class="ic-circulo">${ic('recorrente')}</div><p style="margin:0;">Nenhuma despesa recorrente encontrada</p><p class="kb-vazio-mini">Crie uma despesa recorrente para começar a controlar</p></div>`}`;
 }
@@ -18272,8 +18288,32 @@ function finMenuConta(id, ancora) {
   kbMostrarPopover(`
     <button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); finAbrirEditar('${sid}')">${kbIc('lapis')}<span>Editar</span></button>
     ${l.status === 'pago' || l.status === 'parcial' ? `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); finAtualizar('${sid}', { status: 'pendente', valorPago: 0, dataPagamento: null })">${kbIc('atualizar')}<span>Desfazer ${l.tipo === 'receber' ? 'recebimento' : 'pagamento'}</span></button>` : ''}
+    ${l.tipo === 'receber' && l.recorrenciaId && (l.status === 'pendente' || l.status === 'parcial') && (FIN_REC_TODOS.find((r) => r.id === l.recorrenciaId) || {}).ativa !== false ? `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); finNaoRecebi('${sid}')">${ic('alerta', 'kb-ic')}<span>Não recebi (pausar recorrência)</span></button>` : ''}
     ${l.status !== 'cancelado' ? `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); finAtualizar('${sid}', { status: 'cancelado' })">${kbIc('x')}<span>Cancelar conta</span></button>` : `<button type="button" class="kb-pop-item" onclick="kbFecharPopovers(); finAtualizar('${sid}', { status: (FIN_LANC.find((x) => x.id === '${sid}').valorPago || 0) > 0 ? 'parcial' : 'pendente' })">${kbIc('atualizar')}<span>Reativar conta</span></button>`}
     <button type="button" class="kb-pop-item kb-pop-perigo" onclick="kbFecharPopovers(); finConfirmarExcluir('${sid}')">${kbIc('lixeira')}<span>Excluir</span></button>`, ancora);
+}
+function finNaoRecebi(id) {
+  const l = FIN_LANC.find((x) => x.id === id);
+  const rec = l && FIN_REC_TODOS.find((r) => r.id === l.recorrenciaId);
+  if (!l || !rec) return;
+  confirmarAcao(`Marcar que você não recebeu "${l.cliente || l.descricao}" de ${finNomeMes(finCompetencia(l))}?\n\nA recorrência fica PAUSADA: não aparece mais nenhum mês até você reativar em Recorrentes. Esta conta continua em aberto (você ainda pode receber ou cancelar).`, () => {
+    const agora = new Date().toISOString();
+    finAtualizar(l.id, { naoRecebidoEm: agora });
+    finGravarRecorrencia(rec, { ativa: false, pausadaPor: 'nao-recebi', pausadaEm: agora, pausadaMes: finCompetencia(l) });
+    avisar('Recorrência pausada. Para voltar a cobrar, reative em Financeiro → Recorrentes.', 'Recorrência');
+  }, 'Não recebi');
+}
+function finAlternarRecorrencia(id, ligar) {
+  const rec = FIN_REC_TODOS.find((r) => r.id === id);
+  if (!rec) return;
+  if (!ligar) { finGravarRecorrencia(rec, { ativa: false, pausadaPor: 'manual', pausadaEm: new Date().toISOString() }); return; }
+  // reativou: segue do mês atual em diante, sem criar os meses em que esteve pausada
+  const antesDoAtual = finSomarMeses(finMesAtual(), -1);
+  const m = { ativa: true, pausadaPor: '', pausadaEm: '', pausadaMes: '' };
+  if (!rec.ultimaGeracao || rec.ultimaGeracao < antesDoAtual) m.ultimaGeracao = rec.inicio && rec.inicio > antesDoAtual ? rec.ultimaGeracao || '' : antesDoAtual;
+  finGravarRecorrencia(rec, m);
+  const atualizada = FIN_REC_TODOS.find((r) => r.id === id);
+  if (atualizada) finGerarParaRecorrencia(atualizada);
 }
 function finConfirmarExcluir(id) {
   const l = FIN_LANC.find((x) => x.id === id);
@@ -18858,8 +18898,8 @@ function finHtmlRecorrentes() {
     ${lista.length ? `<div class="fin-painel"><div class="kb-tabela-wrap"><table class="kb-tabela" style="min-width:700px;"><thead><tr><th>Cliente</th><th>Assinatura</th><th>Valor/mês</th><th>Desde</th><th>Meses pagos</th><th>Já rendeu</th><th>Status</th><th></th></tr></thead><tbody>
       ${lista.map((r) => { const id = escapeParaOnclick(r.id); const ativa = r.ativa !== false && (!r.fim || r.fim >= finMesAtual()); return `<tr>
         <td><strong>${escapeHtml(r.cliente || '—')}</strong></td><td>${escapeHtml(r.descricao)}</td><td>${finV(r.valor, r.moeda)}</td><td>${escapeHtml(finNomeMes(r.inicio))}</td><td>${r.mesesPagos}</td><td class="fin-verde">${finV(r.recebido)}</td>
-        <td>${ativa ? '<span class="fin-status pago">Ativa</span>' : (r.ativa === false ? '<span class="fin-status parcial">Pausada</span>' : '<span class="fin-status cancelado">Encerrada</span>')}</td>
-        <td style="white-space:nowrap; text-align:right;"><label class="switch" title="${r.ativa !== false ? 'Pausar' : 'Reativar'}"><input type="checkbox" ${r.ativa !== false ? 'checked' : ''} onchange="finGravarRecorrencia(FIN_REC.find((x) => x.id === '${id}'), { ativa: this.checked })"><span class="switch-slider"></span></label>
+        <td>${ativa ? '<span class="fin-status pago">Ativa</span>' : (r.ativa === false ? `<span class="fin-status parcial">Pausada</span>${r.pausadaPor === 'nao-recebi' ? `<small class="kb-vazio-mini" style="display:block;">não recebeu ${escapeHtml(finNomeMes(r.pausadaMes || ''))}</small>` : ''}` : '<span class="fin-status cancelado">Encerrada</span>')}</td>
+        <td style="white-space:nowrap; text-align:right;"><label class="switch" title="${r.ativa !== false ? 'Pausar' : 'Reativar'}"><input type="checkbox" ${r.ativa !== false ? 'checked' : ''} onchange="finAlternarRecorrencia('${id}', this.checked)"><span class="switch-slider"></span></label>
           <button type="button" class="kb-btn-ic kb-btn-perigo" aria-label="Encerrar assinatura" title="Encerrar (cancelar)" onclick="finConfirmarExcluirRecorrencia('${id}')">${ic('lixeira', 'ic-herda')}</button></td></tr>`; }).join('')}
     </tbody></table></div></div>`
       : `<div class="kb-vazio-grande" style="padding:30px;"><div class="ic-circulo">${ic('recorrente')}</div><p style="margin:0;">Nenhuma assinatura interna encontrada</p><p class="kb-vazio-mini">Crie uma Venda Rápida no modo "Recorrente" (até cancelar) para começar.</p><button type="button" class="btn btn-primary" onclick="finAbrirVendaRapida(); FIN_FORM.modo = 'recorrente'; finRenderForm();">${ic('mais', 'ic-herda')} Nova assinatura</button></div>`}`;
@@ -22570,6 +22610,7 @@ const CHATBOT_FAQ = [
         { p: 'Como ligo os e-mails automáticos?', r: 'Configurações → E-mails: resumo do dia para os Diretores (7h), aviso quando o cliente responde a aprovação e lembrete de pagamento por e-mail para os clientes (antes, no dia e depois do vencimento). Precisa do servidor do sistema ligado (plano Blaze).' },
         { p: 'Como agendo posts no Instagram?', r: 'CRM → Operacional → Instagram e anúncios: conecte com a Meta (Facebook que administra a página, com um Instagram profissional ligado). Depois, em Publicações → "Agendar publicação" (ou abrindo um conteúdo → "Agendar no Instagram"), cole o link da imagem, das imagens do carrossel ou do vídeo, a legenda e o horário. O servidor publica sozinho no horário e o conteúdo fica como publicado.' },
         { p: 'Onde vejo os relatórios do Instagram e dos anúncios?', r: 'CRM → Instagram e anúncios → Relatórios: seguidores, alcance, visitas ao perfil e contas engajadas dos últimos 28 dias, os melhores posts e os posts recentes com alcance, curtidas, comentários, salvos e compartilhamentos, e os anúncios dos últimos 30 dias (investido, cliques, CTR, CPC e resultados por campanha). Atualiza todo dia às 6h ou no botão "Atualizar agora".' },
+        { p: 'Quando aparece o próximo mês de uma recorrência?', r: 'Ao criar, aparecem o mês do primeiro vencimento e o seguinte. Depois, o próximo mês aparece sozinho no dia do vencimento do mês atual (ex.: vence dia 15 → em 15/11 aparece a conta de dezembro), mesmo que ainda não tenha sido paga. Se o cliente não pagou, abra a conta → ⋮ → "Não recebi": a recorrência pausa e não cria mais meses até você reativar em Financeiro → Recorrentes (ela volta do mês atual em diante).' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },

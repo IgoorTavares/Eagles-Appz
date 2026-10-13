@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "meta_agendados",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "quando", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "conteudos_publicos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "resposta", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

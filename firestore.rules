@@ -324,6 +324,14 @@ service cloud.firestore {
         allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
       }
 
+      // Publicações agendadas no Instagram: a equipe cria e acompanha; quem
+      // publica é o servidor. As chaves da Meta (meta_privado) não têm regra:
+      // nenhum navegador lê ou grava.
+      match /meta_agendados/{agId} {
+        allow read: if souSuperAdmin() || souMembroAtivo(tenantId);
+        allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
+      }
+
       // Cadastros do ERP: um documento por item (antes era uma lista inteira
       // dentro de dados/{chave}; duas gravações juntas se apagavam).
       match /{colecaoErp}/{itemId} {
@@ -415,6 +423,52 @@ service cloud.firestore {
         get(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)).data.ativa == true &&
         get(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)).data.tenantId == request.resource.data.tenantId;
       allow read, delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+      allow update: if false;
+    }
+
+    // ---------- agendamentos_publicos/{id} ----------
+    // Página de agendamento online: o visitante (sem login) só cria um
+    // pedido de horário para uma página de agendamento publicada e ativa
+    // daquela empresa. A equipe lê, transforma em compromisso e apaga.
+    match /agendamentos_publicos/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['tenantId', 'pagina', 'nome', 'telefone', 'email', 'servico', 'observacao', 'data', 'hora', 'duracao', 'criadoEm']) &&
+        request.resource.data.nome is string && request.resource.data.nome.size() > 0 && request.resource.data.nome.size() <= 100 &&
+        request.resource.data.telefone is string && request.resource.data.telefone.size() > 0 && request.resource.data.telefone.size() <= 30 &&
+        request.resource.data.email is string && request.resource.data.email.size() <= 120 &&
+        request.resource.data.servico is string && request.resource.data.servico.size() <= 80 &&
+        request.resource.data.observacao is string && request.resource.data.observacao.size() <= 300 &&
+        request.resource.data.data is string && request.resource.data.data.size() == 10 &&
+        request.resource.data.hora is string && request.resource.data.hora.size() == 5 &&
+        request.resource.data.duracao is number && request.resource.data.duracao > 0 && request.resource.data.duracao <= 480 &&
+        request.resource.data.pagina is string &&
+        exists(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)) &&
+        get(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)).data.ativa == true &&
+        get(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)).data.tipo == 'agenda' &&
+        get(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)).data.tenantId == request.resource.data.tenantId;
+      allow read, delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
+      allow update: if false;
+    }
+
+    // ---------- config/cobranca ----------
+    // Planos e preços (aparecem na página de vendas): todo mundo lê, só o
+    // Super Admin muda. A situação de cada assinatura fica no documento da
+    // empresa e só o servidor (funções) e o Super Admin mudam.
+    match /config/{docId} {
+      allow read: if docId == 'cobranca';
+      allow write: if souSuperAdmin();
+    }
+
+    // ---------- erros_app/{id} ----------
+    // Erros técnicos do sistema, enviados pelo aparelho de quem está logado
+    // (só a mensagem, a tela e a versão). Só o Super Admin lê e apaga.
+    match /erros_app/{id} {
+      allow create: if estaLogado() && request.resource.data.uid == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['tenantId', 'uid', 'usuario', 'pagina', 'mensagem', 'pilha', 'tipo', 'navegador', 'tela', 'versao', 'assinatura', 'em']) &&
+        request.resource.data.mensagem is string && request.resource.data.mensagem.size() <= 300 &&
+        request.resource.data.pilha is string && request.resource.data.pilha.size() <= 1500 &&
+        request.resource.data.navegador is string && request.resource.data.navegador.size() <= 200 &&
+        request.resource.data.pagina is string && request.resource.data.pagina.size() <= 120;
+      allow read, delete: if souSuperAdmin();
       allow update: if false;
     }
 

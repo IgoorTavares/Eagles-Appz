@@ -54,7 +54,8 @@
     .lg-topo { padding: 10px 16px; }
     .lg-topo { gap: 8px; }
     .lg-marca span { display: none; }
-    .lg-topo nav { flex-wrap: nowrap; gap: 0; }
+    .lg-topo nav { flex-wrap: nowrap; gap: 0; overflow-x: auto; min-width: 0; scrollbar-width: none; }
+    .lg-topo nav::-webkit-scrollbar { display: none; }
     .lg-topo nav a { padding: 6px 8px; font-size: 13.5px; white-space: nowrap; }
   }
   @media print { .lg-topo, .lg-indice, .lg-rodape { display: none; } .lg-wrap { display: block; padding: 0; } }
@@ -67,6 +68,8 @@
   <nav aria-label="Documentos">
     <a href="privacidade.html" aria-current="page">Privacidade</a>
     <a href="termos.html">Termos de uso</a>
+    <a href="dpa.html">Tratamento de dados</a>
+    <a href="suporte.html">Suporte</a>
     <a href="login.html">Entrar</a>
   </nav>
 </header>
@@ -252,6 +255,8 @@
   <span>© 2026 Eagles Labz</span>
   <a href="privacidade.html">Privacidade</a>
   <a href="termos.html">Termos de uso</a>
+  <a href="dpa.html">Tratamento de dados</a>
+  <a href="suporte.html">Suporte</a>
 </footer>
 
 </body>

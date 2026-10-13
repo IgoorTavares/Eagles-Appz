@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Conferência de estoque · Eagles Labz</title>
+<title>Inventário · Eagles Labz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -80,47 +80,12 @@
 
 <div class="page-header">
   <div>
-    <h1>Conferência de estoque</h1>
-    <p>Contagem física comparada ao sistema</p>
+    <h1>Inventário</h1>
+    <p>Conte o estoque de vários produtos de uma vez e ajuste o saldo</p>
   </div>
-  <button type="button" class="btn btn-primary" onclick="openModal('modal-novo-conferencia-estoque')">+ Novo(a) Conferência de estoque</button>
+  <a class="btn" href="estoque.html">Posição de estoque</a>
 </div>
-
-<div class="panel">
-  <div class="table-scroll">
-    <table id="tabela-conferencia-estoque">
-      <thead><tr><th>Produto</th><th>Data</th><th>Sistema</th><th>Contado</th><th>Divergência</th><th></th></tr></thead>
-      <tbody id="tabela-conferencia-estoque-body"></tbody>
-    </table>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-novo-conferencia-estoque">
-  <div class="modal">
-    <div class="modal-header"><h2>Novo(a) Conferência de estoque</h2><button class="close-btn" onclick="closeModal('modal-novo-conferencia-estoque')">&times;</button></div>
-    <form id="form-novo-conferencia-estoque">
-      <div class="form-grid">
-        <div class="field full"><label>Produto</label><input type="text" data-novo-key="produto"></div>
-        <div class="field"><label>Data da contagem</label><input type="date" data-novo-key="data"></div>
-        <div class="field"><label>Estoque no sistema</label><input type="number" data-novo-key="estoqueSistema"></div>
-        <div class="field"><label>Estoque contado</label><input type="number" data-novo-key="estoqueContado"></div>
-        <div class="field"><label>Responsável pela contagem</label><input type="text" data-novo-key="responsavel"></div>
-      </div>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('modal-novo-conferencia-estoque')">Cancelar</button><button type="submit" class="btn btn-primary">Salvar</button></div>
-    </form>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-editar-conferencia-estoque">
-  <div class="modal">
-    <div class="modal-header"><h2 id="conferencia-estoque-editar-titulo">Editar</h2><button class="close-btn" onclick="closeModal('modal-editar-conferencia-estoque')">&times;</button></div>
-    <form onsubmit="event.preventDefault(); salvarCadastroModal();">
-      <div class="form-grid" id="conferencia-estoque-editar-campos"></div>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('modal-editar-conferencia-estoque')">Cancelar</button><button type="submit" class="btn btn-primary">Salvar</button></div>
-    </form>
-  </div>
-</div>
-
+<div id="inv-app"><p class="kb-vazio">Carregando...</p></div>
 
 </main>
 </div>
@@ -134,7 +99,7 @@
 initPaginaComum('conferencia-estoque');
 protegerPagina(function () {
   if (!protegerPaginaPorPlano('erp')) return;
-  initModuloCadastro('conferencia-estoque');
+  invIniciar();
 
 });
 </script>

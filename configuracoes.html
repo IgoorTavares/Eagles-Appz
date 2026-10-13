@@ -86,16 +86,17 @@
 </div>
 
 <div class="cfg-abas" id="cfg-abas">
-  <button type="button" class="cfg-aba" onclick="sisAbrirMeuSistema()"><svg class="icone-menu" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> Meu sistema</button>
-  <button type="button" class="cfg-aba ativa" data-aba="perfil" onclick="mostrarAbaConfig('perfil')"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Perfil</button>
+  <button type="button" class="cfg-aba" data-aba="perfil" onclick="mostrarAbaConfig('perfil')"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Perfil</button>
+  <button type="button" class="cfg-aba" data-aba="meusistema" onclick="mostrarAbaConfig('meusistema')"><svg class="icone-menu" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> Meu sistema</button>
   <button type="button" class="cfg-aba" data-aba="aparencia" onclick="mostrarAbaConfig('aparencia')"><svg class="icone-menu" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="19" r="2.5"/><path d="M12 2a10 10 0 1 0 8 16c-1 0-2-1-2-2 0-1.5 2-2 3-3a10 10 0 0 0-9-11z"/></svg> Aparência</button>
-  <button type="button" class="cfg-aba" data-aba="atualizacoes" onclick="mostrarAbaConfig('atualizacoes')"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg> Atualizações</button>
   <button type="button" class="cfg-aba" data-aba="notificacoes" onclick="mostrarAbaConfig('notificacoes')"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> Notificações</button>
+  <button type="button" class="cfg-aba" data-aba="emails" onclick="mostrarAbaConfig('emails')"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> E-mails</button>
   <button type="button" class="cfg-aba" data-aba="automacoes" onclick="mostrarAbaConfig('automacoes')"><svg class="icone-menu" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Automações</button>
   <button type="button" class="cfg-aba" data-aba="integracoes" onclick="mostrarAbaConfig('integracoes')"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Integrações</button>
-  <button type="button" class="cfg-aba" data-aba="email" onclick="mostrarAbaConfig('email')"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22 6 12 13 2 6"/></svg> E-mail</button>
   <button type="button" class="cfg-aba" data-aba="conteudos" onclick="mostrarAbaConfig('conteudos')"><svg class="icone-menu" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Conteúdos</button>
+  <button type="button" class="cfg-aba" data-aba="assinatura" onclick="mostrarAbaConfig('assinatura')"><svg class="icone-menu" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Assinatura</button>
   <button type="button" class="cfg-aba" data-aba="backup" onclick="mostrarAbaConfig('backup')"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ic-baixar"/></svg> Backup</button>
+  <button type="button" class="cfg-aba" data-aba="atualizacoes" onclick="mostrarAbaConfig('atualizacoes')"><svg class="icone-menu" viewBox="0 0 24 24"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg> Atualizações</button>
 </div>
 
 <div id="cfg-conteudo-aba"></div>
@@ -106,6 +107,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="script.js"></script>
 <script>

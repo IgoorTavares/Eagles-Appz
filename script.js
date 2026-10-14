@@ -5491,7 +5491,9 @@ const CFG_ICONES_EXTRA = {
 
 function iconeCfg(nome, estilo) {
   const corpo = CFG_ICONES_EXTRA[nome];
-  if (!corpo) return iconeAparenciaConfig(nome);
+  // ícone que não está na lista extra: usa o da Aparência, mas com o tamanho pedido
+  // (sem isso o desenho saía gigante, ocupando a janela inteira)
+  if (!corpo) return String(iconeAparenciaConfig(nome) || '').replace(/<svg\b([^>]*?)(\sstyle="[^"]*")?([^>]*)>/, `<svg$1$3 style="${estilo || 'width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:2; flex-shrink:0;'}">`);
   return `<svg viewBox="0 0 24 24" style="${estilo || 'width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0;'}">${corpo}</svg>`;
 }
 
@@ -6052,9 +6054,9 @@ function abrirCfgPortalCliente() {
           <button type="button" class="btn btn-small btn-ghost" id="cfg-portal-remover-logo" onclick="cfgSet('logoUrl', ''); renderBotoesImagemPortalCfg();">Remover</button>
           <input type="file" id="cfg-portal-input-logo" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="enviarImagemPortalCfg(this, 'logoUrl', 400, 400)">
         </div></div>
-      <div class="cfg-caixa"><span class="cfg-caixa-titulo">Tamanho do logo no topo</span>${htmlOpcoesCfg('dentro.tamanhoLogo', [{ v: 'pequeno', t: 'Pequeno (com o nome)' }, { v: 'medio', t: 'Médio' }, { v: 'grande', t: 'Grande' }], 3)}</div>
-      <div class="cfg-cores-grid">${htmlCampoCor('cfg-portal-cor-botao', 'Cor de destaque (botões, abas e números)', 'corBotao', '#3fae12')}${htmlCampoCor('cfg-portal-cor-texto-botao', 'Cor do texto dos botões', 'corTextoBotao', 'Automática')}</div>
-      <div class="cfg-caixa"><span class="cfg-caixa-titulo">Tema</span>${htmlOpcoesCfg('tema', [{ v: 'escuro', t: 'Escuro', d: 'Fundo escuro, como o sistema' }, { v: 'claro', t: 'Claro', d: 'Fundo branco' }], 2)}</div>
+      <div class="cfg-caixa" style="margin-top:12px;"><span class="cfg-caixa-titulo">Tamanho do logo no topo</span>${htmlOpcoesCfg('dentro.tamanhoLogo', [{ v: 'pequeno', t: 'Pequeno (com o nome)' }, { v: 'medio', t: 'Médio' }, { v: 'grande', t: 'Grande' }], 3)}</div>
+      <div class="cfg-cores-grid" style="margin-top:12px;">${htmlCampoCor('cfg-portal-cor-botao', 'Cor de destaque (botões, abas e números)', 'corBotao', '#3fae12')}${htmlCampoCor('cfg-portal-cor-texto-botao', 'Cor do texto dos botões', 'corTextoBotao', 'Automática')}</div>
+      <div class="cfg-caixa" style="margin-top:12px;"><span class="cfg-caixa-titulo">Tema</span>${htmlOpcoesCfg('tema', [{ v: 'escuro', t: 'Escuro', d: 'Fundo escuro, como o sistema' }, { v: 'claro', t: 'Claro', d: 'Fundo branco' }], 2)}</div>
       <hr class="cfg-divisor">
       ${rot('conversa', 'Textos e contato')}
       <div class="field full"><label>Mensagem de boas-vindas</label><textarea rows="2" maxlength="300" placeholder="Aqui você acompanha a produção dos seus conteúdos, aprova as peças e manda ideias para a equipe." oninput="cfgSet('boasVindas', this.value)">${escapeHtml(CFG_FORM.boasVindas || '')}</textarea></div>
@@ -6470,6 +6472,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '14/10/2026 · Configurações', itens: [
+    { titulo: 'Ícone gigante na personalização do portal', badges: ['corrigido'], texto: 'Na janela Personalizar Portal do Cliente, o ícone ao lado de "Identidade visual" aparecia enorme (um círculo preto ocupando a janela). Corrigido em todas as janelas das Configurações.' },
+  ]},
   { data: '14/10/2026 · Portal do cliente', itens: [
     { titulo: 'Portal do cliente com visual novo', badges: ['novo'], texto: 'Topo com a sua marca, "Olá, cliente", resumo (para aprovar, em produção, agendados e publicados), recado, abas em botões e, no Início, as peças que precisam de aprovação em destaque, com a imagem grande, a legenda e os botões Aprovar e Pedir alteração (agora numa janela, não mais num pop-up do navegador). Depois: em ajuste, próximas publicações, em produção e publicados. Calendário em lista no celular, feed em grade, detalhe da peça com todas as imagens do carrossel e o botão "Falar com a equipe" no WhatsApp. Tema escuro ou claro.' },
     { titulo: 'Personalização do portal reorganizada', badges: ['melhoria'], texto: 'Configurações → Aparência → Portal do Cliente: marca, logo e tamanho, cor de destaque, tema, boas-vindas, WhatsApp da equipe e rodapé, com a prévia do portal ao vivo. Saíram as opções da antiga tela de login (o portal abre pelo link, sem login). Abas, permissões e o que o cliente vê ficam em CRM → Portal do cliente → Aparência e padrões.' },

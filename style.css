@@ -5200,3 +5200,13 @@ body.sis-wiz-aberto { overflow: hidden; }
 .fin-cat-fixa .ic { width: 11px; height: 11px; }
 /* cabeçalhos de seção do CRM: botões quebram linha no celular */
 @media (max-width: 860px) { .crm-secao .fin-cab, .crm-secao > div:first-child { flex-wrap: wrap; row-gap: 10px; } .crm-secao > div:first-child > div { min-width: 0; } }
+
+/* ---------- escalas de plantão ---------- */
+.esc-prof { font-size: 12.5px; color: var(--text-soft); margin: -4px 0 12px; }
+.esc-exc td { color: var(--text-soft); }
+.esc-exc td:first-child b { text-decoration: line-through; }
+.esc-sel { min-width: 140px; font-size: 12.5px; padding: 4px 8px; }
+.esc-mes { display: flex; align-items: center; gap: 8px; }
+.esc-mes b { min-width: 130px; text-align: center; }
+#esc-msg { width: 100%; font-family: inherit; font-size: 13px; }
+.sis-whats-btn { background: #25d366 !important; border-color: #25d366 !important; color: #062b14 !important; text-decoration: none; }

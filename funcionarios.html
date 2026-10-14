@@ -83,7 +83,7 @@
     <h1>Funcionários</h1>
     <p>Equipe interna da empresa</p>
   </div>
-  <button type="button" class="btn btn-primary" onclick="openModal('modal-novo-funcionario')">+ Novo(a) Funcionário</button>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;"><button type="button" class="btn" onclick="escAbrirProfissional()">Escala do profissional</button><button type="button" class="btn" onclick="escAbrirCliente()">Escala do cliente (PDF)</button><button type="button" class="btn btn-primary" onclick="openModal('modal-novo-funcionario')">+ Novo funcionário</button></div>
 </div>
 
 <div class="panel">
@@ -127,6 +127,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="script.js"></script>
 <script>

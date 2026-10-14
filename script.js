@@ -6553,6 +6553,12 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '14/10/2026 · Tarefas do dia', itens: [
+    { titulo: 'Tarefa do Dashboard também no Kanban', badges: ['melhoria'], texto: 'A tarefa criada no "+" das Tarefas diárias que não se repete vira também um cartão no Kanban, na coluna "A Fazer", com o responsável e o prazo de hoje (igual às lançadas pelo celular). Concluir, reabrir ou excluir em um lugar faz o mesmo no outro. As rotinas que se repetem (diária, semanal...) ficam só nas Tarefas diárias. Conteúdos continua sendo para as peças do cliente e a aprovação.' },
+  ]},
+  { data: '14/10/2026 · Escalas', itens: [
+    { titulo: 'Escalas de plantão', badges: ['novo'], texto: 'Em Funcionários, cada profissional pode ser vinculado a clientes com o plantão (12x36, 24x48, 24x72, 12x60 ou personalizado) e o primeiro plantão: o sistema calcula todos os plantões do mês. Folga, troca, férias e falta por dia, sem mexer no ciclo. "Escala do profissional" manda o mês no WhatsApp dele; "Escala do cliente" gera o PDF com quem está em cada plantão.' },
+  ]},
   { data: '14/10/2026 · Datas e tarefas', itens: [
     { titulo: 'O "hoje" do sistema virava amanhã depois das 21h', badges: ['corrigido'], texto: 'O sistema calculava a data de hoje pelo horário de Londres: das 21h à meia-noite já considerava o dia seguinte. Uma tarefa lançada às 23h pelo celular como "Hoje" ia com o prazo de amanhã e não aparecia nas Tarefas diárias. Agora a data é a do seu relógio.' },
     { titulo: 'Tarefas do celular que ficaram para trás', badges: ['melhoria'], texto: 'Uma tarefa lançada pelo celular e ainda não feita continua aparecendo nas Tarefas diárias nos dias seguintes, até ser concluída. E a página do celular só deixa lançar depois de carregar o Kanban e as Tarefas diárias.' },
@@ -12732,6 +12738,247 @@ async function metaAtualizar() {
   META.carregando = ''; metaRender();
 }
 
+// =====================================================================
+// ---------- Escalas de plantão (Cadastros → Funcionários) ----------
+// =====================================================================
+// Cada funcionário pode ter um ou mais vínculos com clientes (o posto onde
+// trabalha). Cada vínculo tem o tipo de plantão (12x36, 24x48, 24x72 ou
+// personalizado) e a data e hora do primeiro plantão: o sistema calcula os
+// plantões de qualquer mês. Exceções (folga, troca, férias) ficam por dia,
+// sem mexer no ciclo. Guardado no próprio cadastro (funcionario.escalas).
+const ESC_TIPOS = { '12x36': [12, 36], '24x48': [24, 48], '24x72': [24, 72], '12x60': [12, 60], personalizado: null };
+const ESC_EXCECOES = { folga: 'Folga', troca: 'Troca', ferias: 'Férias', falta: 'Falta' };
+let ESC = { funcId: '', vincId: '', mes: '', ed: null };
+let ESC_INICIADO = false;
+function escIniciar() {
+  if (ESC_INICIADO) return;
+  ESC_INICIADO = true;
+  if (typeof CLIENTES_FORN_DATA_CARREGADO !== 'undefined' && !CLIENTES_FORN_DATA_CARREGADO) cloudWatch(CLIENTES_FORN_KEY, [], (d) => { CLIENTES_FORN_DATA = Array.isArray(d) ? d : []; CLIENTES_FORN_DATA_CARREGADO = true; });
+}
+function escFuncs() { return (CADASTROS_DATA['funcionario'] || []).filter((f) => f.status !== 'inativo'); }
+function escFunc(id) { return (CADASTROS_DATA['funcionario'] || []).find((f) => f.id === id); }
+function escClientes() { const l = (typeof CLIENTES_FORN_DATA !== 'undefined' ? CLIENTES_FORN_DATA : []).filter((c) => c.tipoCadastro !== 'fornecedor').map((c) => c.nome || c.razaoSocial).filter(Boolean); return Array.from(new Set(l)).sort((a, b) => a.localeCompare(b)); }
+function escHoras(v) { return v.tipo === 'personalizado' ? [Number(v.horasTrab) || 12, Number(v.horasFolga) || 36] : (ESC_TIPOS[v.tipo] || [12, 36]); }
+function escNomeTipo(v) { const [t, f] = escHoras(v); return `${t}x${f}`; }
+// todos os plantões do vínculo que começam no mês (ano-mês "AAAA-MM")
+function escPlantoes(v, mes) {
+  if (!v || !v.inicio || v.ativo === false) return [];
+  const [t, f] = escHoras(v), ciclo = (t + f) * 3600000;
+  const ini = new Date(v.inicio);
+  if (isNaN(ini) || !ciclo) return [];
+  const [a, m] = mes.split('-').map(Number);
+  const m0 = new Date(a, m - 1, 1).getTime(), m1 = new Date(a, m, 1).getTime();
+  const fimVinculo = v.fim ? new Date(v.fim + 'T23:59:59').getTime() : Infinity;
+  let k = Math.max(0, Math.floor((m0 - ini.getTime()) / ciclo));
+  const out = [];
+  for (let n = 0; n < 400; n++, k++) {
+    const s = ini.getTime() + k * ciclo;
+    if (s >= m1 || s > fimVinculo) break;
+    if (s < m0) continue;
+    const d0 = new Date(s), d1 = new Date(s + t * 3600000);
+    const data = kbIsoLocal(d0);
+    out.push({ inicio: d0, fim: d1, data, excecao: (v.excecoes || {})[data] || '' });
+  }
+  return out;
+}
+const escHH = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+const escDia = (iso) => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][new Date(iso + 'T12:00:00').getDay()];
+function escHorario(p) { const outroDia = kbIsoLocal(p.fim) !== p.data; return `${escHH(p.inicio)} às ${escHH(p.fim)}${outroDia ? ` (${formatDatePt(kbIsoLocal(p.fim)).slice(0, 5)})` : ''}`; }
+
+// ---------- escalas de um funcionário ----------
+function escAbrir(funcId) {
+  escIniciar();
+  ESC.funcId = funcId; ESC.vincId = ''; ESC.ed = null; ESC.mes = ESC.mes || isoHoje().slice(0, 7);
+  escRender();
+  openModal('modal-srv');
+}
+function escRender() {
+  const f = escFunc(ESC.funcId);
+  if (!f) return;
+  const vincs = f.escalas || [];
+  const pode = !FIREBASE_PRONTO || !TENANT_ID || nivelPodeOperar();
+  const ov = srvGarantirModal();
+  let corpo = '';
+  if (ESC.ed) corpo = escHtmlForm();
+  else if (ESC.vincId) corpo = escHtmlPlantoes(f, vincs.find((v) => v.id === ESC.vincId));
+  else corpo = `
+    <div class="esc-prof">${[f.cargo, f.telefone, f.cpf ? 'CPF ' + f.cpf : '', f.email].filter(Boolean).map(escapeHtml).join(' · ') || '<span class="kb-vazio-mini">Sem dados extras no cadastro</span>'}</div>
+    ${vincs.length ? `<div class="pgx-lista">${vincs.map((v) => { const prox = escPlantoes(v, isoHoje().slice(0, 7)).concat(escPlantoes(v, finSomarMeses(isoHoje().slice(0, 7), 1))).filter((p) => p.fim >= new Date() && !p.excecao).slice(0, 3); const id = escapeParaOnclick(v.id); return `<div class="pgx-item">
+      <span class="pgx-ic" style="background:#0ea5e9">${ic('calendario', 'ic-herda')}</span>
+      <div class="pgx-txt"><strong>${escapeHtml(v.cliente)}${v.posto ? ' · ' + escapeHtml(v.posto) : ''}</strong><span style="color:var(--text-soft);">${escapeHtml(escNomeTipo(v))}${v.funcao ? ' · ' + escapeHtml(v.funcao) : ''}${v.ativo === false ? ' · pausado' : ''}</span><small>${prox.length ? 'Próximos: ' + prox.map((p) => `${escDia(p.data)} ${formatDatePt(p.data).slice(0, 5)} ${escHH(p.inicio)}`).join(' · ') : 'Sem plantões nos próximos dias'}</small></div>
+      <div class="pgx-acoes"><button type="button" class="btn btn-small" onclick="ESC.vincId='${id}'; escRender()">${ic('calendario', 'ic-herda')} Plantões</button>${pode ? `<button type="button" class="btn btn-small" onclick="escEditar('${id}')">${ic('lapis', 'ic-herda')}</button>` : ''}</div></div>`; }).join('')}</div>`
+      : `<div class="atd-vazio">${ic('calendario')}<strong>Nenhuma escala ainda</strong><span>Vincule ${escapeHtml(String(f.nome || '').split(' ')[0])} a um cliente e escolha o plantão (12x36, 24x48...).</span></div>`}
+    <div class="cfg-modal-rodape"><button type="button" class="btn" onclick="escAbrirProfissional('${escapeParaOnclick(f.id)}')">${ic('conversa', 'ic-herda')} Escala do mês (WhatsApp)</button><span class="kb-espaco"></span>${pode ? `<button type="button" class="btn btn-primary" onclick="escEditar('')">${ic('mais', 'ic-herda')} Vincular a um cliente</button>` : ''}</div>`;
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:680px;" role="dialog" aria-modal="true">
+    <div class="modal-header"><h2>${ESC.ed ? (ESC.ed.id ? 'Editar escala' : 'Nova escala') : ESC.vincId ? 'Plantões' : 'Escalas'} · ${escapeHtml(f.nome || '')}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    ${corpo}</div>`;
+}
+function escEditar(vincId) {
+  const f = escFunc(ESC.funcId);
+  const v = vincId ? (f.escalas || []).find((x) => x.id === vincId) : null;
+  const amanha = atdMaisDias(isoHoje(), 1);
+  ESC.ed = v ? JSON.parse(JSON.stringify(v)) : { id: '', cliente: '', posto: '', funcao: f.cargo || '', tipo: '12x36', horasTrab: 12, horasFolga: 36, inicio: `${amanha}T07:00`, fim: '', ativo: true, obs: '', excecoes: {} };
+  escRender();
+}
+function escHtmlForm() {
+  const e = ESC.ed;
+  const clientes = escClientes();
+  return `<datalist id="esc-clientes">${clientes.map((c) => `<option value="${escapeHtml(c)}"></option>`).join('')}</datalist>
+    <div class="cw-grade2">
+      <div class="field full"><label>Cliente</label><input type="text" list="esc-clientes" maxlength="120" value="${escapeHtml(e.cliente)}" oninput="ESC.ed.cliente = this.value" placeholder="Nome do cliente (do cadastro)"></div>
+      <div class="field"><label>Posto ou local (opcional)</label><input type="text" maxlength="80" value="${escapeHtml(e.posto || '')}" oninput="ESC.ed.posto = this.value" placeholder="Ex.: Portaria, Quarto 12"></div>
+      <div class="field"><label>Função neste cliente</label><input type="text" maxlength="80" value="${escapeHtml(e.funcao || '')}" oninput="ESC.ed.funcao = this.value"></div>
+    </div>
+    <div class="field full"><label>Plantão</label><div class="atd-chips">${Object.keys(ESC_TIPOS).map((k) => `<button type="button" class="${e.tipo === k ? 'ativo' : ''}" onclick="ESC.ed.tipo='${k}'; escRender()">${k === 'personalizado' ? 'Personalizado' : k}</button>`).join('')}</div></div>
+    ${e.tipo === 'personalizado' ? `<div class="cw-grade2"><div class="field"><label>Horas trabalhando</label><input type="number" min="1" max="72" value="${Number(e.horasTrab) || 12}" oninput="ESC.ed.horasTrab = Number(this.value)"></div><div class="field"><label>Horas de folga</label><input type="number" min="1" max="240" value="${Number(e.horasFolga) || 36}" oninput="ESC.ed.horasFolga = Number(this.value)"></div></div>` : ''}
+    <div class="cw-grade2">
+      <div class="field"><label>Primeiro plantão (data e hora de entrada)</label><input type="datetime-local" value="${escapeHtml(e.inicio)}" onchange="ESC.ed.inicio = this.value; escRender()"></div>
+      <div class="field"><label>Até (opcional)</label><input type="date" value="${escapeHtml(e.fim || '')}" onchange="ESC.ed.fim = this.value"></div>
+    </div>
+    <div class="field full"><label>Observações</label><input type="text" maxlength="200" value="${escapeHtml(e.obs || '')}" oninput="ESC.ed.obs = this.value"></div>
+    ${e.inicio ? `<p class="kb-vazio-mini">Primeiros plantões: ${escPlantoes(e, e.inicio.slice(0, 7)).concat(escPlantoes(e, finSomarMeses(e.inicio.slice(0, 7), 1))).slice(0, 4).map((p) => `${escDia(p.data)} ${formatDatePt(p.data).slice(0, 5)}, ${escHorario(p)}`).join(' · ')}</p>` : ''}
+    <label class="sis-check"><input type="checkbox" ${e.ativo !== false ? 'checked' : ''} onchange="ESC.ed.ativo = this.checked"> Escala ativa</label>
+    <div class="cfg-modal-rodape">${e.id ? `<button type="button" class="btn btn-ghost kb-btn-perigo" onclick="escExcluir('${escapeParaOnclick(e.id)}')">Excluir</button>` : ''}<span class="kb-espaco"></span><button type="button" class="btn" onclick="ESC.ed = null; escRender()">Voltar</button><button type="button" class="btn btn-primary" onclick="escSalvar()">Salvar escala</button></div>`;
+}
+function escGravar(f) {
+  const lista = CADASTROS_DATA['funcionario'] || [];
+  f.atualizadoEm = new Date().toISOString();
+  return cloudSet('eagles_funcionarios_v1', lista) !== false;
+}
+function escSalvar() {
+  if (!exigirPodeOperar('editar escalas')) return;
+  const e = ESC.ed, f = escFunc(ESC.funcId);
+  if (!String(e.cliente || '').trim()) { avisar('Escolha o cliente.'); return; }
+  if (!e.inicio || isNaN(new Date(e.inicio))) { avisar('Informe a data e a hora do primeiro plantão.'); return; }
+  if (e.tipo === 'personalizado' && !(Number(e.horasTrab) > 0 && Number(e.horasFolga) > 0)) { avisar('Informe as horas de trabalho e de folga.'); return; }
+  const v = Object.assign({}, e, { id: e.id || genId('esc'), cliente: e.cliente.trim().slice(0, 120), posto: String(e.posto || '').trim().slice(0, 80), funcao: String(e.funcao || '').trim().slice(0, 80), obs: String(e.obs || '').slice(0, 200), atualizadoEm: new Date().toISOString() });
+  f.escalas = (f.escalas || []).filter((x) => x.id !== v.id).concat([v]);
+  if (!escGravar(f)) return;
+  ESC.ed = null; escRender(); renderCadastroTabela('funcionario');
+}
+function escExcluir(id) {
+  confirmarAcao('Excluir esta escala?', () => { const f = escFunc(ESC.funcId); f.escalas = (f.escalas || []).filter((x) => x.id !== id); if (escGravar(f)) { ESC.ed = null; escRender(); renderCadastroTabela('funcionario'); } }, 'Escala');
+}
+// plantões de um vínculo no mês, com as exceções
+function escHtmlPlantoes(f, v) {
+  if (!v) return '';
+  const pl = escPlantoes(v, ESC.mes);
+  const pode = !FIREBASE_PRONTO || !TENANT_ID || nivelPodeOperar();
+  return `<div class="fin-painel-cab" style="margin-bottom:10px;"><strong>${escapeHtml(v.cliente)}${v.posto ? ' · ' + escapeHtml(v.posto) : ''} · ${escapeHtml(escNomeTipo(v))}</strong><span class="kb-espaco"></span>
+      <button type="button" class="btn btn-small" onclick="ESC.mes = finSomarMeses(ESC.mes, -1); escRender()">‹</button><b>${escapeHtml(finNomeMes(ESC.mes))}</b><button type="button" class="btn btn-small" onclick="ESC.mes = finSomarMeses(ESC.mes, 1); escRender()">›</button></div>
+    ${pl.length ? `<div class="table-scroll"><table><thead><tr><th>Dia</th><th>Horário</th><th>Situação</th></tr></thead><tbody>${pl.map((p) => `<tr class="${p.excecao ? 'esc-exc' : ''}"><td><b>${escDia(p.data)}</b> ${escapeHtml(formatDatePt(p.data))}</td><td>${escapeHtml(escHorario(p))}</td>
+      <td>${pode ? `<select class="srv-select esc-sel" onchange="escMarcar('${escapeParaOnclick(v.id)}', '${p.data}', this.value)"><option value="">Plantão normal</option>${Object.entries(ESC_EXCECOES).map(([k, t]) => `<option value="${k}" ${p.excecao === k ? 'selected' : ''}>${t}</option>`).join('')}</select>` : escapeHtml(ESC_EXCECOES[p.excecao] || 'Plantão')}</td></tr>`).join('')}</tbody></table></div>
+      <p class="kb-vazio-mini">${pl.filter((p) => !p.excecao).length} plantão(ões) no mês${pl.some((p) => p.excecao) ? ` · ${pl.filter((p) => p.excecao).length} exceção(ões)` : ''}. Marcar folga ou troca não muda o ciclo dos próximos.</p>` : '<p class="kb-vazio">Sem plantões neste mês.</p>'}
+    <div class="cfg-modal-rodape"><button type="button" class="btn" onclick="ESC.vincId=''; escRender()">← Voltar</button><span class="kb-espaco"></span><button type="button" class="btn" onclick="escAbrirProfissional('${escapeParaOnclick(f.id)}')">${ic('conversa', 'ic-herda')} WhatsApp</button><button type="button" class="btn btn-primary" onclick="escPdfCliente('${escapeParaOnclick(v.cliente)}', ESC.mes)">${ic('baixar', 'ic-herda')} PDF do cliente</button></div>`;
+}
+function escMarcar(vincId, data, valor) {
+  if (!exigirPodeOperar('editar escalas')) return;
+  const f = escFunc(ESC.funcId), v = (f.escalas || []).find((x) => x.id === vincId);
+  if (!v) return;
+  v.excecoes = Object.assign({}, v.excecoes || {});
+  if (valor) v.excecoes[data] = valor; else delete v.excecoes[data];
+  if (escGravar(f)) escRender();
+}
+
+// ---------- escala do profissional (para mandar no WhatsApp) ----------
+function escDoProfissional(f, mes) {
+  return (f.escalas || []).flatMap((v) => escPlantoes(v, mes).map((p) => Object.assign(p, { v }))).sort((a, b) => a.inicio - b.inicio);
+}
+function escTextoWhats(f, mes) {
+  const pl = escDoProfissional(f, mes);
+  const empresa = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '';
+  const linhas = pl.map((p) => `• ${escDia(p.data)} ${formatDatePt(p.data).slice(0, 5)} · ${escHorario(p)} · ${p.v.cliente}${p.v.posto ? ' (' + p.v.posto + ')' : ''}${p.excecao ? ' — ' + ESC_EXCECOES[p.excecao].toUpperCase() : ''}`);
+  return `Olá, ${String(f.nome || '').split(' ')[0]}! Segue a sua escala de ${finNomeMes(mes)}${empresa ? ' (' + empresa + ')' : ''}:\n\n${linhas.join('\n') || 'Sem plantões neste mês.'}\n\nTotal: ${pl.filter((p) => !p.excecao).length} plantão(ões). Qualquer dúvida, me chama.`;
+}
+function escAbrirProfissional(funcId) {
+  escIniciar();
+  ESC.mes = ESC.mes || isoHoje().slice(0, 7);
+  const funcs = escFuncs().filter((f) => (f.escalas || []).length);
+  const f = escFunc(funcId) || funcs[0];
+  const ov = srvGarantirModal();
+  if (!f) { ov.innerHTML = `<div class="modal kb-modal" style="max-width:520px;"><div class="modal-header"><h2>Escala do profissional</h2><button type="button" class="close-btn" onclick="srvFecharModal()">✕</button></div><p class="kb-vazio">Nenhum funcionário com escala ainda. Abra um funcionário → Escalas → "Vincular a um cliente".</p></div>`; openModal('modal-srv'); return; }
+  const pl = escDoProfissional(f, ESC.mes);
+  const num = atdWaNumero(f.telefone);
+  const texto = escTextoWhats(f, ESC.mes);
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:640px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>Escala do profissional</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="cw-grade2"><div class="field"><label>Profissional</label><select class="srv-select" onchange="escAbrirProfissional(this.value)">${funcs.map((x) => `<option value="${escapeHtml(x.id)}" ${x.id === f.id ? 'selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select></div>
+      <div class="field"><label>Mês</label><div class="esc-mes"><button type="button" class="btn btn-small" onclick="ESC.mes = finSomarMeses(ESC.mes, -1); escAbrirProfissional('${escapeParaOnclick(f.id)}')">‹</button><b>${escapeHtml(finNomeMes(ESC.mes))}</b><button type="button" class="btn btn-small" onclick="ESC.mes = finSomarMeses(ESC.mes, 1); escAbrirProfissional('${escapeParaOnclick(f.id)}')">›</button></div></div></div>
+    <div class="esc-prof">${[f.cargo, f.telefone, f.cpf ? 'CPF ' + f.cpf : '', f.email].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+    ${pl.length ? `<div class="table-scroll"><table><thead><tr><th>Dia</th><th>Horário</th><th>Cliente</th></tr></thead><tbody>${pl.map((p) => `<tr class="${p.excecao ? 'esc-exc' : ''}"><td><b>${escDia(p.data)}</b> ${escapeHtml(formatDatePt(p.data))}</td><td>${escapeHtml(escHorario(p))}</td><td>${escapeHtml(p.v.cliente)}${p.v.posto ? ' · ' + escapeHtml(p.v.posto) : ''}${p.excecao ? ` <span class="badge badge-warning">${ESC_EXCECOES[p.excecao]}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="kb-vazio">Sem plantões neste mês.</p>'}
+    <div class="field full"><label>Mensagem</label><textarea id="esc-msg" rows="6" readonly>${escapeHtml(texto)}</textarea></div>
+    <div class="cfg-modal-rodape"><button type="button" class="btn" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('esc-msg').value).then(() => avisar('Mensagem copiada.', 'Escala'))">${ic('copiar', 'ic-herda')} Copiar</button><span class="kb-espaco"></span>
+      ${num ? `<a class="btn btn-primary sis-whats-btn" href="https://wa.me/${num}?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener">${ic('conversa', 'ic-herda')} Mandar no WhatsApp</a>` : '<span class="kb-vazio-mini">Sem telefone no cadastro do funcionário.</span>'}</div></div>`;
+  openModal('modal-srv');
+}
+
+// ---------- escala do cliente (PDF) ----------
+function escDoCliente(cliente, mes) {
+  const n = ttSemAcento(cliente);
+  return escFuncs().flatMap((f) => (f.escalas || []).filter((v) => ttSemAcento(v.cliente) === n).flatMap((v) => escPlantoes(v, mes).map((p) => Object.assign(p, { v, f })))).sort((a, b) => a.inicio - b.inicio);
+}
+function escAbrirCliente(cliente) {
+  escIniciar();
+  ESC.mes = ESC.mes || isoHoje().slice(0, 7);
+  const clientes = Array.from(new Set(escFuncs().flatMap((f) => (f.escalas || []).map((v) => v.cliente)))).sort((a, b) => a.localeCompare(b));
+  const c = cliente || clientes[0];
+  const ov = srvGarantirModal();
+  if (!c) { ov.innerHTML = `<div class="modal kb-modal" style="max-width:520px;"><div class="modal-header"><h2>Escala do cliente</h2><button type="button" class="close-btn" onclick="srvFecharModal()">✕</button></div><p class="kb-vazio">Nenhuma escala ainda. Abra um funcionário → Escalas → "Vincular a um cliente".</p></div>`; openModal('modal-srv'); return; }
+  const pl = escDoCliente(c, ESC.mes);
+  const porDia = {};
+  pl.forEach((p) => { (porDia[p.data] = porDia[p.data] || []).push(p); });
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:700px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>Escala do cliente</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+    <div class="cw-grade2"><div class="field"><label>Cliente</label><select class="srv-select" onchange="escAbrirCliente(this.value)">${clientes.map((x) => `<option ${x === c ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select></div>
+      <div class="field"><label>Mês</label><div class="esc-mes"><button type="button" class="btn btn-small" onclick="ESC.mes = finSomarMeses(ESC.mes, -1); escAbrirCliente('${escapeParaOnclick(c)}')">‹</button><b>${escapeHtml(finNomeMes(ESC.mes))}</b><button type="button" class="btn btn-small" onclick="ESC.mes = finSomarMeses(ESC.mes, 1); escAbrirCliente('${escapeParaOnclick(c)}')">›</button></div></div></div>
+    ${pl.length ? `<div class="table-scroll" style="max-height:52vh;"><table><thead><tr><th>Dia</th><th>Profissional</th><th>Horário</th><th>Posto</th></tr></thead><tbody>${Object.keys(porDia).sort().map((d) => porDia[d].map((p, i) => `<tr class="${p.excecao ? 'esc-exc' : ''}">${i === 0 ? `<td rowspan="${porDia[d].length}"><b>${escDia(d)}</b> ${escapeHtml(formatDatePt(d))}</td>` : ''}<td>${escapeHtml(p.f.nome)}${p.excecao ? ` <span class="badge badge-warning">${ESC_EXCECOES[p.excecao]}</span>` : ''}</td><td>${escapeHtml(escHorario(p))}</td><td>${escapeHtml(p.v.posto || p.v.funcao || '—')}</td></tr>`).join('')).join('')}</tbody></table></div>` : '<p class="kb-vazio">Sem plantões neste mês.</p>'}
+    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="escPdfCliente('${escapeParaOnclick(c)}', ESC.mes)" ${pl.length ? '' : 'disabled'}>${ic('baixar', 'ic-herda')} Baixar PDF</button></div></div>`;
+  openModal('modal-srv');
+}
+async function escPdfCliente(cliente, mes) {
+  if (!window.jspdf || !window.jspdf.jsPDF) { avisar('O gerador de PDF ainda está carregando. Tente de novo em instantes.'); return; }
+  const pl = escDoCliente(cliente, mes);
+  if (!pl.length) { avisar('Sem plantões neste mês para esse cliente.'); return; }
+  const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, M = 14;
+  const empresa = (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '';
+  // logo da empresa (se der para carregar)
+  let y = 16;
+  const logo = PERFIL_DATA && PERFIL_DATA.logoUrl;
+  if (logo) {
+    try {
+      const img = await new Promise((ok, erro) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = erro; i.src = logo; setTimeout(erro, 4000); });
+      const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight; cv.getContext('2d').drawImage(img, 0, 0);
+      const h = 14, w = Math.min(40, (img.naturalWidth / img.naturalHeight) * h);
+      doc.addImage(cv.toDataURL('image/png'), 'PNG', M, 10, w, h); y = 30;
+    } catch (e) { /* sem logo */ }
+  }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(`Escala de plantões · ${finNomeMes(mes)}`, M, y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(90); doc.text(`Cliente: ${cliente}${empresa ? '   ·   ' + empresa : ''}`, M, y + 7); doc.setTextColor(0);
+  y += 16;
+  const col = [M, M + 32, M + 100, M + 140];
+  const cab = () => { doc.setFillColor(235, 240, 233); doc.rect(M, y - 5, W - 2 * M, 8, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); ['Dia', 'Profissional', 'Horário', 'Posto / função'].forEach((t, i) => doc.text(t, col[i] + 1, y)); doc.setFont('helvetica', 'normal'); y += 8; };
+  cab();
+  let ultimo = '';
+  pl.forEach((p) => {
+    if (y > 280) { doc.addPage(); y = 18; cab(); ultimo = ''; }
+    if (p.data !== ultimo) { doc.setDrawColor(220); doc.line(M, y - 5, W - M, y - 5); doc.setFont('helvetica', 'bold'); doc.text(`${escDia(p.data)} ${formatDatePt(p.data).slice(0, 5)}`, col[0] + 1, y); doc.setFont('helvetica', 'normal'); ultimo = p.data; }
+    doc.setTextColor(p.excecao ? 160 : 0);
+    doc.text(String(p.f.nome || '').slice(0, 34) + (p.excecao ? ` (${ESC_EXCECOES[p.excecao]})` : ''), col[1] + 1, y);
+    doc.text(escHorario(p), col[2] + 1, y);
+    doc.text(String(p.v.posto || p.v.funcao || '—').slice(0, 26), col[3] + 1, y);
+    doc.setTextColor(0);
+    y += 7;
+  });
+  doc.setFontSize(8); doc.setTextColor(140); doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, M, 290);
+  const arq = `Escala ${cliente} ${mes}.pdf`.replace(/[\\/:*?"<>|]+/g, ' ');
+  doc.save(arq);
+}
+function escAcoes(item) {
+  const id = escapeParaOnclick(item.id), n = (item.escalas || []).length;
+  return `<button type="button" class="btn btn-small btn-ghost" onclick="escAbrir('${id}')">${ic('calendario', 'ic-herda')} Escalas${n ? ` (${n})` : ''}</button>
+    <button type="button" class="btn btn-small btn-ghost" onclick="abrirCadastroModal('funcionario','${id}')">Editar</button>
+    <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirCadastroItem('funcionario','${id}')">Excluir</button>`;
+}
+
 function renderCrmEmConstrucao(secao) {
   const info = CRM_EM_CONSTRUCAO_INFO[secao];
   const el = document.getElementById('crm-secao-' + secao);
@@ -13044,9 +13291,17 @@ function criarNovaTarefaCrm() {
   const responsavel = document.getElementById('nova-tarefa-responsavel').value;
   const recorrencia = document.querySelector('input[name="nova-tarefa-recorrencia"]:checked').value;
 
+  // tarefa da equipe que não se repete: vira também cartão no Kanban (A Fazer),
+  // ligada à tarefa do dia. Rotinas (diária, semanal...) ficam só aqui.
+  let kbId = '';
+  if (recorrencia === 'nenhuma' && typeof kbCriarTarefa === 'function' && typeof KB_CARREGADO !== 'undefined' && KB_CARREGADO) {
+    const pessoa = ttEquipe().find((u) => ttSemAcento(u.nome) === ttSemAcento(responsavel));
+    const k = kbCriarTarefa({ titulo: texto.slice(0, 140), descricao, responsavel: pessoa ? pessoa.uid : '', prazo: isoHoje(), status: ttColunaAFazer(), etiquetas: ['tarefa do dia'], origem: 'dashboard' });
+    if (k && k.id) kbId = k.id;
+  }
   CRM_TAREFAS_DATA.push({
     id: genId('tf'), texto, descricao, responsavel, recorrencia,
-    feita: false, concluidasEm: [], data: isoHoje(), criadoEm: new Date().toISOString(),
+    feita: false, concluidasEm: [], data: isoHoje(), criadoEm: new Date().toISOString(), kbId, origem: 'dashboard',
   });
   cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA);
   closeModal('modal-nova-tarefa-crm');
@@ -22561,6 +22816,7 @@ const CHATBOT_FAQ = [
         { p: 'Como agendo posts no Instagram?', r: 'CRM → Operacional → Instagram e anúncios: conecte com a Meta (Facebook que administra a página, com um Instagram profissional ligado). Depois, em Publicações → "Agendar publicação" (ou abrindo um conteúdo → "Agendar no Instagram"), cole o link da imagem, das imagens do carrossel ou do vídeo, a legenda e o horário. O servidor publica sozinho no horário e o conteúdo fica como publicado.' },
         { p: 'Onde vejo os relatórios do Instagram e dos anúncios?', r: 'CRM → Instagram e anúncios → Relatórios: seguidores, alcance, visitas ao perfil e contas engajadas dos últimos 28 dias, os melhores posts e os posts recentes com alcance, curtidas, comentários, salvos e compartilhamentos, e os anúncios dos últimos 30 dias (investido, cliques, CTR, CPC e resultados por campanha). Atualiza todo dia às 6h ou no botão "Atualizar agora".' },
         { p: 'Quando aparece o próximo mês de uma recorrência?', r: 'Ao criar, aparecem o mês do primeiro vencimento e o seguinte. Depois, o próximo mês aparece sozinho no dia do vencimento do mês atual (ex.: vence dia 15 → em 15/11 aparece a conta de dezembro), mesmo que ainda não tenha sido paga. Se o cliente não pagou, abra a conta → ⋮ → "Não recebi": a recorrência pausa e não cria mais meses até você reativar em Financeiro → Recorrentes (ela volta do mês atual em diante).' },
+        { p: 'Como faço a escala de plantão?', r: 'ERP → Cadastros → Funcionários → "Escalas" na linha do profissional → "Vincular a um cliente": escolha o cliente, o posto, o plantão (12x36, 24x48, 24x72, 12x60 ou personalizado) e a data e hora do primeiro plantão. O sistema calcula todos os plantões; em "Plantões" você marca folga, troca, férias ou falta sem mudar o ciclo. No topo da página: "Escala do profissional" (manda o mês no WhatsApp dele) e "Escala do cliente" (PDF com quem está em cada plantão).' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },
         { p: 'Como recebo por PIX?', r: 'Financeiro → aba PIX: cadastre sua chave, o nome e a cidade e ligue "Ativar PIX pós-orçamento". Quando o cliente aprovar um orçamento, a página dele mostra o QR Code e o "copia e cola" já com o valor. O dinheiro cai direto na sua conta — confira e marque como recebido em Receber.' },
@@ -23024,6 +23280,8 @@ registrarModuloCadastro('funcionario', {
     { key: 'telefone', label: 'Telefone' },
     { key: 'status', label: 'Status', render: (i) => `<span class="badge ${i.status === 'ativo' ? 'badge-blue' : 'badge-neutral'}">${i.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>` },
   ],
+  renderAcoes: (i) => escAcoes(i),
+  aposRender: () => { if (typeof escIniciar === 'function') escIniciar(); },
 });
 
 function pedidosVendaSeed() {

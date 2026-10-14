@@ -5462,7 +5462,7 @@ let CFG_CATEGORIAS_CARREGADO = false;
 const CFG_APARENCIA_CARDS = [
   { chave: 'sistema', icone: 'paleta', titulo: 'Aparência do Sistema', desc: 'Tema, cores e tipografia da plataforma' },
   { chave: 'menu', icone: 'lista', titulo: 'Itens do Menu', desc: 'Mostre, oculte e reordene itens do menu lateral do CRM', plano: 'crm' },
-  { chave: 'portal', icone: 'pessoas', titulo: 'Portal do Cliente', desc: 'Logo, cores, login e mensagens do portal', plano: 'crm' },
+  { chave: 'portal', icone: 'pessoas', titulo: 'Portal do Cliente', desc: 'Logo, cor, tema, boas-vindas e contato do portal', plano: 'crm' },
   { chave: 'briefings', icone: 'prancheta', titulo: 'Briefings', desc: 'Tema, cores e logo da página pública de briefing', plano: 'crm' },
   { chave: 'categorias', icone: 'tag', titulo: 'Categorias de Conteúdo', desc: 'Crie categorias próprias que aparecem no diálogo de novo conteúdo', plano: 'crm' },
   { chave: 'aprovacao', icone: 'cifrao', titulo: 'Página de Aprovação / Checkout', desc: 'Logo, cores e textos da página onde o cliente aprova o orçamento', plano: 'crm' },
@@ -6008,7 +6008,7 @@ if (typeof window !== 'undefined') {
 
 function portalConfigPadrao() {
   return {
-    nomeMarca: '', logoUrl: '', corBotao: '#7c3aed', corTextoBotao: '#ffffff', corMarca: '',
+    nomeMarca: '', logoUrl: '', corBotao: '#3fae12', corTextoBotao: '', corMarca: '', tema: 'escuro', boasVindas: '', whatsapp: '', rodape: '', ocultarMarca: false,
     login: { imagemFundo: '', corFundo: '#1a1a2e', titulo: '', subtitulo: '', disposicao: 'centralizada', textura: 'nenhuma', caixa: 'solida', campoFundo: '', campoTexto: '', rodape: '' },
     dentro: { tamanhoLogo: 'medio', cartaoCliente: true },
     visibilidade: { emAprovacao: true, emRevisao: true, aprovado: true, publicado: true, emProducao: false, revisaoInterna: false },
@@ -6036,116 +6036,34 @@ const TEXTURAS_PORTAL = [
 function abrirCfgPortalCliente() {
   if (FIREBASE_PRONTO && TENANT_ID && !CFG_PORTAL_CARREGADO) { avisar('Ainda carregando as configurações do portal — aguarde um instante e tente de novo.'); return; }
   CFG_FORM = mesclarComPadrao(portalConfigPadrao(), CFG_PORTAL_DATA);
+  if (!CFG_FORM.rodape && CFG_FORM.login && CFG_FORM.login.rodape) CFG_FORM.rodape = CFG_FORM.login.rodape;
   CFG_FORM_APOS = () => renderPreviewPortalCfg();
-  const ponto = (cor) => `<span class="cfg-status-ponto" style="background:${cor};"></span>`;
-
+  const rot = (icone, t) => `<div class="cfg-secao-rotulo">${iconeCfg(icone, 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} ${t}</div>`;
   abrirModalCfg({
     titulo: 'Personalizar Portal do Cliente',
-    sub: 'Estas configurações se aplicam a todos os clientes que acessam seu portal de aprovações.',
+    sub: 'A aparência do portal que cada cliente abre pelo link (sem login). Vale para todos os clientes.',
     corpo: `
-      <div class="cfg-aviso-info">O Portal do Cliente ainda está sendo construído (faz parte do módulo Operacional). Tudo que você configurar aqui já fica salvo e passa a valer assim que o portal entrar no ar.</div>
-      <div class="cfg-portal-preview" id="cfg-portal-preview"></div>
-
-      <div class="cfg-secao-rotulo">${iconeCfg('paleta', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Identidade visual</div>
+      <div class="cfg-portal-preview pv-prev" id="cfg-portal-preview"></div>
+      ${rot('paleta', 'Identidade visual')}
       <div class="field full"><label>Nome da empresa / marca</label><input type="text" maxlength="60" value="${escapeHtml(CFG_FORM.nomeMarca)}" placeholder="${escapeHtml(nomeEmpresaAtualCfg())}" oninput="cfgSet('nomeMarca', this.value)"></div>
-      <div class="field full"><label>Logo da empresa</label>
+      <div class="field full"><label>Logo</label>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <button type="button" class="btn btn-small" onclick="document.getElementById('cfg-portal-input-logo').click()">${iconeCfg('upload')} Enviar logo</button>
           <button type="button" class="btn btn-small btn-ghost" id="cfg-portal-remover-logo" onclick="cfgSet('logoUrl', ''); renderBotoesImagemPortalCfg();">Remover</button>
           <input type="file" id="cfg-portal-input-logo" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="enviarImagemPortalCfg(this, 'logoUrl', 400, 400)">
-        </div>
-      </div>
-      <div class="cfg-cores-grid">
-        ${htmlCampoCor('cfg-portal-cor-botao', 'Cor do botão', 'corBotao', '#7c3aed')}
-        ${htmlCampoCor('cfg-portal-cor-texto-botao', 'Cor texto botão', 'corTextoBotao', '#ffffff')}
-      </div>
-      <div style="margin-top:12px;">${htmlCampoCor('cfg-portal-cor-marca', 'Cor da marca no portal', 'corMarca', 'Igual ao botão')}</div>
-      <p class="cfg-secao-nota" style="margin-top:6px;">Pinta o portal inteiro: menu, abas, destaques e links. Vazio, usa a cor do botão.</p>
-
+        </div></div>
+      <div class="cfg-caixa"><span class="cfg-caixa-titulo">Tamanho do logo no topo</span>${htmlOpcoesCfg('dentro.tamanhoLogo', [{ v: 'pequeno', t: 'Pequeno (com o nome)' }, { v: 'medio', t: 'Médio' }, { v: 'grande', t: 'Grande' }], 3)}</div>
+      <div class="cfg-cores-grid">${htmlCampoCor('cfg-portal-cor-botao', 'Cor de destaque (botões, abas e números)', 'corBotao', '#3fae12')}${htmlCampoCor('cfg-portal-cor-texto-botao', 'Cor do texto dos botões', 'corTextoBotao', 'Automática')}</div>
+      <div class="cfg-caixa"><span class="cfg-caixa-titulo">Tema</span>${htmlOpcoesCfg('tema', [{ v: 'escuro', t: 'Escuro', d: 'Fundo escuro, como o sistema' }, { v: 'claro', t: 'Claro', d: 'Fundo branco' }], 2)}</div>
       <hr class="cfg-divisor">
-      <div class="cfg-secao-rotulo">${iconeCfg('imagem', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Tela de login</div>
-      <div class="cfg-caixa">
-        <span class="cfg-caixa-titulo">Imagem de fundo</span>
-        <p class="cfg-upload-nota">Desktop: 1920×1080px · Mobile: 1080×1920px (a imagem será ajustada automaticamente)</p>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button type="button" class="btn btn-small" onclick="document.getElementById('cfg-portal-input-fundo').click()">${iconeCfg('upload')} Enviar imagem</button>
-          <button type="button" class="btn btn-small btn-ghost" id="cfg-portal-remover-fundo" onclick="cfgSet('login.imagemFundo', ''); renderBotoesImagemPortalCfg();">Remover</button>
-          <input type="file" id="cfg-portal-input-fundo" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="enviarImagemPortalCfg(this, 'login.imagemFundo', 1920, 1920)">
-        </div>
-      </div>
-      <div class="cfg-caixa">${htmlCampoCor('cfg-portal-cor-fundo', 'Cor de fundo (caso sem imagem)', 'login.corFundo', '#1a1a2e')}</div>
-      <div class="cfg-caixa">
-        <div class="cfg-cores-grid">
-          <div class="field" style="margin:0;"><label>Título</label><input type="text" maxlength="60" value="${escapeHtml(CFG_FORM.login.titulo)}" placeholder="${escapeHtml(nomeEmpresaAtualCfg())}" oninput="cfgSet('login.titulo', this.value)"></div>
-          <div class="field" style="margin:0;"><label>Subtítulo</label><input type="text" maxlength="90" value="${escapeHtml(CFG_FORM.login.subtitulo)}" placeholder="Acompanhe e aprove seus conteúdos" oninput="cfgSet('login.subtitulo', this.value)"></div>
-        </div>
-      </div>
-      <div class="cfg-caixa">
-        <span class="cfg-caixa-titulo">Disposição</span>
-        ${htmlOpcoesCfg('login.disposicao', [
-          { v: 'centralizada', t: 'Centralizada', d: 'Imagem cobrindo a tela, formulário no meio' },
-          { v: 'dividida', t: 'Dividida', d: 'Imagem com o título de um lado, formulário do outro' },
-        ], 2)}
-      </div>
-      <div class="cfg-caixa">
-        <span class="cfg-caixa-titulo">Textura</span>
-        <p class="cfg-upload-nota">Estilos prontos, com traço fino. A textura some atrás do formulário e aparece nas bordas.</p>
-        <div class="cfg-texturas">
-          ${TEXTURAS_PORTAL.map((tx) => `<button type="button" class="cfg-textura cfg-tx-${tx.v}${CFG_FORM.login.textura === tx.v ? ' ativo' : ''}" onclick="escolherOpcaoCfg(this, 'login.textura', '${tx.v}')"><span>${escapeHtml(tx.t)}</span></button>`).join('')}
-        </div>
-      </div>
-      <div class="cfg-caixa">
-        <span class="cfg-caixa-titulo">Caixa do formulário</span>
-        ${htmlOpcoesCfg('login.caixa', [{ v: 'solida', t: 'Sólida' }, { v: 'vidro', t: 'Vidro (sobre a imagem)' }], 2)}
-      </div>
-      <div class="cfg-caixa">
-        <span class="cfg-caixa-titulo">Campos (telefone, e-mail e senha)</span>
-        <p class="cfg-upload-nota">Vazio = automático: no vidro, campo translúcido com texto branco; na sólida, o padrão.</p>
-        <div class="cfg-cores-grid">
-          ${htmlCampoCor('cfg-portal-campo-fundo', 'Fundo do campo', 'login.campoFundo', 'Automático')}
-          ${htmlCampoCor('cfg-portal-campo-texto', 'Texto do campo', 'login.campoTexto', 'Automático')}
-        </div>
-      </div>
-      <div class="cfg-caixa">
-        <span class="cfg-caixa-titulo">Texto no rodapé</span>
-        <textarea rows="2" maxlength="200" placeholder="Ex.: Atendimento de segunda a sexta, das 9h às 18h" oninput="cfgSet('login.rodape', this.value)">${escapeHtml(CFG_FORM.login.rodape)}</textarea>
-      </div>
-
+      ${rot('conversa', 'Textos e contato')}
+      <div class="field full"><label>Mensagem de boas-vindas</label><textarea rows="2" maxlength="300" placeholder="Aqui você acompanha a produção dos seus conteúdos, aprova as peças e manda ideias para a equipe." oninput="cfgSet('boasVindas', this.value)">${escapeHtml(CFG_FORM.boasVindas || '')}</textarea></div>
+      <div class="field full"><label>WhatsApp da equipe (botão "Falar com a equipe")</label><input type="tel" maxlength="30" value="${escapeHtml(CFG_FORM.whatsapp || '')}" placeholder="Vazio = usa o telefone do seu Perfil" oninput="cfgSet('whatsapp', this.value)"></div>
+      <div class="field full"><label>Texto no rodapé</label><input type="text" maxlength="200" value="${escapeHtml(CFG_FORM.rodape || '')}" placeholder="Ex.: Atendimento de segunda a sexta, das 9h às 18h" oninput="cfgSet('rodape', this.value)"></div>
+      ${htmlLinhaToggleCfg('Ocultar "Feito com Eagles Labz"', 'Tira a marca Eagles Labz do rodapé do portal.', 'ocultarMarca')}
       <hr class="cfg-divisor">
-      <div class="cfg-secao-rotulo">${iconeCfg('caixa', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Portal por dentro</div>
-      <div class="cfg-caixa">
-        <span class="cfg-caixa-titulo">Tamanho do seu logo no topo</span>
-        ${htmlOpcoesCfg('dentro.tamanhoLogo', [{ v: 'pequeno', t: 'Pequeno' }, { v: 'medio', t: 'Médio' }, { v: 'grande', t: 'Grande' }], 3)}
-      </div>
-      <div class="cfg-caixa" style="padding-top:2px; padding-bottom:2px;">
-        ${htmlLinhaToggleCfg('Cartão do cliente na lateral', 'Foto ou logo do cliente com nome, empresa, e-mail e WhatsApp dele. A foto se troca na configuração de cada cliente.', 'dentro.cartaoCliente')}
-      </div>
-
-      <hr class="cfg-divisor">
-      <div class="cfg-secao-rotulo">${iconeCfg('olhoFechado', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Visibilidade de conteúdos</div>
-      <p class="cfg-secao-nota">Selecione quais status o cliente pode ver no portal (calendário, feed e lista). Conteúdos em rascunho ou revisão interna ficam ocultos por padrão.</p>
-      ${htmlLinhaToggleCfg(ponto('#f59e0b') + 'Em aprovação', 'Aguardando aprovação do cliente', 'visibilidade.emAprovacao')}
-      ${htmlLinhaToggleCfg(ponto('#fb923c') + 'Em revisão', 'Cliente pediu ajustes', 'visibilidade.emRevisao')}
-      ${htmlLinhaToggleCfg(ponto('#22c55e') + 'Aprovado', 'Já aprovado pelo cliente', 'visibilidade.aprovado')}
-      ${htmlLinhaToggleCfg(ponto('#10b981') + 'Publicado', 'Já foi ao ar', 'visibilidade.publicado')}
-      ${htmlLinhaToggleCfg(ponto('#9ca3af') + 'Em produção (rascunho)', 'Ainda sendo criado pela equipe', 'visibilidade.emProducao')}
-      ${htmlLinhaToggleCfg(ponto('#6366f1') + 'Revisão interna', 'Em revisão dentro da equipe', 'visibilidade.revisaoInterna')}
-
-      <hr class="cfg-divisor">
-      <div class="cfg-secao-rotulo">${iconeCfg('escudo', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Permissões do cliente</div>
-      ${htmlLinhaToggleCfg('Criar tarefas', 'Clientes podem criar novas tarefas', 'permissoes.criarTarefas')}
-      ${htmlLinhaToggleCfg('Editar tarefas', 'Clientes podem editar tarefas existentes', 'permissoes.editarTarefas')}
-      ${htmlLinhaToggleCfg('Baixar arquivos', 'Desligado, os botões de baixar somem do portal. Serve para segurar a entrega até o pagamento.', 'permissoes.baixarArquivos')}
-
-      <hr class="cfg-divisor">
-      <div class="cfg-secao-rotulo">${iconeCfg('caixa', 'width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2;')} Solicitações de serviço</div>
-      ${htmlLinhaToggleCfg('Mostrar aba "Relatório"', 'Exibe relatório mensal dos conteúdos produzidos no portal do cliente.', 'solicitacoes.abaRelatorio')}
-      ${htmlLinhaToggleCfg('Mostrar aba "Produção" <span style="font-weight:400; color:var(--text-soft);">(padrão)</span>', 'Clientes veem as tarefas em produção no portal.', 'solicitacoes.abaProducao', '<span class="cfg-nota-laranja">Este é o padrão geral. Você vai poder ligar/desligar por cliente no acesso de cada um.</span>')}
-      ${htmlLinhaToggleCfg('Sugestões de post do cliente', 'O cliente manda ideias e referências pelo portal. Elas chegam no quadro de produção, onde viram pauta em um clique.', 'solicitacoes.sugestoesPost')}
-      ${htmlLinhaToggleCfg('Permitir solicitações <span style="font-weight:400; color:var(--text-soft);">(padrão)</span>', 'Clientes podem solicitar serviços/orçamentos.', 'solicitacoes.permitirSolicitacoes', '<span class="cfg-nota-laranja">Este é o padrão geral. Você vai poder ligar/desligar por cliente no acesso de cada um.</span>')}`,
-    rodape: `
-      <button type="button" class="btn" title="Ver pré-visualização" aria-label="Ver pré-visualização" onclick="document.getElementById('cfg-portal-preview').scrollIntoView({ behavior: 'smooth', block: 'center' })">${iconeCfg('olho')}</button>
-      <button type="button" class="btn btn-primary" style="flex:1; justify-content:center;" onclick="salvarCfgPortalCliente()">Salvar Configurações</button>`,
+      <div class="cfg-aviso-info">As <b>abas</b>, o que o cliente <b>pode fazer</b> (sugerir ideias, pedir serviços, baixar arquivos) e <b>quais conteúdos ele vê</b> ficam em <b>CRM → Portal do cliente → Aparência e padrões</b>, e cada cliente pode ter a sua configuração própria lá. <a href="crm.html#secao=portal-cliente">Abrir</a></div>`,
+    rodape: `<button type="button" class="btn btn-primary" style="flex:1; justify-content:center;" onclick="salvarCfgPortalCliente()">Salvar</button>`,
   });
   renderPreviewPortalCfg();
   renderBotoesImagemPortalCfg();
@@ -6175,26 +6093,23 @@ function enviarImagemPortalCfg(input, caminho, maxW, maxH) {
 function renderPreviewPortalCfg() {
   const el = document.getElementById('cfg-portal-preview');
   if (!el || !CFG_FORM) return;
-  const f = CFG_FORM;
-  const fundo = urlImagemSegura(f.login.imagemFundo);
-  el.style.backgroundColor = corHexValida(f.login.corFundo) || '#1a1a2e';
-  el.style.backgroundImage = fundo ? `url("${fundo}")` : 'none';
-  el.style.justifyContent = f.login.disposicao === 'dividida' ? 'flex-end' : 'center';
-  const logo = urlImagemSegura(f.logoUrl);
-  const nome = f.login.titulo || f.nomeMarca || nomeEmpresaAtualCfg();
-  const textura = TEXTURAS_PORTAL.some((t) => t.v === f.login.textura) ? f.login.textura : 'nenhuma';
-  el.innerHTML = `
-    <div class="cfg-portal-preview-textura cfg-tx-${textura}"></div>
-    <div class="cfg-portal-preview-conteudo ${f.login.caixa === 'vidro' ? 'vidro' : 'solida'}">
-      ${logo ? `<img src="${logo}" alt="">` : ''}
-      <div class="cfg-portal-preview-nome">${escapeHtml(nome)}<small>Pré-visualização</small></div>
-      <button type="button" class="cfg-portal-preview-btn" tabindex="-1" style="background:${corHexValida(f.corBotao) || '#7c3aed'}; color:${corHexValida(f.corTextoBotao) || '#ffffff'};">Entrar</button>
-    </div>`;
+  const f = CFG_FORM, cor = corHexValida(f.corBotao) || '#3fae12', txt = corHexValida(f.corTextoBotao) || (typeof pcContraste === 'function' ? pcContraste(cor) : '#fff');
+  const logo = urlImagemSegura(f.logoUrl), nome = f.nomeMarca || nomeEmpresaAtualCfg(), tam = (f.dentro && f.dentro.tamanhoLogo) || 'medio';
+  el.removeAttribute('style');
+  el.innerHTML = `<div class="pv ${f.tema === 'claro' ? 'pv-claro' : 'pv-escuro'} pv-mini" style="--pv-cor:${cor}; --pv-cor-txt:${txt};">
+    <header class="pv-topo"><div class="pv-topo-in"><div class="pv-marca">${logo ? `<img src="${logo}" alt="" class="pv-logo pv-logo-${tam}">` : `<span class="pv-marca-av">${escapeHtml(initials(nome))}</span>`}${!logo || tam === 'pequeno' ? `<b>${escapeHtml(nome)}</b>` : ''}</div><div class="pv-topo-acoes"><span class="pv-btn pv-btn-sec">Sugerir ideia</span></div></div></header>
+    <section class="pv-hero"><div><h1>Olá, Cliente 👋</h1><p>${escapeHtml(f.boasVindas || 'Aqui você acompanha a produção dos seus conteúdos, aprova as peças e manda ideias para a equipe.')}</p></div>
+      <div class="pv-resumo"><div class="pv-kpi destaque tem"><b>2</b><span>para aprovar</span></div><div class="pv-kpi"><b>3</b><span>em produção</span></div><div class="pv-kpi"><b>4</b><span>agendados</span></div></div></section>
+    <nav class="pv-abas"><button type="button" class="ativo"><span>Início</span><i>2</i></button><button type="button"><span>Calendário</span></button><button type="button"><span>Feed</span></button></nav>
+    <div class="pv-corpo"><div class="pv-acoes"><span class="pv-btn pv-btn-ok">✓ Aprovar</span><span class="pv-btn pv-btn-sec">✎ Pedir alteração</span></div></div>
+  </div><small class="pv-prev-rot">Pré-visualização</small>`;
 }
 
 function salvarCfgPortalCliente() {
   if (FIREBASE_PRONTO && TENANT_ID && !CFG_PORTAL_CARREGADO) { avisar('Ainda carregando — aguarde um instante e tente de novo.'); return; }
   const dados = mesclarComPadrao(portalConfigPadrao(), CFG_FORM);
+  if (CFG_PORTAL_DATA && CFG_PORTAL_DATA.padroes) dados.padroes = CFG_PORTAL_DATA.padroes; // não perde os padrões feitos no CRM
+  dados.tema = dados.tema === 'claro' ? 'claro' : 'escuro';
   ['corBotao', 'corTextoBotao', 'corMarca'].forEach((k) => { dados[k] = corHexValida(dados[k]); });
   ['corFundo', 'campoFundo', 'campoTexto'].forEach((k) => { dados.login[k] = corHexValida(dados.login[k]); });
   dados.logoUrl = urlImagemSegura(dados.logoUrl);
@@ -6203,7 +6118,8 @@ function salvarCfgPortalCliente() {
   CFG_PORTAL_DATA = dados;
   cloudSet(CFG_PORTAL_KEY, dados);
   fecharModalCfg();
-  avisar('Configurações do Portal do Cliente salvas!');
+  if (typeof portalPublicarPadrao === 'function') portalPublicarPadrao();
+  avisar('Portal do cliente salvo! Os links dos clientes se atualizam na próxima vez que o CRM estiver aberto.');
 }
 
 
@@ -6554,6 +6470,11 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '14/10/2026 · Portal do cliente', itens: [
+    { titulo: 'Portal do cliente com visual novo', badges: ['novo'], texto: 'Topo com a sua marca, "Olá, cliente", resumo (para aprovar, em produção, agendados e publicados), recado, abas em botões e, no Início, as peças que precisam de aprovação em destaque, com a imagem grande, a legenda e os botões Aprovar e Pedir alteração (agora numa janela, não mais num pop-up do navegador). Depois: em ajuste, próximas publicações, em produção e publicados. Calendário em lista no celular, feed em grade, detalhe da peça com todas as imagens do carrossel e o botão "Falar com a equipe" no WhatsApp. Tema escuro ou claro.' },
+    { titulo: 'Personalização do portal reorganizada', badges: ['melhoria'], texto: 'Configurações → Aparência → Portal do Cliente: marca, logo e tamanho, cor de destaque, tema, boas-vindas, WhatsApp da equipe e rodapé, com a prévia do portal ao vivo. Saíram as opções da antiga tela de login (o portal abre pelo link, sem login). Abas, permissões e o que o cliente vê ficam em CRM → Portal do cliente → Aparência e padrões.' },
+    { titulo: 'Conteúdo aprovado some do portal', badges: ['corrigido'], texto: 'Com o fluxo novo, o conteúdo aprovado vai para a etapa Copy, que o portal não reconhecia, e ele sumia da lista do cliente. Agora aparece como Aprovado.' },
+  ]},
   { data: '14/10/2026 · Aprovação e recorrências', itens: [
     { titulo: 'Resposta do cliente que não passa despercebida', badges: ['corrigido'], texto: 'Quando o cliente responde o link de aprovação (ou o portal), chega o aviso "Obaaa! Cliente aprovou 🎉" ou "ATENÇÃO: Cliente respondeu e pediu alterações" com o comentário, e ele fica na tela até você fechar. Antes, se o sistema estava fechado na hora da resposta, o aviso entrava calado no sino. Agora ele aparece também quando você estiver no ERP, no Financeiro ou nas Configurações. O cartão e o conteúdo vão para Copy (aprovado) ou para Alteração/Revisão.' },
     { titulo: 'Recorrência: recebeu, aparece o mês seguinte', badges: ['melhoria'], texto: 'Ao criar a recorrência, aparecem o mês do primeiro vencimento e o seguinte. Quando você marca uma conta como recebida, a do mês seguinte aparece na hora. Se chegar o vencimento sem receber, ela também aparece (a não ser que tenha marcado "Não recebi").' },
@@ -21413,7 +21334,9 @@ function portalPadrao() {
   const c = mesclarComPadrao(portalConfigPadrao(), CFG_PORTAL_DATA);
   const ex = (CFG_PORTAL_DATA && CFG_PORTAL_DATA.padroes) || {}; // mesclarComPadrao só copia campos que o padrão conhece
   return {
-    marca: c.nomeMarca || (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '', logoUrl: c.logoUrl || '', cor: corHexValida(c.corBotao) || '#7c3aed',
+    marca: c.nomeMarca || (PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || '', logoUrl: c.logoUrl || '', cor: corHexValida(c.corBotao) || '#3fae12',
+    corTexto: corHexValida(c.corTextoBotao) || '', tema: c.tema === 'claro' ? 'claro' : 'escuro', boasVindas: String(c.boasVindas || '').slice(0, 300), whatsapp: String(c.whatsapp || (PERFIL_DATA && (PERFIL_DATA.whatsapp || PERFIL_DATA.telefone1)) || '').slice(0, 30),
+    rodape: String(c.rodape || (c.login && c.login.rodape) || '').slice(0, 200), ocultarMarca: !!c.ocultarMarca, tamanhoLogo: (c.dentro && c.dentro.tamanhoLogo) || 'medio',
     perm: Object.assign({ sugerir: !!c.solicitacoes.sugestoesPost, servicos: !!c.solicitacoes.permitirSolicitacoes, baixar: !!c.permissoes.baixarArquivos, postado: false }, ex.perm || {}),
     abas: Object.assign({ producao: c.solicitacoes.abaProducao !== false, calendario: true, agendados: true, feed: true, instagram: true, materiais: true, relatorio: !!c.solicitacoes.abaRelatorio }, ex.abas || {}),
     visiveis: Object.assign({ aguardando: c.visibilidade.emAprovacao !== false, revisao: c.visibilidade.emRevisao !== false, aprovado: c.visibilidade.aprovado !== false, publicado: c.visibilidade.publicado !== false, rascunho: !!c.visibilidade.emProducao }, ex.visiveis || {}),
@@ -21427,6 +21350,7 @@ function portalEfetivo(padrao, cfg) {
   const r = (grupo, k) => { const v = ((cfg || {})[grupo] || {})[k]; return v === true || v === false ? v : padrao[grupo][k]; };
   return {
     marca: padrao.marca, logoUrl: (cfg && cfg.logoUrl) || padrao.logoUrl, cor: padrao.cor, recado: (cfg && cfg.recado) || '',
+    corTexto: padrao.corTexto || '', tema: padrao.tema || 'escuro', boasVindas: padrao.boasVindas || '', whatsapp: padrao.whatsapp || '', rodape: padrao.rodape || '', ocultarMarca: !!padrao.ocultarMarca, tamanhoLogo: padrao.tamanhoLogo || 'medio',
     perm: Object.fromEntries(Object.keys(padrao.perm).map((k) => [k, r('perm', k)])),
     abas: Object.fromEntries(Object.keys(padrao.abas).map((k) => [k, r('abas', k)])),
     visiveis: Object.fromEntries(Object.keys(padrao.visiveis).map((k) => [k, r('visiveis', k)])),
@@ -21497,7 +21421,7 @@ function portalHtmlPadroes() {
   const linha = (grupo, k, t, d) => `<div class="portal-op"><div><strong>${t}</strong><small>${d}</small></div><label class="switch"><input type="checkbox" ${p[grupo][k] ? 'checked' : ''} onchange="PORTAL_PAD_EDIT.${grupo}['${k}'] = this.checked"><span class="switch-slider"></span></label></div>`;
   const esc = (campo, ops) => `<div class="fin-seg">${ops.map(([v, t, s]) => `<button type="button" class="${p[campo] === v ? 'ativo' : ''}" onclick="PORTAL_PAD_EDIT.${campo} = '${v}'; portalRender();">${t}<small style="display:block; font-weight:400;">${s}</small></button>`).join('')}</div>`;
   return `<div class="fin-painel">
-    <div class="fin-painel-cab"><strong>Logo, cores e tela de login</strong><span class="kb-espaco"></span><a class="btn btn-small" href="configuracoes.html#portal">${ic('paleta', 'ic-herda')} Editar em Configurações</a></div>
+    <div class="fin-painel-cab"><strong>Logo, cor, tema e textos</strong><span class="kb-espaco"></span><button type="button" class="btn btn-small" onclick="location.href='configuracoes.html#aparencia'">${ic('paleta', 'ic-herda')} Editar em Configurações → Aparência</button></div>
     <p class="kb-vazio-mini" style="margin:0;">Marca: <b>${escapeHtml(p.marca || '—')}</b> · cor <span class="kb-bolinha" style="background:${p.cor};"></span> ${p.logoUrl ? '· com logo' : '· sem logo'}</p></div>
     <div class="fin-painel"><div class="cfg-secao-rotulo" style="margin-top:0;">O que o cliente pode fazer (padrão)</div>${PORTAL_PERMISSOES.map(([k, t, d]) => linha('perm', k, t, d)).join('')}
     <div class="cfg-secao-rotulo">Abas que o cliente vê (padrão)</div>${PORTAL_ABAS.map(([k, t, d]) => linha('abas', k, t, d)).join('')}
@@ -21681,7 +21605,7 @@ function portalIniciarProcessamento() {
 let PC = { cliente: '', previa: false, cfg: null, conteudos: [], aba: '', mes: '' };
 function portalPadraoFallback() {
   const c = portalConfigPadrao();
-  return { marca: '', logoUrl: '', cor: c.corBotao, perm: { sugerir: true, servicos: false, baixar: true, postado: false }, abas: { producao: true, calendario: true, agendados: true, feed: true, instagram: true, materiais: true, relatorio: false }, visiveis: { aguardando: true, revisao: true, aprovado: true, publicado: true, rascunho: false }, link: 'post', pedidos: 'kanban' };
+  return { marca: '', logoUrl: '', cor: c.corBotao, tema: 'escuro', boasVindas: '', whatsapp: '', rodape: '', tamanhoLogo: 'medio', perm: { sugerir: true, servicos: false, baixar: true, postado: false }, abas: { producao: true, calendario: true, agendados: true, feed: true, instagram: true, materiais: true, relatorio: false }, visiveis: { aguardando: true, revisao: true, aprovado: true, publicado: true, rascunho: false }, link: 'post', pedidos: 'kanban' };
 }
 function initPortalCliente() {
   try { initFirebase(); } catch (e) { /* sem Firebase: a mensagem abaixo explica */ }
@@ -21731,7 +21655,7 @@ function initPortalCliente() {
 function pcCategoria(c) {
   // a etapa do quadro manda (a equipe pode arrastar o cartão sem mudar o status)
   if (c.status === 'publicado' || c.etapa === 'publicacao' || c.portalPostadoEm) return 'publicado';
-  if (c.etapa === 'aprovado') return 'aprovado';
+  if (c.etapa === 'aprovado' || c.etapa === 'copy') return 'aprovado'; // no fluxo novo, depois de aprovado vem a Copy
   if (c.etapa === 'revisao') return 'revisao';
   if (c.etapa === 'aprovacao') return 'aguardando';
   if (c.status === 'aprovado') return 'aprovado';
@@ -21740,88 +21664,176 @@ function pcCategoria(c) {
 }
 function pcVisiveis() { return PC.conteudos.filter((c) => PC.cfg.visiveis[pcCategoria(c)]).sort((a, b) => (a.publicacao || '9999').localeCompare(b.publicacao || '9999')); }
 function pcImg(c) { const m = c.midia || {}; return urlImagemSegura(m.capaUrl) || urlImagemSegura(m.url) || urlImagemSegura((m.paginas || [])[0]) || ''; }
+const PC_CATS = {
+  aguardando: { nome: 'Aguardando sua aprovação', curto: 'Para aprovar', cor: '#f59e0b' },
+  revisao: { nome: 'Em ajuste pela equipe', curto: 'Em ajuste', cor: '#fb923c' },
+  rascunho: { nome: 'Em produção', curto: 'Em produção', cor: '#94a3b8' },
+  aprovado: { nome: 'Aprovado', curto: 'Aprovado', cor: '#22c55e' },
+  publicado: { nome: 'Publicado', curto: 'Publicado', cor: '#10b981' },
+};
+const PC_ABAS = { producao: ['Início', 'quadro'], calendario: ['Calendário', 'calendario'], agendados: ['Agenda', 'relogio'], feed: ['Feed', 'camadas'], instagram: ['Ver como no Instagram', 'imagem'], materiais: ['Materiais', 'baixar'], relatorio: ['Relatório', 'grafico'] };
+function pcPend() { return pcVisiveis().filter((c) => pcCategoria(c) === 'aguardando' && !c.portalResposta); }
 function pcRender() {
   const el = document.getElementById('pc-app'), cfg = PC.cfg;
   if (!el || !cfg) return;
-  const ABAS = { producao: 'Produção', calendario: 'Calendário', agendados: 'Agendados', feed: 'Feed', instagram: 'Modo Instagram', materiais: 'Materiais', relatorio: 'Relatório' };
-  const abas = Object.keys(ABAS).filter((k) => cfg.abas[k]);
-  const corpo = { producao: pcHtmlProducao, calendario: pcHtmlCalendario, agendados: pcHtmlAgendados, feed: pcHtmlFeed, instagram: pcHtmlInstagram, materiais: pcHtmlMateriais, relatorio: pcHtmlRelatorio }[PC.aba] || (() => '');
-  const pend = pcVisiveis().filter((c) => pcCategoria(c) === 'aguardando' && !c.portalResposta).length;
-  el.innerHTML = `<div class="pc" style="--pc-cor:${corHexValida(cfg.cor) || '#7c3aed'};">
-    ${PC.previa ? `<div class="pc-previa">Pré-visualização: você está vendo o portal como <b>${escapeHtml(PC.cliente)}</b>. As ações ficam desligadas.</div>` : ''}
-    <header class="pc-topo">${urlImagemSegura(cfg.logoUrl) ? `<img class="pc-logo" src="${escapeHtml(urlImagemSegura(cfg.logoUrl))}" alt="">` : `<strong class="pc-marca">${escapeHtml(cfg.marca || 'Portal')}</strong>`}
-      <span class="pc-cliente">${escapeHtml(PC.cliente)}</span><span class="kb-espaco"></span>
-      ${cfg.perm.sugerir ? '<button type="button" class="pc-btn" onclick="pcAbrirPedido(\'ideia\')">Sugerir ideia</button>' : ''}
-      ${cfg.perm.servicos ? '<button type="button" class="pc-btn" onclick="pcAbrirPedido(\'servico\')">Solicitar serviço</button>' : ''}
-      ${PC.publico ? '' : `<button type="button" class="pc-btn pc-sair" onclick="firebase.auth().signOut().then(() => location.replace('login.html'))">Sair</button>`}</header>
-    ${cfg.recado ? `<div class="pc-recado">${escapeHtml(cfg.recado)}</div>` : ''}
-    ${pend ? `<div class="pc-aviso"><b>${pend}</b> conteúdo(s) esperando a sua aprovação.</div>` : ''}
-    <nav class="pc-abas">${abas.map((k) => `<button type="button" class="${PC.aba === k ? 'ativo' : ''}" onclick="PC.aba = '${k}'; pcRender();">${ABAS[k]}</button>`).join('')}</nav>
-    <main>${corpo()}</main>
+  const abas = Object.keys(PC_ABAS).filter((k) => cfg.abas[k]);
+  if (!abas.includes(PC.aba)) PC.aba = abas[0] || 'producao';
+  const corpo = { producao: pcHtmlInicio, calendario: pcHtmlCalendario, agendados: pcHtmlAgendados, feed: pcHtmlFeed, instagram: pcHtmlInstagram, materiais: pcHtmlMateriais, relatorio: pcHtmlRelatorio }[PC.aba] || (() => '');
+  const l = pcVisiveis(), mes = finMesAtual(), pend = pcPend();
+  const n = (cat, f) => l.filter((c) => pcCategoria(c) === cat && (!f || f(c))).length;
+  const logo = urlImagemSegura(cfg.logoUrl), cor = corHexValida(cfg.cor) || '#3fae12', corTxt = corHexValida(cfg.corTexto) || pcContraste(cor);
+  const whats = String(cfg.whatsapp || '').replace(/\D/g, '');
+  document.documentElement.setAttribute('data-theme', cfg.tema === 'claro' ? 'light' : 'dark');
+  el.innerHTML = `<div class="pv ${cfg.tema === 'claro' ? 'pv-claro' : 'pv-escuro'}" style="--pv-cor:${cor}; --pv-cor-txt:${corTxt};">
+    ${PC.previa ? `<div class="pv-previa">Pré-visualização: você está vendo o portal como <b>${escapeHtml(PC.cliente)}</b>. As ações ficam desligadas.</div>` : ''}
+    <header class="pv-topo"><div class="pv-topo-in">
+      <div class="pv-marca">${logo ? `<img src="${escapeHtml(logo)}" alt="" class="pv-logo pv-logo-${cfg.tamanhoLogo || 'medio'}">` : `<span class="pv-marca-av">${escapeHtml(initials(cfg.marca || 'P'))}</span>`}${!logo || cfg.tamanhoLogo === 'pequeno' ? `<b>${escapeHtml(cfg.marca || 'Portal do cliente')}</b>` : ''}</div>
+      <div class="pv-topo-acoes">
+        ${cfg.perm.sugerir ? `<button type="button" class="pv-btn pv-btn-sec" onclick="pcAbrirPedido('ideia')">${ic('brilho', 'ic-herda')}<span>Sugerir ideia</span></button>` : ''}
+        ${cfg.perm.servicos ? `<button type="button" class="pv-btn pv-btn-sec" onclick="pcAbrirPedido('servico')">${ic('mais', 'ic-herda')}<span>Pedir serviço</span></button>` : ''}
+        ${whats ? `<a class="pv-btn pv-btn-whats" href="https://wa.me/${whats.length <= 11 ? '55' + whats : whats}?text=${encodeURIComponent(`Olá! Sou ${PC.cliente}, estou no portal.`)}" target="_blank" rel="noopener">${ic('conversa', 'ic-herda')}<span>Falar com a equipe</span></a>` : ''}
+        ${PC.publico ? '' : `<button type="button" class="pv-btn pv-btn-sec" onclick="firebase.auth().signOut().then(() => location.replace('login.html'))">Sair</button>`}
+      </div></div></header>
+    <section class="pv-hero"><div>
+      <h1>Olá, ${escapeHtml(String(PC.cliente || '').split(' ')[0])} 👋</h1>
+      <p>${escapeHtml(cfg.boasVindas || 'Aqui você acompanha a produção dos seus conteúdos, aprova as peças e manda ideias para a equipe.')}</p></div>
+      <div class="pv-resumo">
+        <button type="button" class="pv-kpi destaque ${pend.length ? 'tem' : ''}" onclick="PC.aba='${abas.includes('producao') ? 'producao' : abas[0]}'; pcRender(); setTimeout(() => { const s = document.getElementById('pv-aprovar'); if (s) s.scrollIntoView({ behavior: 'smooth' }); }, 50)"><b>${pend.length}</b><span>para aprovar</span></button>
+        <div class="pv-kpi"><b>${n('rascunho') + n('revisao')}</b><span>em produção</span></div>
+        <div class="pv-kpi"><b>${n('aprovado', (c) => c.publicacao && c.publicacao >= finHoje())}</b><span>agendados</span></div>
+        <div class="pv-kpi"><b>${n('publicado', (c) => String(c.publicacao || '').startsWith(mes))}</b><span>publicados no mês</span></div>
+      </div></section>
+    ${cfg.recado ? `<div class="pv-recado">${ic('megafone', 'ic-herda')}<p>${escapeHtml(cfg.recado)}</p></div>` : ''}
+    ${abas.length > 1 ? `<nav class="pv-abas">${abas.map((k) => `<button type="button" class="${PC.aba === k ? 'ativo' : ''}" onclick="PC.aba = '${k}'; pcRender(); window.scrollTo({ top: 0, behavior: 'smooth' });">${ic(PC_ABAS[k][1], 'ic-herda')}<span>${PC_ABAS[k][0]}</span>${k === 'producao' && pend.length ? `<i>${pend.length}</i>` : ''}</button>`).join('')}</nav>` : ''}
+    <main class="pv-corpo">${corpo()}</main>
+    <footer class="pv-rodape">${cfg.rodape ? `<p>${escapeHtml(cfg.rodape)}</p>` : ''}${cfg.ocultarMarca ? '' : '<small>Feito com Eagles Labz</small>'}</footer>
   </div>`;
+}
+function pcContraste(hex) { const h = String(hex || '').replace('#', ''); if (h.length !== 6) return '#ffffff'; const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#0b0f0b' : '#ffffff'; }
+function pcTag(c) { const k = pcCategoria(c), cat = PC_CATS[k]; const respondido = k === 'aguardando' && c.portalResposta; return `<span class="pv-tag" style="--c:${respondido ? '#22c55e' : cat.cor};">${respondido ? (c.portalResposta === 'aprovado' ? 'Você aprovou ✓' : 'Ajuste pedido ✓') : cat.curto}</span>`; }
+function pcMeta(c) { return [((CNT_TIPOS[c.tipo] || {}).nome || ''), c.publicacao ? '📅 ' + formatDatePt(c.publicacao) + (c.publicacaoHora ? ' às ' + c.publicacaoHora : '') : ''].filter(Boolean).map(escapeHtml).join(' · '); }
+function pcMidiaHtml(c, grande) {
+  const img = pcImg(c), m = c.midia || {}, pags = (m.paginas || []).filter(Boolean);
+  const icone = (CNT_TIPOS[c.tipo] || {}).icone || 'imagem';
+  if (!img) return `<div class="pv-thumb vazio">${ic(icone, 'ic-herda')}<small>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || 'Conteúdo')}</small></div>`;
+  return `<div class="pv-thumb${grande ? ' grande' : ''}"><img src="${escapeHtml(img)}" alt="" loading="lazy">${pags.length > 1 ? `<span class="pv-thumb-n">1/${pags.length}</span>` : ''}${(CNT_TIPOS[c.tipo] || {}).midia === 'video' ? '<span class="pv-thumb-play">▶</span>' : ''}</div>`;
 }
 function pcAcoes(c, compacto) {
   const cfg = PC.cfg, cat = pcCategoria(c), id = escapeParaOnclick(c.id);
   const m = c.midia || {}, links = [m.url, m.capaUrl].concat(m.paginas || []).filter((u) => /^https:\/\//i.test(u || ''));
   let h = '';
-  if (cat === 'aguardando') h += c.portalResposta ? `<span class="pc-estado">${c.portalResposta === 'aprovado' ? APR_MSG_APROVADO : APR_MSG_AJUSTE}</span>` : `<button type="button" class="pc-btn pc-ok" onclick="pcResponder('${id}', 'aprovado')">Aprovar</button><button type="button" class="pc-btn" onclick="pcResponder('${id}', 'ajustes')">Pedir ajustes</button>`;
-  if (cfg.perm.postado && cat === 'aprovado') h += c.portalPostadoEm ? '<span class="pc-estado">Marcado como postado ✓</span>' : `<button type="button" class="pc-btn" onclick="pcPostado('${id}')">Marcar como postado</button>`;
-  if (cfg.perm.baixar && c.download !== 'bloqueado' && links.length && !compacto) h += links.map((u, i) => `<a class="pc-link" href="${escapeHtml(u)}" target="_blank" rel="noopener" download>Baixar${links.length > 1 ? ' ' + (i + 1) : ''}</a>`).join('');
-  return h ? `<div class="pc-acoes">${h}</div>` : '';
+  if (cat === 'aguardando') h += c.portalResposta ? `<span class="pv-estado">${c.portalResposta === 'aprovado' ? 'Você aprovou esta peça. Obrigado!' : 'Seu pedido de ajuste foi enviado para a equipe.'}</span>` : `<button type="button" class="pv-btn pv-btn-ok" onclick="event.stopPropagation(); pcResponder('${id}', 'aprovado')">✓ Aprovar</button><button type="button" class="pv-btn pv-btn-sec" onclick="event.stopPropagation(); pcAbrirAjuste('${id}')">✎ Pedir alteração</button>`;
+  if (cat === 'revisao' && c.portalComentario) h += `<span class="pv-estado">Você pediu: “${escapeHtml(String(c.portalComentario).slice(0, 160))}”</span>`;
+  if (cfg.perm.postado && cat === 'aprovado') h += c.portalPostadoEm ? '<span class="pv-estado">Marcado como postado ✓</span>' : `<button type="button" class="pv-btn pv-btn-sec" onclick="event.stopPropagation(); pcPostado('${id}')">Marcar como postado</button>`;
+  if (cfg.perm.baixar && c.download !== 'bloqueado' && links.length && !compacto && ['aprovado', 'publicado'].includes(cat)) h += `<a class="pv-btn pv-btn-sec" href="${escapeHtml(links[0])}" target="_blank" rel="noopener" download onclick="event.stopPropagation()">${ic('baixar', 'ic-herda')} Baixar${links.length > 1 ? ` (${links.length})` : ''}</a>`;
+  return h ? `<div class="pv-acoes">${h}</div>` : '';
 }
 function pcCard(c) {
-  const img = pcImg(c), CATS = { aguardando: 'Aguardando aprovação', revisao: 'Em revisão', aprovado: 'Aprovado', publicado: 'Publicado', rascunho: 'Em produção' };
-  return `<article class="pc-card">${img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy">` : ''}
-    <div class="pc-card-corpo"><span class="pc-tag pc-${pcCategoria(c)}">${CATS[pcCategoria(c)]}</span><strong>${escapeHtml(c.titulo || 'Sem título')}</strong>
-    <small>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}${c.publicacao ? ' · ' + escapeHtml(formatDatePt(c.publicacao)) : ''}</small>
-    ${c.legenda ? `<p>${escapeHtml(c.legenda).slice(0, 400).replace(/\n/g, '<br>')}</p>` : ''}${pcAcoes(c)}</div></article>`;
+  return `<article class="pv-card" onclick="pcAbrirDetalhe('${escapeParaOnclick(c.id)}')">${pcMidiaHtml(c)}
+    <div class="pv-card-corpo">${pcTag(c)}<strong>${escapeHtml(c.titulo || 'Sem título')}</strong><small>${pcMeta(c)}</small>${pcAcoes(c, true)}</div></article>`;
 }
-function pcHtmlProducao() {
-  const ordem = ['aguardando', 'revisao', 'rascunho', 'aprovado', 'publicado'], NOMES = { aguardando: 'Aguardando sua aprovação', revisao: 'Em revisão', rascunho: 'Em produção', aprovado: 'Aprovados', publicado: 'Publicados' };
-  const l = pcVisiveis();
-  return ordem.map((cat) => { const g = l.filter((c) => pcCategoria(c) === cat); return g.length ? `<section><h2>${NOMES[cat]} <small>${g.length}</small></h2><div class="pc-grade">${g.map(pcCard).join('')}</div></section>` : ''; }).join('') || '<p class="pc-vazio">Nada por aqui ainda.</p>';
+function pcVazio(icone, titulo, texto) { return `<div class="pv-vazio">${ic(icone, 'ic-herda')}<strong>${escapeHtml(titulo)}</strong><span>${escapeHtml(texto)}</span></div>`; }
+// Início: o que precisa do cliente primeiro, depois o andamento
+function pcHtmlInicio() {
+  const l = pcVisiveis(), pend = pcPend(), hoje = finHoje();
+  const grupo = (cat) => l.filter((c) => pcCategoria(c) === cat);
+  const proximos = l.filter((c) => pcCategoria(c) === 'aprovado' && c.publicacao && c.publicacao >= hoje).slice(0, 6);
+  const respondidos = grupo('aguardando').filter((c) => c.portalResposta);
+  const blocos = [];
+  blocos.push(pend.length ? `<section class="pv-sec pv-sec-aprovar" id="pv-aprovar"><div class="pv-sec-cab"><h2>Precisa da sua aprovação</h2><span>${pend.length}</span></div><div class="pv-aprovar-lista">${pend.map(pcCardAprovar).join('')}</div></section>`
+    : `<section class="pv-sec"><div class="pv-tudo-ok">${ic('aprovado', 'ic-herda')}<div><strong>Tudo em dia!</strong><span>Nenhuma peça esperando a sua aprovação agora.</span></div></div></section>`);
+  if (respondidos.length) blocos.push(pcSecao('Suas respostas', respondidos));
+  if (grupo('revisao').length) blocos.push(pcSecao('Em ajuste pela equipe', grupo('revisao')));
+  if (proximos.length) blocos.push(pcSecao('Próximas publicações', proximos));
+  if (grupo('rascunho').length) blocos.push(pcSecao('Em produção', grupo('rascunho')));
+  const pub = grupo('publicado').slice().reverse().slice(0, 8);
+  if (pub.length) blocos.push(pcSecao('Publicados recentemente', pub));
+  return blocos.join('') || pcVazio('quadro', 'Nada por aqui ainda', 'Assim que a equipe começar a produzir, os conteúdos aparecem aqui.');
+}
+function pcSecao(titulo, lista) { return `<section class="pv-sec"><div class="pv-sec-cab"><h2>${escapeHtml(titulo)}</h2><span>${lista.length}</span></div><div class="pv-grade">${lista.map(pcCard).join('')}</div></section>`; }
+function pcCardAprovar(c) {
+  return `<article class="pv-aprovar">${pcMidiaHtml(c, true)}<div class="pv-aprovar-corpo">${pcTag(c)}<h3>${escapeHtml(c.titulo || 'Sem título')}</h3><small>${pcMeta(c)}</small>
+    ${c.legenda ? `<div class="pv-legenda">${escapeHtml(c.legenda).slice(0, 700).replace(/\n/g, '<br>')}${c.legenda.length > 700 ? '…' : ''}</div>` : ''}
+    <button type="button" class="pv-link" onclick="pcAbrirDetalhe('${escapeParaOnclick(c.id)}')">Ver a peça inteira${((c.midia || {}).paginas || []).filter(Boolean).length > 1 ? ' (todas as imagens)' : ''} →</button>${pcAcoes(c)}</div></article>`;
 }
 function pcHtmlCalendario() {
-  const mes = PC.mes, [a, m] = mes.split('-').map(Number), primeiro = new Date(a, m - 1, 1).getDay(), dias = new Date(a, m, 0).getDate(), l = pcVisiveis();
-  const cel = []; for (let i = 0; i < primeiro; i++) cel.push('<div class="cnt-dia vazio"></div>');
-  for (let d = 1; d <= dias; d++) { const data = `${mes}-${String(d).padStart(2, '0')}`; cel.push(`<div class="cnt-dia"><span class="cnt-dia-n">${d}</span>${l.filter((c) => c.publicacao === data).map((c) => `<span class="cnt-dia-item" style="--c:var(--pc-cor);">${escapeHtml(c.titulo || '')}</span>`).join('')}</div>`); }
-  return `<div class="pc-mes"><button type="button" class="pc-btn" onclick="PC.mes = finSomarMeses(PC.mes, -1); pcRender();">‹</button><strong>${escapeHtml(finNomeMes(mes))}</strong><button type="button" class="pc-btn" onclick="PC.mes = finSomarMeses(PC.mes, 1); pcRender();">›</button></div>
-    <div class="cnt-cal">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((n) => `<div class="cnt-cal-sem">${n}</div>`).join('')}${cel.join('')}</div>`;
+  const mes = PC.mes, [a, m] = mes.split('-').map(Number), primeiro = new Date(a, m - 1, 1).getDay(), dias = new Date(a, m, 0).getDate(), l = pcVisiveis(), hoje = finHoje();
+  const cel = []; for (let i = 0; i < primeiro; i++) cel.push('<div class="pv-dia vazio"></div>');
+  for (let d = 1; d <= dias; d++) {
+    const data = `${mes}-${String(d).padStart(2, '0')}`, itens = l.filter((c) => c.publicacao === data);
+    cel.push(`<div class="pv-dia${data === hoje ? ' hoje' : ''}${itens.length ? ' tem' : ''}"><span class="pv-dia-n">${d}</span>${itens.map((c) => `<button type="button" class="pv-dia-item" style="--c:${PC_CATS[pcCategoria(c)].cor};" onclick="pcAbrirDetalhe('${escapeParaOnclick(c.id)}')">${escapeHtml(c.titulo || '')}</button>`).join('')}</div>`);
+  }
+  const doMes = l.filter((c) => String(c.publicacao || '').startsWith(mes));
+  return `<div class="pv-mes"><button type="button" class="pv-btn pv-btn-sec" onclick="PC.mes = finSomarMeses(PC.mes, -1); pcRender();">‹</button><strong>${escapeHtml(finNomeMes(mes))}</strong><button type="button" class="pv-btn pv-btn-sec" onclick="PC.mes = finSomarMeses(PC.mes, 1); pcRender();">›</button></div>
+    <div class="pv-cal">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((n) => `<div class="pv-cal-sem">${n}</div>`).join('')}${cel.join('')}</div>
+    <div class="pv-cal-lista">${doMes.length ? doMes.map((c) => `<button type="button" class="pv-linha" onclick="pcAbrirDetalhe('${escapeParaOnclick(c.id)}')"><span class="pv-linha-data"><b>${escapeHtml(c.publicacao.slice(8, 10))}</b><small>${escapeHtml(['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][new Date(c.publicacao + 'T12:00:00').getDay()])}</small></span><span class="pv-linha-txt"><strong>${escapeHtml(c.titulo || '')}</strong><small>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}</small></span>${pcTag(c)}</button>`).join('') : pcVazio('calendario', 'Nada marcado neste mês', 'As datas de publicação aparecem aqui.')}</div>`;
 }
 function pcHtmlAgendados() {
   const l = pcVisiveis(), hoje = finHoje();
   const fila = l.filter((c) => pcCategoria(c) === 'aprovado' && c.publicacao && c.publicacao >= hoje), foi = l.filter((c) => pcCategoria(c) === 'publicado').reverse();
-  const linha = (c) => `<div class="pc-linha"><strong>${escapeHtml(c.publicacao ? formatDatePt(c.publicacao) : '—')}${c.publicacaoHora ? ' ' + escapeHtml(c.publicacaoHora) : ''}</strong><span>${escapeHtml(c.titulo || '')}</span><small>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}</small></div>`;
-  return `<section><h2>Na fila <small>${fila.length}</small></h2>${fila.map(linha).join('') || '<p class="pc-vazio">Nada agendado.</p>'}</section><section><h2>Já foram ao ar <small>${foi.length}</small></h2>${foi.map(linha).join('') || '<p class="pc-vazio">Nada publicado ainda.</p>'}</section>`;
+  const linha = (c) => `<button type="button" class="pv-linha" onclick="pcAbrirDetalhe('${escapeParaOnclick(c.id)}')"><span class="pv-linha-data"><b>${escapeHtml(c.publicacao ? c.publicacao.slice(8, 10) + '/' + c.publicacao.slice(5, 7) : '—')}</b><small>${escapeHtml(c.publicacaoHora || '')}</small></span><span class="pv-linha-txt"><strong>${escapeHtml(c.titulo || '')}</strong><small>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}</small></span>${pcTag(c)}</button>`;
+  return `<section class="pv-sec"><div class="pv-sec-cab"><h2>Vão ao ar</h2><span>${fila.length}</span></div>${fila.map(linha).join('') || pcVazio('relogio', 'Nada agendado', 'As peças aprovadas com data aparecem aqui.')}</section>
+    <section class="pv-sec"><div class="pv-sec-cab"><h2>Já foram ao ar</h2><span>${foi.length}</span></div>${foi.map(linha).join('') || pcVazio('aprovado', 'Nada publicado ainda', '')}</section>`;
 }
 function pcHtmlFeed() {
   const l = pcVisiveis().filter((c) => ['aguardando', 'aprovado', 'publicado'].includes(pcCategoria(c)) && pcImg(c)).sort((a, b) => (b.publicacao || '').localeCompare(a.publicacao || ''));
-  return `<p class="pc-dica">Prévia de como o perfil vai ficar (do mais novo para o mais antigo).</p><div class="pc-feed">${l.map((c) => `<div class="pc-feed-item${pcCategoria(c) === 'aguardando' ? ' pend' : ''}" title="${escapeHtml(c.titulo || '')}"><img src="${escapeHtml(pcImg(c))}" alt="" loading="lazy"></div>`).join('') || '<p class="pc-vazio">Sem imagens ainda.</p>'}</div>`;
+  return `<p class="pv-dica">Prévia de como o seu perfil vai ficar, do mais novo para o mais antigo. As peças com borda ainda esperam a sua aprovação.</p>
+    ${l.length ? `<div class="pv-feed">${l.map((c) => `<button type="button" class="pv-feed-item${pcCategoria(c) === 'aguardando' ? ' pend' : ''}" title="${escapeHtml(c.titulo || '')}" onclick="pcAbrirDetalhe('${escapeParaOnclick(c.id)}')"><img src="${escapeHtml(pcImg(c))}" alt="" loading="lazy"></button>`).join('')}</div>` : pcVazio('camadas', 'Sem imagens ainda', 'As peças com imagem aparecem aqui em grade.')}`;
 }
 function pcHtmlInstagram() {
-  const l = pcVisiveis().filter((c) => pcCategoria(c) === 'aguardando');
-  return l.map((c) => `<article class="pc-ig"><header><span class="pc-ig-av">${escapeHtml(initials(PC.cliente))}</span><strong>${escapeHtml(PC.cliente)}</strong></header>
-    ${pcImg(c) ? `<img src="${escapeHtml(pcImg(c))}" alt="">` : '<div class="pc-ig-sem">Sem imagem</div>'}
-    <div class="pc-ig-corpo"><p><b>${escapeHtml(PC.cliente)}</b> ${escapeHtml(c.legenda || '').replace(/\n/g, '<br>')}</p>${pcAcoes(c, true)}</div></article>`).join('') || '<p class="pc-vazio">Nenhum conteúdo esperando aprovação.</p>';
+  const l = pcVisiveis().filter((c) => ['aguardando', 'aprovado'].includes(pcCategoria(c)));
+  return l.map((c) => `<article class="pv-ig"><header><span class="pv-ig-av">${escapeHtml(initials(PC.cliente))}</span><strong>${escapeHtml(PC.cliente)}</strong>${pcTag(c)}</header>
+    ${pcImg(c) ? `<img src="${escapeHtml(pcImg(c))}" alt="" onclick="pcAbrirDetalhe('${escapeParaOnclick(c.id)}')">` : '<div class="pv-ig-sem">Sem imagem</div>'}
+    <div class="pv-ig-corpo"><div class="pv-ig-icones">♡ 💬 ↗</div><p><b>${escapeHtml(PC.cliente)}</b> ${escapeHtml(c.legenda || '').replace(/\n/g, '<br>')}</p>${pcAcoes(c, true)}</div></article>`).join('') || pcVazio('imagem', 'Nada para mostrar', 'As peças para aprovar e as aprovadas aparecem aqui como no Instagram.');
 }
 function pcHtmlMateriais() {
   const l = pcVisiveis().filter((c) => ['aprovado', 'publicado'].includes(pcCategoria(c))).reverse();
-  return l.length ? `<div class="pc-grade">${l.map(pcCard).join('')}</div>` : '<p class="pc-vazio">Nada aprovado ainda.</p>';
+  return l.length ? `<p class="pv-dica">Tudo o que já foi aprovado, para você baixar quando precisar.</p><div class="pv-grade">${l.map((c) => `<article class="pv-card" onclick="pcAbrirDetalhe('${escapeParaOnclick(c.id)}')">${pcMidiaHtml(c)}<div class="pv-card-corpo">${pcTag(c)}<strong>${escapeHtml(c.titulo || '')}</strong><small>${pcMeta(c)}</small>${pcAcoes(c)}</div></article>`).join('')}</div>` : pcVazio('baixar', 'Nada aprovado ainda', 'Os materiais aprovados ficam aqui para baixar.');
 }
 function pcHtmlRelatorio() {
   const mes = PC.mes, l = pcVisiveis().filter((c) => (c.publicacao || c.entrega || '').startsWith(mes));
   const por = (f) => l.reduce((m, c) => { const k = f(c); m[k] = (m[k] || 0) + 1; return m; }, {});
   const cats = por(pcCategoria), tipos = por((c) => (CNT_TIPOS[c.tipo] || {}).nome || c.tipo);
-  return `<div class="pc-mes"><button type="button" class="pc-btn" onclick="PC.mes = finSomarMeses(PC.mes, -1); pcRender();">‹</button><strong>${escapeHtml(finNomeMes(mes))}</strong><button type="button" class="pc-btn" onclick="PC.mes = finSomarMeses(PC.mes, 1); pcRender();">›</button><span class="kb-espaco"></span><button type="button" class="pc-btn" onclick="window.print()">Salvar PDF</button></div>
-    <div class="pc-rel"><div><b>${l.length}</b><small>conteúdos no mês</small></div><div><b>${cats.publicado || 0}</b><small>publicados</small></div><div><b>${cats.aprovado || 0}</b><small>aprovados</small></div><div><b>${cats.aguardando || 0}</b><small>aguardando você</small></div></div>
-    <section><h2>Por tipo</h2>${Object.entries(tipos).map(([t, n]) => `<div class="pc-linha"><span>${escapeHtml(t)}</span><strong>${n}</strong></div>`).join('') || '<p class="pc-vazio">Nada nesse mês.</p>'}</section>`;
+  const max = Math.max(1, ...Object.values(tipos));
+  return `<div class="pv-mes"><button type="button" class="pv-btn pv-btn-sec" onclick="PC.mes = finSomarMeses(PC.mes, -1); pcRender();">‹</button><strong>${escapeHtml(finNomeMes(mes))}</strong><button type="button" class="pv-btn pv-btn-sec" onclick="PC.mes = finSomarMeses(PC.mes, 1); pcRender();">›</button></div>
+    <div class="pv-resumo pv-resumo-rel"><div class="pv-kpi"><b>${l.length}</b><span>conteúdos no mês</span></div><div class="pv-kpi"><b>${cats.publicado || 0}</b><span>publicados</span></div><div class="pv-kpi"><b>${cats.aprovado || 0}</b><span>aprovados</span></div><div class="pv-kpi"><b>${cats.aguardando || 0}</b><span>esperando você</span></div></div>
+    <section class="pv-sec"><div class="pv-sec-cab"><h2>Por tipo</h2></div>${Object.entries(tipos).map(([t, n]) => `<div class="pv-barra"><span>${escapeHtml(t)}</span><div><i style="width:${Math.round((n / max) * 100)}%"></i></div><b>${n}</b></div>`).join('') || pcVazio('grafico', 'Nada neste mês', '')}</section>`;
 }
+// ---------- detalhe da peça ----------
+function pcAbrirDetalhe(id) {
+  const c = PC.conteudos.find((x) => x.id === id);
+  if (!c) return;
+  const m = c.midia || {}, pags = (m.paginas || []).filter((u) => urlImagemSegura(u));
+  const imgs = pags.length ? pags : [pcImg(c)].filter(Boolean);
+  const video = (CNT_TIPOS[c.tipo] || {}).midia === 'video';
+  const el = document.getElementById('pc-modal');
+  el.innerHTML = `<div class="pv-modal" onclick="if (event.target === this) pcFecharModal()"><div class="pv-modal-caixa pv-detalhe ${PC.cfg.tema === 'claro' ? 'pv-claro' : 'pv-escuro'}" style="--pv-cor:${corHexValida(PC.cfg.cor) || '#3fae12'};">
+    <button type="button" class="pv-fechar" aria-label="Fechar" onclick="pcFecharModal()">✕</button>
+    <div class="pv-det-midia">${imgs.length ? `<div class="pv-carrossel">${imgs.map((u) => `<img src="${escapeHtml(urlImagemSegura(u))}" alt="">`).join('')}</div>${imgs.length > 1 ? `<small class="pv-det-dica">Arraste para o lado para ver as ${imgs.length} imagens</small>` : ''}` : `<div class="pv-thumb vazio grande">${ic('imagem', 'ic-herda')}<small>Sem prévia</small></div>`}
+      ${video && /^https:\/\//i.test(m.url || '') ? `<a class="pv-btn pv-btn-sec" href="${escapeHtml(m.url)}" target="_blank" rel="noopener">▶ Assistir o vídeo</a>` : ''}</div>
+    <div class="pv-det-info">${pcTag(c)}<h2>${escapeHtml(c.titulo || 'Sem título')}</h2><small>${pcMeta(c)}</small>
+      ${c.legenda ? `<div class="pv-legenda grande">${escapeHtml(c.legenda).replace(/\n/g, '<br>')}</div>` : ''}
+      ${pcAcoes(c)}</div></div></div>`;
+}
+function pcFecharModal() { const el = document.getElementById('pc-modal'); if (el) el.innerHTML = ''; }
 // ---------- ações do cliente ----------
 function pcSoCliente() { if (PC.previa) { alert('Na pré-visualização as ações ficam desligadas.'); return false; } return true; }
-async function pcResponder(id, resposta) {
+function pcAbrirAjuste(id) {
+  if (!pcSoCliente()) return;
+  const c = PC.conteudos.find((x) => x.id === id);
+  const el = document.getElementById('pc-modal');
+  el.innerHTML = `<div class="pv-modal" onclick="if (event.target === this) pcFecharModal()"><div class="pv-modal-caixa ${PC.cfg.tema === 'claro' ? 'pv-claro' : 'pv-escuro'}" style="--pv-cor:${corHexValida(PC.cfg.cor) || '#3fae12'};">
+    <button type="button" class="pv-fechar" aria-label="Fechar" onclick="pcFecharModal()">✕</button>
+    <h2>O que precisa mudar?</h2><p class="pv-modal-sub">${escapeHtml((c && c.titulo) || '')}</p>
+    <textarea id="pv-ajuste" rows="5" maxlength="1000" placeholder="Ex.: trocar a cor do fundo para azul, deixar o logo maior e corrigir o telefone."></textarea>
+    <p class="pv-erro" id="pv-ajuste-erro"></p>
+    <div class="pv-modal-botoes"><button type="button" class="pv-btn pv-btn-sec" onclick="pcFecharModal()">Cancelar</button><button type="button" class="pv-btn pv-btn-ok" onclick="pcResponder('${escapeParaOnclick(id)}', 'ajustes', document.getElementById('pv-ajuste').value)">Enviar para a equipe</button></div></div></div>`;
+  setTimeout(() => { const t = document.getElementById('pv-ajuste'); if (t) t.focus(); }, 50);
+}
+async function pcResponder(id, resposta, textoAjuste) {
   if (!pcSoCliente()) return;
   let comentario = '';
-  if (resposta === 'ajustes') { comentario = (prompt('O que precisa mudar?') || '').trim().slice(0, 1000); if (!comentario) return; }
+  if (resposta === 'ajustes') { comentario = String(textoAjuste || '').trim().slice(0, 1000); if (!comentario) { const e = document.getElementById('pv-ajuste-erro'); if (e) e.textContent = 'Conte o que precisa mudar.'; return; } }
   if (PC.publico) {
     const c = PC.conteudos.find((x) => x.id === id);
     if (!c || !c.aprovToken) { alert('Este conteúdo ainda não está liberado para aprovação. Tente de novo em alguns minutos.'); return; }
@@ -21831,17 +21843,17 @@ async function pcResponder(id, resposta) {
       PC.respostasLocais = Object.assign({}, PC.respostasLocais, { [id]: { rodada: c.rodada, campos: { portalResposta: dados.resposta, portalComentario: comentario } } });
       Object.assign(c, { portalResposta: dados.resposta, portalComentario: comentario });
       pcRender();
-      pcMensagem(dados.resposta === 'aprovado' ? 'Aprovado ✓' : 'Pedido enviado ✓', dados.resposta === 'aprovado' ? APR_MSG_APROVADO : APR_MSG_AJUSTE);
+      pcMensagem(dados.resposta === 'aprovado' ? 'Aprovado! 🎉' : 'Pedido enviado ✓', dados.resposta === 'aprovado' ? 'Obrigado! A equipe já foi avisada e segue com a publicação.' : 'A equipe já recebeu o seu pedido e vai ajustar. Você recebe a nova versão para aprovar.');
     } catch (e) { console.error(e); alert('Não foi possível enviar agora. Tente de novo.'); }
     return;
   }
-  try { await firestoreDb.collection('tenants').doc(TENANT_ID).collection('conteudos').doc(id).set({ portalResposta: resposta, portalComentario: comentario, portalRespondidoEm: new Date().toISOString(), portalPendente: true }, { merge: true }); }
+  try { await firestoreDb.collection('tenants').doc(TENANT_ID).collection('conteudos').doc(id).set({ portalResposta: resposta, portalComentario: comentario, portalRespondidoEm: new Date().toISOString(), portalPendente: true }, { merge: true }); pcFecharModal(); }
   catch (e) { console.error(e); alert('Não foi possível enviar agora. Tente de novo.'); }
 }
 function pcMensagem(titulo, texto) {
   const el = document.getElementById('pc-modal');
   if (!el) { alert(texto); return; }
-  el.innerHTML = `<div class="pc-modal-caixa"><h2>${escapeHtml(titulo)}</h2><p>${escapeHtml(texto)}</p><div class="ap-botoes"><button type="button" class="ap-btn ok" onclick="document.getElementById('pc-modal').innerHTML = ''">Fechar</button></div></div>`;
+  el.innerHTML = `<div class="pv-modal" onclick="if (event.target === this) pcFecharModal()"><div class="pv-modal-caixa pv-msg ${PC.cfg && PC.cfg.tema === 'claro' ? 'pv-claro' : 'pv-escuro'}" style="--pv-cor:${corHexValida(PC.cfg && PC.cfg.cor) || '#3fae12'};"><h2>${escapeHtml(titulo)}</h2><p>${escapeHtml(texto)}</p><div class="pv-modal-botoes"><button type="button" class="pv-btn pv-btn-ok" onclick="pcFecharModal()">Fechar</button></div></div></div>`;
 }
 async function pcPostado(id) {
   if (!pcSoCliente() || !confirm('Confirmar que esse conteúdo já foi postado?')) return;
@@ -21858,28 +21870,31 @@ async function pcPostado(id) {
 function pcAbrirPedido(tipo) {
   if (!pcSoCliente()) return;
   const el = document.getElementById('pc-modal');
-  el.innerHTML = `<div class="pc-modal-caixa"><h2>${tipo === 'servico' ? 'Solicitar serviço' : 'Sugerir ideia de post'}</h2>
-    <label>Título<input id="pcp-titulo" maxlength="100" placeholder="${tipo === 'servico' ? 'Ex: Vídeo institucional' : 'Ex: Post sobre o lançamento'}"></label>
-    <label>Detalhes<textarea id="pcp-texto" rows="4" maxlength="2000" placeholder="Explique o que você quer"></textarea></label>
-    <label>Links de referência ou arquivos (um por linha)<textarea id="pcp-links" rows="2" maxlength="1500" placeholder="https://..."></textarea></label>
-    ${tipo === 'servico' ? '<label>Prazo desejado<input id="pcp-prazo" type="date"></label>' : ''}
-    <p class="ap-erro" id="pcp-erro"></p>
-    <div class="ap-botoes"><button type="button" class="ap-btn ajuste" onclick="document.getElementById('pc-modal').innerHTML = ''">Cancelar</button><button type="button" class="ap-btn ok" onclick="pcEnviarPedido('${tipo === 'servico' ? 'servico' : 'ideia'}')">Enviar</button></div></div>`;
+  el.innerHTML = `<div class="pv-modal" onclick="if (event.target === this) pcFecharModal()"><div class="pv-modal-caixa ${PC.cfg.tema === 'claro' ? 'pv-claro' : 'pv-escuro'}" style="--pv-cor:${corHexValida(PC.cfg.cor) || '#3fae12'};">
+    <button type="button" class="pv-fechar" aria-label="Fechar" onclick="pcFecharModal()">✕</button>
+    <h2>${tipo === 'servico' ? 'Pedir um serviço' : 'Sugerir uma ideia de post'}</h2><p class="pv-modal-sub">${tipo === 'servico' ? 'Conte o que você precisa: a equipe responde com prazo e valor.' : 'Mande a ideia e as referências: vira pauta para a equipe.'}</p>
+    <label class="pv-campo"><span>Título</span><input id="pcp-titulo" maxlength="100" placeholder="${tipo === 'servico' ? 'Ex.: Vídeo institucional' : 'Ex.: Post sobre o lançamento'}"></label>
+    <label class="pv-campo"><span>Detalhes</span><textarea id="pcp-texto" rows="4" maxlength="2000" placeholder="Explique o que você quer"></textarea></label>
+    <label class="pv-campo"><span>Links de referência (um por linha)</span><textarea id="pcp-links" rows="2" maxlength="1500" placeholder="https://..."></textarea></label>
+    ${tipo === 'servico' ? '<label class="pv-campo"><span>Prazo desejado</span><input id="pcp-prazo" type="date"></label>' : ''}
+    <p class="pv-erro" id="pcp-erro"></p>
+    <div class="pv-modal-botoes"><button type="button" class="pv-btn pv-btn-sec" onclick="pcFecharModal()">Cancelar</button><button type="button" class="pv-btn pv-btn-ok" onclick="pcEnviarPedido('${tipo === 'servico' ? 'servico' : 'ideia'}')">Enviar</button></div></div></div>`;
 }
 async function pcEnviarPedido(tipo) {
   const v = (id) => ((document.getElementById(id) || {}).value || '').trim();
   if (!v('pcp-titulo')) { document.getElementById('pcp-erro').textContent = 'Dê um título.'; return; }
   const links = v('pcp-links').split('\n').map((x) => x.trim()).filter((x) => /^https:\/\//i.test(x)).slice(0, 10).map((x) => x.slice(0, 500));
+  const ok = () => pcMensagem('Enviado! ✓', `A equipe já recebeu ${tipo === 'servico' ? 'o seu pedido' : 'a sua ideia'}. Obrigado!`);
   if (PC.publico) {
     try {
       await firestoreDb.collection('portal_pedidos_publicos').add({ tenantId: TENANT_ID, cliente: PC.cliente, portalToken: PC.token, tipo, titulo: v('pcp-titulo').slice(0, 100), texto: v('pcp-texto').slice(0, 2000), links, prazo: v('pcp-prazo').slice(0, 10), criadoEm: new Date().toISOString(), processado: false });
-      pcMensagem('Enviado ✓', APR_MSG_AJUSTE);
+      ok();
     } catch (e) { console.error(e); document.getElementById('pcp-erro').textContent = 'Não foi possível enviar agora.'; }
     return;
   }
   try {
     await firestoreDb.collection('tenants').doc(TENANT_ID).collection('portal_pedidos').add({ cliente: PC.cliente, tipo, titulo: v('pcp-titulo').slice(0, 100), texto: v('pcp-texto').slice(0, 2000), links, prazo: v('pcp-prazo').slice(0, 10), criadoEm: new Date().toISOString(), processado: false, autorUid: USUARIO_UID });
-    document.getElementById('pc-modal').innerHTML = `<div class="pc-modal-caixa"><h2>Enviado! ✓</h2><p>A agência já recebeu o seu ${tipo === 'servico' ? 'pedido' : 'sugestão'}.</p><div class="ap-botoes"><button type="button" class="ap-btn ok" onclick="document.getElementById('pc-modal').innerHTML = ''">Fechar</button></div></div>`;
+    ok();
   } catch (e) { console.error(e); document.getElementById('pcp-erro').textContent = 'Não foi possível enviar agora.'; }
 }
 

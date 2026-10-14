@@ -6553,6 +6553,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '14/10/2026 · Fluxo do conteúdo', itens: [
+    { titulo: 'Fluxo novo: Planejamento → Design → Aprovação → Copy → Publicado', badges: ['melhoria'], texto: 'Tarefa do dia marcada como "É conteúdo" nasce no Planejamento do Conteúdos. "Aprovar e mandar ao Kanban" cria o cartão em A fazer. No Kanban o botão do cartão segue a etapa: Iniciar (vai para Design), Concluir e mandar para aprovação (oferece o link ao cliente), Concluir alteração, e depois da aprovação do cliente o cartão volta na coluna Copy: Concluir copy e publicar. As colunas do Conteúdos passaram a ser Planejamento, Design, Aprovação, Revisão, Copy e Publicado; o projeto Produção de Conteúdo trocou "Aprovados" por "Copy".' },
+  ]},
   { data: '14/10/2026 · Tarefas do dia', itens: [
     { titulo: 'Tarefa do Dashboard também no Kanban', badges: ['melhoria'], texto: 'A tarefa criada no "+" das Tarefas diárias que não se repete vira também um cartão no Kanban, na coluna "A Fazer", com o responsável e o prazo de hoje (igual às lançadas pelo celular). Concluir, reabrir ou excluir em um lugar faz o mesmo no outro. As rotinas que se repetem (diária, semanal...) ficam só nas Tarefas diárias. Conteúdos continua sendo para as peças do cliente e a aprovação.' },
   ]},
@@ -9325,18 +9328,25 @@ function dsExcluirProjeto(id) {
 const PRD_PJ_ID = 'pj_producao_conteudo';
 const PRD_COLUNAS = [
   { id: 'prd_afazer', nome: 'A fazer', cor: '#06b6d4' },
-  { id: 'prd_producao', nome: 'Em produção', cor: '#a855f7' },
+  { id: 'prd_producao', nome: 'Em progresso', cor: '#a855f7' },
   { id: 'prd_aprovacao', nome: 'Aprovação do cliente', cor: '#f59e0b' },
   { id: 'prd_alteracao', nome: 'Alteração', cor: '#f97316' },
-  { id: 'prd_aprovado', nome: 'Aprovados', cor: '#22c55e' },
-  { id: 'prd_entregue', nome: 'Entregue', cor: '#16a34a', final: true },
+  { id: 'prd_copy', nome: 'Copy', cor: '#3b82f6' },
+  { id: 'prd_entregue', nome: 'Publicado', cor: '#16a34a', final: true },
 ];
 let PRD_SINC = false; // evita ida e volta infinita entre cartão e conteúdo
 
 function prdProjeto() { return typeof kbProjeto === 'function' ? kbProjeto(PRD_PJ_ID) : null; }
 function prdGarantirProjeto() {
   const pj = prdProjeto();
-  if (pj) return pj;
+  if (pj) {
+    const cols = pj.colunas || [];
+    if (!cols.some((c) => c.id === 'prd_copy' || /copy|legenda/.test(kbNomeNorm(c.nome))) && cols.some((c) => c.id === 'prd_aprovado') && nivelPodeOperar()) {
+      kbGravarProjeto(Object.assign({}, pj, { colunas: cols.map((c) => (c.id === 'prd_aprovado' ? Object.assign({}, c, { nome: 'Copy', cor: '#3b82f6' }) : c.id === 'prd_producao' && c.nome === 'Em produção' ? Object.assign({}, c, { nome: 'Em progresso' }) : c.id === 'prd_entregue' && c.nome === 'Entregue' ? Object.assign({}, c, { nome: 'Publicado' }) : c)) }));
+      return prdProjeto() || pj;
+    }
+    return pj;
+  }
   if (!KB_PROJETOS_CARREGADO) return null;
   const agora = new Date().toISOString();
   const ok = kbGravarProjeto(Object.assign({
@@ -9350,7 +9360,7 @@ function prdGarantirProjeto() {
 // equipe renomeou ou recriou, procura pelo nome)
 function prdColuna(papel) {
   const cols = (prdProjeto() || {}).colunas || PRD_COLUNAS;
-  const nomes = { prd_afazer: /fazer|backlog/, prd_producao: /produ|andamento|progresso/, prd_aprovacao: /aprova[çc][aã]o|cliente/, prd_alteracao: /altera|ajuste|revis/, prd_aprovado: /aprovad/, prd_entregue: /entreg|conclu|final/ };
+  const nomes = { prd_afazer: /fazer|backlog/, prd_producao: /produ|andamento|progresso/, prd_aprovacao: /aprova[çc][aã]o|cliente/, prd_alteracao: /altera|ajuste|revis/, prd_copy: /copy|legenda|aprovad/, prd_entregue: /entreg|conclu|final/ };
   return (cols.find((c) => c.id === papel) || cols.find((c) => nomes[papel] && nomes[papel].test(kbNomeNorm(c.nome))) || {}).id || '';
 }
 function prdPapelDaColuna(colId) {
@@ -9372,14 +9382,14 @@ function prdEtapaCnt(id, reserva) { return typeof cntColunas === 'function' && c
 function prdMapaCartao(colId, c) {
   const cols = cntColunas(), ultima = cols[cols.length - 1].id;
   return {
-    prd_afazer: { etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' }, prd_producao: { etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' },
+    prd_afazer: { etapa: prdEtapaCnt('planejamento', c.etapa), status: 'andamento' }, prd_producao: { etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' },
     prd_aprovacao: { etapa: prdEtapaCnt('aprovacao', c.etapa), status: 'aguardando' }, prd_alteracao: { etapa: prdEtapaCnt('revisao', c.etapa), status: 'andamento' },
-    prd_aprovado: { etapa: prdEtapaCnt('aprovado', c.etapa), status: 'aprovado' }, prd_entregue: { etapa: ultima, status: 'aprovado' },
+    prd_copy: { etapa: prdEtapaCnt('copy', prdEtapaCnt('aprovado', c.etapa)), status: 'aprovado' }, prd_entregue: { etapa: ultima, status: 'publicado' },
   }[prdPapelDaColuna(colId)] || null;
 }
 function prdColunaDoConteudo(c) {
   if (cntFinalizado(c)) return prdColuna('prd_entregue');
-  const papel = { aprovacao: 'prd_aprovacao', revisao: 'prd_alteracao', aprovado: 'prd_aprovado', design: 'prd_producao', copy: 'prd_producao' }[c.etapa];
+  const papel = { planejamento: 'prd_afazer', design: 'prd_producao', aprovacao: 'prd_aprovacao', revisao: 'prd_alteracao', copy: 'prd_copy', aprovado: 'prd_copy' }[c.etapa];
   return papel ? prdColuna(papel) : '';
 }
 // os dois lados dizem a mesma coisa?
@@ -9405,7 +9415,7 @@ function prdSincronizar(c, t) {
       const m = prdMapaCartao(t.status, c);
       if (m) cntAtualizar(c.id, Object.assign({ prdColuna: t.status }, m), `Kanban: cartão foi para "${(((prdProjeto() || {}).colunas || PRD_COLUNAS).find((x) => x.id === t.status) || {}).nome || t.status}"`);
       const papel = prdPapelDaColuna(t.status);
-      if (papel === 'prd_entregue' || papel === 'prd_aprovado') aprAtualizarFase(c, papel === 'prd_entregue' ? 'entregue' : 'aprovado');
+      if (papel === 'prd_entregue' || papel === 'prd_copy') aprAtualizarFase(c, papel === 'prd_entregue' ? 'entregue' : 'aprovado');
     } else {
       const destino = prdColunaDoConteudo(c);
       if (destino && destino !== t.status) {
@@ -9417,6 +9427,30 @@ function prdSincronizar(c, t) {
     }
   } finally { PRD_SINC = false; }
 }
+// o botão principal do cartão de produção muda conforme a etapa
+function prdBotaoCartao(t) {
+  if (!t || t.projetoId !== PRD_PJ_ID || !t.conteudoId) return '';
+  const id = escapeParaOnclick(t.id), papel = prdPapelDaColuna(t.status);
+  const b = (txt, prox, cls) => `<button type="button" class="kb-card-btn-concluir ${cls || ''}" onclick="event.stopPropagation(); prdAvancar('${id}', '${prox}')">${txt}</button>`;
+  if (papel === 'prd_afazer') return b(`${kbIc('play') || '▶'} Iniciar`, 'prd_producao');
+  if (papel === 'prd_producao') return b(`${kbIc('check')} Concluir e mandar para aprovação`, 'prd_aprovacao');
+  if (papel === 'prd_alteracao') return b(`${kbIc('check')} Concluir alteração`, 'prd_aprovacao');
+  if (papel === 'prd_aprovacao') return `<button type="button" class="kb-card-btn-concluir espera" onclick="event.stopPropagation(); cntEnviarAprovacao('${escapeParaOnclick(t.conteudoId)}')">⏳ Aguardando o cliente · reenviar link</button>`;
+  if (papel === 'prd_copy') return b(`${kbIc('check')} Concluir copy e publicar`, 'prd_entregue');
+  if (papel === 'prd_entregue') return `<button type="button" class="kb-card-btn-concluir feito" onclick="event.stopPropagation(); prdAvancar('${id}', 'prd_copy')">${kbIc('check')} Publicado · reabrir</button>`;
+  return '';
+}
+function prdAvancar(tarefaId, papel) {
+  const t = KB_TAREFAS.find((x) => x.id === tarefaId);
+  const dest = prdColuna(papel);
+  if (!t || !dest) { avisar('A coluna dessa etapa não existe no projeto Produção de Conteúdo.'); return; }
+  const final = papel === 'prd_entregue';
+  if (!kbAtualizar(t.id, final ? { status: dest, concluidaEm: new Date().toISOString() } : { status: dest, concluidaEm: '' })) return;
+  if (papel === 'prd_aprovacao' && t.conteudoId) {
+    const c = typeof CNT !== 'undefined' ? CNT.find((x) => x.id === t.conteudoId) : null;
+    confirmarAcao(`"${t.titulo}" foi para a aprovação do cliente.\n\nMandar o link de aprovação para ${(c && c.cliente) || 'o cliente'} agora?`, () => cntEnviarAprovacao(t.conteudoId), 'Aprovação do cliente');
+  }
+}
 function prdAoMoverCartao(t) {
   if (!t || !t.conteudoId || typeof CNT === 'undefined') return;
   prdSincronizar(CNT.find((x) => x.id === t.conteudoId), t);
@@ -9427,6 +9461,8 @@ function prdReconciliarTodos() {
   clearTimeout(PRD_TIMER);
   PRD_TIMER = setTimeout(() => {
     if (typeof CNT === 'undefined' || typeof KB_TAREFAS === 'undefined' || !CNT_CARREGADO || !KB_CARREGADO) return;
+    cntMigrarAprovado();
+    if (CNT.some((c) => c.tarefaId) && typeof KB_PROJETOS_CARREGADO !== 'undefined' && KB_PROJETOS_CARREGADO) prdGarantirProjeto(); // "Aprovados" → "Copy" no projeto que já existia
     CNT.filter((c) => c.tarefaId).forEach((c) => { const t = prdTarefaDoConteudo(c); if (t) prdSincronizar(c, t); });
   }, 400);
 }
@@ -9448,12 +9484,12 @@ function prdIniciar(conteudoId, silencioso) {
   if (!prdGarantirProjeto()) { avisar('Os projetos do Kanban ainda estão carregando. Tente de novo em alguns segundos.'); return null; }
   const prio = { urgente: 'urgente', alta: 'alta', baixa: 'baixa' }[c.prioridade] || 'media';
   const t = kbCriarTarefa({ titulo: (c.titulo || 'Conteúdo').slice(0, 140), descricao: prdDescricao(c), cliente: c.cliente || '', responsavel: c.responsavel || '', prazo: c.entrega || '', prazoHora: c.entregaHora || '',
-    projetoId: PRD_PJ_ID, status: prdColuna('prd_producao') || prdColuna('prd_afazer'), prioridade: KB_PRIORIDADES[prio] ? prio : 'media', etiquetas: ['conteúdo', (CNT_TIPOS[c.tipo] || {}).nome || c.tipo].filter(Boolean), conteudoId: c.id });
+    projetoId: PRD_PJ_ID, status: prdColuna('prd_afazer') || prdColuna('prd_producao'), prioridade: KB_PRIORIDADES[prio] ? prio : 'media', etiquetas: ['conteúdo', (CNT_TIPOS[c.tipo] || {}).nome || c.tipo].filter(Boolean), conteudoId: c.id });
   if (!t) return null;
   PRD_SINC = true;
-  try { cntAtualizar(c.id, { tarefaId: t.id, prdColuna: t.status, etapa: prdEtapaCnt('design', c.etapa), status: 'andamento' }, 'Iniciou a produção: foi para o Kanban'); }
+  try { cntAtualizar(c.id, { tarefaId: t.id, prdColuna: t.status, etapa: prdEtapaCnt('planejamento', c.etapa), status: 'andamento', planoAprovadoEm: new Date().toISOString() }, 'Planejamento aprovado: foi para o Kanban (A fazer)'); }
   finally { PRD_SINC = false; }
-  if (!silencioso) confirmarAcao(`"${c.titulo || 'Conteúdo'}" foi para o Kanban, no projeto Produção de Conteúdo, coluna "Em produção".\n\nAbrir o cartão agora?`, () => prdAbrirNoKanban(t.id), 'Produção iniciada');
+  if (!silencioso) confirmarAcao(`Planejamento aprovado: "${c.titulo || 'Conteúdo'}" foi para o Kanban (Produção de Conteúdo), na coluna "A fazer".\n\nQuando o responsável tocar em "Iniciar", o conteúdo vai para Design.\n\nAbrir o cartão agora?`, () => prdAbrirNoKanban(t.id), 'Produção');
   return t;
 }
 function prdAbrirNoKanban(tarefaId) {
@@ -9640,7 +9676,7 @@ function aprProcessar() {
     if (ap.token === id && (Number(p.rodada) || 1) < (Number(ap.rodada) || 1)) { ref.set({ aplicado: true }, { merge: true }).catch(() => {}); p.aplicado = true; return; }
     const aprovou = p.resposta === 'aprovado';
     cntAtualizar(c.id, { aprovacao: Object.assign({}, ap, { token: id, status: p.resposta, comentario: p.comentario || '', respondidoEm: p.respondidoEm, rodada: Number(p.rodada) || ap.rodada || 1 }),
-      status: aprovou ? 'aprovado' : 'andamento', etapa: prdEtapaCnt(aprovou ? 'aprovado' : 'revisao', c.etapa) },
+      status: aprovou ? 'aprovado' : 'andamento', etapa: aprovou ? prdEtapaCnt('copy', prdEtapaCnt('aprovado', c.etapa)) : prdEtapaCnt('revisao', c.etapa) },
       aprovou ? `Cliente aprovou${(p.rodada || 1) > 1 ? ' a versão ' + p.rodada : ''}` : `Cliente pediu alteração: "${String(p.comentario || '').slice(0, 150)}"`);
     const t = prdTarefaDoConteudo(c);
     if (t && !aprovou && p.comentario) {
@@ -13271,6 +13307,12 @@ function notificarNovaTarefaCriada() {
 }
 
 function abrirNovaTarefaCrm() {
+  const chk = document.getElementById('nova-tarefa-conteudo');
+  if (chk) { chk.checked = false; document.getElementById('nova-tarefa-conteudo-campos').style.display = 'none'; }
+  const selTipo = document.getElementById('nova-tarefa-tipo');
+  if (selTipo && typeof CNT_TIPOS !== 'undefined') selTipo.innerHTML = Object.entries(CNT_TIPOS).map(([k, t]) => `<option value="${k}">${escapeHtml(t.nome)}</option>`).join('');
+  const dl = document.getElementById('nova-tarefa-clientes');
+  if (dl) dl.innerHTML = (typeof CRM_CLIENTES_INDEP_DATA !== 'undefined' ? CRM_CLIENTES_INDEP_DATA : []).map((c) => `<option value="${escapeHtml(c.nome)}"></option>`).join('');
   document.getElementById('nova-tarefa-titulo').value = '';
   document.getElementById('nova-tarefa-descricao').value = '';
   document.querySelector('input[name="nova-tarefa-recorrencia"][value="nenhuma"]').checked = true;
@@ -13293,15 +13335,24 @@ function criarNovaTarefaCrm() {
 
   // tarefa da equipe que não se repete: vira também cartão no Kanban (A Fazer),
   // ligada à tarefa do dia. Rotinas (diária, semanal...) ficam só aqui.
-  let kbId = '';
-  if (recorrencia === 'nenhuma' && typeof kbCriarTarefa === 'function' && typeof KB_CARREGADO !== 'undefined' && KB_CARREGADO) {
+  const ehConteudo = !!(document.getElementById('nova-tarefa-conteudo') || {}).checked;
+  let kbId = '', cntId = '';
+  if (ehConteudo) {
+    if (typeof cntCriar !== 'function' || typeof CNT_CARREGADO === 'undefined' || !CNT_CARREGADO) { avisar('O Conteúdos ainda está carregando. Tente de novo em alguns segundos.'); return; }
+    const pessoaC = ttEquipe().find((u) => ttSemAcento(u.nome) === ttSemAcento(responsavel));
+    const c = cntCriar({ titulo: texto.slice(0, 140), briefing: descricao, cliente: (document.getElementById('nova-tarefa-cliente') || {}).value || '', tipo: (document.getElementById('nova-tarefa-tipo') || {}).value || 'imagem',
+      publicacao: (document.getElementById('nova-tarefa-publicacao') || {}).value || '', responsavel: pessoaC ? pessoaC.uid : '', etapa: cntColunas()[0].id, status: 'rascunho', origem: 'tarefa do dia' });
+    if (!c) return;
+    cntId = c.id;
+  }
+  if (!ehConteudo && recorrencia === 'nenhuma' && typeof kbCriarTarefa === 'function' && typeof KB_CARREGADO !== 'undefined' && KB_CARREGADO) {
     const pessoa = ttEquipe().find((u) => ttSemAcento(u.nome) === ttSemAcento(responsavel));
     const k = kbCriarTarefa({ titulo: texto.slice(0, 140), descricao, responsavel: pessoa ? pessoa.uid : '', prazo: isoHoje(), status: ttColunaAFazer(), etiquetas: ['tarefa do dia'], origem: 'dashboard' });
     if (k && k.id) kbId = k.id;
   }
   CRM_TAREFAS_DATA.push({
     id: genId('tf'), texto, descricao, responsavel, recorrencia,
-    feita: false, concluidasEm: [], data: isoHoje(), criadoEm: new Date().toISOString(), kbId, origem: 'dashboard',
+    feita: false, concluidasEm: [], data: isoHoje(), criadoEm: new Date().toISOString(), kbId, cntId, origem: 'dashboard',
   });
   cloudSet(CRM_TAREFAS_KEY, CRM_TAREFAS_DATA);
   closeModal('modal-nova-tarefa-crm');
@@ -14619,7 +14670,7 @@ function kbCardHtml(t, p) {
         ${KB_SELECAO ? `<input type="checkbox" class="kb-sel" aria-label="Selecionar" ${selecionada ? 'checked' : ''} onclick="event.stopPropagation();" onchange="kbMarcarSelecao('${id}', this.checked); this.closest('.kb-card').classList.toggle('selecionada', this.checked);">` : ''}
         <strong class="kb-card-titulo">${escapeHtml(t.titulo || 'Sem título')}</strong>
         ${t.recorrencia && p.mostrarRecorrentes ? `<span class="kb-recorrente" title="Recorrente: ${escapeHtml(KB_RECORRENCIAS[t.recorrencia] || '')}">${kbIc('atualizar')}</span>` : ''}
-        <button type="button" class="kb-card-concluir${concluida ? ' ativo' : ''}" title="${concluida ? 'Reabrir' : 'Marcar como concluída'}" aria-label="Concluir" onclick="event.stopPropagation(); kbAlternarConcluida('${id}')">${kbIc('checkDuplo')}</button>
+        <button type="button" class="kb-card-concluir${concluida ? ' ativo' : ''}" title="${concluida ? 'Reabrir' : 'Marcar como concluída'}" aria-label="Concluir" ${t.projetoId === PRD_PJ_ID && t.conteudoId ? 'style="display:none"' : ''} onclick="event.stopPropagation(); kbAlternarConcluida('${id}')">${kbIc('checkDuplo')}</button>
         <button type="button" class="kb-card-menu" title="Mais ações" aria-label="Mais ações" onclick="event.stopPropagation(); kbAbrirMenuTarefa('${id}', this)">${kbIc('pontos')}</button>
       </div>
       <div class="kb-card-datas"><span>${kbIc('calendario')} ${kbDataCurta(t.criadoEm)}</span>${kbPrazoHtml(t)}</div>
@@ -14634,7 +14685,7 @@ function kbCardHtml(t, p) {
         ${kbTempoBotaoHtml(t)}
       </div>
       <div class="kb-card-acoes">
-        <button type="button" class="kb-card-btn-concluir${concluida ? ' feito' : ''}" onclick="event.stopPropagation(); kbAlternarConcluida('${id}')">${kbIc('check')} ${concluida ? 'Concluída · reabrir' : 'Concluir'}</button>
+        ${(typeof prdBotaoCartao === 'function' && prdBotaoCartao(t)) || `<button type="button" class="kb-card-btn-concluir${concluida ? ' feito' : ''}" onclick="event.stopPropagation(); kbAlternarConcluida('${id}')">${kbIc('check')} ${concluida ? 'Concluída · reabrir' : 'Concluir'}</button>`}
         <button type="button" class="kb-card-btn-lixo" title="Excluir" aria-label="Excluir tarefa" onclick="event.stopPropagation(); kbConfirmarExcluir('${id}')">${kbIc('lixeira')}</button>
       </div>
       ${compacto ? '' : `<button type="button" class="kb-card-abrir" onclick="event.stopPropagation(); kbAbrirTarefa('${id}')">${kbIc('externo')} Acessar tarefa completa</button>`}
@@ -14845,9 +14896,10 @@ let TD_SINC_TIMER = null;
 function tdSincronizarComKanban() {
   clearTimeout(TD_SINC_TIMER);
   TD_SINC_TIMER = setTimeout(() => {
-    if (typeof CRM_TAREFAS_DATA === 'undefined' || !Array.isArray(CRM_TAREFAS_DATA) || !KB_CARREGADO || !chaveCarregadaNaNuvem(CRM_TAREFAS_KEY)) return;
+    if (typeof CRM_TAREFAS_DATA === 'undefined' || !Array.isArray(CRM_TAREFAS_DATA) || (typeof KB_CARREGADO !== 'undefined' && !KB_CARREGADO) || !chaveCarregadaNaNuvem(CRM_TAREFAS_KEY)) return;
     let mexeu = false;
     CRM_TAREFAS_DATA = CRM_TAREFAS_DATA.filter((t) => {
+      if (t.cntId && typeof CNT !== 'undefined' && CNT_CARREGADO) { const c = CNT.find((x) => x.id === t.cntId); if (c && cntFinalizado(c) && !t.feita) { t.feita = true; mexeu = true; } return true; }
       if (!t.kbId) return true;
       const k = KB_TAREFAS.find((x) => x.id === t.kbId);
       if (!k) { mexeu = true; return false; }
@@ -20467,12 +20519,17 @@ const CNT_TIPOS = {
   landing: { nome: 'Landing Page', grupo: 'outros', icone: 'globo', midia: 'arquivo', cor: '#84cc16' },
   foto: { nome: 'Fotografia', grupo: 'outros', icone: 'imagem', midia: 'imagem', cor: '#0ea5e9' },
 };
+// Fluxo: Planejamento → Design → Aprovação (do cliente) → Revisão (se pediu
+// alteração) → Copy (depois de aprovado) → Publicado.
 const CNT_COLUNAS_PADRAO = [
-  { id: 'planejamento', nome: 'Planejamento', cor: '#64748b', icone: 'tarefas' }, { id: 'copy', nome: 'Copy', cor: '#3b82f6', icone: 'lapis' },
-  { id: 'design', nome: 'Design', cor: '#a855f7', icone: 'paleta' }, { id: 'aprovacao', nome: 'Aprovação', cor: '#f59e0b', icone: 'olho' },
-  { id: 'revisao', nome: 'Revisão', cor: '#f97316', icone: 'recorrente' }, { id: 'aprovado', nome: 'Aprovado', cor: '#22c55e', icone: 'aprovado' },
-  { id: 'publicacao', nome: 'Publicação', cor: '#06b6d4', icone: 'raio' },
+  { id: 'planejamento', nome: 'Planejamento', cor: '#64748b', icone: 'tarefas' }, { id: 'design', nome: 'Design', cor: '#a855f7', icone: 'paleta' },
+  { id: 'aprovacao', nome: 'Aprovação', cor: '#f59e0b', icone: 'olho' }, { id: 'revisao', nome: 'Revisão', cor: '#f97316', icone: 'recorrente' },
+  { id: 'copy', nome: 'Copy', cor: '#3b82f6', icone: 'lapis' }, { id: 'publicacao', nome: 'Publicado', cor: '#22c55e', icone: 'aprovado' },
 ];
+// quem ainda tem as colunas padrão antigas (Copy antes do Design, com
+// "Aprovado") passa para as novas; quem personalizou, não é tocado
+const CNT_COLUNAS_ANTIGAS = 'planejamento,copy,design,aprovacao,revisao,aprovado,publicacao';
+function cntColunasSaoAntigas(cfg) { return cfg && Array.isArray(cfg.colunas) && cfg.colunas.map((c) => c.id).join(',') === CNT_COLUNAS_ANTIGAS; }
 const CNT_STATUS = { rascunho: 'Rascunho', andamento: 'Em andamento', aguardando: 'Aguardando cliente', aprovado: 'Aprovado', publicado: 'Publicado' };
 const CNT_PRIORIDADES = { urgente: { nome: 'Urgente', cor: '#ef4444' }, alta: { nome: 'Alta', cor: '#f97316' }, normal: { nome: 'Normal', cor: '#3b82f6' }, baixa: { nome: 'Baixa', cor: '#64748b' } };
 const CNT_REDES = { instagram: 'Instagram', facebook: 'Facebook', twitter: 'Twitter/X', youtube: 'YouTube', linkedin: 'LinkedIn' };
@@ -20480,7 +20537,15 @@ const CNT_TAGS_SUGERIDAS = ['Urgente', 'Prioridade', 'Reels', 'Story', 'Carrosse
 
 function cntNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
 function cntRef() { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(CNT_COLECAO); }
-function cntColunas() { const c = CNT_CONFIG && Array.isArray(CNT_CONFIG.colunas) && CNT_CONFIG.colunas.length ? CNT_CONFIG.colunas : CNT_COLUNAS_PADRAO; return c; }
+function cntColunas() { const c = CNT_CONFIG && Array.isArray(CNT_CONFIG.colunas) && CNT_CONFIG.colunas.length && !cntColunasSaoAntigas(CNT_CONFIG) ? CNT_CONFIG.colunas : CNT_COLUNAS_PADRAO; return c; }
+// conteúdos que estavam na coluna "Aprovado" (que saiu) vão para "Copy"
+let CNT_MIGROU_APROVADO = false;
+function cntMigrarAprovado() {
+  if (CNT_MIGROU_APROVADO || !CNT_CARREGADO || typeof nivelPodeOperar !== 'function' || !nivelPodeOperar()) return;
+  if (cntColunas().some((x) => x.id === 'aprovado')) { CNT_MIGROU_APROVADO = true; return; }
+  CNT_MIGROU_APROVADO = true;
+  CNT.filter((c) => c.etapa === 'aprovado').forEach((c) => cntAtualizar(c.id, { etapa: 'copy' }, 'Fluxo novo: Aprovado → Copy'));
+}
 function cntColuna(id) { return cntColunas().find((c) => c.id === id) || cntColunas()[0]; }
 function cntFinalizado(c) { const cols = cntColunas(); return c.status === 'publicado' || c.etapa === cols[cols.length - 1].id; }
 function cntAtrasoDias(c) {
@@ -20505,7 +20570,7 @@ function cntIniciarDados() {
     try {
       cntRef().onSnapshot((snap) => {
         const l = []; snap.forEach((d) => l.push(Object.assign({}, d.data(), { id: d.id })));
-        CNT = l; CNT_CARREGADO = true; try { notifChecarAtribuicoes('conteudo', snap); } catch (e) {} cntRender(); crmAvisarDashboard(); if (typeof aprProcessar === 'function') aprProcessar(); if (typeof portalAgendarPublicacao === 'function') portalAgendarPublicacao();
+        CNT = l; CNT_CARREGADO = true; try { notifChecarAtribuicoes('conteudo', snap); tdSincronizarComKanban(); cntMigrarAprovado(); } catch (e) {} cntRender(); crmAvisarDashboard(); if (typeof aprProcessar === 'function') aprProcessar(); if (typeof portalAgendarPublicacao === 'function') portalAgendarPublicacao();
       }, (err) => console.error('Erro ao carregar conteúdos:', err));
       cntEscutarAprovacoes();
     } catch (err) { console.error('Não foi possível carregar os conteúdos:', err); }
@@ -20514,7 +20579,7 @@ function cntIniciarDados() {
     CNT_CARREGADO = true;
   }
 }
-function cntGravarLocal() { lsSave(chaveLocalTenant('eagles_conteudos_local_v1'), CNT); }
+function cntGravarLocal() { lsSave(chaveLocalTenant('eagles_conteudos_local_v1'), CNT); if (typeof tdSincronizarComKanban === 'function') tdSincronizarComKanban(); }
 function cntErro(err) { console.error('Erro nos conteúdos:', err); avisar(typeof mensagemErroFirestore === 'function' ? mensagemErroFirestore(err) : 'Não foi possível salvar agora.'); }
 function cntPronto() { if (!CNT_CARREGADO) { avisar('Os conteúdos ainda estão carregando — aguarde um instante.'); return false; } return exigirPodeOperar('editar conteúdos'); }
 function cntHist(acao) { return { em: new Date().toISOString(), por: (typeof USUARIO_NOME !== 'undefined' && USUARIO_NOME) || 'Você', acao: String(acao).slice(0, 200) }; }
@@ -20678,7 +20743,7 @@ function cntCardHtml(c) {
       <button type="button" class="kb-btn-ic" title="Duplicar" aria-label="Duplicar" onclick="cntDuplicar('${id}')">${ic('copiar', 'ic-herda')}</button>
       <button type="button" class="kb-btn-ic kb-btn-perigo" title="Excluir" aria-label="Excluir" onclick="cntExcluir('${id}')">${ic('lixeira', 'ic-herda')}</button>
       ${c.tempo && c.tempo.inicio ? `<button type="button" class="btn btn-small" onclick="cntAlternarTempo('${id}')">⏸ <span data-cnt-tempo="${escapeHtml(c.id)}">${kbFormatarTempo(cntTempoSeg(c))}</span></button>` : ''}
-      ${(() => { const tk = prdTarefaDoConteudo(c); return tk ? `<button type="button" class="btn btn-small prd-no-kanban" title="Abrir o cartão no Kanban" onclick="prdAbrirNoKanban('${escapeParaOnclick(tk.id)}')">${ic('kanban', 'ic-herda')} ${escapeHtml(((((prdProjeto() || {}).colunas) || PRD_COLUNAS).find((x) => x.id === tk.status) || {}).nome || 'Kanban')}</button>` : (cntFinalizado(c) ? '' : `<button type="button" class="btn btn-small btn-primary" onclick="prdIniciar('${id}')">▶ Iniciar produção</button>`); })()}
+      ${(() => { const tk = prdTarefaDoConteudo(c); return tk ? `<button type="button" class="btn btn-small prd-no-kanban" title="Abrir o cartão no Kanban" onclick="prdAbrirNoKanban('${escapeParaOnclick(tk.id)}')">${ic('kanban', 'ic-herda')} ${escapeHtml(((((prdProjeto() || {}).colunas) || PRD_COLUNAS).find((x) => x.id === tk.status) || {}).nome || 'Kanban')}</button>` : (cntFinalizado(c) ? '' : `<button type="button" class="btn btn-small btn-primary" onclick="prdIniciar('${id}')">✓ Aprovar e mandar ao Kanban</button>`); })()}
     </div>
     <button type="button" class="cnt-detalhes-btn" onclick="CNT_FILTRO.abertos['${id}'] = !CNT_FILTRO.abertos['${id}']; cntRender();">${kbIc(aberto ? 'setaCima' : 'setaBaixo')} Detalhes</button>
     ${aberto ? `<div class="cnt-detalhes">${c.cliente ? `<div><b>Cliente:</b> ${escapeHtml(c.cliente)}</div>` : ''}${c.legenda ? `<p>${escapeHtml(c.legenda).slice(0, 220)}</p>` : ''}<div><b>Publicar em:</b> ${(c.redes || []).map((r) => CNT_REDES[r]).filter(Boolean).join(', ') || '—'}</div>
@@ -20896,7 +20961,7 @@ function cntRenderEditor() {
         ${lado('relogio', 'Horário', `<input type="time" value="${escapeHtml(e.entregaHora || '')}" onchange="CNT_ED.entregaHora = this.value">`)}
         ${lado('tag', 'Categoria', `<select onchange="CNT_ED.categoria = this.value">${opts(cntCategorias().map((n) => [n, n]), e.categoria)}</select>`)}
         ${lado('documento', 'Tipo', `<select onchange="CNT_ED.tipo = this.value; cntRenderEditor();">${opts(Object.entries(CNT_TIPOS).map(([k, x]) => [k, x.nome]), e.tipo)}</select>`)}
-        <div class="kb-wiz-caixa kb-linha-switch"><div><strong>${ic('tarefas')} Iniciar produção no Kanban</strong><span>${prdTarefaDoConteudo(e) ? 'Já está no Kanban (Produção de Conteúdo)' : 'Ao salvar, cria o cartão no Kanban, na coluna "Em produção"'}</span></div><label class="switch"><input type="checkbox" ${e.tarefaId || e.__criarTarefa ? 'checked' : ''} ${e.tarefaId ? 'disabled' : ''} onchange="CNT_ED.__criarTarefa = this.checked"><span class="switch-slider"></span></label></div>
+        <div class="kb-wiz-caixa kb-linha-switch"><div><strong>${ic('tarefas')} Aprovar e mandar ao Kanban</strong><span>${prdTarefaDoConteudo(e) ? 'Já está no Kanban (Produção de Conteúdo)' : 'Ao salvar, cria o cartão no Kanban, na coluna "Em produção"'}</span></div><label class="switch"><input type="checkbox" ${e.tarefaId || e.__criarTarefa ? 'checked' : ''} ${e.tarefaId ? 'disabled' : ''} onchange="CNT_ED.__criarTarefa = this.checked"><span class="switch-slider"></span></label></div>
         <div class="kb-wiz-caixa kb-linha-switch"><div><strong>Usar em campanha de tráfego pago</strong><span>Marca o conteúdo pra equipe de tráfego</span></div><label class="switch"><input type="checkbox" ${e.trafego ? 'checked' : ''} onchange="CNT_ED.trafego = this.checked"><span class="switch-slider"></span></label></div>
         <div class="cnt-lado-campo"><label>${ic('tag', 'ic-herda')} Tags</label>
           <div class="kb-m-check-add"><input type="text" id="cnt-tag-nova" maxlength="30" placeholder="Adicionar tag..." onkeydown="if(event.key==='Enter'){ event.preventDefault(); cntAddTag(this.value); }"><button type="button" class="btn btn-small btn-primary" aria-label="Adicionar tag" onclick="cntAddTag(document.getElementById('cnt-tag-nova').value)">${ic('mais', 'ic-herda')}</button></div>
@@ -22789,6 +22854,7 @@ const CHATBOT_FAQ = [
         { p: 'Onde fica a chave de IA? É seguro?', r: 'O Diretor escolhe em "Chaves de IA": só neste navegador (cada pessoa cola a sua; a chave não sai do computador) ou na empresa (cola uma vez e vale para todos, mas qualquer pessoa logada da empresa consegue, tecnicamente, ver a chave). A chave só é usada para falar direto com o provedor. Dica: no painel do provedor, coloque um limite de gasto mensal na chave.' },
         { p: 'O que faz o Analista (IA)?', r: 'Agentes IA → Analista lê os dados do sistema dos últimos 90 dias (funil, tarefas, conteúdos, clientes, agenda e, para quem vê o Financeiro, o financeiro), calcula os números e pede à IA um diagnóstico: nota de 0 a 100, o que vai bem, gargalos e ações priorizadas. Cada ação vira tarefa no Kanban com um clique. Dá para fazer perguntas também. O ideal é refazer a cada 15 dias.' },
         { p: 'Como uso o Designer (IA)?', r: 'Agentes IA → Designer → Criar uma peça: escolha carrossel, post ou story; traga o texto do Copywriter, gere com IA ou digite; escolha o estilo (Editorial, Minimalista, Profile ou Impacto) e abra o editor. No editor você muda textos, cores, fonte, fundo (imagem do computador, por link ou gerada pela IA) e baixa os PNGs ou o PDF. As imagens ficam guardadas neste aparelho; os textos e cores ficam na nuvem.' },
+        { p: 'Qual é o fluxo de um conteúdo?', r: '1) Nas Tarefas diárias, marque "É conteúdo" (ou crie direto no Conteúdos): ele nasce em Planejamento. 2) No Conteúdos, toque em "Aprovar e mandar ao Kanban": vira cartão em "A fazer" (Produção de Conteúdo). 3) O responsável toca em "Iniciar": o cartão vai para Em progresso e o conteúdo para Design. 4) "Concluir e mandar para aprovação": vai para a aprovação do cliente (o sistema oferece mandar o link). 5) Se o cliente aprovar, o cartão volta na coluna Copy; o responsável faz a legenda e toca em "Concluir copy e publicar" (Publicado). Se pedir alteração, vai para Alteração/Revisão e o responsável conclui de novo.' },
         { p: 'Qual a diferença entre Conteúdos e Kanban?', r: 'Conteúdos é o planejamento: tipo, legenda, roteiro, mídia, datas e cliente. Quando clicar em "Iniciar produção", o conteúdo vira um cartão no Kanban, no projeto "Produção de Conteúdo" (A fazer → Em produção → Aprovação do cliente → Alteração → Aprovados → Entregue). A equipe trabalha no Kanban; o conteúdo acompanha sozinho e o Dashboard conta as entregas.' },
         { p: 'Como o cliente aprova um conteúdo?', r: 'No cartão do Kanban (ou no Conteúdos), clique em "Enviar para aprovação": o link é copiado e o cliente abre sem login. Se ele pedir alteração, o cartão volta para "Alteração" com o comentário; se aprovar, vai para "Aprovados". Você recebe a notificação na hora (sino no topo e aviso na tela). Depois da alteração, use "Reenviar ao cliente": é o mesmo link, com a nova versão.' },
         { p: 'Como funciona o Portal do cliente sem login?', r: 'Em Portal do cliente, clique em "Copiar link" ao lado do cliente. O cliente abre direto, sem senha: vê a produção, aprova ou pede alteração e manda ideias e pedidos. O botão ao lado gera um link novo (o antigo para de funcionar).' },

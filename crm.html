@@ -986,6 +986,13 @@
       <label class="crm-radio-linha"><input type="radio" name="nova-tarefa-recorrencia" value="semanal"> Semanal</label>
       <label class="crm-radio-linha"><input type="radio" name="nova-tarefa-recorrencia" value="mensal"> Mensal</label>
     </div>
+    <label class="crm-radio-linha" style="margin-top:12px;"><input type="checkbox" id="nova-tarefa-conteudo" onchange="document.getElementById('nova-tarefa-conteudo-campos').style.display = this.checked ? '' : 'none'"> <b>É conteúdo</b> (post, vídeo, carrossel para um cliente)</label>
+    <div id="nova-tarefa-conteudo-campos" style="display:none; margin-top:8px;">
+      <div class="field"><label>Cliente</label><input type="text" id="nova-tarefa-cliente" list="nova-tarefa-clientes" maxlength="120" placeholder="Cliente do CRM"><datalist id="nova-tarefa-clientes"></datalist></div>
+      <div class="field"><label>Tipo</label><select id="nova-tarefa-tipo" class="srv-select"></select></div>
+      <div class="field"><label>Data de publicação (opcional)</label><input type="date" id="nova-tarefa-publicacao"></div>
+      <p class="kb-vazio-mini" style="margin:0;">Vai para o Conteúdos, em Planejamento. Lá você aprova e ele vira cartão no Kanban.</p>
+    </div>
     <p class="kb-vazio-mini" style="margin:10px 0 0;">"Não repete": a tarefa também vira cartão no Kanban, na coluna "A Fazer", e concluir em um lugar conclui no outro. Tarefas que se repetem (rotinas) ficam só aqui.</p>
 
     <button type="button" class="btn" style="width:100%; justify-content:center; margin-top:18px; background:linear-gradient(135deg,#e0544a,#c73b3b); color:#fff; border:none;" onclick="criarNovaTarefaCrm()">Criar Tarefa</button>

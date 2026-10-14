@@ -2475,7 +2475,7 @@ function finalizarWizardOrcamento() {
       : w.itens.filter((i) => i.descricao.trim()).map((i) => ({ descricao: i.descricao + (i.prazo ? ` (prazo: ${i.prazo})` : ''), valor: Number(i.qtd || 0) * Number(i.valorUnit || 0) })),
     descricao: w.descricao,
     videos: w.videos.filter((v) => v.trim()),
-    validoAte: validoAteData.toISOString().slice(0, 10),
+    validoAte: kbIsoLocal(validoAteData),
     condicaoPagamento: w.recorrenteAtivo ? `Recorrente: ${w.recorrenteMeses}x de ${formatMoney(total)}` : 'Pagamento único',
     observacoes: w.descricao,
     multiPlano: w.multiPlano,
@@ -6553,6 +6553,10 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '14/10/2026 · Datas e tarefas', itens: [
+    { titulo: 'O "hoje" do sistema virava amanhã depois das 21h', badges: ['corrigido'], texto: 'O sistema calculava a data de hoje pelo horário de Londres: das 21h à meia-noite já considerava o dia seguinte. Uma tarefa lançada às 23h pelo celular como "Hoje" ia com o prazo de amanhã e não aparecia nas Tarefas diárias. Agora a data é a do seu relógio.' },
+    { titulo: 'Tarefas do celular que ficaram para trás', badges: ['melhoria'], texto: 'Uma tarefa lançada pelo celular e ainda não feita continua aparecendo nas Tarefas diárias nos dias seguintes, até ser concluída. E a página do celular só deixa lançar depois de carregar o Kanban e as Tarefas diárias.' },
+  ]},
   { data: '14/10/2026 · Acesso', itens: [
     { titulo: 'Sem página de vendas e sem assinatura automática', badges: ['melhoria'], texto: 'O sistema é vendido para clientes selecionados: saíram a página de vendas com cadastro sozinho, a página de assinatura, a aba Assinatura das Configurações, os avisos de teste e de pagamento no Painel e a cobrança automática (Asaas e Mercado Pago). O acesso de cada empresa é liberado e suspenso pelo super administrador, em Empresas.' },
   ]},
@@ -10163,7 +10167,7 @@ function ttIniciar() {
   cloudWatch(CRM_TAREFAS_KEY, [], (d) => { CRM_TAREFAS_DATA = Array.isArray(d) ? d : []; });
   cloudWatch(CRM_CLIENTES_KEY, [], (d) => { CRM_CLIENTES_INDEP_DATA = Array.isArray(d) ? d : []; ttRender(); });
   cloudWatch(CLIENTES_FORN_KEY, [], (d) => { TT.clientesErp = Array.isArray(d) ? d.filter((c) => c.tipoCadastro !== 'fornecedor').map((c) => c.nome || c.razaoSocial).filter(Boolean) : []; ttRender(); });
-  const esperar = () => { if (KB_CARREGADO) { TT.carregado = true; ttRender(); } else setTimeout(esperar, 400); };
+  const esperar = () => { if (KB_CARREGADO && chaveCarregadaNaNuvem(CRM_TAREFAS_KEY)) { TT.carregado = true; ttRender(); } else setTimeout(esperar, 400); };
   esperar();
   ttRender();
 }
@@ -10252,7 +10256,7 @@ function ttTirar(i) { TT.previa.splice(i, 1); ttRender(); }
 function ttLancar() {
   if (!TT.previa.length) return;
   if (FIREBASE_PRONTO && TENANT_ID && !nivelPodeOperar()) { avisarSemPermissaoNivel('criar tarefas'); return; }
-  if (!KB_CARREGADO) { avisar('O Kanban ainda está carregando. Tente de novo em alguns segundos.'); return; }
+  if (!KB_CARREGADO || !chaveCarregadaNaNuvem(CRM_TAREFAS_KEY)) { avisar('Ainda carregando o Kanban e as Tarefas diárias. Tente de novo em alguns segundos.'); return; }
   const status = ttColunaAFazer();
   let n = 0;
   const nomeDe = (uid) => (ttEquipe().find((u) => u.uid === uid) || {}).nome || '';
@@ -12988,7 +12992,7 @@ function renderDropdownTarefasDiarias() {
   if (!lista) return;
 
   const hoje = isoHoje();
-  const tarefasHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje));
+  const tarefasHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje) || (t.kbId && !t.feita && t.data && t.data < hoje)); // do celular e não feita: continua até concluir
   const feitas = tarefasHoje.filter((t) => tarefaConcluidaEm(t, hoje)).length;
   const pendentes = tarefasHoje.length - feitas;
   const pct = tarefasHoje.length ? Math.round((feitas / tarefasHoje.length) * 100) : 0;
@@ -13077,7 +13081,7 @@ function renderCrmTarefas() {
   const el = document.getElementById('crm-tarefas-lista');
   if (!el) return;
   const hoje = isoHoje();
-  const tarefasHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje));
+  const tarefasHoje = CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje) || (t.kbId && !t.feita && t.data && t.data < hoje)); // do celular e não feita: continua até concluir
   el.innerHTML = tarefasHoje.length
     ? tarefasHoje.map((t) => {
         const feita = tarefaConcluidaEm(t, hoje);
@@ -23794,7 +23798,8 @@ const FINANCE_CICLOS_KEY = 'eagles_fin_ciclos_v1';
 const FINANCE_HOJE = new Date();
 
 function mesKeyDoHoje() {
-  return `${FINANCE_HOJE.getFullYear()}-${String(FINANCE_HOJE.getMonth() + 1).padStart(2, '0')}`;
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function financeTemplatePadrao() {
@@ -23903,7 +23908,7 @@ function salvarCicloDoMes(mesKey, ciclo) {
   return true;
 }
 
-function isoHoje() { return FINANCE_HOJE.toISOString().slice(0, 10); }
+function isoHoje() { const d = new Date(), z = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; } // data local (antes usava o horário UTC: depois das 21h já virava amanhã)
 
 function statusExibicaoGenerico(campoDia, item, mesKey) {
   if (item.status === 'pago') return 'pago';

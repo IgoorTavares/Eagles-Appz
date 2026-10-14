@@ -1,12 +1,11 @@
 // =====================================================================
 // Eagles Labz · funções do servidor (Firebase Cloud Functions, plano Blaze)
 // =====================================================================
-// rotinaDiaria ............ todo dia às 7h (Brasília): assinaturas, lembretes por e-mail e resumo do dia
+// rotinaDiaria ............ todo dia às 7h (Brasília): lembretes de pagamento por e-mail e resumo do dia
 // aoResponderAprovacao .... cliente respondeu o link de aprovação → e-mail para a equipe
 // boasVindas .............. novo usuário criado → e-mail de boas-vindas
-// criarAssinatura ......... (chamada pelo sistema) cria a assinatura no Asaas ou no Mercado Pago
-// webhookAsaas / webhookMercadoPago ... avisos de pagamento → libera ou bloqueia o acesso
-// cadastroPublico ......... (chamada pela página de vendas) cria empresa + conta do titular, em teste
+// meta* ................... Instagram e anúncios (conexão, publicação agendada e relatórios)
+// O acesso das empresas é liberado e suspenso pelo super administrador (não há cobrança automática).
 'use strict';
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
@@ -22,18 +21,11 @@ setGlobalOptions({ region: 'southamerica-east1', maxInstances: 5 });
 
 // ---------- chaves e configurações (definidas no deploy; veja o README) ----------
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
-const ASAAS_API_KEY = defineSecret('ASAAS_API_KEY');
-const ASAAS_WEBHOOK_TOKEN = defineSecret('ASAAS_WEBHOOK_TOKEN');
-const MP_ACCESS_TOKEN = defineSecret('MP_ACCESS_TOKEN');
-const MP_WEBHOOK_SECRET = defineSecret('MP_WEBHOOK_SECRET');
 const APP_URL = defineString('APP_URL', { default: 'https://eagleslabz.com.br' });
 const EMAIL_FROM = defineString('EMAIL_FROM', { default: 'Eagles Labz <nao-responda@eagleslabz.com.br>' });
-const ASAAS_SANDBOX = defineString('ASAAS_SANDBOX', { default: 'sim' });
 const SEGREDOS_EMAIL = [RESEND_API_KEY];
-const SEGREDOS_PAGTO = [ASAAS_API_KEY, MP_ACCESS_TOKEN];
 
 // ---------- utilidades ----------
-async function cobrancaCfg() { const s = await db.doc('config/cobranca').get(); return L.configCobranca(s.exists ? s.data() : null); }
 async function lerDados(tenantId, chave, padrao) { const s = await db.doc(`tenants/${tenantId}/dados/${chave}`).get(); return s.exists && s.data().valor !== undefined ? s.data().valor : padrao; }
 async function diretores(tenantId) {
   const s = await db.collection('usuarios').where('tenantId', '==', tenantId).get();
@@ -59,30 +51,16 @@ function nomeEmpresa(t, perfil) { return (perfil && (perfil.nomeFantasia || perf
 // Rotina diária
 // =====================================================================
 exports.rotinaDiaria = onSchedule({ schedule: 'every day 07:00', timeZone: 'America/Sao_Paulo', secrets: [...SEGREDOS_EMAIL], timeoutSeconds: 540, memory: '512MiB' }, async () => {
-  const cfg = await cobrancaCfg();
   const hoje = L.hojeBR();
   const tenants = await db.collection('tenants').get();
   for (const doc of tenants.docs) {
     const t = Object.assign({ id: doc.id }, doc.data());
     try {
-      await rotinaAssinatura(t, cfg, hoje);
-      if (t.ativo === false) continue;
+      if (t.ativo === false) continue; // empresa suspensa não recebe e-mails
       await rotinaEmailsDaEmpresa(t, hoje);
     } catch (e) { logger.error('Rotina da empresa', t.id, e); }
   }
 });
-async function rotinaAssinatura(t, cfg, hoje) {
-  const a = t.assinatura || null;
-  if (!a) return; // empresas antigas (sem assinatura pelo sistema) seguem como estão
-  const d = L.decidirAssinatura(a, hoje, cfg);
-  if (d.acao === 'nada') return;
-  const ref = db.doc(`tenants/${t.id}`);
-  const link = `${APP_URL.value()}/configuracoes.html#assinatura`;
-  const dirs = await diretores(t.id);
-  if (d.acao === 'fim-teste') await ref.set({ assinatura: Object.assign({}, a, { status: 'pendente', proximoVencimento: hoje, atualizadoEm: new Date().toISOString() }) }, { merge: true });
-  if (d.acao === 'bloquear') await ref.set({ ativo: false, bloqueadoPor: 'pagamento', bloqueadoEm: new Date().toISOString(), assinatura: Object.assign({}, a, { status: 'atrasada', atualizadoEm: new Date().toISOString() }) }, { merge: true });
-  if (dirs.length && !(await jaEnviou(t.id, `ass_${d.acao}_${hoje}`))) await enviarEmail(dirs.map((u) => u.email), L.emailAssinatura(d.acao, t.nomeEmpresa || '', { link: a.linkPagamento || link }));
-}
 async function rotinaEmailsDaEmpresa(t, hoje) {
   const conf = Object.assign({ cobrancaClientes: false, resumoDiario: true, antes: true, antesDias: 3, noDia: true, atraso: true, atrasoDias: 2 }, await lerDados(t.id, 'eagles_emails_config_v1', {}));
   const perfil = await empresaPerfil(t.id);
@@ -134,137 +112,6 @@ exports.boasVindas = onDocumentCreated({ document: 'usuarios/{uid}', secrets: SE
   if (!u.email || u.role === 'Cliente' || u.role === 'SuperAdmin') return;
   const t = u.tenantId ? (await db.doc(`tenants/${u.tenantId}`).get()).data() || {} : {};
   await enviarEmail(u.email, L.emailBoasVindas(u.nome, t.nomeEmpresa || '', `${APP_URL.value()}/login.html`));
-});
-
-// =====================================================================
-// Assinatura: cria a cobrança recorrente no Asaas ou no Mercado Pago
-// =====================================================================
-async function asaas(caminho, metodo, corpo) {
-  const base = ASAAS_SANDBOX.value() === 'nao' ? 'https://api.asaas.com/v3' : 'https://sandbox.asaas.com/api/v3';
-  const r = await fetch(base + caminho, { method: metodo || 'GET', headers: { access_token: ASAAS_API_KEY.value(), 'Content-Type': 'application/json', 'User-Agent': 'EaglesLabz' }, body: corpo ? JSON.stringify(corpo) : undefined });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new HttpsError('failed-precondition', 'Asaas: ' + ((j.errors && j.errors[0] && j.errors[0].description) || r.status));
-  return j;
-}
-async function mp(caminho, metodo, corpo) {
-  const r = await fetch('https://api.mercadopago.com' + caminho, { method: metodo || 'GET', headers: { Authorization: 'Bearer ' + MP_ACCESS_TOKEN.value(), 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new HttpsError('failed-precondition', 'Mercado Pago: ' + (j.message || r.status));
-  return j;
-}
-exports.criarAssinatura = onCall({ secrets: SEGREDOS_PAGTO }, async (req) => {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Entre no sistema primeiro.');
-  const u = (await db.doc(`usuarios/${req.auth.uid}`).get()).data();
-  if (!u || !u.tenantId || !(u.role === 'Diretor' || u.titular)) throw new HttpsError('permission-denied', 'Só o Diretor da empresa assina.');
-  const cfg = await cobrancaCfg();
-  const provedor = cfg.provedores.includes(req.data && req.data.provedor) ? req.data.provedor : cfg.provedorPadrao;
-  const tRef = db.doc(`tenants/${u.tenantId}`);
-  const t = Object.assign({ id: u.tenantId }, (await tRef.get()).data());
-  const plano = cfg.planos[t.plano] || cfg.planos.ambos;
-  const hoje = L.hojeBR();
-  let assinatura = Object.assign({}, t.assinatura || {}, { provedor, plano: t.plano, valor: Number(plano.valor), atualizadoEm: new Date().toISOString() });
-  // já tem cobrança aberta no mesmo provedor: devolve o mesmo link
-  if (t.assinatura && t.assinatura.provedor === provedor && t.assinatura.linkPagamento && ['pendente', 'atrasada'].includes(t.assinatura.status)) return { link: t.assinatura.linkPagamento };
-  if (provedor === 'asaas') {
-    let clienteId = t.assinatura && t.assinatura.provedor === 'asaas' ? t.assinatura.clienteExterno : '';
-    if (!clienteId) clienteId = (await asaas('/customers', 'POST', L.asaasCliente(t, Object.assign({ email: u.email, nome: u.nome }, req.data || {})))).id;
-    const sub = await asaas('/subscriptions', 'POST', L.asaasAssinatura(clienteId, t, plano, hoje));
-    const pagamentos = await asaas(`/subscriptions/${sub.id}/payments`);
-    const primeiro = (pagamentos.data || [])[0] || {};
-    assinatura = Object.assign(assinatura, { idExterno: sub.id, clienteExterno: clienteId, linkPagamento: primeiro.invoiceUrl || '', proximoVencimento: sub.nextDueDate, status: t.assinatura && t.assinatura.status === 'ativa' ? 'ativa' : 'pendente' });
-  } else {
-    const pre = await mp('/preapproval', 'POST', L.mpAssinatura(t, { email: u.email }, plano, `${APP_URL.value()}/configuracoes.html#assinatura`));
-    assinatura = Object.assign(assinatura, { idExterno: pre.id, linkPagamento: pre.init_point || '', proximoVencimento: (pre.next_payment_date || '').slice(0, 10) || L.maisDias(hoje, 1), status: 'pendente' });
-  }
-  await tRef.set({ assinatura }, { merge: true });
-  return { link: assinatura.linkPagamento };
-});
-// libera ou marca atraso (as duas plataformas chegam aqui)
-async function registrarPagamento(tenantId, estado, dados) {
-  const ref = db.doc(`tenants/${tenantId}`);
-  const s = await ref.get();
-  if (!s.exists) return;
-  const t = s.data(), a = Object.assign({}, t.assinatura || {});
-  const hoje = L.hojeBR();
-  if (estado === 'pago') {
-    a.status = 'ativa'; a.ultimoPagamentoEm = new Date().toISOString(); a.proximoVencimento = (dados && dados.proximo) || L.maisMeses(a.proximoVencimento && a.proximoVencimento > hoje ? a.proximoVencimento : hoje, 1);
-    await ref.set({ assinatura: a, ativo: true, bloqueadoPor: admin.firestore.FieldValue.delete() }, { merge: true });
-    const dirs = await diretores(tenantId);
-    if (dirs.length) await enviarEmail(dirs.map((u) => u.email), L.emailAssinatura('pago', t.nomeEmpresa || '', { proximoVencimento: a.proximoVencimento, link: `${APP_URL.value()}/index.html` })).catch(() => {});
-  } else if (estado === 'atrasada' || estado === 'cancelada') {
-    a.status = estado; await ref.set({ assinatura: a }, { merge: true });
-  }
-}
-async function tenantPorAssinatura(idExterno, externalReference) {
-  if (externalReference) { const s = await db.doc(`tenants/${externalReference}`).get(); if (s.exists) return externalReference; }
-  const q = await db.collection('tenants').where('assinatura.idExterno', '==', String(idExterno || '')).limit(1).get();
-  return q.empty ? '' : q.docs[0].id;
-}
-exports.webhookAsaas = onRequest({ secrets: [ASAAS_WEBHOOK_TOKEN, ...SEGREDOS_EMAIL] }, async (req, res) => {
-  if (req.method !== 'POST' || req.get('asaas-access-token') !== ASAAS_WEBHOOK_TOKEN.value()) { res.status(401).send('não autorizado'); return; }
-  try {
-    const ev = req.body || {}, p = ev.payment || {}, sub = ev.subscription || {};
-    const estado = L.asaasEvento(ev);
-    const tenantId = await tenantPorAssinatura(p.subscription || sub.id, p.externalReference || sub.externalReference);
-    if (estado && tenantId) await registrarPagamento(tenantId, estado, {});
-    res.status(200).send('ok');
-  } catch (e) { logger.error('webhookAsaas', e); res.status(200).send('ok'); }
-});
-exports.webhookMercadoPago = onRequest({ secrets: [MP_WEBHOOK_SECRET, MP_ACCESS_TOKEN, ...SEGREDOS_EMAIL] }, async (req, res) => {
-  const dataId = (req.query && (req.query['data.id'] || req.query.id)) || (req.body && req.body.data && req.body.data.id);
-  if (!L.mpAssinaturaValida(req.get('x-signature'), req.get('x-request-id'), dataId, MP_WEBHOOK_SECRET.value())) { res.status(401).send('assinatura inválida'); return; }
-  try {
-    const tipo = (req.body && (req.body.type || req.body.topic)) || req.query.type || req.query.topic;
-    if (tipo === 'subscription_preapproval') {
-      const pre = await mp(`/preapproval/${dataId}`);
-      const tenantId = await tenantPorAssinatura(pre.id, pre.external_reference);
-      if (tenantId && pre.status === 'authorized') await registrarPagamento(tenantId, 'pago', { proximo: (pre.next_payment_date || '').slice(0, 10) || undefined });
-      if (tenantId && ['cancelled', 'paused'].includes(pre.status)) await registrarPagamento(tenantId, 'cancelada', {});
-    } else if (tipo === 'subscription_authorized_payment') {
-      const pg = await mp(`/authorized_payments/${dataId}`);
-      const tenantId = await tenantPorAssinatura(pg.preapproval_id, pg.external_reference);
-      if (tenantId) await registrarPagamento(tenantId, pg.status === 'processed' || (pg.payment && pg.payment.status === 'approved') ? 'pago' : 'atrasada', {});
-    }
-    res.status(200).send('ok');
-  } catch (e) { logger.error('webhookMercadoPago', e); res.status(200).send('ok'); }
-});
-
-// =====================================================================
-// Cadastro sozinho (página de vendas): empresa + titular, em período de teste
-// =====================================================================
-exports.cadastroPublico = onCall({ secrets: SEGREDOS_EMAIL }, async (req) => {
-  const d = req.data || {};
-  const cfg = await cobrancaCfg();
-  if (!cfg.cadastroAberto) throw new HttpsError('failed-precondition', 'O cadastro está fechado no momento. Fale com a gente.');
-  const erros = L.validarCadastro(d);
-  if (erros.length) throw new HttpsError('invalid-argument', erros.join(' '));
-  if (d.site) throw new HttpsError('invalid-argument', 'Cadastro recusado.'); // armadilha de robôs
-  // no máximo 3 cadastros por hora do mesmo endereço de internet
-  const ip = String((req.rawRequest && (req.rawRequest.headers['x-forwarded-for'] || req.rawRequest.ip)) || 'x').split(',')[0].trim();
-  const ipRef = db.doc(`cadastros_ip/${require('crypto').createHash('sha256').update(ip).digest('hex').slice(0, 32)}`);
-  await db.runTransaction(async (tx) => {
-    const s = await tx.get(ipRef), agora = Date.now(), lista = ((s.exists && s.data().em) || []).filter((x) => agora - x < 3600000);
-    if (lista.length >= 3) throw new HttpsError('resource-exhausted', 'Muitos cadastros seguidos. Tente de novo mais tarde.');
-    tx.set(ipRef, { em: lista.concat([agora]) });
-  });
-  const plano = cfg.planos[d.plano];
-  let user;
-  try { user = await admin.auth().createUser({ email: String(d.email).trim(), password: String(d.senha), displayName: String(d.nome).trim() }); }
-  catch (e) { throw new HttpsError('already-exists', e.code === 'auth/email-already-exists' ? 'Esse e-mail já tem conta. Use "Entrar".' : 'Não foi possível criar a conta.'); }
-  const tenantId = 'tenant_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const agora = new Date().toISOString(), hoje = L.hojeBR();
-  try {
-    const lote = db.batch();
-    lote.set(db.doc(`tenants/${tenantId}`), { nomeEmpresa: String(d.empresa).trim().slice(0, 100), plano: d.plano, ativo: true, limiteUsuarios: Number(plano.limiteUsuarios) || 3, titularEmail: user.email, titularUid: user.uid,
-      telefone: String(d.telefone || '').slice(0, 30), criadoEm: agora, criadoPor: 'cadastro-publico', origemCadastro: String(d.origem || '').slice(0, 60),
-      assinatura: { status: 'teste', plano: d.plano, valor: Number(plano.valor), testeAte: L.maisDias(hoje, Number(cfg.testeDias) || 14), atualizadoEm: agora } });
-    lote.set(db.doc(`usuarios/${user.uid}`), { tenantId, role: 'Diretor', titular: true, vaga: 1, nome: String(d.nome).trim().slice(0, 80), email: user.email, criadoEm: agora, criadoPor: 'cadastro-publico' });
-    lote.set(db.doc(`tenants/${tenantId}/vagas/1`), { uid: user.uid, criadoEm: agora });
-    // perfil marcado como "novoCadastro": o questionário de primeiro acesso abre sozinho
-    lote.set(db.doc(`tenants/${tenantId}/dados/eagles_perfil_empresa_v1`), { valor: { nomeFantasia: String(d.empresa).trim().slice(0, 100), email: user.email, telefone1: String(d.telefone || '').slice(0, 30), novoCadastro: true }, atualizadoEm: agora });
-    await lote.commit();
-  } catch (e) { await admin.auth().deleteUser(user.uid).catch(() => {}); throw new HttpsError('internal', 'Não foi possível criar a empresa. Tente de novo.'); }
-  return { ok: true, testeDias: Number(cfg.testeDias) || 14 };
 });
 
 // =====================================================================

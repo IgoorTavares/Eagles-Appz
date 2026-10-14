@@ -2,15 +2,6 @@
 'use strict';
 const crypto = require('crypto');
 
-const COBRANCA_PADRAO = {
-  planos: { erp: { nome: 'ERP', valor: 97, limiteUsuarios: 3 }, crm: { nome: 'CRM', valor: 97, limiteUsuarios: 3 }, ambos: { nome: 'ERP + CRM', valor: 167, limiteUsuarios: 5 } },
-  testeDias: 14, toleranciaDias: 5, provedores: ['asaas', 'mercadopago'], provedorPadrao: 'asaas', cadastroAberto: true,
-};
-function configCobranca(doc) {
-  const c = Object.assign({}, COBRANCA_PADRAO, doc || {});
-  c.planos = Object.assign({}, COBRANCA_PADRAO.planos, (doc && doc.planos) || {});
-  return c;
-}
 // ---------- datas (horário de Brasília) ----------
 function hojeBR(agora) {
   const d = new Date((agora || Date.now()) - 3 * 3600000);
@@ -27,23 +18,6 @@ function maisMeses(iso, n) {
 function diasEntre(a, b) { return Math.round((new Date(b + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 86400000); }
 function dataBR(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; }
 function dinheiro(v) { return 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
-
-// ---------- o que fazer com a assinatura hoje ----------
-// devolve { acao: 'nada'|'fim-teste'|'bloquear'|'avisar-vencendo', motivo }
-function decidirAssinatura(a, hoje, cfg) {
-  const s = (a && a.status) || 'sem';
-  if (s === 'cortesia' || s === 'cancelada-manual') return { acao: 'nada' };
-  const tol = Number(cfg.toleranciaDias) || 0;
-  if (s === 'teste') {
-    if (a.testeAte && a.testeAte < hoje) return { acao: 'fim-teste' };
-    if (a.testeAte && diasEntre(hoje, a.testeAte) === 3) return { acao: 'avisar-fim-teste' };
-    return { acao: 'nada' };
-  }
-  const venc = a.proximoVencimento || a.testeAte;
-  if ((s === 'pendente' || s === 'atrasada') && venc && diasEntre(venc, hoje) > tol) return { acao: 'bloquear' };
-  if (s === 'ativa' && venc && diasEntre(venc, hoje) > tol) return { acao: 'bloquear' }; // pagamento não chegou
-  return { acao: 'nada' };
-}
 
 // ---------- lembretes de cobrança por e-mail aos clientes da empresa ----------
 // lancamentos: contas a receber abertas; devolve [{ l, quando, chave }]
@@ -104,56 +78,8 @@ function emailResumo(empresa, r, url) {
   const linha = (rot, v) => `<tr><td style="padding:6px 0;color:#5f675a;">${rot}</td><td style="padding:6px 0;text-align:right;font-weight:bold;">${v}</td></tr>`;
   return { assunto: `Seu dia · ${empresa} · ${dataBR(r.hoje)}`, html: casca(empresa, 'Resumo do seu dia', `<table style="width:100%;border-collapse:collapse;font-size:15px;">${linha('A receber hoje', `${r.receberHoje.n} · ${dinheiro(r.receberHoje.v)}`)}${linha('Recebimentos atrasados', `${r.atrasados.n} · ${dinheiro(r.atrasados.v)}`)}${linha('A pagar hoje', `${r.pagarHoje.n} · ${dinheiro(r.pagarHoje.v)}`)}${linha('Tarefas atrasadas', r.tarefasAtrasadas)}${linha('Esperando aprovação do cliente', r.aprovacoes)}</table><p>Os lembretes de WhatsApp do dia já estão na fila: abra o sistema e toque em "Lembrar no WhatsApp".</p>`, { url, texto: 'Abrir o sistema' }) };
 }
-function emailAssinatura(tipo, empresa, info) {
-  const t = { 'fim-teste': ['Seu período de teste terminou', `<p>O período de teste do Eagles Labz para <b>${empresa}</b> terminou. Para continuar usando, escolha a forma de pagamento.</p>`],
-    'avisar-fim-teste': ['Seu teste termina em 3 dias', `<p>Faltam 3 dias para o fim do período de teste de <b>${empresa}</b>. Assine para não perder o acesso — seus dados continuam todos lá.</p>`],
-    bloquear: ['Acesso suspenso por falta de pagamento', `<p>Não identificamos o pagamento da assinatura de <b>${empresa}</b> e o acesso foi suspenso. Os dados continuam guardados: assim que o pagamento cair, o acesso volta sozinho.</p>`],
-    pago: ['Pagamento confirmado ✓', `<p>Recebemos o pagamento da assinatura de <b>${empresa}</b>. Obrigado! Próximo vencimento: <b>${dataBR(info && info.proximoVencimento)}</b>.</p>`] }[tipo];
-  return { assunto: `${t[0]} · Eagles Labz`, html: casca('Eagles Labz', t[0], t[1], info && info.link ? { url: info.link, texto: tipo === 'pago' ? 'Abrir o sistema' : 'Pagar agora' } : null) };
-}
 
-// ---------- Mercado Pago: conferência da assinatura do aviso (webhook) ----------
-// x-signature: "ts=...,v1=..."; manifesto: "id:<data.id>;request-id:<x-request-id>;ts:<ts>;"
-function mpAssinaturaValida(xSignature, xRequestId, dataId, segredo) {
-  if (!xSignature || !segredo) return false;
-  const partes = Object.fromEntries(String(xSignature).split(',').map((p) => p.trim().split('=')));
-  if (!partes.ts || !partes.v1) return false;
-  const manifesto = `id:${String(dataId || '').toLowerCase()};request-id:${xRequestId || ''};ts:${partes.ts};`;
-  const esperado = crypto.createHmac('sha256', segredo).update(manifesto).digest('hex');
-  try { return crypto.timingSafeEqual(Buffer.from(esperado), Buffer.from(partes.v1)); } catch (e) { return false; }
-}
-// ---------- pedidos para os meios de pagamento ----------
-function asaasCliente(t, titular) {
-  return { name: t.nomeEmpresa || titular.nome || 'Cliente', email: titular.email, cpfCnpj: (t.documento || '').replace(/\D/g, '') || undefined, mobilePhone: (titular.telefone || '').replace(/\D/g, '') || undefined, externalReference: t.id, notificationDisabled: false };
-}
-function asaasAssinatura(clienteId, t, plano, hoje) {
-  return { customer: clienteId, billingType: 'UNDEFINED', value: Number(plano.valor), nextDueDate: maisDias(hoje, 1), cycle: 'MONTHLY', description: `Eagles Labz · plano ${plano.nome}`, externalReference: t.id };
-}
-function mpAssinatura(t, titular, plano, voltarUrl) {
-  return { reason: `Eagles Labz · plano ${plano.nome}`, external_reference: t.id, payer_email: titular.email, back_url: voltarUrl, status: 'pending',
-    auto_recurring: { frequency: 1, frequency_type: 'months', transaction_amount: Number(plano.valor), currency_id: 'BRL' } };
-}
-// evento do Asaas → novo estado da assinatura
-function asaasEvento(ev) {
-  const e = ev && ev.event;
-  if (['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAYMENT_RECEIVED_IN_CASH'].includes(e)) return 'pago';
-  if (e === 'PAYMENT_OVERDUE') return 'atrasada';
-  if (['PAYMENT_REFUNDED', 'PAYMENT_CHARGEBACK_REQUESTED'].includes(e)) return 'atrasada';
-  if (e === 'SUBSCRIPTION_DELETED' || e === 'SUBSCRIPTION_INACTIVATED') return 'cancelada';
-  return '';
-}
-function validarCadastro(d) {
-  const erros = [];
-  const s = (x) => String(x || '').trim();
-  if (s(d.empresa).length < 2) erros.push('Informe o nome da empresa.');
-  if (s(d.nome).length < 2) erros.push('Informe o seu nome.');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s(d.email))) erros.push('Confira o e-mail.');
-  if (String(d.senha || '').length < 8) erros.push('A senha precisa ter pelo menos 8 caracteres.');
-  if (!['erp', 'crm', 'ambos'].includes(d.plano)) erros.push('Escolha um plano.');
-  if (!d.aceite) erros.push('É preciso aceitar os Termos de Uso e a Política de Privacidade.');
-  return erros;
-}
-module.exports = { aplicarModelo, aplicarAssunto, COBRANCA_PADRAO, configCobranca, hojeBR, maisDias, maisMeses, diasEntre, dataBR, dinheiro, decidirAssinatura, lembretesDoDia, emailCobranca, emailBoasVindas, emailAprovacao, emailResumo, emailAssinatura, mpAssinaturaValida, asaasCliente, asaasAssinatura, mpAssinatura, asaasEvento, validarCadastro };
+module.exports = { aplicarModelo, aplicarAssunto, hojeBR, maisDias, maisMeses, diasEntre, dataBR, dinheiro, lembretesDoDia, emailCobranca, emailBoasVindas, emailAprovacao, emailResumo };
 
 // =====================================================================
 // Meta (Instagram e anúncios) — regras puras

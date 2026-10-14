@@ -1026,11 +1026,6 @@ async function resolverTenantDoUsuario(user) {
 
     // Empresa suspensa (ex: falta de pagamento) — bloqueia mesmo com login válido.
     const tenantSnap = await firestoreDb.collection('tenants').doc(TENANT_ID).get();
-    if (tenantSnap.exists && tenantSnap.data().ativo === false && tenantSnap.data().bloqueadoPor === 'pagamento') {
-      // suspensa por falta de pagamento: vai para a página da assinatura (sem sair da conta, para poder pagar)
-      window.location.href = 'assinatura.html';
-      return false;
-    }
     if (tenantSnap.exists && tenantSnap.data().ativo === false) {
       avisar('O acesso desta empresa está temporariamente suspenso. Fale com o suporte para regularizar.');
       await firebase.auth().signOut();
@@ -5239,7 +5234,7 @@ function initConfiguracoesPage() {
   if (/^#portal/.test(window.location.hash || '')) { mostrarAbaConfig('aparencia'); setTimeout(() => { if (typeof abrirCardAparenciaConfig === 'function') abrirCardAparenciaConfig('portal'); }, 0); return; }
   if (/^#integracoes-pixels/.test(window.location.hash || '')) { mostrarAbaConfig('integracoes'); setTimeout(() => cfgAbrirPixels('meta'), 0); return; }
   const abaInicial = (window.location.hash || '').replace('#', '');
-  mostrarAbaConfig(['perfil', 'meusistema', 'aparencia', 'notificacoes', 'emails', 'email', 'automacoes', 'integracoes', 'conteudos', 'assinatura', 'backup', 'atualizacoes'].includes(abaInicial) ? abaInicial : 'perfil');
+  mostrarAbaConfig(['perfil', 'meusistema', 'aparencia', 'notificacoes', 'emails', 'email', 'automacoes', 'integracoes', 'conteudos', 'backup', 'atualizacoes'].includes(abaInicial) ? abaInicial : 'perfil');
 }
 
 function mostrarAbaConfig(aba) {
@@ -5252,7 +5247,6 @@ function mostrarAbaConfig(aba) {
   const funcoes = {
     meusistema: () => { document.getElementById('cfg-conteudo-aba').innerHTML = `<div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('camadas')}</div><div><h2>Meu sistema</h2><p>Versão, ferramentas que aparecem e nomes</p></div></div>${sisHtmlMeuSistema()}</div>`; },
     emails: renderAbaEmailsConfig,
-    assinatura: renderAbaAssinaturaConfig,
     email: renderAbaEmailsConfig,
     perfil: renderAbaPerfilConfig,
     aparencia: renderAbaAparenciaConfig,
@@ -6559,6 +6553,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '14/10/2026 · Acesso', itens: [
+    { titulo: 'Sem página de vendas e sem assinatura automática', badges: ['melhoria'], texto: 'O sistema é vendido para clientes selecionados: saíram a página de vendas com cadastro sozinho, a página de assinatura, a aba Assinatura das Configurações, os avisos de teste e de pagamento no Painel e a cobrança automática (Asaas e Mercado Pago). O acesso de cada empresa é liberado e suspenso pelo super administrador, em Empresas.' },
+  ]},
   { data: '14/10/2026 · Auditoria ERP e CRM', itens: [
     { titulo: 'Plano só CRM: primeiros passos no lugar certo', badges: ['corrigido'], texto: 'No Dashboard do CRM, os primeiros passos levavam para telas do ERP (cadastro de clientes, produtos e pedidos), que o plano só CRM não tem, e nunca ficavam marcados. Agora levam para Clientes, Serviços e Pipeline do CRM e contam os dados do CRM.' },
     { titulo: 'ERP + CRM: estoque pelo CRM no histórico do ERP', badges: ['corrigido'], texto: 'Entradas, saídas e o estoque inicial feitos em CRM → Serviços → Produtos passam a entrar no histórico do produto no ERP (com o saldo depois), como as feitas no ERP. O que no ERP é serviço não aparece mais como produto com estoque no CRM.' },
@@ -6928,7 +6925,6 @@ const CFG_INTEG = [
   { cat: 'Pagamentos e bancos', itens: [
     { id: 'pix', nome: 'Chave PIX', icone: 'cifrao', desc: 'Aparece nos recibos, cobranças e no portal do cliente.', href: 'financeiro.html#pix' },
     { id: 'ofx', nome: 'Extrato bancário (OFX)', icone: 'banco', desc: 'Conciliação: importa o extrato e casa com os lançamentos.', href: 'financeiro.html#caixa' },
-    { id: 'assinatura', nome: 'Asaas e Mercado Pago', icone: 'cartao', desc: 'Pagamento da assinatura do sistema (boleto, PIX e cartão).', aba: 'assinatura' },
   ]},
   { cat: 'Agenda e comunicação', itens: [
     { id: 'gagenda', nome: 'Google Agenda', icone: 'calendario', desc: 'Mostra e cria compromissos na sua agenda do Google.', plano: 'crm', href: 'crm.html#secao=agenda' },
@@ -6955,12 +6951,10 @@ async function cfgIntegEstado() {
   const [pix, caixas, atd, meta, ia, emails] = await Promise.all([ler('eagles_fin_pix_v1', {}), ler('eagles_fin_caixas_v1', {}), ler('eagles_atend_config_v1', {}), ler('eagles_meta_v1', {}), ler('eagles_ia_config_v1', {}), ler('eagles_emails_config_v1', null)]);
   let gag = false; try { const g = JSON.parse(sessionStorage.getItem('eagles_google_agenda_v1') || 'null'); gag = !!(g && g.expira > Date.now()); } catch (e) {}
   const iaLoc = (() => { try { const v = lsLoad(chaveLocalTenant('eagles_ia_local_v1'), null); return !!(v && v.chaves && Object.values(v.chaves).some(Boolean)); } catch (e) { return false; } })();
-  const a = TENANT_ASSINATURA;
   const autoAtivas = ((atd && atd.automacoes) || []).filter((x) => x.ativo !== false).length;
   CFG_INTEG_ESTADO = {
     pix: pix && pix.chave ? ['ok', 'Configurada'] : ['nao', 'Não configurada'],
     ofx: (((caixas && caixas.caixas) || []).some((c) => (c.ofxIgnorados || []).length)) ? ['ok', 'Em uso'] : ['livre', 'Disponível'],
-    assinatura: !a ? ['livre', 'Sem assinatura pelo sistema'] : a.status === 'ativa' ? ['ok', 'Em dia'] : a.status === 'cortesia' ? ['ok', 'Cortesia'] : a.status === 'teste' ? ['livre', 'Em teste'] : ['nao', 'Pagamento pendente'],
     gagenda: gag ? ['ok', 'Conectada'] : ['livre', 'Disponível'],
     whats: autoAtivas ? ['ok', `${autoAtivas} automação(ões) ligada(s)`] : ['nao', 'Nenhuma automação ligada'],
     emails: emails ? ['ok', 'Configurados'] : ['livre', 'Padrão'],
@@ -7065,22 +7059,6 @@ function emSalvarTudo() {
   if (cloudSet(EMAILS_CFG_KEY, c) !== false) { EMAIL_ED = c; avisar('E-mails salvos.', 'E-mails'); renderAbaEmailsConfig(); }
 }
 function renderAbaEmailConfig() { renderAbaEmailsConfig(); }
-// a assinatura dentro das Configurações (o pagamento continua na página própria)
-function renderAbaAssinaturaConfig() {
-  const el = document.getElementById('cfg-conteudo-aba');
-  const a = TENANT_ASSINATURA;
-  const st = !a ? ['Sem assinatura pelo sistema', 'badge-neutral'] : { teste: ['Período de teste', 'badge-blue'], ativa: ['Em dia', 'badge-success'], pendente: ['Pagamento pendente', 'badge-warning'], atrasada: ['Em atraso', 'badge-danger'], cancelada: ['Cancelada', 'badge-danger'], cortesia: ['Cortesia', 'badge-neutral'] }[a.status] || ['—', 'badge-neutral'];
-  el.innerHTML = `<div class="cfg-painel"><div class="cfg-painel-titulo"><div class="cfg-painel-titulo-icone">${ic('cartao')}</div><div><h2>Assinatura</h2><p>Plano e pagamento do sistema</p></div></div>
-    <div class="ass-linhas cfg-ass">
-      <div><span>Situação</span><b><span class="badge ${st[1]}">${st[0]}</span></b></div>
-      <div><span>Plano</span><b>${escapeHtml(TENANT_PLANO === 'ambos' ? 'ERP + CRM' : (TENANT_PLANO || '—').toUpperCase())}</b></div>
-      ${a && a.status === 'teste' ? `<div><span>Teste grátis até</span><b>${escapeHtml(formatDatePt(a.testeAte || ''))}</b></div>` : ''}
-      ${a && a.proximoVencimento ? `<div><span>Próximo vencimento</span><b>${escapeHtml(formatDatePt(a.proximoVencimento))}</b></div>` : ''}
-      ${a && a.ultimoPagamentoEm ? `<div><span>Último pagamento</span><b>${escapeHtml(formatDatePt(a.ultimoPagamentoEm.slice(0, 10)))}</b></div>` : ''}
-    </div>
-    ${!a ? '<p class="kb-vazio-mini">A sua conta não é cobrada pelo sistema. Para mudar o plano, fale com o suporte.</p>' : a.status === 'cortesia' ? '<p class="kb-vazio-mini">Esta conta não tem cobrança.</p>' : `<div class="cfg-modal-rodape"><span class="kb-espaco"></span><a class="btn btn-primary" href="assinatura.html">${['pendente', 'atrasada', 'teste'].includes(a.status) ? 'Pagar ou assinar' : 'Ver detalhes do pagamento'}</a></div>`}
-  </div>`;
-}
 
 // ----- Aba: Conteúdos -----
 
@@ -12552,17 +12530,7 @@ function fnChamar(nome, dados) {
   if (typeof firebase === 'undefined' || !firebase.app || typeof firebase.app().functions !== 'function') return Promise.reject(new Error('O servidor do sistema ainda não está ligado (funções do Firebase).'));
   return firebase.app().functions('southamerica-east1').httpsCallable(nome)(dados || {}).then((r) => r.data);
 }
-function assHtmlAviso() {
-  const a = TENANT_ASSINATURA;
-  if (!a || !(nivelEhDiretor() || nivelUsuario() === 'superadmin')) return '';
-  const hoje = isoHoje();
-  if (a.status === 'teste' && a.testeAte) {
-    const faltam = Math.max(0, Math.round((new Date(a.testeAte + 'T12:00:00') - new Date(hoje + 'T12:00:00')) / 86400000));
-    return `<div class="atd-banner" style="margin-bottom:14px;">${ic('relogio', 'ic-herda')}<div><strong>Teste grátis: ${faltam === 0 ? 'termina hoje' : `faltam ${faltam} dia${faltam === 1 ? '' : 's'}`}.</strong> Assine para continuar depois do teste — seus dados ficam todos. <a class="btn btn-small btn-primary" style="margin-left:6px;" href="assinatura.html">Assinar</a></div></div>`;
-  }
-  if (a.status === 'pendente' || a.status === 'atrasada') return `<div class="cw-erro" style="margin-bottom:14px;">${ic('alerta', 'ic-herda')} <span><b>Pagamento da assinatura em aberto.</b> Regularize para não ter o acesso suspenso. <a href="assinatura.html">Ver e pagar</a></span></div>`;
-  return '';
-}
+function assHtmlAviso() { return ''; } // sem assinatura pelo sistema (o acesso é liberado e suspenso pelo super administrador)
 const EMAILS_CFG_KEY = 'eagles_emails_config_v1';
 function emailsAbrir() {
   cloudGetForce(EMAILS_CFG_KEY, {}).then((d) => {
@@ -12587,149 +12555,8 @@ function emailsSalvar() {
   const c = { resumoDiario: v('resumoDiario'), avisoAprovacao: v('avisoAprovacao'), cobrancaClientes: v('cobrancaClientes'), antes: true, antesDias: n('antesDias', 1, 15, 3), noDia: v('noDia'), atraso: true, atrasoDias: n('atrasoDias', 1, 30, 2), atualizadoEm: new Date().toISOString() };
   if (cloudSet(EMAILS_CFG_KEY, c) !== false) { srvFecharModal(); avisar('E-mails automáticos salvos.', 'E-mails'); }
 }
-// ---------- super administrador: planos e cobrança ----------
-async function cobAbrirPlanos() {
-  if (nivelUsuario() !== 'superadmin') return;
-  const s = await firestoreDb.collection('config').doc('cobranca').get().catch(() => null);
-  const c = Object.assign({ planos: { erp: { nome: 'ERP', valor: 97, limiteUsuarios: 3 }, crm: { nome: 'CRM', valor: 97, limiteUsuarios: 3 }, ambos: { nome: 'ERP + CRM', valor: 167, limiteUsuarios: 5 } }, testeDias: 14, toleranciaDias: 5, provedores: ['asaas', 'mercadopago'], provedorPadrao: 'asaas', cadastroAberto: true }, s && s.exists ? s.data() : {});
-  const base = 'https://southamerica-east1-labz-18246.cloudfunctions.net';
-  const ov = srvGarantirModal();
-  ov.innerHTML = `<div class="modal kb-modal" style="max-width:680px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>Planos e cobrança</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
-    <div class="table-scroll"><table><thead><tr><th>Plano</th><th>Nome na página de vendas</th><th>Valor mensal (R$)</th><th>Usuários</th></tr></thead><tbody>
-    ${['erp', 'crm', 'ambos'].map((k) => `<tr><td><b>${k.toUpperCase()}</b></td><td><input type="text" id="cob-n-${k}" maxlength="40" value="${escapeHtml(c.planos[k].nome)}"></td><td><input type="number" id="cob-v-${k}" min="0" step="0.01" value="${Number(c.planos[k].valor) || 0}" style="width:110px;"></td><td><input type="number" id="cob-u-${k}" min="1" max="50" value="${Number(c.planos[k].limiteUsuarios) || 3}" style="width:80px;"></td></tr>`).join('')}
-    </tbody></table></div>
-    <div class="cw-grade2" style="margin-top:10px;"><div class="field"><label>Dias de teste grátis</label><input type="number" id="cob-teste" min="0" max="60" value="${c.testeDias}"></div><div class="field"><label>Tolerância depois do vencimento (dias)</label><input type="number" id="cob-tol" min="0" max="30" value="${c.toleranciaDias}"></div></div>
-    <div class="sis-tit">Meios de pagamento oferecidos</div>
-    <label class="sis-check"><input type="checkbox" id="cob-asaas" ${c.provedores.includes('asaas') ? 'checked' : ''}> Asaas (boleto, PIX e cartão)</label>
-    <label class="sis-check"><input type="checkbox" id="cob-mp" ${c.provedores.includes('mercadopago') ? 'checked' : ''}> Mercado Pago (cartão recorrente)</label>
-    <label class="sis-check"><input type="checkbox" id="cob-aberto" ${c.cadastroAberto ? 'checked' : ''}> Cadastro pela página de vendas aberto</label>
-    <div class="sis-tit">Endereços para configurar nos meios de pagamento</div>
-    <p class="kb-vazio-mini" style="margin:0;">Asaas (Integrações → Webhooks): <code>${base}/webhookAsaas</code><br>Mercado Pago (Suas integrações → Webhooks): <code>${base}/webhookMercadoPago</code><br>Página de vendas: <code>${escapeHtml(location.origin + location.pathname.replace(/[^/]*$/, ''))}vendas.html</code></p>
-    <div class="cfg-modal-rodape"><span class="kb-espaco"></span><button type="button" class="btn" onclick="srvFecharModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="cobSalvarPlanos()">Salvar</button></div></div>`;
-  openModal('modal-srv');
-}
-async function cobSalvarPlanos() {
-  const v = (id) => (document.getElementById(id) || {}).value;
-  const planos = {};
-  ['erp', 'crm', 'ambos'].forEach((k) => { planos[k] = { nome: String(v('cob-n-' + k) || k).slice(0, 40), valor: Math.max(0, Number(v('cob-v-' + k)) || 0), limiteUsuarios: Math.max(1, Math.min(50, Number(v('cob-u-' + k)) || 3)) }; });
-  const provedores = [document.getElementById('cob-asaas').checked && 'asaas', document.getElementById('cob-mp').checked && 'mercadopago'].filter(Boolean);
-  if (!provedores.length) { avisar('Deixe pelo menos um meio de pagamento.'); return; }
-  try {
-    await firestoreDb.collection('config').doc('cobranca').set({ planos, testeDias: Math.max(0, Number(v('cob-teste')) || 0), toleranciaDias: Math.max(0, Number(v('cob-tol')) || 0), provedores, provedorPadrao: provedores[0], cadastroAberto: document.getElementById('cob-aberto').checked, atualizadoEm: new Date().toISOString() });
-    srvFecharModal(); avisar('Planos e cobrança salvos.', 'Cobrança');
-  } catch (e) { avisar('Não foi possível salvar: ' + mensagemErroFirestore(e)); }
-}
-async function cobCortesia(tenantId, ligar) {
-  const t = TENANTS_DATA.find((x) => x.id === tenantId) || {};
-  const a = Object.assign({}, t.assinatura || {}, { status: ligar ? 'cortesia' : 'pendente', atualizadoEm: new Date().toISOString() });
-  try { await firestoreDb.collection('tenants').doc(tenantId).set(Object.assign({ assinatura: a }, ligar ? { ativo: true } : {}), { merge: true }); avisar(ligar ? 'Empresa em cortesia: nunca é bloqueada por pagamento.' : 'Cortesia retirada: a empresa passa a pagar pelo sistema.', 'Cobrança'); }
-  catch (e) { avisar('Não foi possível salvar: ' + mensagemErroFirestore(e)); }
-}
-function cobBadge(t) {
-  const a = t.assinatura;
-  if (!a) return '';
-  const m = { teste: ['Teste até ' + formatDatePt(a.testeAte || ''), 'badge-blue'], ativa: ['Paga', 'badge-success'], pendente: ['Pagamento pendente', 'badge-warning'], atrasada: ['Em atraso', 'badge-danger'], cancelada: ['Assinatura cancelada', 'badge-danger'], cortesia: ['Cortesia', 'badge-neutral'] }[a.status];
-  return m ? ` <span class="badge ${m[1]}" style="font-size:10.5px;">${escapeHtml(m[0])}</span>` : '';
-}
 
 
-// ---------- assinatura.html (situação e pagamento) ----------
-let ASS = { t: null, u: null, cfg: null, carregando: '' };
-function assIniciarPagina() {
-  initFirebase();
-  const el = document.getElementById('ass-app');
-  if (!firestoreDb) { el.innerHTML = '<p class="kb-vazio">Sem conexão com o servidor.</p>'; return; }
-  firebase.auth().onAuthStateChanged(async (user) => {
-    if (!user) { window.location.href = 'login.html?voltar=assinatura.html'; return; }
-    try {
-      const u = (await firestoreDb.collection('usuarios').doc(user.uid).get()).data() || {};
-      USUARIO_UID = user.uid; USUARIO_ROLE = u.role || ''; USUARIO_NOME = u.nome || '';
-      const t = await firestoreDb.collection('tenants').doc(u.tenantId).get();
-      const c = await firestoreDb.collection('config').doc('cobranca').get().catch(() => null);
-      ASS = { t: Object.assign({ id: u.tenantId }, t.data() || {}), u, cfg: Object.assign({ planos: {}, provedores: ['asaas', 'mercadopago'], toleranciaDias: 5 }, c && c.exists ? c.data() : {}), carregando: '' };
-      assRender();
-    } catch (e) { el.innerHTML = '<p class="kb-vazio">Não foi possível carregar a assinatura. Tente de novo.</p>'; }
-  });
-}
-function assRender() {
-  const el = document.getElementById('ass-app'), t = ASS.t, a = t.assinatura || {}, cfg = ASS.cfg;
-  const plano = (cfg.planos || {})[t.plano] || {};
-  const diretor = ASS.u.role === 'Diretor' || ASS.u.titular;
-  const st = { teste: ['Período de teste', 'badge-blue'], ativa: ['Em dia', 'badge-success'], pendente: ['Pagamento pendente', 'badge-warning'], atrasada: ['Em atraso', 'badge-danger'], cancelada: ['Cancelada', 'badge-danger'], cortesia: ['Cortesia', 'badge-neutral'] }[a.status] || ['Sem assinatura pelo sistema', 'badge-neutral'];
-  const bloqueada = t.ativo === false;
-  el.innerHTML = `<div class="ass-caixa">
-    <img src="assets/favicon-eagles.png" alt="" class="ass-logo"><h1>${escapeHtml(t.nomeEmpresa || 'Sua empresa')}</h1>
-    <p><span class="badge ${st[1]}">${st[0]}</span></p>
-    ${bloqueada ? `<div class="cw-erro">${ic('alerta', 'ic-herda')} <span><b>Acesso suspenso por falta de pagamento.</b> Os seus dados estão guardados: assim que o pagamento for confirmado, o acesso volta sozinho.</span></div>` : ''}
-    <div class="ass-linhas">
-      <div><span>Plano</span><b>${escapeHtml(plano.nome || t.plano || '—')}${plano.valor ? ' · ' + formatMoney(plano.valor) + '/mês' : ''}</b></div>
-      ${a.status === 'teste' ? `<div><span>Teste grátis até</span><b>${escapeHtml(formatDatePt(a.testeAte || ''))}</b></div>` : ''}
-      ${a.proximoVencimento ? `<div><span>Próximo vencimento</span><b>${escapeHtml(formatDatePt(a.proximoVencimento))}</b></div>` : ''}
-      ${a.ultimoPagamentoEm ? `<div><span>Último pagamento</span><b>${escapeHtml(formatDatePt(a.ultimoPagamentoEm.slice(0, 10)))}</b></div>` : ''}
-    </div>
-    ${a.status === 'cortesia' ? '<p class="kb-vazio-mini">Esta conta não tem cobrança.</p>' : diretor ? `
-      ${a.linkPagamento && ['pendente', 'atrasada'].includes(a.status) ? `<a class="btn btn-primary ass-btn" href="${escapeHtml(a.linkPagamento)}" target="_blank" rel="noopener">Abrir a cobrança</a>` : ''}
-      <div class="ass-pagar">${(cfg.provedores || []).map((p) => `<button type="button" class="btn ${a.linkPagamento ? '' : 'btn-primary'} ass-btn" onclick="assPagar('${p}')" ${ASS.carregando ? 'disabled' : ''}>${ASS.carregando === p ? 'Gerando...' : p === 'asaas' ? 'Pagar com boleto, PIX ou cartão (Asaas)' : 'Pagar com cartão recorrente (Mercado Pago)'}</button>`).join('')}</div>
-      <button type="button" class="btn btn-ghost" onclick="location.reload()">Já paguei, atualizar</button>` : '<p class="kb-vazio-mini">Só o Diretor da empresa faz o pagamento. Avise o responsável.</p>'}
-    <p class="ass-rodape">${bloqueada ? '' : '<a href="index.html">Voltar ao sistema</a> · '}<a href="suporte.html">Suporte</a> · <a href="#" onclick="firebase.auth().signOut().then(() => location.href = \'login.html\'); return false;">Sair</a></p>
-  </div>`;
-}
-async function assPagar(provedor) {
-  ASS.carregando = provedor; assRender();
-  try {
-    const r = await fnChamar('criarAssinatura', { provedor });
-    if (r && r.link) { window.location.href = r.link; return; }
-    avisar('A cobrança foi criada. O link de pagamento chega também por e-mail.', 'Assinatura');
-  } catch (e) { avisar((e && e.message) || 'Não foi possível gerar a cobrança agora.', 'Assinatura'); }
-  ASS.carregando = ''; assRender();
-}
-
-// ---------- vendas.html (planos + cadastro sozinho) ----------
-let VND = { cfg: null, plano: 'ambos', enviando: false };
-async function vendIniciar() {
-  initFirebase();
-  try { const c = await firestoreDb.collection('config').doc('cobranca').get(); VND.cfg = c.exists ? c.data() : null; } catch (e) { VND.cfg = null; }
-  const cfg = Object.assign({ planos: { erp: { nome: 'ERP', valor: 97 }, crm: { nome: 'CRM', valor: 97 }, ambos: { nome: 'ERP + CRM', valor: 167 } }, testeDias: 14, cadastroAberto: true }, VND.cfg || {});
-  VND.cfg = cfg;
-  const p = new URLSearchParams(location.search).get('plano');
-  if (['erp', 'crm', 'ambos'].includes(p)) VND.plano = p;
-  vendRender();
-}
-const VND_TEXTO = { erp: ['Para quem vende produtos', 'Estoque que baixa sozinho, pedidos, compras, contratos, NFS-e e financeiro.'], crm: ['Para quem vende serviços', 'Funil, orçamentos, produção de conteúdo com aprovação do cliente, agenda, automações e agentes de IA.'], ambos: ['Tudo em um', 'ERP + CRM juntos: do primeiro contato com o cliente até o estoque e o caixa.'] };
-function vendRender() {
-  const cfg = VND.cfg, el = document.getElementById('vnd-app');
-  el.innerHTML = `
-    <header class="vnd-topo"><img src="assets/favicon-eagles.png" alt=""><b>Eagles Labz</b><span class="kb-espaco"></span><a href="login.html">Entrar</a></header>
-    <section class="vnd-hero"><h1>O sistema que se monta para o seu negócio</h1><p>Responda 2 minutos de perguntas e ele mostra só o que você usa: vendas, estoque, financeiro, clientes e produção. Teste grátis por ${Number(cfg.testeDias) || 14} dias, sem cartão.</p></section>
-    <section class="vnd-planos">${['crm', 'ambos', 'erp'].map((k) => { const pl = cfg.planos[k] || {}; return `<button type="button" class="vnd-plano${VND.plano === k ? ' ativo' : ''}${k === 'ambos' ? ' destaque' : ''}" onclick="VND.plano='${k}'; vendRender(); document.getElementById('vnd-form').scrollIntoView({behavior:'smooth'})">${k === 'ambos' ? '<span class="vnd-selo">Mais completo</span>' : ''}<b>${escapeHtml(pl.nome || k)}</b><span class="vnd-preco">${formatMoney(pl.valor)}<small>/mês</small></span><small>${escapeHtml(VND_TEXTO[k][0])}</small><p>${escapeHtml(VND_TEXTO[k][1])}</p></button>`; }).join('')}</section>
-    <section class="vnd-form" id="vnd-form">${cfg.cadastroAberto === false ? '<h2>Cadastros fechados no momento</h2><p>Fale com a gente pela página de <a href="suporte.html">Suporte</a>.</p>' : `
-      <h2>Comece o teste grátis</h2><p class="vnd-sub">Plano escolhido: <b>${escapeHtml((cfg.planos[VND.plano] || {}).nome || VND.plano)}</b> · ${Number(cfg.testeDias) || 14} dias grátis</p>
-      <form onsubmit="return vendCadastrar(event)"><input type="text" name="site" class="pgxp-armadilha" tabindex="-1" autocomplete="off">
-        <input type="text" name="empresa" placeholder="Nome da empresa" required maxlength="100"><input type="text" name="nome" placeholder="Seu nome" required maxlength="80">
-        <input type="email" name="email" placeholder="Seu e-mail (vai ser o login)" required maxlength="120"><input type="tel" name="telefone" placeholder="WhatsApp" maxlength="30">
-        <input type="password" name="senha" placeholder="Crie uma senha (mínimo 8)" required minlength="8" maxlength="60" autocomplete="new-password">
-        <label class="vnd-aceite"><input type="checkbox" name="aceite" required><span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a>, a <a href="privacidade.html" target="_blank">Política de Privacidade</a> e o <a href="dpa.html" target="_blank">Acordo de Tratamento de Dados</a>.</span></label>
-        <button type="submit" ${VND.enviando ? 'disabled' : ''}>${VND.enviando ? 'Criando a sua conta...' : 'Criar conta e começar'}</button><p class="vnd-msg" id="vnd-msg"></p></form>`}</section>
-    <footer class="vnd-rodape"><a href="privacidade.html">Privacidade</a> · <a href="termos.html">Termos</a> · <a href="dpa.html">Tratamento de dados</a> · <a href="suporte.html">Suporte</a></footer>`;
-}
-async function vendCadastrar(ev) {
-  ev.preventDefault();
-  const f = ev.target, v = (n) => String((f.elements[n] && f.elements[n].value) || '').trim();
-  if (v('site')) return false;
-  const dados = { empresa: v('empresa'), nome: v('nome'), email: v('email'), telefone: v('telefone'), senha: (f.elements.senha || {}).value || '', plano: VND.plano, aceite: !!(f.elements.aceite || {}).checked, origem: new URLSearchParams(location.search).get('origem') || '' };
-  const msg = document.getElementById('vnd-msg');
-  VND.enviando = true; const btn = f.querySelector('button[type=submit]'); if (btn) { btn.disabled = true; btn.textContent = 'Criando a sua conta...'; }
-  try {
-    await fnChamar('cadastroPublico', dados);
-    await firebase.auth().signInWithEmailAndPassword(dados.email, dados.senha);
-    window.location.href = VND.plano === 'crm' ? 'crm.html' : 'index.html';
-  } catch (e) {
-    VND.enviando = false;
-    if (btn) { btn.disabled = false; btn.textContent = 'Criar conta e começar'; }
-    if (msg) msg.textContent = (e && e.message) || 'Não foi possível criar a conta agora. Tente de novo.';
-  }
-  return false;
-}
 
 // =====================================================================
 // ---------- Meta: Instagram e anúncios (CRM → Operacional → Instagram e anúncios) ----------
@@ -22726,7 +22553,6 @@ const CHATBOT_FAQ = [
         { p: 'Onde vejo as estatísticas do funil?', r: 'CRM → Comercial → Estatísticas: negócios novos, ganhos e perdidos, conversão, valor ganho, tempo médio até ganhar, tempo médio em cada etapa e a conversão por origem e por vendedor, em 30 dias, 90 dias, 12 meses ou tudo.' },
         { p: 'Qual o horário e o prazo do suporte?', r: 'Segunda a sexta, das 9h às 18h, pelo WhatsApp (11) 94678-4626 ou por e-mail. Prazos de primeira resposta: crítico (ninguém entra, sistema fora do ar) até 2 horas úteis; alto até 4 horas úteis; dúvidas até 1 dia útil. Tudo na página Suporte (link no rodapé do login).' },
         { p: 'Onde está o contrato de tratamento de dados (LGPD)?', r: 'Na página "Tratamento de dados" (dpa.html), ligada aos Termos de Uso: explica que os dados são da sua empresa (Controladora), o que o Eagles Labz faz com eles (Operador), segurança, suboperadores, aviso de incidente em até 48 horas e a devolução dos dados no fim do contrato.' },
-        { p: 'Como pago a assinatura do sistema?', r: 'Configurações → Assinatura (ou o aviso no Painel): escolha Asaas (boleto, PIX ou cartão) ou Mercado Pago (cartão recorrente) e pague pelo link. Quando o pagamento cai, o acesso fica liberado sozinho. Se passar do prazo de tolerância sem pagar, o acesso é suspenso até regularizar — os dados ficam guardados.' },
         { p: 'Como ligo os e-mails automáticos?', r: 'Configurações → E-mails: resumo do dia para os Diretores (7h), aviso quando o cliente responde a aprovação e lembrete de pagamento por e-mail para os clientes (antes, no dia e depois do vencimento). Precisa do servidor do sistema ligado (plano Blaze).' },
         { p: 'Como agendo posts no Instagram?', r: 'CRM → Operacional → Instagram e anúncios: conecte com a Meta (Facebook que administra a página, com um Instagram profissional ligado). Depois, em Publicações → "Agendar publicação" (ou abrindo um conteúdo → "Agendar no Instagram"), cole o link da imagem, das imagens do carrossel ou do vídeo, a legenda e o horário. O servidor publica sozinho no horário e o conteúdo fica como publicado.' },
         { p: 'Onde vejo os relatórios do Instagram e dos anúncios?', r: 'CRM → Instagram e anúncios → Relatórios: seguidores, alcance, visitas ao perfil e contas engajadas dos últimos 28 dias, os melhores posts e os posts recentes com alcance, curtidas, comentários, salvos e compartilhamentos, e os anúncios dos últimos 30 dias (investido, cliques, CTR, CPC e resultados por campanha). Atualiza todo dia às 6h ou no botão "Atualizar agora".' },
@@ -27005,7 +26831,7 @@ function renderTenantsLista() {
     const planoCores = { erp: 'badge-blue', crm: 'badge-warning', ambos: 'badge-success' };
     return `
     <tr>
-      <td>${escapeHtml(t.nomeEmpresa || t.id)}${typeof cobBadge === 'function' ? cobBadge(t) : ''}</td>
+      <td>${escapeHtml(t.nomeEmpresa || t.id)}</td>
       <td style="font-size:12px; color:var(--text-soft);">${escapeHtml(t.id)}</td>
       <td>${t.criadoEm ? formatDatePt(t.criadoEm.slice(0, 10)) : '—'}</td>
       <td><button type="button" class="btn btn-small btn-ghost" style="padding:0; border:none;" onclick="abrirModalTrocarPlano('${t.id}','${plano}','${escapeParaOnclick(t.nomeEmpresa || '')}')"><span class="badge ${planoCores[plano]}">${planoLabels[plano]} ✎</span></button></td>
@@ -27023,7 +26849,6 @@ function renderTenantsLista() {
         ${ativo
           ? `<button class="btn btn-small btn-ghost" style="color:var(--warning);" onclick="suspenderEmpresa('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Suspender</button>`
           : `<button class="btn btn-small btn-ghost" style="color:var(--success);" onclick="reativarEmpresa('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Reativar</button>`}
-        <button class="btn btn-small btn-ghost" onclick="cobCortesia('${t.id}', ${!(t.assinatura && t.assinatura.status === 'cortesia')})">${t.assinatura && t.assinatura.status === 'cortesia' ? 'Tirar cortesia' : 'Cortesia'}</button>
         <button class="btn btn-small btn-ghost" onclick="bkpAbrirRestauracaoSA('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Restaurar backup</button>
         <button class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirEmpresaCompleta('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Excluir</button>
       </td>

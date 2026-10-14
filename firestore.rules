@@ -449,15 +449,6 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // ---------- config/cobranca ----------
-    // Planos e preços (aparecem na página de vendas): todo mundo lê, só o
-    // Super Admin muda. A situação de cada assinatura fica no documento da
-    // empresa e só o servidor (funções) e o Super Admin mudam.
-    match /config/{docId} {
-      allow read: if docId == 'cobranca';
-      allow write: if souSuperAdmin();
-    }
-
     // ---------- erros_app/{id} ----------
     // Erros técnicos do sistema, enviados pelo aparelho de quem está logado
     // (só a mensagem, a tela e a versão). Só o Super Admin lê e apaga.

@@ -1034,7 +1034,8 @@ async function resolverTenantDoUsuario(user) {
     }
     TENANT_PLANO = tenantSnap.exists ? (tenantSnap.data().plano || 'erp') : 'erp';
     TENANT_ASSINATURA = tenantSnap.exists ? (tenantSnap.data().assinatura || null) : null;
-
+    // fora do CRM, avisa quando um cliente responder a aprovação
+    setTimeout(() => { try { if (typeof aprVigiaGlobal === 'function') aprVigiaGlobal(); } catch (e) {} }, 2500);
     return true;
   } catch (err) {
     console.error("Erro ao resolver tenant:", err);
@@ -6553,6 +6554,10 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '14/10/2026 · Aprovação e recorrências', itens: [
+    { titulo: 'Resposta do cliente que não passa despercebida', badges: ['corrigido'], texto: 'Quando o cliente responde o link de aprovação (ou o portal), chega o aviso "Obaaa! Cliente aprovou 🎉" ou "ATENÇÃO: Cliente respondeu e pediu alterações" com o comentário, e ele fica na tela até você fechar. Antes, se o sistema estava fechado na hora da resposta, o aviso entrava calado no sino. Agora ele aparece também quando você estiver no ERP, no Financeiro ou nas Configurações. O cartão e o conteúdo vão para Copy (aprovado) ou para Alteração/Revisão.' },
+    { titulo: 'Recorrência: recebeu, aparece o mês seguinte', badges: ['melhoria'], texto: 'Ao criar a recorrência, aparecem o mês do primeiro vencimento e o seguinte. Quando você marca uma conta como recebida, a do mês seguinte aparece na hora. Se chegar o vencimento sem receber, ela também aparece (a não ser que tenha marcado "Não recebi").' },
+  ]},
   { data: '14/10/2026 · Fluxo do conteúdo', itens: [
     { titulo: 'Fluxo novo: Planejamento → Design → Aprovação → Copy → Publicado', badges: ['melhoria'], texto: 'Tarefa do dia marcada como "É conteúdo" nasce no Planejamento do Conteúdos. "Aprovar e mandar ao Kanban" cria o cartão em A fazer. No Kanban o botão do cartão segue a etapa: Iniciar (vai para Design), Concluir e mandar para aprovação (oferece o link ao cliente), Concluir alteração, e depois da aprovação do cliente o cartão volta na coluna Copy: Concluir copy e publicar. As colunas do Conteúdos passaram a ser Planejamento, Design, Aprovação, Revisão, Copy e Publicado; o projeto Produção de Conteúdo trocou "Aprovados" por "Copy".' },
   ]},
@@ -9592,13 +9597,14 @@ const NOTIF_INICIO = new Date().toISOString();
 function notifChaveVisto() { return chaveLocalTenant('eagles_notif_visto_v1'); }
 function notifVistoEm() { return localStorage.getItem(notifChaveVisto()) || ''; }
 function notifRegistrar(n) {
-  if (NOTIF.some((x) => x.id === n.id)) return;
+  if (NOTIF.some((x) => x.id === n.id)) { if (n.forcar && !NOTIF_FORCADOS.has(n.id)) { NOTIF_FORCADOS.add(n.id); notifToast(n); } return; }
   const pr = notifPrefs();
   if (n.cat && pr[n.cat] === false) return; // a pessoa desligou esse tipo
   NOTIF = [n].concat(NOTIF).sort((a, b) => b.em.localeCompare(a.em)).slice(0, 40);
   notifRenderSino();
   // só "toca" o que chegou depois que a tela abriu (o resto entra calado no sino)
-  if (n.em > NOTIF_INICIO) {
+  if (n.em > NOTIF_INICIO || n.forcar) {
+    if (n.forcar) NOTIF_FORCADOS.add(n.id);
     notifToast(n);
     try { if (pr.computador !== false && 'Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification(n.titulo, { body: n.texto, icon: 'assets/favicon-eagles.png', tag: n.id }); } catch (e) {}
   }
@@ -9631,6 +9637,7 @@ function notifQuando(iso) {
 }
 function notifAbrir() { setTimeout(() => { try { localStorage.setItem(notifChaveVisto(), new Date().toISOString()); } catch (e) {} notifRenderSino(); }, 1500); }
 function notifPedirPermissao() { try { Notification.requestPermission().then(() => notifRenderSino()); } catch (e) {} }
+const NOTIF_FORCADOS = new Set();
 function notifToast(n) {
   let box = document.getElementById('notif-toasts');
   if (!box) { box = document.createElement('div'); box.id = 'notif-toasts'; document.body.appendChild(box); }
@@ -9640,7 +9647,8 @@ function notifToast(n) {
   if (n.acao) el.querySelector('div').onclick = () => { el.remove(); new Function(n.acao)(); };
   box.appendChild(el);
   if (notifPrefs().som !== false) try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(), g = a.createGain(); o.connect(g); g.connect(a.destination); o.frequency.value = n.tipo === 'ok' ? 880 : 520; g.gain.value = 0.04; o.start(); o.stop(a.currentTime + 0.15); } catch (e) {}
-  setTimeout(() => { el.classList.add('saindo'); setTimeout(() => el.remove(), 400); }, 9000);
+  if (n.fixo) el.classList.add('fixo'); // fica até a pessoa fechar
+  else setTimeout(() => { el.classList.add('saindo'); setTimeout(() => el.remove(), 400); }, 9000);
 }
 // recebe uma resposta do cliente (do link ou do portal)
 function aprAoResponder(p, docId) {
@@ -9648,8 +9656,11 @@ function aprAoResponder(p, docId) {
   const titulo = (c && c.titulo) || p.titulo || 'Conteúdo';
   const aprovou = p.resposta === 'aprovado';
   const t = c && prdTarefaDoConteudo(c);
-  notifRegistrar({ cat: 'aprovacao', id: 'apr_' + docId + '_' + (p.rodada || 1) + '_' + p.resposta, em: p.respondidoEm || new Date().toISOString(), tipo: aprovou ? 'ok' : 'alerta',
-    titulo: aprovou ? `${p.cliente || 'Cliente'} aprovou` : `${p.cliente || 'Cliente'} pediu alteração`, texto: aprovou ? titulo : `${titulo}${p.comentario ? ': “' + String(p.comentario).slice(0, 120) + '”' : ''}`,
+  const nome = p.cliente || (c && c.cliente) || 'O cliente';
+  const nova = !p.aplicado;
+  notifRegistrar({ cat: 'aprovacao', id: 'apr_' + docId + '_' + (p.rodada || 1) + '_' + p.resposta, em: p.respondidoEm || new Date().toISOString(), tipo: aprovou ? 'ok' : 'alerta', forcar: nova, fixo: nova,
+    titulo: aprovou ? `Obaaa! ${nome} aprovou 🎉` : `ATENÇÃO: ${nome} respondeu e pediu alterações`,
+    texto: aprovou ? `"${titulo}" foi aprovado e já está na etapa Copy.` : `Abra e veja as sugestões no projeto "${titulo}"${p.comentario ? ': “' + String(p.comentario).slice(0, 140) + '”' : ''}`,
     acao: t ? `prdAbrirNoKanban('${escapeParaOnclick(t.id)}')` : (c ? `dshIrConteudo('${escapeParaOnclick(c.id)}')` : '') });
 }
 
@@ -13015,6 +13026,29 @@ function escAcoes(item) {
     <button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirCadastroItem('funcionario','${id}')">Excluir</button>`;
 }
 
+let APR_VIGIA = false;
+function aprVigiaGlobal() {
+  if (APR_VIGIA || PAGINA_ATIVA_KEY === 'crm' || !FIREBASE_PRONTO || !TENANT_ID || !firestoreDb) return;
+  if (TENANT_PLANO === 'erp' || !nivelPodeOperar() || nivelUsuario() === 'superadmin') return;
+  APR_VIGIA = true;
+  const chave = 'eagles_apr_avisados::' + TENANT_ID;
+  firestoreDb.collection(CNT_PUB_COLECAO).where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
+    const vistos = new Set(lsLoad(chave, []));
+    snap.forEach((d) => {
+      const p = d.data() || {};
+      if (!p.resposta || p.aplicado) return;
+      const id = 'apr_' + d.id + '_' + (p.rodada || 1) + '_' + p.resposta;
+      if (vistos.has(id)) return;
+      vistos.add(id);
+      const aprovou = p.resposta === 'aprovado', nome = p.cliente || 'O cliente';
+      notifRegistrar({ cat: 'aprovacao', id, em: p.respondidoEm || new Date().toISOString(), tipo: aprovou ? 'ok' : 'alerta', forcar: true, fixo: true,
+        titulo: aprovou ? `Obaaa! ${nome} aprovou 🎉` : `ATENÇÃO: ${nome} respondeu e pediu alterações`,
+        texto: aprovou ? `"${p.titulo || 'Conteúdo'}" foi aprovado. Toque para abrir.` : `Abra e veja as sugestões no projeto "${p.titulo || 'Conteúdo'}"${p.comentario ? ': “' + String(p.comentario).slice(0, 140) + '”' : ''}`,
+        acao: "location.href='crm.html#secao=conteudos'" });
+    });
+    lsSave(chave, Array.from(vistos).slice(-200));
+  }, () => {});
+}
 function renderCrmEmConstrucao(secao) {
   const info = CRM_EM_CONSTRUCAO_INFO[secao];
   const el = document.getElementById('crm-secao-' + secao);
@@ -17963,6 +17997,8 @@ function finAtualizar(id, campos) {
   if (finNuvem()) finRef(FIN_COLECAO).doc(id).set(finLimpar(m), { merge: true }).catch(finErro);
   else finGravarLocal();
   finNotificar();
+  // recebeu a conta de uma recorrência: já cria a do mês seguinte
+  if (m.status === 'pago' && l.recorrenciaId && typeof finGerarRecorrencias === 'function') setTimeout(() => { try { const r = FIN_REC_TODOS.find((x) => x.id === l.recorrenciaId); if (r && r.ativa !== false) finGerarParaRecorrencia(r); } catch (e) { console.error(e); } }, 50);
   return true;
 }
 function finExcluir(id) {
@@ -18014,11 +18050,18 @@ function finMesesParaGerar(rec, ate) {
 // a partir do dia do vencimento deste mês, também o mês seguinte
 // (ex.: vence dia 15 → no dia 15/11 aparece a conta de dezembro).
 // A primeira conta (mês de início) aparece sempre, na hora.
+// Até que mês a recorrência já tem conta criada:
+//  - ao criar: o mês de início e o seguinte (ex.: lançou em outubro → outubro e novembro);
+//  - recebeu (ou pagou) a conta de um mês → aparece a do mês seguinte na hora;
+//  - chegou o dia do vencimento do mês atual → aparece o mês seguinte, mesmo sem pagar
+//    (a não ser que tenha marcado "Não recebi", que pausa a recorrência).
 function finAteRecorrencia(rec) {
   const atual = finMesAtual();
   let ate = atual;
   if (finHoje() >= finDataDoMes(atual, rec.dia)) ate = finSomarMeses(atual, 1);
-  if (rec.inicio && rec.inicio > ate) ate = rec.inicio;
+  if (rec.inicio) { const segundo = finSomarMeses(rec.inicio, 1); if (segundo > ate) ate = segundo; }
+  const pagos = (typeof FIN_LANC_TODOS !== 'undefined' ? FIN_LANC_TODOS : []).filter((l) => l.recorrenciaId === rec.id && l.status === 'pago').map((l) => finCompetencia(l)).sort();
+  if (pagos.length) { const depois = finSomarMeses(pagos[pagos.length - 1], 1); if (depois > ate) ate = depois; }
   return ate;
 }
 function finGerarParaRecorrencia(rec) {
@@ -22881,7 +22924,7 @@ const CHATBOT_FAQ = [
         { p: 'Como ligo os e-mails automáticos?', r: 'Configurações → E-mails: resumo do dia para os Diretores (7h), aviso quando o cliente responde a aprovação e lembrete de pagamento por e-mail para os clientes (antes, no dia e depois do vencimento). Precisa do servidor do sistema ligado (plano Blaze).' },
         { p: 'Como agendo posts no Instagram?', r: 'CRM → Operacional → Instagram e anúncios: conecte com a Meta (Facebook que administra a página, com um Instagram profissional ligado). Depois, em Publicações → "Agendar publicação" (ou abrindo um conteúdo → "Agendar no Instagram"), cole o link da imagem, das imagens do carrossel ou do vídeo, a legenda e o horário. O servidor publica sozinho no horário e o conteúdo fica como publicado.' },
         { p: 'Onde vejo os relatórios do Instagram e dos anúncios?', r: 'CRM → Instagram e anúncios → Relatórios: seguidores, alcance, visitas ao perfil e contas engajadas dos últimos 28 dias, os melhores posts e os posts recentes com alcance, curtidas, comentários, salvos e compartilhamentos, e os anúncios dos últimos 30 dias (investido, cliques, CTR, CPC e resultados por campanha). Atualiza todo dia às 6h ou no botão "Atualizar agora".' },
-        { p: 'Quando aparece o próximo mês de uma recorrência?', r: 'Ao criar, aparecem o mês do primeiro vencimento e o seguinte. Depois, o próximo mês aparece sozinho no dia do vencimento do mês atual (ex.: vence dia 15 → em 15/11 aparece a conta de dezembro), mesmo que ainda não tenha sido paga. Se o cliente não pagou, abra a conta → ⋮ → "Não recebi": a recorrência pausa e não cria mais meses até você reativar em Financeiro → Recorrentes (ela volta do mês atual em diante).' },
+        { p: 'Quando aparece o próximo mês de uma recorrência?', r: 'Ao criar, aparecem o mês do primeiro vencimento e o seguinte. Depois, o próximo mês aparece na hora em que você marca a conta como recebida, ou sozinho no dia do vencimento do mês atual (ex.: vence dia 15 → em 15/11 aparece a conta de dezembro), mesmo que ainda não tenha sido paga. Se o cliente não pagou, abra a conta → ⋮ → "Não recebi": a recorrência pausa e não cria mais meses até você reativar em Financeiro → Recorrentes (ela volta do mês atual em diante).' },
         { p: 'Como faço a escala de plantão?', r: 'ERP → Cadastros → Funcionários → "Escalas" na linha do profissional → "Vincular a um cliente": escolha o cliente, o posto, o plantão (12x36, 24x48, 24x72, 12x60 ou personalizado) e a data e hora do primeiro plantão. O sistema calcula todos os plantões; em "Plantões" você marca folga, troca, férias ou falta sem mudar o ciclo. No topo da página: "Escala do profissional" (manda o mês no WhatsApp dele) e "Escala do cliente" (PDF com quem está em cada plantão).' },
         { p: 'Como faço backup dos dados?', r: 'Configurações → Backup → "Baixar backup completo" (só o Diretor). O arquivo tem todos os dados da empresa; guarde no Google Drive, OneDrive ou pendrive. Para restaurar, escolha o arquivo na mesma tela: o sistema devolve o que está nele, mantém o que foi criado depois e, antes, baixa um backup do estado atual. Recomendado: um backup por mês.' },
         { p: 'Como funciona a produção de conteúdos?', r: 'Operacional → Conteúdos. "+ Novo Conteúdo" e escolha o tipo (Reels, Carrossel, Stories...). Cada conteúdo anda pelas etapas (Planejamento, Copy, Design, Aprovação, Revisão, Aprovado, Publicação). Mídia entra por link (Drive, OneDrive...). O ícone de link gera o endereço de aprovação pro cliente: ele aprova ou pede ajustes, e o conteúdo anda sozinho.' },

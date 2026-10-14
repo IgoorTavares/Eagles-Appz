@@ -5210,3 +5210,6 @@ body.sis-wiz-aberto { overflow: hidden; }
 .esc-mes b { min-width: 130px; text-align: center; }
 #esc-msg { width: 100%; font-family: inherit; font-size: 13px; }
 .sis-whats-btn { background: #25d366 !important; border-color: #25d366 !important; color: #062b14 !important; text-decoration: none; }
+.notif-toast.fixo { border-width: 2px; box-shadow: 0 12px 40px rgba(0,0,0,.35); }
+.notif-toast.fixo.ok { border-color: var(--success); }
+.notif-toast.fixo.alerta { border-color: var(--warning, #f59e0b); }

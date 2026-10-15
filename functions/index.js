@@ -26,7 +26,15 @@ const EMAIL_FROM = defineString('EMAIL_FROM', { default: 'Eagles Labz <nao-respo
 const SEGREDOS_EMAIL = [RESEND_API_KEY];
 
 // ---------- utilidades ----------
-async function lerDados(tenantId, chave, padrao) { const s = await db.doc(`tenants/${tenantId}/dados/${chave}`).get(); return s.exists && s.data().valor !== undefined ? s.data().valor : padrao; }
+// listas que viraram "um documento por item" (igual ao CHAVES_COLECAO do sistema)
+const COLECOES = { eagles_crm_clientes_v1: 'crm_clientes', eagles_crm_negocios_v1: 'crm_negocios', eagles_crm_contratos_v1: 'crm_contratos', eagles_servicos_v1: 'crm_servicos', eagles_crm_tarefas_v1: 'crm_tarefas_dia', eagles_crm_lembretes_v1: 'crm_lembretes', eagles_clientes_fornecedores_v1: 'erp_clientes_fornecedores' };
+async function lerDados(tenantId, chave, padrao) {
+  if (COLECOES[chave]) {
+    const c = await db.collection(`tenants/${tenantId}/${COLECOES[chave]}`).get();
+    if (!c.empty) return c.docs.map((d) => Object.assign({}, d.data(), { id: d.id }));
+  }
+  const s = await db.doc(`tenants/${tenantId}/dados/${chave}`).get(); return s.exists && s.data().valor !== undefined ? s.data().valor : padrao;
+}
 async function diretores(tenantId) {
   const s = await db.collection('usuarios').where('tenantId', '==', tenantId).get();
   return s.docs.map((d) => Object.assign({ uid: d.id }, d.data())).filter((u) => (u.role === 'Diretor' || u.titular) && u.email);

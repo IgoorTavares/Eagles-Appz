@@ -749,6 +749,9 @@ const CHAVES_COLECAO = {
   eagles_contratos_v1: 'erp_contratos', eagles_pedido_compras_v1: 'erp_pedido_compras', eagles_notas_fiscais_entrada_v1: 'erp_notas_entrada',
   eagles_lancamentos_estoque_v1: 'erp_mov_estoque', eagles_vendedores_v1: 'erp_vendedores', eagles_funcionarios_v1: 'erp_funcionarios',
   eagles_objetos_postagem_v1: 'erp_objetos_postagem', eagles_conferencia_estoque_v1: 'erp_conferencia_estoque',
+  // listas do CRM (mesma proteção: duas pessoas salvando juntas não se apagam)
+  eagles_crm_clientes_v1: 'crm_clientes', eagles_crm_negocios_v1: 'crm_negocios', eagles_crm_contratos_v1: 'crm_contratos',
+  eagles_servicos_v1: 'crm_servicos', eagles_crm_tarefas_v1: 'crm_tarefas_dia', eagles_crm_lembretes_v1: 'crm_lembretes',
 };
 const COL_ULTIMO = {}; // chave -> Map(id -> JSON do item como está no banco)
 function colRef(key) { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(CHAVES_COLECAO[key]); }
@@ -5725,8 +5728,19 @@ function lerImagemRedimensionada(file, maxW, maxH) {
   });
 }
 
-function urlImagemSegura(url) {
+// Link de "compartilhar" do Google Drive ou do Dropbox abre uma página, não a
+// imagem: aqui ele vira o endereço da própria imagem (o arquivo precisa estar
+// como "Qualquer pessoa com o link").
+function linkImagemDireto(url) {
   const u = String(url || '').trim();
+  const d = u.match(/^https:\/\/(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]{10,})/i);
+  if (d) return `https://drive.google.com/thumbnail?id=${d[1]}&sz=w2000`;
+  const db = u.match(/^https:\/\/(?:www\.)?dropbox\.com\/([^?#]+)(\?[^#]*)?/i);
+  if (db) return `https://www.dropbox.com/${db[1]}?raw=1`;
+  return u;
+}
+function urlImagemSegura(url) {
+  const u = linkImagemDireto(url);
   if (/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(u)) return u;
   if (/^https:\/\/[^\s"'<>()\\]+$/i.test(u)) return u;
   return '';
@@ -6472,6 +6486,36 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '16/10/2026 · Kanban', itens: [
+    { titulo: 'Rolagem para o lado sempre à vista', badges: ['corrigido'], texto: 'O quadro do Kanban crescia até a altura da coluna mais cheia, e a barra para rolar para o lado ficava lá no fim da página. Agora o quadro cabe na tela: cada coluna rola para baixo sozinha e a barra de rolar para o lado fica sempre visível, discreta, no tom do sistema.' },
+    { titulo: 'Cartões da produção no quadro geral', badges: ['corrigido'], texto: 'Em "Todas as tarefas", os cartões da Produção de Conteúdo que estavam esperando o cliente apareciam em "A Fazer", e arrastar não funcionava. Agora cada etapa aparece na coluna equivalente (Em progresso → Em Progresso, Aprovação do cliente → Avaliação, Alteração → Alteração, Copy → Em Progresso, Publicado → Concluído) e dá para arrastar entre elas.' },
+  ]},
+  { data: '15/10/2026 · Portal do cliente', itens: [
+    { titulo: 'Portal mostrava só uma das peças do cliente', badges: ['corrigido'], texto: 'O portal juntava as peças pelo nome do cliente escrito exatamente igual: "Seven" e "Seven " (com espaço no fim), ou "seven", viravam clientes diferentes, e uma das peças ficava de fora (ou ia para outro portal). Agora espaços, maiúsculas e acentos não atrapalham, e o nome do cliente é salvo sem espaço sobrando.' },
+  ]},
+  { data: '15/10/2026 · Aprovação e Kanban', itens: [
+    { titulo: 'Link de aprovação = portal do cliente', badges: ['melhoria'], texto: 'O "Enviar para aprovação" do Conteúdos agora manda o link do portal do cliente, que abre direto na peça, com a imagem grande, a legenda e os botões Aprovar e Pedir alteração. Links antigos de aprovação (aprovacao.html) passam a abrir o portal quando a peça é reenviada.' },
+    { titulo: 'Kanban mostra a arte da produção', badges: ['melhoria'], texto: 'Os cartões da Produção de Conteúdo mostram a prévia da arte, e "Abrir o conteúdo completo" abre o conteúdo (imagem, legenda, briefing, datas e aprovação). No cartão completo do Kanban, a caixa "Conteúdo ligado" também mostra a arte e a legenda.' },
+  ]},
+  { data: '15/10/2026 · Conteúdos', itens: [
+    { titulo: 'Botão do cartão de conteúdo', badges: ['corrigido'], texto: 'O botão "Aprovar e mandar ao Kanban" (e o da coluna do Kanban) saía para fora do cartão. Agora fica numa linha só dele, na largura do cartão, abaixo dos ícones.' },
+  ]},
+  { data: '15/10/2026 · Segurança dos dados', itens: [
+    { titulo: 'Listas do CRM sem sobrescrever', badges: ['melhoria'], texto: 'Clientes, negócios do Pipeline, contratos, serviços, tarefas do dia e lembretes do CRM passaram a ser guardados um documento por item, como os cadastros do ERP: duas pessoas salvando ao mesmo tempo não apagam mais o trabalho uma da outra, e cada uma só grava o que mudou. A mudança é automática, na primeira vez que um Diretor ou Administrativo abrir o CRM (a lista antiga fica guardada).' },
+    { titulo: 'Testes automáticos das regras do banco', badges: ['novo'], texto: 'A pasta testes-regras/ testa, num simulador do Firebase, se uma empresa consegue ler ou gravar dados de outra, se quem não está logado acessa algo e se os níveis de acesso são respeitados. Pode rodar sozinha no GitHub a cada envio.' },
+  ]},
+  { data: '15/10/2026 · Kanban', itens: [
+    { titulo: 'Projeto excluído voltava sozinho', badges: ['corrigido'], texto: 'Ao excluir o projeto Produção de Conteúdo, o sistema o recriava logo depois (no Kanban e no Dashboard). Agora ele só é criado de novo quando você manda um conteúdo para o Kanban ("Aprovar e mandar ao Kanban"). Ao excluir qualquer projeto, as tarefas dele vão para as colunas do quadro geral (antes podiam ficar numa coluna que não existe mais), e os conteúdos ligados deixam de constar como "em produção".' },
+  ]},
+  { data: '15/10/2026 · Dashboard e imagens', itens: [
+    { titulo: 'Tarefas atrasadas e de hoje: abrir e concluir', badges: ['corrigido'], texto: 'No Dashboard, cada tarefa atrasada ou de hoje abre onde ela está (o cartão no Kanban, o conteúdo ou a lista do dia) e tem o ✓ para concluir ali mesmo. A tarefa do dia ligada a um cartão aparece uma vez só. Cartões da produção de conteúdo abrem o cartão, para não pular a aprovação do cliente.' },
+    { titulo: 'Imagem do Google Drive e do Dropbox', badges: ['corrigido'], texto: 'O link de compartilhar do Google Drive (ou do Dropbox) colado na imagem do conteúdo não mostrava a imagem. Agora ela aparece no conteúdo, no link de aprovação e no portal do cliente. O arquivo precisa estar compartilhado como "Qualquer pessoa com o link".' },
+  ]},
+  { data: '14/10/2026 · Celular', itens: [
+    { titulo: 'Kanban no celular', badges: ['corrigido'], texto: 'Com cartões no quadro, a tela do Kanban ficava mais larga que o celular (topo, filtros e colunas cortados). Agora cabe na tela: as ferramentas deslizam para o lado, e cada coluna ocupa a largura da tela e desliza de uma em uma.' },
+    { titulo: 'Sino de notificações no celular', badges: ['corrigido'], texto: 'A lista de notificações abria para fora da tela. Agora abre na largura do celular, logo abaixo do topo.' },
+    { titulo: 'Portal do cliente (equipe) no celular', badges: ['corrigido'], texto: 'Na lista de clientes, o nome ficava espremido ao lado dos botões. Agora o nome e a situação ficam em cima e os botões Configurar e Copiar link embaixo, na largura toda.' },
+  ]},
   { data: '14/10/2026 · Configurações', itens: [
     { titulo: 'Ícone gigante na personalização do portal', badges: ['corrigido'], texto: 'Na janela Personalizar Portal do Cliente, o ícone ao lado de "Identidade visual" aparecia enorme (um círculo preto ocupando a janela). Corrigido em todas as janelas das Configurações.' },
   ]},
@@ -9393,7 +9437,7 @@ function prdReconciliarTodos() {
   PRD_TIMER = setTimeout(() => {
     if (typeof CNT === 'undefined' || typeof KB_TAREFAS === 'undefined' || !CNT_CARREGADO || !KB_CARREGADO) return;
     cntMigrarAprovado();
-    if (CNT.some((c) => c.tarefaId) && typeof KB_PROJETOS_CARREGADO !== 'undefined' && KB_PROJETOS_CARREGADO) prdGarantirProjeto(); // "Aprovados" → "Copy" no projeto que já existia
+    if (prdProjeto() && typeof KB_PROJETOS_CARREGADO !== 'undefined' && KB_PROJETOS_CARREGADO) prdGarantirProjeto(); // "Aprovados" → "Copy" no projeto que já existe (nunca recria um projeto apagado)
     CNT.filter((c) => c.tarefaId).forEach((c) => { const t = prdTarefaDoConteudo(c); if (t) prdSincronizar(c, t); });
   }, 400);
 }
@@ -9428,14 +9472,18 @@ function prdAbrirNoKanban(tarefaId) {
   dshIrKanban(tarefaId);
 }
 // botões que entram no cartão do Kanban ligado a um conteúdo
+function prdImgConteudo(c) { const m = (c && c.midia) || {}; return urlImagemSegura(m.capaUrl) || urlImagemSegura(m.url) || urlImagemSegura((m.paginas || [])[0]) || ''; }
+function prdConteudoDaTarefa(t) { return t && t.conteudoId && typeof CNT !== 'undefined' ? CNT.find((x) => x.id === t.conteudoId) : null; }
 function prdHtmlBotoesTarefa(t) {
   if (!t || !t.conteudoId || typeof CNT === 'undefined') return '';
   const c = CNT.find((x) => x.id === t.conteudoId);
   if (!c) return '';
   const ap = c.aprovacao || {};
   const estado = ap.status === 'aprovado' ? 'Cliente aprovou' : ap.status === 'ajustes' ? 'Cliente pediu alteração' : ap.token ? 'Esperando o cliente' : '';
-  return `<div class="prd-caixa">
-    <div><strong>${ic('brilho', 'ic-herda')} Conteúdo ligado</strong><span>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}${c.publicacao ? ' · publica ' + kbDataCurta(c.publicacao) : ''}${estado ? ' · ' + estado + (ap.rodada > 1 ? ` (versão ${ap.rodada})` : '') : ''}</span>
+  const img = prdImgConteudo(c);
+  return `<div class="prd-caixa${img ? ' com-img' : ''}">
+    ${img ? `<img class="prd-caixa-img" src="${escapeHtml(img)}" alt="" onclick="fecharModalKb(); cntAbrirEditor('${escapeParaOnclick(c.id)}')" onerror="this.remove()">` : ''}
+    <div><strong>${ic('brilho', 'ic-herda')} Conteúdo ligado</strong>${c.legenda ? `<p class="prd-legenda">${escapeHtml(String(c.legenda).slice(0, 180))}${c.legenda.length > 180 ? '…' : ''}</p>` : ''}<span>${escapeHtml((CNT_TIPOS[c.tipo] || {}).nome || '')}${c.publicacao ? ' · publica ' + kbDataCurta(c.publicacao) : ''}${estado ? ' · ' + estado + (ap.rodada > 1 ? ` (versão ${ap.rodada})` : '') : ''}</span>
       ${ap.status === 'ajustes' && ap.comentario ? `<p class="prd-comentario">“${escapeHtml(ap.comentario)}”</p>` : ''}</div>
     <div class="prd-botoes"><button type="button" class="btn btn-small" onclick="fecharModalKb(); dshIrConteudo('${escapeParaOnclick(c.id)}')">${ic('abrir', 'ic-herda')} Abrir conteúdo</button>
       <button type="button" class="btn btn-small btn-primary" onclick="cntEnviarAprovacao('${escapeParaOnclick(c.id)}')">${ic('link', 'ic-herda')} ${ap.token ? 'Reenviar ao cliente' : 'Enviar para aprovação'}</button></div>
@@ -9639,9 +9687,13 @@ let PORTAL_LINKS_CARREGADO = false;
 const PORTAL_PUB_FEITO = {};
 let PORTAL_PUB_TIMER = null;
 function portalTokenNovo() { return 'pt' + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 12) + Date.now().toString(36); }
-function portalLinkCliente(nome) { const t = PORTAL_LINKS[nome]; return t ? location.origin + location.pathname.replace(/[^/]*$/, '') + 'portal.html?p=' + encodeURIComponent(t) : ''; }
+// "Seven", "seven" e "Seven " são o mesmo cliente no portal
+function portalNomeIgual(a, b) { return ttSemAcento(String(a || '').trim()).replace(/\s+/g, ' ') === ttSemAcento(String(b || '').trim()).replace(/\s+/g, ' '); }
+function portalChave(nome) { if (!nome) return ''; if (PORTAL_LINKS[nome]) return nome; return Object.keys(PORTAL_LINKS).find((k) => portalNomeIgual(k, nome)) || String(nome).trim(); }
+function portalLinkCliente(nome) { nome = portalChave(nome); const t = PORTAL_LINKS[nome]; return t ? location.origin + location.pathname.replace(/[^/]*$/, '') + 'portal.html?p=' + encodeURIComponent(t) : ''; }
 function portalGarantirToken(nome) {
   if (!nome) return '';
+  nome = portalChave(nome);
   if (PORTAL_LINKS[nome]) return PORTAL_LINKS[nome];
   if (!nivelPodeOperar()) return '';
   PORTAL_LINKS = Object.assign({}, PORTAL_LINKS, { [nome]: portalTokenNovo() });
@@ -9680,10 +9732,11 @@ function portalItemPublico(c) {
   };
 }
 function portalPublicarCliente(nome, forcar) {
+  nome = portalChave(nome);
   const token = PORTAL_LINKS[nome];
   if (!token || !FIREBASE_PRONTO || !TENANT_ID || !firestoreDb || !nivelPodeOperar() || !CNT_CARREGADO) return;
   const cfg = portalEfetivo(portalPadrao(), portalCfgCliente(nome));
-  const visiveis = CNT.filter((c) => c.cliente === nome && cfg.visiveis[pcCategoria(c)])
+  const visiveis = CNT.filter((c) => portalNomeIgual(c.cliente, nome) && cfg.visiveis[pcCategoria(c)])
     .sort((a, b) => String(b.publicacao || b.atualizadoEm || '').localeCompare(String(a.publicacao || a.atualizadoEm || ''))).slice(0, 80);
   // quem está esperando aprovação precisa de um link de resposta
   visiveis.filter((c) => pcCategoria(c) === 'aguardando' && !(c.aprovacao && c.aprovacao.token)).forEach((c) => { aprPrepararLink(c, false).catch((e) => console.error(e)); });
@@ -12460,7 +12513,7 @@ async function errResolver(i) {
 
 // ---------- super administrador: uso por empresa ----------
 const USO_SUBS = ['dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'conteudos', 'agenda', 'atend_envios', 'portal', 'portal_pedidos',
-  'erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque'];
+  'erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes'];
 async function usoContar(ref) {
   try { if (typeof ref.count === 'function') { const s = await ref.count().get(); return s.data().count; } } catch (e) {}
   const s = await ref.get(); return s.size;
@@ -13300,7 +13353,7 @@ function criarNovaTarefaCrm() {
   if (ehConteudo) {
     if (typeof cntCriar !== 'function' || typeof CNT_CARREGADO === 'undefined' || !CNT_CARREGADO) { avisar('O Conteúdos ainda está carregando. Tente de novo em alguns segundos.'); return; }
     const pessoaC = ttEquipe().find((u) => ttSemAcento(u.nome) === ttSemAcento(responsavel));
-    const c = cntCriar({ titulo: texto.slice(0, 140), briefing: descricao, cliente: (document.getElementById('nova-tarefa-cliente') || {}).value || '', tipo: (document.getElementById('nova-tarefa-tipo') || {}).value || 'imagem',
+    const c = cntCriar({ titulo: texto.slice(0, 140), briefing: descricao, cliente: String((document.getElementById('nova-tarefa-cliente') || {}).value || '').trim().replace(/\s+/g, ' '), tipo: (document.getElementById('nova-tarefa-tipo') || {}).value || 'imagem',
       publicacao: (document.getElementById('nova-tarefa-publicacao') || {}).value || '', responsavel: pessoaC ? pessoaC.uid : '', etapa: cntColunas()[0].id, status: 'rascunho', origem: 'tarefa do dia' });
     if (!c) return;
     cntId = c.id;
@@ -14091,14 +14144,33 @@ function kbNomeNorm(n) { return String(n || '').toLowerCase().normalize('NFD').r
 // Em qual coluna do quadro atual a tarefa aparece (tarefa de projeto com
 // colunas próprias vista no quadro geral: mesma coluna pelo nome; a
 // concluída vai pra coluna final; o resto, pra "A Fazer").
+const KB_SINONIMOS = [
+  /^(a fazer|backlog|para fazer|fila|planejamento|to ?do)/,
+  /(progresso|andamento|produ[cç]|fazendo|execu|copy|legenda|design)/,
+  /(aprova|avalia|revis|cliente|valida|confer)/,
+  /(altera|ajuste|corre[cç])/,
+];
+function kbGrupoSinonimo(nome) { const n = kbNomeNorm(nome); return KB_SINONIMOS.findIndex((r) => r.test(n)); }
+// coluna equivalente em outra lista de colunas: mesmo nome, ou a mesma etapa com outro nome
+function kbColunaEquivalente(col, cols) {
+  if (!col) return null;
+  if (col.final) return cols.find((c) => c.final) || cols[cols.length - 1];
+  const mesmo = cols.find((c) => kbNomeNorm(c.nome) === kbNomeNorm(col.nome));
+  if (mesmo) return mesmo;
+  const g = kbGrupoSinonimo(col.nome);
+  if (g === -1) return null;
+  // "Alteração" sem coluna própria no quadro geral fica junto da aprovação
+  const doGrupo = (gr) => { const l = cols.filter((c) => !c.final && kbGrupoSinonimo(c.nome) === gr); if (gr !== 2) return l[0]; return l.find((c) => /aprova/.test(kbNomeNorm(c.nome))) || l.find((c) => /avalia/.test(kbNomeNorm(c.nome))) || l[0]; };
+  return doGrupo(g) || (g === 3 ? doGrupo(2) : null) || null;
+}
 function kbColunaNoQuadro(t) {
   const cols = kbColunas();
   if (cols.some((c) => c.id === t.status)) return t.status;
   const propria = kbColunasDaTarefa(t).find((c) => c.id === t.status);
   if (propria) {
     if (propria.final) return kbFinalDe(cols);
-    const mesmo = cols.find((c) => kbNomeNorm(c.nome) === kbNomeNorm(propria.nome));
-    if (mesmo) return mesmo.id;
+    const eq = kbColunaEquivalente(propria, cols);
+    if (eq) return eq.id;
   }
   return (cols.find((c) => !c.final && kbNomeNorm(c.nome) === 'a fazer') || cols.find((c) => !c.final) || cols[0]).id;
 }
@@ -14110,7 +14182,7 @@ function kbStatusParaTarefa(t, colId) {
   const alvo = kbColunas().concat(kbColunasGlobais()).find((c) => c.id === colId);
   if (!alvo) return null;
   if (alvo.final) return kbFinalDe(proprias);
-  const m = proprias.find((c) => kbNomeNorm(c.nome) === kbNomeNorm(alvo.nome));
+  const m = kbColunaEquivalente(alvo, proprias);
   return m ? m.id : null;
 }
 
@@ -14539,6 +14611,11 @@ function renderKanbanFiltroResponsaveis() {
 
 // Atualiza a barra (estado dos botões, selects) e desenha o modo atual.
 let KB_RENDER_ADIADO = false;
+function kbAjustarAlturaQuadro() {
+  // a altura vem do CSS (cabe na tela abaixo do topo fixo); aqui só limpa o que um tamanho antigo deixou
+  document.querySelectorAll('.kb-quadro').forEach((q) => { if (q.style.height) q.style.height = ''; });
+}
+if (typeof window !== 'undefined' && !window.__KB_ALTURA) { window.__KB_ALTURA = true; window.addEventListener('resize', () => { clearTimeout(window.__KB_ALT_T); window.__KB_ALT_T = setTimeout(kbAjustarAlturaQuadro, 120); }); }
 function renderKanbanConteudo(forcar) {
   const el = document.getElementById('kb-conteudo');
   if (!el) return;
@@ -14583,6 +14660,7 @@ function renderKanbanConteudo(forcar) {
   const faixaProjeto = pj && p.modo !== 'projetos' ? `<div class="kb-faixa-projeto" style="--kb-cor:${corHexValida(pj.cor) || '#8b5cf6'};">${kbIc('projetos')} <strong>${escapeHtml(pj.nome)}</strong><span>${kbProgressoProjeto(pj.id).pct}% concluído</span><button type="button" onclick="kbAbrirTarefa(null, { projetoId: KB_FILTROS.projeto, cliente: (kbProjeto(KB_FILTROS.projeto) || {}).cliente || '' })">${kbIc('mais')} Tarefa no projeto</button><button type="button" onclick="kbAbrirProjeto(KB_FILTROS.projeto)">Editar projeto</button><button type="button" onclick="kbSetFiltro('projeto', '')">Ver todas as tarefas</button></div>` : '';
   const carga = p.mostrarCarga && p.modo !== 'projetos' ? kbRenderCarga(lista) : '';
   el.innerHTML = aviso + faixaProjeto + carga + desenhar(lista, p);
+  requestAnimationFrame(kbAjustarAlturaQuadro);
   kbRenderBarraSelecao();
   kbRenderAtalhos();
   kbGarantirTimer();
@@ -14625,6 +14703,7 @@ function kbCardHtml(t, p) {
   const selecionada = KB_SELECAO && KB_SELECAO.has(t.id);
   return `
     <div class="kb-card${compacto ? ' compacto' : ''}${concluida ? ' concluida' : ''}${selecionada ? ' selecionada' : ''}" data-kb-card="${escapeHtml(t.id)}" onpointerdown="kbPointerDown(event, '${id}')"${KB_SELECAO ? ` onclick="kbMarcarSelecao('${id}', !KB_SELECAO.has('${id}')); renderKanbanConteudo(true);"` : ''}>
+      ${(() => { const c = prdConteudoDaTarefa(t), img = c && !compacto && prdImgConteudo(c); return img ? `<div class="kb-card-arte" onclick="event.stopPropagation(); cntAbrirEditor('${escapeParaOnclick(c.id)}')"><img src="${escapeHtml(img)}" alt="" loading="lazy" onerror="this.parentElement.remove()"></div>` : ''; })()}
       ${pj || pai ? `<div class="kb-card-origem">${pj ? `<span style="color:${corHexValida(pj.cor) || '#8b5cf6'};">${kbIc('projetos')} ${escapeHtml(pj.nome)}</span>` : ''}${pai ? `<span>${kbIc('camadas')} Subtarefa de: ${escapeHtml(pai.titulo || '')}</span>` : ''}</div>` : ''}
       <div class="kb-card-topo">
         ${KB_SELECAO ? `<input type="checkbox" class="kb-sel" aria-label="Selecionar" ${selecionada ? 'checked' : ''} onclick="event.stopPropagation();" onchange="kbMarcarSelecao('${id}', this.checked); this.closest('.kb-card').classList.toggle('selecionada', this.checked);">` : ''}
@@ -14648,7 +14727,7 @@ function kbCardHtml(t, p) {
         ${(typeof prdBotaoCartao === 'function' && prdBotaoCartao(t)) || `<button type="button" class="kb-card-btn-concluir${concluida ? ' feito' : ''}" onclick="event.stopPropagation(); kbAlternarConcluida('${id}')">${kbIc('check')} ${concluida ? 'Concluída · reabrir' : 'Concluir'}</button>`}
         <button type="button" class="kb-card-btn-lixo" title="Excluir" aria-label="Excluir tarefa" onclick="event.stopPropagation(); kbConfirmarExcluir('${id}')">${kbIc('lixeira')}</button>
       </div>
-      ${compacto ? '' : `<button type="button" class="kb-card-abrir" onclick="event.stopPropagation(); kbAbrirTarefa('${id}')">${kbIc('externo')} Acessar tarefa completa</button>`}
+      ${compacto ? '' : (prdConteudoDaTarefa(t) ? `<button type="button" class="kb-card-abrir" onclick="event.stopPropagation(); cntAbrirEditor('${escapeParaOnclick(t.conteudoId)}')">${kbIc('externo')} Abrir o conteúdo completo</button>` : `<button type="button" class="kb-card-abrir" onclick="event.stopPropagation(); kbAbrirTarefa('${id}')">${kbIc('externo')} Acessar tarefa completa</button>`)}
     </div>`;
 }
 
@@ -15423,11 +15502,23 @@ function kbGravarProjeto(pj, campos) {
 
 function kbExcluirProjeto(id) {
   if (!exigirPodeOperar('excluir projetos')) return;
+  const pjAntes = kbProjeto(id), ehProducao = id === PRD_PJ_ID;
+  const tarefas = KB_TAREFAS.filter((t) => t.projetoId === id);
   KB_PROJETOS = KB_PROJETOS.filter((p) => p.id !== id);
   if (kbNuvem()) kbColecaoProjetosRef().doc(id).delete().catch(kbErroGravar);
   else lsSave(kbChaveLocalProjetos(), KB_PROJETOS);
-  // as tarefas do projeto continuam existindo, só ficam sem projeto
-  KB_TAREFAS.filter((t) => t.projetoId === id).forEach((t) => kbAtualizar(t.id, { projetoId: '' }));
+  // as tarefas do projeto continuam existindo, só ficam sem projeto — e vão para
+  // as colunas do quadro geral (as colunas do projeto apagado deixam de existir)
+  const colsGerais = kbColunasGlobais(), final = kbFinalDe(colsGerais), aFazer = (typeof ttColunaAFazer === 'function' && ttColunaAFazer()) || ((colsGerais.find((c) => !c.final) || {}).id);
+  tarefas.forEach((t) => {
+    const concluida = pjAntes && t.status === kbFinalDe(pjAntes.colunas || []);
+    const m = { projetoId: '' };
+    if (!colsGerais.some((c) => c.id === t.status)) m.status = concluida ? final : aFazer;
+    if (ehProducao) m.conteudoId = '';
+    kbAtualizar(t.id, m);
+  });
+  // apagou a Produção de Conteúdo: os conteúdos deixam de estar "em produção"
+  if (ehProducao && typeof CNT !== 'undefined') CNT.filter((c) => c.tarefaId && tarefas.some((t) => t.id === c.tarefaId)).forEach((c) => cntAtualizar(c.id, { tarefaId: '', prdColuna: '' }, 'O projeto Produção de Conteúdo foi excluído'));
   if (KB_FILTROS.projeto === id) KB_FILTROS.projeto = '';
   renderKanbanConteudo(true);
 }
@@ -20563,6 +20654,7 @@ function cntNovo(dados) {
   }, dados || {});
 }
 function cntCriar(dados) {
+  if (dados && typeof dados.cliente === 'string') dados = Object.assign({}, dados, { cliente: dados.cliente.trim().replace(/\s+/g, ' ') });
   if (!cntPronto()) return null;
   const c = cntNovo(dados);
   c.historico = [cntHist('Criou o conteúdo')].concat(c.historico || []);
@@ -20712,8 +20804,8 @@ function cntCardHtml(c) {
       <button type="button" class="kb-btn-ic" title="Duplicar" aria-label="Duplicar" onclick="cntDuplicar('${id}')">${ic('copiar', 'ic-herda')}</button>
       <button type="button" class="kb-btn-ic kb-btn-perigo" title="Excluir" aria-label="Excluir" onclick="cntExcluir('${id}')">${ic('lixeira', 'ic-herda')}</button>
       ${c.tempo && c.tempo.inicio ? `<button type="button" class="btn btn-small" onclick="cntAlternarTempo('${id}')">⏸ <span data-cnt-tempo="${escapeHtml(c.id)}">${kbFormatarTempo(cntTempoSeg(c))}</span></button>` : ''}
-      ${(() => { const tk = prdTarefaDoConteudo(c); return tk ? `<button type="button" class="btn btn-small prd-no-kanban" title="Abrir o cartão no Kanban" onclick="prdAbrirNoKanban('${escapeParaOnclick(tk.id)}')">${ic('kanban', 'ic-herda')} ${escapeHtml(((((prdProjeto() || {}).colunas) || PRD_COLUNAS).find((x) => x.id === tk.status) || {}).nome || 'Kanban')}</button>` : (cntFinalizado(c) ? '' : `<button type="button" class="btn btn-small btn-primary" onclick="prdIniciar('${id}')">✓ Aprovar e mandar ao Kanban</button>`); })()}
     </div>
+    <div class="cnt-acao-principal">${(() => { const tk = prdTarefaDoConteudo(c); return tk ? `<button type="button" class="btn btn-small prd-no-kanban" title="Abrir o cartão no Kanban" onclick="prdAbrirNoKanban('${escapeParaOnclick(tk.id)}')">${ic('kanban', 'ic-herda')} ${escapeHtml(((((prdProjeto() || {}).colunas) || PRD_COLUNAS).find((x) => x.id === tk.status) || {}).nome || 'Kanban')}</button>` : (cntFinalizado(c) ? '' : `<button type="button" class="btn btn-small btn-primary" onclick="prdIniciar('${id}')">✓ Aprovar e mandar ao Kanban</button>`); })()}</div>
     <button type="button" class="cnt-detalhes-btn" onclick="CNT_FILTRO.abertos['${id}'] = !CNT_FILTRO.abertos['${id}']; cntRender();">${kbIc(aberto ? 'setaCima' : 'setaBaixo')} Detalhes</button>
     ${aberto ? `<div class="cnt-detalhes">${c.cliente ? `<div><b>Cliente:</b> ${escapeHtml(c.cliente)}</div>` : ''}${c.legenda ? `<p>${escapeHtml(c.legenda).slice(0, 220)}</p>` : ''}<div><b>Publicar em:</b> ${(c.redes || []).map((r) => CNT_REDES[r]).filter(Boolean).join(', ') || '—'}</div>
       <label class="kb-vazio-mini">Mover para <select onchange="cntMover('${id}', this.value)">${cntColunas().map((col) => `<option value="${escapeHtml(col.id)}"${col.id === c.etapa ? ' selected' : ''}>${escapeHtml(col.nome)}</option>`).join('')}</select></label></div>` : ''}
@@ -20868,7 +20960,14 @@ function cntCampoTexto(campo, rot, ph, linhas) {
   const v = CNT_ED[campo] || '';
   return `<div class="cnt-campo"><label>${rot}</label><textarea rows="${linhas || 4}" maxlength="5000" placeholder="${ph}" oninput="CNT_ED.${campo} = this.value; this.nextElementSibling.textContent = this.value.length + ' caracteres';">${escapeHtml(v)}</textarea><small>${v.length} caracteres</small></div>`;
 }
-function cntPreviaImg(url, ph) { const u = urlImagemSegura(url); return u ? `<img src="${escapeHtml(u)}" alt="">` : `<span>${ph}</span>`; }
+function cntPreviaImg(url, ph) {
+  const u = urlImagemSegura(url);
+  if (!u) return `<span>${ph}</span>`;
+  const drive = /drive\.google\.com|dropbox\.com/i.test(u);
+  // se a imagem não abrir, explica o motivo mais comum em vez de mostrar o ícone quebrado
+  const aviso = `<span class="cnt-img-erro">${ic('alerta', 'ic-herda')}<b>A imagem não carregou</b>${drive ? 'No Drive: Compartilhar → Acesso geral → "Qualquer pessoa com o link".' : 'Confira se o link abre direto a imagem (JPG, PNG ou WEBP).'}</span>`;
+  return `<img src="${escapeHtml(u)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'), { className: 'cnt-img-erro-caixa', innerHTML: ${escapeHtml(JSON.stringify(aviso))} }))">`;
+}
 function cntHtmlMidia() {
   const e = CNT_ED, t = CNT_TIPOS[e.tipo] || CNT_TIPOS.imagem, m = e.midia;
   const link = (campo, rot, ph) => `<input type="url" maxlength="600" placeholder="${ph}" value="${escapeHtml(m[campo] || '')}" oninput="CNT_ED.midia.${campo} = this.value.trim()" onchange="cntRenderEditor()" aria-label="${rot}">`;
@@ -21039,14 +21138,20 @@ async function cntEnviarAprovacao(id) {
   let token;
   try { token = await aprPrepararLink(c, true); } catch (err) { cntErro(err); return; }
   const ap = (CNT.find((x) => x.id === id) || {}).aprovacao || {};
-  const usaPortal = c.cliente && typeof portalEfetivo === 'function' && portalEfetivo(portalPadrao(), portalCfgCliente(c.cliente)).link === 'portal' && portalGarantirToken(c.cliente);
-  const link = usaPortal ? portalLinkCliente(c.cliente) : cntLinkAprovacao(token);
-  if (usaPortal) portalAgendarPublicacao();
+  // com cliente, o link é o do portal (o mesmo visual), abrindo direto nesta peça;
+  // a resposta continua indo para o mesmo lugar (os avisos e os cartões andam igual)
+  const usaPortal = c.cliente && typeof portalGarantirToken === 'function' && typeof PORTAL_LINKS_CARREGADO !== 'undefined' && PORTAL_LINKS_CARREGADO && portalGarantirToken(c.cliente);
+  const link = usaPortal ? portalLinkCliente(c.cliente) + '&c=' + encodeURIComponent(c.id) : cntLinkAprovacao(token);
+  if (usaPortal) {
+    portalPublicarCliente(c.cliente, true);
+    // quem abrir o link antigo (aprovacao.html) desta peça vai para o portal
+    try { firestoreDb.collection(CNT_PUB_COLECAO).doc(token).set({ portalToken: PORTAL_LINKS[portalChave(c.cliente)], portalConteudo: c.id }, { merge: true }).catch(() => {}); } catch (e) {}
+  }
   try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
   const contato = linkContatoCliente(c.cliente);
   const tipo = ((CNT_TIPOS[c.tipo] || {}).nome || 'conteúdo').toLowerCase();
   linkCompartilhar({ titulo: ap.rodada > 1 ? `Aprovação · versão ${ap.rodada}` : 'Aprovação', link, telefone: contato.telefone, email: contato.email,
-    texto: `Mande o link para o cliente (ele abre sem login). Quando ele responder, você recebe a notificação na hora e o cartão do Kanban anda sozinho: "Aprovados" ou "Alteração".`,
+    texto: usaPortal ? `É o link do portal do cliente: ele abre direto nesta peça, com os botões Aprovar e Pedir alteração (sem login). Quando ele responder, você recebe o aviso na hora e o cartão do Kanban anda sozinho.` : `Mande o link para o cliente (ele abre sem login). Quando ele responder, você recebe a notificação na hora e o cartão do Kanban anda sozinho.`,
     assunto: `${ap.rodada > 1 ? 'Nova versão para aprovação' : 'Para sua aprovação'}: ${c.titulo || 'conteúdo'}`,
     mensagem: `Olá${c.cliente ? ', ' + atdPrimeiroNome(c.cliente) : ''}! ${ap.rodada > 1 ? `Fizemos as alterações no ${tipo} "${c.titulo || ''}".` : `Segue o ${tipo} "${c.titulo || ''}" para sua aprovação.`} É só abrir o link, aprovar ou pedir alteração:\n${link}` });
 }
@@ -21072,7 +21177,9 @@ async function carregarAprovacaoConteudo() {
   // arquivo final, a página se atualiza sozinha
   firestoreDb.collection(CNT_PUB_COLECAO).doc(token).onSnapshot((snap) => {
     if (!snap.exists) { msg('Conteúdo não encontrado', 'O link pode ter expirado.'); return; }
-    CNT_PUB = Object.assign({ token }, snap.data());
+    const dd = snap.data() || {};
+    if (dd.portalToken) { location.replace('portal.html?p=' + encodeURIComponent(dd.portalToken) + '&c=' + encodeURIComponent(dd.portalConteudo || dd.conteudoId || '')); return; }
+    CNT_PUB = Object.assign({ token }, dd);
     cntRenderAprovacaoPublica();
   }, () => msg('Conteúdo não encontrado', 'O link pode ter expirado.'));
 }
@@ -21349,7 +21456,7 @@ function portalPadrao() {
   };
 }
 function portalSlug(nome) { return 'c_' + (kbNomeNorm(nome).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'cliente'); }
-function portalCfgCliente(nome) { return PORTAL_CLIENTES[nome] || {}; }
+function portalCfgCliente(nome) { if (PORTAL_CLIENTES[nome]) return PORTAL_CLIENTES[nome]; const k = Object.keys(PORTAL_CLIENTES || {}).find((x) => portalNomeIgual(x, nome)); return (k && PORTAL_CLIENTES[k]) || {}; }
 // efetivo = padrão da agência + o que o cliente tem de próprio ('padrao' | true | false)
 function portalEfetivo(padrao, cfg) {
   const r = (grupo, k) => { const v = ((cfg || {})[grupo] || {})[k]; return v === true || v === false ? v : padrao[grupo][k]; };
@@ -21403,12 +21510,12 @@ function portalRender() {
     <div class="kb-segmento" style="margin-bottom:12px;">${[['clientes', 'Clientes'], ['aparencia', 'Aparência e padrões']].map(([a, t]) => `<button type="button" class="${PORTAL_ABA === a ? 'ativo' : ''}" onclick="PORTAL_ABA = '${a}'; portalRender();">${t}</button>`).join('')}</div>
     ${PORTAL_ABA === 'aparencia' ? portalHtmlPadroes() : `
     <div class="portal-resumo"><span><b>${clientes.length}</b> clientes</span><span><b>${clientes.filter((n) => PORTAL_LINKS[n]).length}</b> com link criado</span><span><b>${personalizados.length}</b> com configuração própria</span><small>"Aparência e padrões" vale para todos; cada cliente pode ter o próprio ajuste.</small></div>
-    <div class="srv-acoes"><label class="kb-busca" style="flex:1; max-width:none;">${kbIc('busca')}<input type="search" id="portal-busca" placeholder="Buscar cliente..." value="${escapeHtml(PORTAL_FILTRO.busca)}" oninput="PORTAL_FILTRO.busca = this.value; portalRender();"></label>
+    <div class="srv-acoes portal-filtros"><label class="kb-busca" style="flex:1; max-width:none;">${kbIc('busca')}<input type="search" id="portal-busca" placeholder="Buscar cliente..." value="${escapeHtml(PORTAL_FILTRO.busca)}" oninput="PORTAL_FILTRO.busca = this.value; portalRender();"></label>
       ${[['todos', 'Todos'], ['login', 'Com link'], ['personalizados', 'Personalizados']].map(([v, t]) => `<button type="button" class="btn${PORTAL_FILTRO.tipo === v ? ' btn-primary' : ''}" onclick="PORTAL_FILTRO.tipo = '${v}'; portalRender();">${t}</button>`).join('')}</div>
     <div class="fin-painel" style="padding:0;">${lista.map((n) => { const nn = escapeHtml(JSON.stringify(n)); const nl = PORTAL_LOGINS.filter((l) => l.clienteNome === n).length; return `<div class="portal-linha">
-      <span class="cnt-fixado-av">${escapeHtml(initials(n))}</span><div style="flex:1; min-width:0;"><strong>${escapeHtml(n)}</strong><div><span class="srv-tag${PORTAL_LINKS[n] ? ' ativo' : ''}">${PORTAL_LINKS[n] ? 'Link criado' : 'Sem link ainda'}</span>${Object.keys(portalCfgCliente(n)).length ? ' <span class="srv-tag ativo">Personalizado</span>' : ''}</div></div>
-      <button type="button" class="btn btn-small" onclick="portalAbrirConfig(${nn})">${ic('configuracoes', 'ic-herda')} Configurar</button>
-      <button type="button" class="btn btn-small btn-primary" onclick="portalCopiarLink(${nn})">${ic('link', 'ic-herda')} Copiar link</button>${PORTAL_LINKS[n] ? `<button type="button" class="btn btn-small btn-ghost" title="Gerar um link novo (o antigo para de funcionar)" onclick="portalNovoLink(${nn})">${ic('repetir', 'ic-herda')}</button>` : ''}</div>`; }).join('') || '<p class="kb-vazio" style="padding:20px;">Nenhum cliente encontrado. Os clientes vêm de CRM → Clientes.</p>'}</div>`}
+      <span class="cnt-fixado-av">${escapeHtml(initials(n))}</span><div class="portal-linha-info" style="flex:1; min-width:0;"><strong>${escapeHtml(n)}</strong><div><span class="srv-tag${PORTAL_LINKS[n] ? ' ativo' : ''}">${PORTAL_LINKS[n] ? 'Link criado' : 'Sem link ainda'}</span>${Object.keys(portalCfgCliente(n)).length ? ' <span class="srv-tag ativo">Personalizado</span>' : ''}</div></div>
+      <div class="portal-linha-acoes"><button type="button" class="btn btn-small" onclick="portalAbrirConfig(${nn})">${ic('configuracoes', 'ic-herda')} Configurar</button>
+      <button type="button" class="btn btn-small btn-primary" onclick="portalCopiarLink(${nn})">${ic('link', 'ic-herda')} Copiar link</button>${PORTAL_LINKS[n] ? `<button type="button" class="btn btn-small btn-ghost" title="Gerar um link novo (o antigo para de funcionar)" onclick="portalNovoLink(${nn})">${ic('repetir', 'ic-herda')}</button>` : ''}</div></div>`; }).join('') || '<p class="kb-vazio" style="padding:20px;">Nenhum cliente encontrado. Os clientes vêm de CRM → Clientes.</p>'}</div>`}
   </div>`;
   if (foco) { const i = document.getElementById(foco); if (i) { i.focus(); try { i.setSelectionRange(i.value.length, i.value.length); } catch (e) {} } }
 }
@@ -21633,6 +21740,9 @@ function initPortalCliente() {
       PC.conteudos = (d.conteudos || []).map((c) => (locais[c.id] && locais[c.id].rodada === c.rodada && !c.portalResposta ? Object.assign({}, c, locais[c.id].campos) : c));
       document.title = (PC.cfg.marca ? PC.cfg.marca + ' · ' : '') + 'Portal do cliente';
       pcRender();
+      // veio pelo link de uma peça (…&c=id): abre a peça direto, uma vez
+      const alvo = String(new URLSearchParams(location.search).get('c') || '');
+      if (alvo && !PC.abriuAlvo && PC.conteudos.some((x) => x.id === alvo)) { PC.abriuAlvo = true; setTimeout(() => pcAbrirDetalhe(alvo), 150); }
     }, () => aviso('Portal indisponível', 'Não foi possível abrir agora. Tente de novo em instantes.'));
     return;
   }
@@ -21933,9 +22043,18 @@ function dshQuando(iso) {
 }
 function dshIrKanban(id) { mostrarSecaoCrm('kanban', document.querySelector('[data-menu-id="kanban"]')); setTimeout(() => { if (typeof kbAbrirTarefa === 'function') kbAbrirTarefa(id); }, 60); }
 function dshIrConteudo(id) { mostrarSecaoCrm('conteudos', document.querySelector('[data-menu-id="conteudos"]')); setTimeout(() => { if (typeof cntAbrirEditor === 'function') cntAbrirEditor(id); }, 60); }
-function dshLinha(texto, sub, origem, acao, cor) {
-  return `<div class="list-row${acao ? ' dsh-clicavel' : ''}"${acao ? ` onclick="${acao}"` : ''}><div class="list-row-main"><div class="list-row-title">${escapeHtml(texto)}</div>${sub ? `<div class="list-row-sub"${cor ? ` style="color:${cor};"` : ''}>${sub}</div>` : ''}</div>${origem ? `<span class="dsh-origem">${escapeHtml(origem)}</span>` : ''}</div>`;
+// cada linha abre onde a tarefa está e tem o ✓ para concluir ali mesmo
+function dshLinha(texto, sub, origem, acao, cor, concluir) {
+  return `<div class="list-row${acao ? ' dsh-clicavel' : ''}"${acao ? ` onclick="${acao}"` : ''}>${concluir ? `<button type="button" class="dsh-check" title="Concluir" aria-label="Concluir" onclick="event.stopPropagation(); ${concluir}">${ic('check', 'ic-herda')}</button>` : ''}<div class="list-row-main"><div class="list-row-title">${escapeHtml(texto)}</div>${sub ? `<div class="list-row-sub"${cor ? ` style="color:${cor};"` : ''}>${sub}</div>` : ''}</div>${origem ? `<span class="dsh-origem">${escapeHtml(origem)}${acao ? ' ›' : ''}</span>` : ''}</div>`;
 }
+// tarefa do dia: se está ligada a um cartão, abre o cartão; se não, abre a lista do dia
+function dshAcaoTarefaDia(t) {
+  if (t.kbId && KB_TAREFAS.some((k) => k.id === t.kbId)) return `dshIrKanban('${escapeParaOnclick(t.kbId)}')`;
+  if (t.cntId) return `dshIrConteudo('${escapeParaOnclick(t.cntId)}')`;
+  return "const el = document.getElementById('crm-tarefas-lista'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.closest('.panel') && el.closest('.panel').classList.add('dsh-pisca'); setTimeout(() => { const p = el.closest('.panel'); if (p) p.classList.remove('dsh-pisca'); }, 1600); }";
+}
+// cartão de produção de conteúdo não pode ser concluído pulando a aprovação: abre o cartão
+function dshConcluirKb(t) { return t.projetoId === PRD_PJ_ID && t.conteudoId ? '' : `kbAlternarConcluida('${escapeParaOnclick(t.id)}'); setTimeout(renderCrmDashTarefasFiltradas, 150)`; }
 
 // ---------- tarefas atrasadas e de hoje (lista do dia + Kanban + Conteúdos) ----------
 function renderCrmDashKanbanResumo() {
@@ -21964,11 +22083,14 @@ function renderCrmDashTarefasFiltradas() {
   const kb = dshKb().filter((t) => t.prazo && !kbConcluida(t));
   const cnt = dshCnt().filter((c) => c.entrega && !cntFinalizado(c));
   const at = [], dia = [];
-  CRM_TAREFAS_DATA.filter((t) => (!t.recorrencia || t.recorrencia === 'nenhuma') && !t.feita && t.data && t.data < hoje).forEach((t) => at.push({ data: t.data, h: dshLinha(t.texto, formatDatePt(t.data), 'Tarefas do dia', '', 'var(--danger)') }));
-  kb.filter((t) => t.prazo < hoje).forEach((t) => at.push({ data: t.prazo, h: dshLinha(t.titulo || 'Sem título', `${formatDatePt(t.prazo)}${t.cliente ? ' · ' + escapeHtml(t.cliente) : ''}`, 'Kanban', `dshIrKanban('${escapeParaOnclick(t.id)}')`, 'var(--danger)') }));
+  // a tarefa do dia ligada a um cartão aparece uma vez só (como cartão do Kanban)
+  const ligadaAoKb = (t) => t.kbId && KB_TAREFAS.some((k) => k.id === t.kbId);
+  const concluirDia = (t) => `toggleTarefaCrm('${escapeParaOnclick(t.id)}'); setTimeout(renderCrmDashTarefasFiltradas, 150)`;
+  CRM_TAREFAS_DATA.filter((t) => (!t.recorrencia || t.recorrencia === 'nenhuma') && !t.feita && t.data && t.data < hoje && !ligadaAoKb(t)).forEach((t) => at.push({ data: t.data, h: dshLinha(t.texto, formatDatePt(t.data), 'Tarefas do dia', dshAcaoTarefaDia(t), 'var(--danger)', concluirDia(t)) }));
+  kb.filter((t) => t.prazo < hoje).forEach((t) => at.push({ data: t.prazo, h: dshLinha(t.titulo || 'Sem título', `${formatDatePt(t.prazo)}${t.cliente ? ' · ' + escapeHtml(t.cliente) : ''}`, 'Kanban', `dshIrKanban('${escapeParaOnclick(t.id)}')`, 'var(--danger)', dshConcluirKb(t)) }));
   cnt.filter((c) => c.entrega < hoje).forEach((c) => at.push({ data: c.entrega, h: dshLinha(c.titulo || 'Sem título', `${formatDatePt(c.entrega)}${c.cliente ? ' · ' + escapeHtml(c.cliente) : ''}`, 'Conteúdo', `dshIrConteudo('${escapeParaOnclick(c.id)}')`, 'var(--danger)') }));
-  CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje) && !tarefaConcluidaEm(t, hoje)).forEach((t) => dia.push(dshLinha(t.texto, '', 'Tarefas do dia')));
-  kb.filter((t) => t.prazo === hoje).forEach((t) => dia.push(dshLinha(t.titulo || 'Sem título', t.cliente ? escapeHtml(t.cliente) : '', 'Kanban', `dshIrKanban('${escapeParaOnclick(t.id)}')`)));
+  CRM_TAREFAS_DATA.filter((t) => tarefaValeHoje(t, hoje) && !tarefaConcluidaEm(t, hoje) && !ligadaAoKb(t)).forEach((t) => dia.push(dshLinha(t.texto, '', 'Tarefas do dia', dshAcaoTarefaDia(t), '', concluirDia(t))));
+  kb.filter((t) => t.prazo === hoje).forEach((t) => dia.push(dshLinha(t.titulo || 'Sem título', t.cliente ? escapeHtml(t.cliente) : '', 'Kanban', `dshIrKanban('${escapeParaOnclick(t.id)}')`, '', dshConcluirKb(t))));
   cnt.filter((c) => c.entrega === hoje).forEach((c) => dia.push(dshLinha(c.titulo || 'Sem título', `Entrega${c.cliente ? ' · ' + escapeHtml(c.cliente) : ''}`, 'Conteúdo', `dshIrConteudo('${escapeParaOnclick(c.id)}')`)));
   if (elAt) elAt.innerHTML = at.length ? at.sort((a, b) => a.data.localeCompare(b.data)).slice(0, 8).map((x) => x.h).join('') + (at.length > 8 ? `<p class="kb-vazio-mini">+ ${at.length - 8} atrasada(s)</p>` : '') : '<div class="crm-dash-vazio"><p>Nenhuma tarefa atrasada ' + ic('festa') + '</p></div>';
   // próximos 7 dias, para nenhuma tarefa com prazo ficar escondida
@@ -22562,10 +22684,10 @@ function agComoConfigurarGoogle() {
 // apaga o que foi criado depois do backup. Antes de restaurar, baixa um
 // backup do estado atual. Logins não entram (contas não se recriam).
 const BKP_META_KEY = 'eagles_backup_meta_v1';
-const BKP_SUBCOLECOES = ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'agenda', 'portal', 'portal_pedidos', 'receitas_pendentes', 'atend_envios'];
+const BKP_SUBCOLECOES = ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'agenda', 'portal', 'portal_pedidos', 'receitas_pendentes', 'atend_envios', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes'];
 const BKP_PUBLICAS = ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'conteudos_publicos', 'leads_publicos'];
 const BKP_LEMBRETE_DIAS = 30;
-const BKP_NOMES = { erp_produtos: 'Produtos e serviços (ERP)', erp_pedidos_venda: 'Pedidos de venda', erp_clientes_fornecedores: 'Clientes e fornecedores (ERP)', erp_contratos: 'Contratos (ERP)', erp_pedido_compras: 'Compras', erp_notas_entrada: 'Notas de entrada', erp_mov_estoque: 'Movimentações de estoque', erp_vendedores: 'Vendedores', erp_funcionarios: 'Funcionários', erp_objetos_postagem: 'Objetos de postagem', erp_conferencia_estoque: 'Conferências de estoque', dados: 'Cadastros, CRM e configurações', kanban_tarefas: 'Tarefas do Kanban', kanban_projetos: 'Projetos', fin_lancamentos: 'Lançamentos financeiros', fin_recorrencias: 'Contas recorrentes', fin_meta: 'Controle do Financeiro', conteudos: 'Conteúdos', agenda: 'Compromissos', portal: 'Portal do Cliente', portal_pedidos: 'Pedidos do portal', receitas_pendentes: 'Receitas pendentes', propostas_publicas: 'Propostas', briefings_publicos: 'Briefings', planos_publicos: 'Planos publicados', paginas_publicas: 'Página pública', conteudos_publicos: 'Links de aprovação', leads_publicos: 'Leads do site', pix_publico: 'PIX' };
+const BKP_NOMES = { crm_clientes: 'Clientes (CRM)', crm_negocios: 'Negócios do Pipeline', crm_contratos: 'Contratos (CRM)', crm_servicos: 'Serviços (CRM)', crm_tarefas_dia: 'Tarefas do dia', crm_lembretes: 'Lembretes', erp_produtos: 'Produtos e serviços (ERP)', erp_pedidos_venda: 'Pedidos de venda', erp_clientes_fornecedores: 'Clientes e fornecedores (ERP)', erp_contratos: 'Contratos (ERP)', erp_pedido_compras: 'Compras', erp_notas_entrada: 'Notas de entrada', erp_mov_estoque: 'Movimentações de estoque', erp_vendedores: 'Vendedores', erp_funcionarios: 'Funcionários', erp_objetos_postagem: 'Objetos de postagem', erp_conferencia_estoque: 'Conferências de estoque', dados: 'Cadastros, CRM e configurações', kanban_tarefas: 'Tarefas do Kanban', kanban_projetos: 'Projetos', fin_lancamentos: 'Lançamentos financeiros', fin_recorrencias: 'Contas recorrentes', fin_meta: 'Controle do Financeiro', conteudos: 'Conteúdos', agenda: 'Compromissos', portal: 'Portal do Cliente', portal_pedidos: 'Pedidos do portal', receitas_pendentes: 'Receitas pendentes', propostas_publicas: 'Propostas', briefings_publicos: 'Briefings', planos_publicos: 'Planos publicados', paginas_publicas: 'Página pública', conteudos_publicos: 'Links de aprovação', leads_publicos: 'Leads do site', pix_publico: 'PIX' };
 let BKP_META = null;
 let BKP_ARQUIVO = null;
 
@@ -27320,7 +27442,7 @@ async function excluirEmpresaCompleta(tenantId, nomeEmpresa) {
 
     // todas as subcoleções da empresa (antes só "dados" era apagada e as
     // tarefas/projetos do Kanban ficavam órfãos no banco)
-    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'portal', 'portal_pedidos', 'agenda', 'atend_envios', 'erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque']) {
+    for (const sub of ['dados', 'kanban_tarefas', 'kanban_projetos', 'vagas', 'receitas_pendentes', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'portal', 'portal_pedidos', 'agenda', 'atend_envios', 'erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes']) {
       const snap = await firestoreDb.collection('tenants').doc(tenantId).collection(sub).get();
       const docs = []; snap.forEach((d) => docs.push(d.ref));
       for (let i = 0; i < docs.length; i += 400) { // limite de 500 operações por lote

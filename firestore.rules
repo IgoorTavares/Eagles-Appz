@@ -332,12 +332,12 @@ service cloud.firestore {
         allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar());
       }
 
-      // Cadastros do ERP: um documento por item (antes era uma lista inteira
-      // dentro de dados/{chave}; duas gravações juntas se apagavam).
+      // Cadastros do ERP e listas do CRM: um documento por item (antes era uma
+      // lista inteira dentro de dados/{chave}; duas gravações juntas se apagavam).
       match /{colecaoErp}/{itemId} {
-        allow read: if (colecaoErp in ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque']) &&
+        allow read: if (colecaoErp in ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes']) &&
           (souSuperAdmin() || souMembroAtivo(tenantId));
-        allow write: if (colecaoErp in ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque']) &&
+        allow write: if (colecaoErp in ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes']) &&
           (souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar()));
       }
 

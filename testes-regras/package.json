@@ -1,0 +1,14 @@
+{
+  "name": "eagles-labz-testes-regras",
+  "private": true,
+  "description": "Testes automáticos das regras do banco (firestore.rules) num simulador do Firebase",
+  "type": "module",
+  "scripts": {
+    "test": "node --test regras.test.mjs",
+    "simulador": "firebase emulators:exec --only firestore --project demo-eagles \"npm test\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase": "^10.12.2"
+  }
+}

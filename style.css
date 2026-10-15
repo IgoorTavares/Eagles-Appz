@@ -5366,3 +5366,76 @@ button.pv-kpi { cursor: pointer; }
 @media (max-width: 420px) { .pv-grade { grid-template-columns: 1fr; } }
 .cfg-portal-preview.pv-prev { height: auto !important; max-height: none !important; aspect-ratio: auto !important; overflow: hidden; }
 .pv-prev-rot { top: auto; bottom: 8px; right: 12px; }
+
+/* ---------- celular: Kanban dentro da tela, sino e portal ---------- */
+/* o quadro largo esticava o topo, a barra e os filtros para fora da tela */
+.kb > * { min-width: 0; max-width: 100%; }
+.kb-conteudo, .kb-quadro { max-width: 100%; }
+@media (max-width: 860px) {
+  .kb-quadro { scroll-snap-type: x mandatory; scroll-padding: 0 4px; gap: 10px; -webkit-overflow-scrolling: touch; }
+  .kb-coluna { flex: 0 0 calc(100vw - 56px); max-width: 340px; scroll-snap-align: start; min-height: 50vh; }
+  .kb-barra { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; padding-bottom: 4px; }
+  .kb-barra::-webkit-scrollbar { display: none; }
+  .kb-barra > * { flex-shrink: 0; }
+  .kb-filtros { flex-wrap: wrap; }
+  .kb-card { max-width: 100%; }
+  .kb-card-titulo, .kb-card strong { overflow-wrap: anywhere; }
+  /* o painel do sino abria para fora da tela */
+  .topbar #notif-dropdown-menu, #notif-dropdown-menu { position: fixed !important; left: 10px !important; right: 10px !important; top: calc(env(safe-area-inset-top, 0px) + 66px) !important; width: auto !important; max-height: calc(100vh - 170px); overflow-y: auto; z-index: 1200; }
+  /* avisos na tela: menos espaço, sem cobrir tudo */
+  .notif-toasts, #notif-toasts { left: 10px; right: 10px; bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); }
+  /* Portal do cliente (equipe): nome em cima, botões embaixo */
+  .portal-linha { flex-wrap: wrap; row-gap: 10px; }
+  .portal-linha > div:first-of-type, .portal-linha .portal-linha-info { flex: 1 1 calc(100% - 60px); min-width: 0; }
+  .portal-linha > .portal-linha-acoes, .portal-linha .portal-acoes { flex: 1 1 100%; display: flex; gap: 8px; }
+}
+@media (max-width: 860px) { #notif-dropdown-menu { background: var(--bg-card, #121812) !important; backdrop-filter: none !important; box-shadow: 0 18px 50px rgba(0,0,0,.5) !important; border: 1px solid var(--border) !important; } }
+@media (max-width: 860px) {
+  .portal-filtros { flex-wrap: wrap; gap: 8px; }
+  .portal-filtros .kb-busca { flex: 1 1 100% !important; }
+  .portal-filtros > *:not(.kb-busca) { flex: 1 1 auto; }
+  .portal-linha-acoes { margin-left: 52px; flex-wrap: wrap; }
+  .portal-linha-acoes .btn { flex: 1; justify-content: center; }
+}
+
+/* ---------- Dashboard: concluir a tarefa na própria linha ---------- */
+.dsh-check { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--border); background: transparent; color: transparent; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; margin-right: 10px; transition: all .15s; }
+.dsh-check .ic { width: 14px; height: 14px; }
+.dsh-check:hover { border-color: var(--success); color: var(--success); background: var(--success-tint, rgba(63,174,18,.12)); }
+.list-row.dsh-clicavel { cursor: pointer; }
+.list-row.dsh-clicavel:hover .list-row-title { color: var(--accent, var(--success)); }
+.dsh-pisca { box-shadow: 0 0 0 2px var(--success); transition: box-shadow .3s; }
+/* imagem que não carregou no editor do conteúdo */
+.cnt-img-erro-caixa { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 14px; box-sizing: border-box; }
+.cnt-img-erro { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-size: 12.5px; line-height: 1.45; color: var(--text-soft); }
+.cnt-img-erro b { color: var(--warning, #f59e0b); font-size: 13px; }
+.cnt-img-erro .ic { width: 22px; height: 22px; color: var(--warning, #f59e0b); }
+
+/* cartão de conteúdo: botão principal numa linha só dele */
+.cnt-acao-principal { margin-top: 8px; display: flex; }
+.cnt-acao-principal:empty { display: none; }
+.cnt-acao-principal .btn { flex: 1; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cnt-acoes .kb-link { white-space: nowrap; }
+
+/* ---------- Kanban: prévia da arte nos cartões da produção ---------- */
+.kb-card-arte { margin: -2px -2px 10px; border-radius: 12px; overflow: hidden; aspect-ratio: 4 / 3; background: var(--bg-soft); cursor: pointer; }
+.kb-card-arte img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .25s; }
+.kb-card-arte:hover img { transform: scale(1.03); }
+.prd-caixa.com-img { display: grid; grid-template-columns: 96px 1fr auto; gap: 14px; align-items: center; }
+.prd-caixa-img { width: 96px; height: 96px; object-fit: cover; border-radius: 12px; cursor: pointer; }
+.prd-legenda { margin: 4px 0 0; font-size: 12.5px; color: var(--text-soft); line-height: 1.45; }
+@media (max-width: 640px) { .prd-caixa.com-img { grid-template-columns: 72px 1fr; } .prd-caixa.com-img .prd-botoes { grid-column: 1 / -1; } .prd-caixa-img { width: 72px; height: 72px; } }
+
+/* ---------- Kanban na altura da tela (computador) ---------- */
+@media (min-width: 861px) {
+  .kb-quadro { align-items: stretch; min-height: 0; }
+  .kb-quadro .kb-coluna { min-height: 0; max-height: 100%; }
+  .kb-quadro .kb-coluna-corpo { overflow-y: auto; min-height: 0; scrollbar-width: thin; }
+  .kb-quadro .kb-coluna-corpo::-webkit-scrollbar { width: 6px; }
+  .kb-quadro .kb-coluna-corpo::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+}
+/* barra de rolar para o lado discreta (antes ficava branca) */
+.cnt-quadro, .kb-quadro, .funil-kanban { scrollbar-color: var(--border) transparent; }
+.cnt-quadro::-webkit-scrollbar-track, .kb-quadro::-webkit-scrollbar-track, .funil-kanban::-webkit-scrollbar-track { background: transparent; }
+.cnt-quadro::-webkit-scrollbar-thumb:hover, .kb-quadro::-webkit-scrollbar-thumb:hover { background: var(--text-soft); }
+@media (min-width: 861px) { .kb-quadro { height: calc(100vh - 150px); min-height: 420px; } }

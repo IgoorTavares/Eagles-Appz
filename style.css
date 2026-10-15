@@ -5438,4 +5438,9 @@ button.pv-kpi { cursor: pointer; }
 .cnt-quadro, .kb-quadro, .funil-kanban { scrollbar-color: var(--border) transparent; }
 .cnt-quadro::-webkit-scrollbar-track, .kb-quadro::-webkit-scrollbar-track, .funil-kanban::-webkit-scrollbar-track { background: transparent; }
 .cnt-quadro::-webkit-scrollbar-thumb:hover, .kb-quadro::-webkit-scrollbar-thumb:hover { background: var(--text-soft); }
-@media (min-width: 861px) { .kb-quadro { height: calc(100vh - 150px); min-height: 420px; } }
+@media (min-width: 861px) { .kb-quadro { height: calc(100vh - 170px); min-height: 420px; } }
+.ap-ajuste { width: 100%; margin-top: 4px; }
+.ap-ajuste textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--pv-borda); background: var(--pv-sup2); color: var(--pv-txt); }
+.pv-aprovar .pv-thumb.grande .pv-carrossel { border-radius: 0; }
+body.ap-body { background: #0b0f0c; }
+body.ap-body #ap-conteudo { max-width: none; padding: 0; }

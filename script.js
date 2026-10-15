@@ -6486,6 +6486,12 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '16/10/2026 · Aprovação', itens: [
+    { titulo: 'O ícone de link do conteúdo abria a página antiga', badges: ['corrigido'], texto: 'Se o CRM ainda não tinha terminado de carregar os links do portal, o ícone de link (e o "Enviar para aprovação") caía na página antiga de aprovação. Agora ele espera os links e manda sempre o portal do cliente, abrindo na peça. E a página avulsa, que continua existindo para conteúdo sem cliente e para links antigos, ganhou o mesmo visual do portal.' },
+  ]},
+  { data: '16/10/2026 · Produção de conteúdo', itens: [
+    { titulo: 'Cartão em "Avaliação" e o conteúdo parado em Design', badges: ['corrigido'], texto: 'Um cartão da produção arrastado no quadro geral antes da v137 ficava com a coluna do quadro geral ("Avaliação") e o conteúdo continuava em Design. Por isso a peça não aparecia para o cliente no portal. Ao abrir o CRM, o sistema agora conserta sozinho: o cartão volta para "Aprovação do cliente" e o conteúdo vai para Aprovação, aparecendo no portal.' },
+  ]},
   { data: '16/10/2026 · Kanban', itens: [
     { titulo: 'Rolagem para o lado sempre à vista', badges: ['corrigido'], texto: 'O quadro do Kanban crescia até a altura da coluna mais cheia, e a barra para rolar para o lado ficava lá no fim da página. Agora o quadro cabe na tela: cada coluna rola para baixo sozinha e a barra de rolar para o lado fica sempre visível, discreta, no tom do sistema.' },
     { titulo: 'Cartões da produção no quadro geral', badges: ['corrigido'], texto: 'Em "Todas as tarefas", os cartões da Produção de Conteúdo que estavam esperando o cliente apareciam em "A Fazer", e arrastar não funcionava. Agora cada etapa aparece na coluna equivalente (Em progresso → Em Progresso, Aprovação do cliente → Avaliação, Alteração → Alteração, Copy → Em Progresso, Publicado → Concluído) e dá para arrastar entre elas.' },
@@ -9342,7 +9348,26 @@ function prdPapelDaColuna(colId) {
   if (!colId) return '';
   const direto = PRD_COLUNAS.find((c) => c.id === colId);
   if (direto) return direto.id;
-  return PRD_COLUNAS.map((c) => c.id).find((papel) => prdColuna(papel) === colId) || '';
+  const papel = PRD_COLUNAS.map((c) => c.id).find((pp) => prdColuna(pp) === colId);
+  if (papel) return papel;
+  // cartão que ficou com uma coluna do quadro geral (ex.: "Avaliação"): vale a etapa equivalente
+  const geral = typeof kbColunasGlobais === 'function' ? kbColunasGlobais().find((c) => c.id === colId) : null;
+  const pj = prdProjeto();
+  const eq = geral && pj && typeof kbColunaEquivalente === 'function' ? kbColunaEquivalente(geral, pj.colunas || []) : null;
+  return eq && eq.id !== colId ? prdPapelDaColuna(eq.id) : '';
+}
+// conserta cartões da produção que ficaram presos numa coluna do quadro geral
+// (aconteceu ao arrastar em "Todas as tarefas" antes da v137): o cartão volta
+// para a coluna certa da produção e o conteúdo vai para a etapa dela
+function prdConsertarColunas() {
+  const pj = prdProjeto();
+  if (!pj || !nivelPodeOperar()) return;
+  const ids = (pj.colunas || []).map((c) => c.id);
+  KB_TAREFAS.filter((t) => t.projetoId === PRD_PJ_ID && t.conteudoId && !ids.includes(t.status)).forEach((t) => {
+    const papel = prdPapelDaColuna(t.status), dest = papel && prdColuna(papel);
+    if (!dest) return;
+    if (kbAtualizar(t.id, { status: dest })) { const tt = KB_TAREFAS.find((x) => x.id === t.id); if (tt) prdAoMoverCartao(tt); }
+  });
 }
 function prdTarefaDoConteudo(c) { return c && c.tarefaId && typeof KB_TAREFAS !== 'undefined' ? KB_TAREFAS.find((t) => t.id === c.tarefaId && t.projetoId === PRD_PJ_ID) : null; }
 function prdEtapaCnt(id, reserva) { return typeof cntColunas === 'function' && cntColunas().some((x) => x.id === id) ? id : reserva; }
@@ -9438,6 +9463,7 @@ function prdReconciliarTodos() {
     if (typeof CNT === 'undefined' || typeof KB_TAREFAS === 'undefined' || !CNT_CARREGADO || !KB_CARREGADO) return;
     cntMigrarAprovado();
     if (prdProjeto() && typeof KB_PROJETOS_CARREGADO !== 'undefined' && KB_PROJETOS_CARREGADO) prdGarantirProjeto(); // "Aprovados" → "Copy" no projeto que já existe (nunca recria um projeto apagado)
+    prdConsertarColunas();
     CNT.filter((c) => c.tarefaId).forEach((c) => { const t = prdTarefaDoConteudo(c); if (t) prdSincronizar(c, t); });
   }, 400);
 }
@@ -21138,6 +21164,10 @@ async function cntEnviarAprovacao(id) {
   let token;
   try { token = await aprPrepararLink(c, true); } catch (err) { cntErro(err); return; }
   const ap = (CNT.find((x) => x.id === id) || {}).aprovacao || {};
+  // os links do portal ainda não tinham chegado: busca agora (senão caía no link avulso)
+  if (c.cliente && typeof PORTAL_LINKS_CARREGADO !== 'undefined' && !PORTAL_LINKS_CARREGADO) {
+    try { const d = await cloudGetForce(PORTAL_LINKS_KEY, {}); PORTAL_LINKS = d && typeof d === 'object' ? d : {}; PORTAL_LINKS_CARREGADO = true; } catch (e) {}
+  }
   // com cliente, o link é o do portal (o mesmo visual), abrindo direto nesta peça;
   // a resposta continua indo para o mesmo lugar (os avisos e os cartões andam igual)
   const usaPortal = c.cliente && typeof portalGarantirToken === 'function' && typeof PORTAL_LINKS_CARREGADO !== 'undefined' && PORTAL_LINKS_CARREGADO && portalGarantirToken(c.cliente);
@@ -21187,31 +21217,38 @@ const APR_MSG_AJUSTE = 'Recebemos sua solicitação, vamos produzir e logo te ma
 const APR_MSG_APROVADO = 'Conteúdo aprovado! Em breve te mandaremos o arquivo final.';
 function cntRenderAprovacaoPublica() {
   const p = CNT_PUB, el = document.getElementById('ap-conteudo'), m = p.midia || {};
-  const imgs = [m.capaUrl, m.url].concat(m.paginas || []).map(urlImagemSegura).filter(Boolean);
+  const imgs = Array.from(new Set([m.capaUrl, m.url].concat(m.paginas || []).map(urlImagemSegura).filter(Boolean)));
   const links = [m.url].concat(m.paginas || []).filter((u) => /^https:\/\//i.test(u || '') && !urlImagemSegura(u));
   const entregue = p.fase === 'entregue';
   const podeBaixar = p.download !== 'bloqueado' && (entregue || p.resposta === 'aprovado');
-  let estado = '';
-  if (entregue) estado = `<div class="ap-resp ok"><strong>Arquivo final entregue ✓</strong><p>${podeBaixar && (imgs.length || links.length) ? 'Os arquivos estão logo acima para baixar.' : 'A agência já te mandou o arquivo final.'}</p></div>`;
-  else if (p.resposta === 'aprovado') estado = `<div class="ap-resp ok"><strong>${escapeHtml(APR_MSG_APROVADO)}</strong></div>`;
-  else if (p.resposta === 'ajustes') estado = `<div class="ap-resp"><strong>${escapeHtml(APR_MSG_AJUSTE)}</strong>${p.comentario ? `<p>Seu pedido: “${escapeHtml(p.comentario)}”</p>` : ''}</div>`;
-  el.innerHTML = `<div class="ap-caixa">
-    ${p.empresaNome ? `<div class="ap-empresa">${escapeHtml(p.empresaNome)}</div>` : ''}
-    <span class="ap-tipo">${escapeHtml(p.tipo)}${(Number(p.rodada) || 1) > 1 ? ` · versão ${Number(p.rodada)}` : ''}</span><h1>${escapeHtml(p.titulo || 'Conteúdo')}</h1>
-    ${p.publicacao ? `<p class="ap-sub">Publicação prevista: ${escapeHtml(formatDatePt(p.publicacao))}${p.redes && p.redes.length ? ' · ' + escapeHtml(p.redes.join(', ')) : ''}</p>` : ''}
-    ${imgs.length ? `<div class="ap-midia">${imgs.map((u) => `<img src="${escapeHtml(u)}" alt="" oncontextmenu="${p.download === 'bloqueado' ? 'return false;' : ''}">`).join('')}</div>` : ''}
-    ${links.length ? `<div class="ap-links">${links.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener">${podeBaixar ? 'Abrir / baixar' : 'Ver'} arquivo ${links.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
-    ${podeBaixar && imgs.length ? `<div class="ap-links">${imgs.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" download>Baixar imagem ${imgs.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
-    ${p.legenda ? `<div class="ap-legenda">${escapeHtml(p.legenda).replace(/\n/g, '<br>')}</div>` : ''}
-    ${estado || `<div class="ap-acoes"><textarea id="ap-comentario" maxlength="1000" rows="3" placeholder="O que precisa mudar? (obrigatório para pedir alteração)"></textarea>
-        <div class="ap-botoes"><button type="button" class="ap-btn ajuste" onclick="cntResponderAprovacao('ajustes')">Pedir alteração</button><button type="button" class="ap-btn ok" onclick="cntResponderAprovacao('aprovado')">Aprovar</button></div>
-        <p class="ap-erro" id="ap-erro"></p></div>`}
-  </div>`;
+  const cor = corHexValida(p.cor) || '#3fae12', txt = typeof pcContraste === 'function' ? pcContraste(cor) : '#0b0f0b';
+  const rodada = Number(p.rodada) || 1;
+  let acoes = '';
+  if (entregue) acoes = `<span class="pv-estado">Arquivo final entregue ✓ ${podeBaixar && (imgs.length || links.length) ? 'Os arquivos estão logo abaixo para baixar.' : ''}</span>`;
+  else if (p.resposta === 'aprovado') acoes = `<span class="pv-estado">Você aprovou esta peça. Obrigado! ${escapeHtml(APR_MSG_APROVADO)}</span>`;
+  else if (p.resposta === 'ajustes') acoes = `<span class="pv-estado">${escapeHtml(APR_MSG_AJUSTE)}${p.comentario ? `<br>Seu pedido: “${escapeHtml(p.comentario)}”` : ''}</span>`;
+  else acoes = `<button type="button" class="pv-btn pv-btn-ok ap-btn" onclick="cntResponderAprovacao('aprovado')">✓ Aprovar</button><button type="button" class="pv-btn pv-btn-sec ap-btn" onclick="document.getElementById('ap-ajuste').style.display=''; document.getElementById('ap-comentario').focus()">✎ Pedir alteração</button>
+    <div id="ap-ajuste" class="ap-ajuste" style="display:none;"><textarea id="ap-comentario" maxlength="1000" rows="4" placeholder="O que precisa mudar? Ex.: trocar a cor do fundo, deixar o logo maior."></textarea><div class="pv-modal-botoes"><button type="button" class="pv-btn pv-btn-ok ap-btn" onclick="cntResponderAprovacao('ajustes')">Enviar para a equipe</button></div></div>`;
+  document.documentElement.setAttribute('data-theme', 'dark');
+  el.innerHTML = `<div class="pv pv-escuro" style="--pv-cor:${cor}; --pv-cor-txt:${txt};">
+    <header class="pv-topo"><div class="pv-topo-in"><div class="pv-marca"><span class="pv-marca-av">${escapeHtml(initials(p.empresaNome || 'A'))}</span><b>${escapeHtml(p.empresaNome || 'Aprovação')}</b></div></div></header>
+    <section class="pv-hero"><div><h1>Olá${p.cliente ? ', ' + escapeHtml(String(p.cliente).split(' ')[0]) : ''} 👋</h1><p>Esta peça precisa da sua aprovação. Veja a arte e a legenda, e aprove ou peça uma alteração.</p></div></section>
+    <main class="pv-corpo"><section class="pv-sec"><div class="pv-sec-cab"><h2>Precisa da sua aprovação</h2>${rodada > 1 ? `<span>versão ${rodada}</span>` : ''}</div>
+      <article class="pv-aprovar">
+        ${imgs.length ? `<div class="pv-thumb grande"><div class="pv-carrossel" style="height:100%;">${imgs.map((u) => `<img src="${escapeHtml(u)}" alt="" style="object-fit:cover; max-height:none; height:100%;" ${p.download === 'bloqueado' ? 'oncontextmenu="return false;"' : ''}>`).join('')}</div>${imgs.length > 1 ? `<span class="pv-thumb-n">${imgs.length} imagens · arraste</span>` : ''}</div>` : `<div class="pv-thumb vazio grande">${ic('imagem', 'ic-herda')}<small>Sem prévia</small></div>`}
+        <div class="pv-aprovar-corpo"><span class="pv-tag" style="--c:${p.resposta === 'aprovado' || entregue ? '#22c55e' : p.resposta === 'ajustes' ? '#fb923c' : '#f59e0b'};">${entregue ? 'Entregue' : p.resposta === 'aprovado' ? 'Aprovado' : p.resposta === 'ajustes' ? 'Em ajuste' : 'Para aprovar'}</span>
+          <h3>${escapeHtml(p.titulo || 'Conteúdo')}</h3><small>${escapeHtml([p.tipo, p.publicacao ? '📅 ' + formatDatePt(p.publicacao) : '', (p.redes || []).join(', ')].filter(Boolean).join(' · '))}</small>
+          ${p.legenda ? `<div class="pv-legenda">${escapeHtml(p.legenda).replace(/\n/g, '<br>')}</div>` : ''}
+          ${links.length ? `<div class="pv-acoes">${links.map((u, i) => `<a class="pv-btn pv-btn-sec" href="${escapeHtml(u)}" target="_blank" rel="noopener">${podeBaixar ? 'Abrir / baixar' : 'Ver'} arquivo ${links.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
+          ${podeBaixar && imgs.length ? `<div class="pv-acoes">${imgs.map((u, i) => `<a class="pv-btn pv-btn-sec" href="${escapeHtml(u)}" target="_blank" rel="noopener" download>${ic('baixar', 'ic-herda')} Baixar ${imgs.length > 1 ? i + 1 : ''}</a>`).join('')}</div>` : ''}
+          <div class="pv-acoes">${acoes}</div><p class="pv-erro" id="ap-erro"></p></div>
+      </article></section></main>
+    <footer class="pv-rodape"><small>Feito com Eagles Labz</small></footer></div>`;
 }
 async function cntResponderAprovacao(resposta) {
-  const com = (document.getElementById('ap-comentario').value || '').trim().slice(0, 1000);
+  const com = ((document.getElementById('ap-comentario') || {}).value || '').trim().slice(0, 1000);
   if (resposta === 'ajustes' && !com) { document.getElementById('ap-erro').textContent = 'Conte o que precisa mudar.'; return; }
-  const dados = { resposta: resposta === 'aprovado' ? 'aprovado' : 'ajustes', comentario: com, respondidoEm: new Date().toISOString() };
+  const dados = { resposta: resposta === 'aprovado' ? 'aprovado' : 'ajustes', comentario: resposta === 'ajustes' ? com : '', respondidoEm: new Date().toISOString() };
   document.querySelectorAll('.ap-btn').forEach((b) => { b.disabled = true; });
   try {
     await firestoreDb.collection(CNT_PUB_COLECAO).doc(CNT_PUB.token).set(dados, { merge: true });

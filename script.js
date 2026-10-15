@@ -1004,6 +1004,7 @@ async function resolverTenantDoUsuario(user) {
     USUARIO_NOME = dados.nome || user.email;
     USUARIO_UID = user.uid;
     USUARIO_PREFS_NOTIF = dados.prefsNotif || null;
+    if (await loginConferirBloqueio(user)) { window.location.href = 'login.html?bloqueado=1'; return false; }
 
     // SuperAdmin não é OBRIGADO a ter empresa (continua entrando mesmo sem
     // uma), mas se ele tiver uma vinculada — porque também usa o sistema
@@ -1156,9 +1157,58 @@ function traduzirRole(role) {
   return (NIVEIS[nivelDoRole(role)] || {}).nome || role;
 }
 
+// ---------- bloqueio por senha errada (5 seguidas) ----------
+const LOGIN_MAX_FALHAS = 5;
+const LOGIN_CODIGOS_SENHA = ['auth/wrong-password', 'auth/invalid-credential', 'auth/user-not-found', 'auth/invalid-login-credentials'];
+function loginEmailNorm(e) { return String(e || '').trim().toLowerCase(); }
+function loginTentativaRef(email) { return firebase.firestore().collection('tentativas_login').doc(loginEmailNorm(email)); }
+function loginFalhasLocais(email) { try { return Number(localStorage.getItem('eagles_login_falhas::' + loginEmailNorm(email))) || 0; } catch (e) { return 0; } }
+function loginGuardarFalhasLocais(email, n) { try { if (n) localStorage.setItem('eagles_login_falhas::' + loginEmailNorm(email), String(n)); else localStorage.removeItem('eagles_login_falhas::' + loginEmailNorm(email)); } catch (e) {} }
+const LOGIN_MSG_BLOQUEIO = 'Conta bloqueada por 5 tentativas de senha erradas. Fale com o administrador do sistema para desbloquear.';
+// conta a senha errada (no banco: só dá para somar 1) e diz quantas restam
+async function loginRegistrarFalha(email) {
+  const e = loginEmailNorm(email);
+  if (!e || !/^[^\s@/]+@[^\s@/]+$/.test(e)) return LOGIN_MAX_FALHAS;
+  const n = loginFalhasLocais(e) + 1;
+  loginGuardarFalhasLocais(e, n);
+  try { await loginTentativaRef(e).set({ falhas: firebase.firestore.FieldValue.increment(1), ultimaEm: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }); } catch (err) { /* sem internet: o contador do aparelho vale */ }
+  return Math.max(0, LOGIN_MAX_FALHAS - n);
+}
+// depois de acertar a senha: se a conta estiver bloqueada, sai; se não, zera o contador
+async function loginConferirBloqueio(user) {
+  if (!user || !user.email) return false;
+  const e = loginEmailNorm(user.email);
+  try {
+    const d = await loginTentativaRef(e).get();
+    if (d.exists && (Number(d.data().falhas) || 0) >= LOGIN_MAX_FALHAS) {
+      loginGuardarFalhasLocais(e, LOGIN_MAX_FALHAS);
+      await firebase.auth().signOut();
+      return true;
+    }
+    if (d.exists) await loginTentativaRef(e).delete().catch(() => {});
+  } catch (err) { /* regras antigas (sem permissão de leitura): segue */ }
+  loginGuardarFalhasLocais(e, 0);
+  return false;
+}
+// ---------- sair: não deixa dados da empresa guardados no aparelho ----------
+function logoutLimparAparelho() {
+  try {
+    const manter = /^(eagles_tema|eagles_prefs_|eagles_login_falhas::|eagles_sis_teste_off)/;
+    Object.keys(localStorage).forEach((k) => {
+      if (manter.test(k)) return;
+      if (k.includes('::') || /^eagles_/.test(k)) localStorage.removeItem(k);
+    });
+    sessionStorage.clear();
+  } catch (e) {}
+}
 function logout() {
+  logoutLimparAparelho();
   if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length) {
-    firebase.auth().signOut().then(() => { window.location.href = 'login.html'; });
+    firebase.auth().signOut().then(async () => {
+      // apaga também a cópia do banco que o navegador guarda para funcionar sem internet
+      try { const db = firebase.firestore(); await db.terminate(); await db.clearPersistence(); } catch (e) {}
+      window.location.href = 'login.html';
+    });
   } else {
     window.location.href = 'login.html';
   }
@@ -1958,7 +2008,7 @@ function renderPreviewAprovacao() {
   const total = subtotal - desconto;
 
   let html = '';
-  if (CRM_APROVACAO_DATA.logoUrl) html += `<img src="${CRM_APROVACAO_DATA.logoUrl}" style="max-height:50px; margin-bottom:16px;">`;
+  if (CRM_APROVACAO_DATA.logoUrl) html += `<img src="${escapeHtml(urlImagemSegura(CRM_APROVACAO_DATA.logoUrl))}" style="max-height:50px; margin-bottom:16px;">`;
   html += `<h2 style="margin:0 0 6px; color:#fff;">${escapeHtml(titulo)}</h2>`;
   if (boasVindas) html += `<p style="color:#aaa; font-size:13px; margin:0 0 18px;">${escapeHtml(boasVindas)}</p>`;
   html += `<p style="color:#ccc; font-size:13px;">Desenvolvimento completo de identidade visual incluindo logotipo, paleta de cores, tipografia e manual de marca.</p>`;
@@ -3179,7 +3229,7 @@ function construirHtmlOrcamentoParaPdf(p) {
   let html = `<div style="font-family:Helvetica,Arial,sans-serif; width:760px; padding:40px; background:#fff; color:#222;">`;
   html += `<div style="display:flex; align-items:center; gap:14px; margin-bottom:24px; border-bottom:2px solid ${cor1}; padding-bottom:18px;">`;
   if (vc.logoUrl || p.empresaLogo) {
-    html += `<img src="${vc.logoUrl || p.empresaLogo}" style="height:46px;">`;
+    html += `<img src="${escapeHtml(urlImagemSegura(vc.logoUrl || p.empresaLogo))}" style="height:46px;">`;
   } else {
     html += `<div style="width:46px; height:46px; border-radius:50%; background:${cor1}; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:18px;">${escapeHtml((p.empresaNome || 'E').charAt(0).toUpperCase())}</div>`;
   }
@@ -5370,7 +5420,7 @@ function renderAbaPerfilConfig() {
 function atualizarPreviewAvatarConfig() {
   const el = document.getElementById('cfg-perfil-avatar-preview');
   if (!el) return;
-  if (PERFIL_DATA.logoUrl) el.innerHTML = `<img src="${PERFIL_DATA.logoUrl}" style="width:100%; height:100%; object-fit:cover;">`;
+  if (PERFIL_DATA.logoUrl) el.innerHTML = `<img src="${escapeHtml(urlImagemSegura(PERFIL_DATA.logoUrl))}" style="width:100%; height:100%; object-fit:cover;">`;
   else el.innerHTML = `<svg viewBox="0 0 24 24" style="width:28px; height:28px; stroke:var(--text-soft); fill:none; stroke-width:2;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
 }
 
@@ -5738,6 +5788,35 @@ function linkImagemDireto(url) {
   const db = u.match(/^https:\/\/(?:www\.)?dropbox\.com\/([^?#]+)(\?[^#]*)?/i);
   if (db) return `https://www.dropbox.com/${db[1]}?raw=1`;
   return u;
+}
+// link digitado por alguém que não pode virar código (javascript:, data:, vbscript:)
+function urlSegura(url) { const u = String(url || '').trim(); if (/^[a-z][a-z0-9+.-]*:/i.test(u) && !/^(https?|mailto|tel|whatsapp):/i.test(u)) return '#'; return u; }
+if (typeof document !== 'undefined' && !window.__GUARDA_LINKS) {
+  window.__GUARDA_LINKS = true;
+  document.addEventListener('click', (e) => { const a = e.target && e.target.closest && e.target.closest('a[href]'); if (a && /^\s*(javascript|data|vbscript):/i.test(a.getAttribute('href') || '')) { e.preventDefault(); e.stopPropagation(); } }, true);
+  // o sistema (com login) não abre dentro de outro site (proteção contra "clickjacking")
+  try { const publica = /(portal|aprovacao|pagina|proposta|briefing|planos|site|privacidade|termos|suporte|dpa)\.html$/.test(location.pathname); if (!publica && window.top !== window.self) window.top.location = window.self.location.href; } catch (e) {}
+}
+// Imagem do Google Drive que não abriu: tenta os outros endereços do Drive e,
+// se nenhum abrir (arquivo não compartilhado), mostra um aviso com o link
+if (typeof document !== 'undefined' && !window.__IMG_DRIVE) {
+  window.__IMG_DRIVE = true;
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG') return;
+    const m = String(img.src || '').match(/(?:drive\.google\.com\/(?:thumbnail\?(?:[^#]*&)?id=|uc\?(?:[^#]*&)?id=)|lh3\.googleusercontent\.com\/d\/)([\w-]{10,})/);
+    if (!m) return;
+    const id = m[1], t = Number(img.dataset.tentativa || 0);
+    const outros = [`https://lh3.googleusercontent.com/d/${id}=w2000`, `https://drive.google.com/uc?export=view&id=${id}`];
+    if (t < outros.length) { e.stopPropagation(); img.dataset.tentativa = String(t + 1); img.src = outros[t]; return; }
+    if (img.getAttribute('onerror') || img.dataset.avisou) return; // a tela tem o próprio aviso
+    img.dataset.avisou = '1';
+    const publica = /(portal|aprovacao|pagina|proposta)\.html$/.test(location.pathname);
+    const aviso = document.createElement('div');
+    aviso.className = 'img-drive-falhou';
+    aviso.innerHTML = `<b>A imagem não abriu neste aparelho</b><span>${publica ? 'Toque abaixo para ver a arte no Google Drive.' : 'No Google Drive, deixe o arquivo como "Qualquer pessoa com o link" (Compartilhar → Acesso geral).'}</span><a href="https://drive.google.com/file/d/${id}/view" target="_blank" rel="noopener" onclick="event.stopPropagation()">Abrir a arte</a>`;
+    img.replaceWith(aviso);
+  }, true);
 }
 function urlImagemSegura(url) {
   const u = linkImagemDireto(url);
@@ -6486,6 +6565,11 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '16/10/2026 · Segurança', itens: [
+    { titulo: 'Bloqueio depois de 5 senhas erradas', badges: ['novo'], texto: 'Errar a senha 5 vezes seguidas bloqueia a conta. A pessoa vê quantas tentativas restam e, ao bloquear, a mensagem para falar com o administrador. Só o super administrador desbloqueia (Empresas → Contas bloqueadas). O bloqueio vale também nas regras do banco: mesmo entrando por fora da tela de login, a conta bloqueada não lê nada. Acertar a senha antes da 5ª zera o contador.' },
+    { titulo: 'Sair apaga os dados do aparelho', badges: ['melhoria'], texto: 'Ao sair, o sistema apaga a cópia dos dados da empresa guardada no navegador (cache e banco para funcionar sem internet). Importante em computador compartilhado.' },
+    { titulo: 'Proteções extras', badges: ['melhoria'], texto: 'Links digitados (Link da Bio, isca, anexos) não aceitam endereços que viram código (javascript:, data:). O sistema não abre dentro de outro site. Logos passam pela mesma proteção das imagens.' },
+  ]},
   { data: '16/10/2026 · Aprovação', itens: [
     { titulo: 'O ícone de link do conteúdo abria a página antiga', badges: ['corrigido'], texto: 'Se o CRM ainda não tinha terminado de carregar os links do portal, o ícone de link (e o "Enviar para aprovação") caía na página antiga de aprovação. Agora ele espera os links e manda sempre o portal do cliente, abrindo na peça. E a página avulsa, que continua existindo para conteúdo sem cliente e para links antigos, ganhou o mesmo visual do portal.' },
   ]},
@@ -12299,7 +12383,7 @@ function pgxPublicoRender() {
     <input type="text" name="nome" placeholder="Seu nome" required maxlength="100"><input type="tel" name="telefone" placeholder="Seu WhatsApp" maxlength="30"><input type="email" name="email" placeholder="Seu e-mail" maxlength="120">
     <button type="submit">${escapeHtml(botao || 'Enviar')}</button><p class="pgxp-msg"></p></form>`;
   let corpo = '';
-  if (p.tipo === 'linkbio') corpo = `${topo}<div class="pgxp-links">${p.whatsapp ? `<a class="pgxp-link pgxp-whats" href="https://wa.me/${escapeHtml(p.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${(p.links || []).map((l) => `<a class="pgxp-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.rotulo)}</a>`).join('')}</div>${p.pedirContato ? `<details class="pgxp-contato"><summary>Deixe seu contato</summary>${formContato('Quero que entrem em contato')}</details>` : ''}`;
+  if (p.tipo === 'linkbio') corpo = `${topo}<div class="pgxp-links">${p.whatsapp ? `<a class="pgxp-link pgxp-whats" href="https://wa.me/${escapeHtml(p.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${(p.links || []).map((l) => `<a class="pgxp-link" href="${escapeHtml(urlSegura(l.url))}" target="_blank" rel="noopener">${escapeHtml(l.rotulo)}</a>`).join('')}</div>${p.pedirContato ? `<details class="pgxp-contato"><summary>Deixe seu contato</summary>${formContato('Quero que entrem em contato')}</details>` : ''}`;
   if (p.tipo === 'form') corpo = `${topo}<form class="pgxp-form" onsubmit="return pgxEnviarLead(event)"><input type="text" name="site" class="pgxp-armadilha" tabindex="-1" autocomplete="off">
     ${(p.campos || []).map((c, i) => { const nome = c.tipo === 'nome' ? 'nome' : c.tipo === 'email' ? 'email' : c.tipo === 'telefone' ? 'telefone' : 'c' + i; const req = c.obrigatorio || c.tipo === 'nome' ? 'required' : '';
       return `<label class="pgxp-rot">${escapeHtml(c.rotulo)}${req ? ' *' : ''}</label>${c.tipo === 'longo' ? `<textarea name="${nome}" rows="4" maxlength="600" ${req}></textarea>` : c.tipo === 'opcoes' ? `<select name="${nome}" ${req}><option value="">Escolha...</option>${(c.opcoes || []).map((o) => `<option>${escapeHtml(o)}</option>`).join('')}</select>` : `<input type="${c.tipo === 'email' ? 'email' : c.tipo === 'telefone' ? 'tel' : 'text'}" name="${nome}" maxlength="${c.tipo === 'email' ? 120 : 200}" ${req}>`}`; }).join('')}
@@ -12322,7 +12406,7 @@ async function pgxEnviarLead(ev) {
   const btn = form.querySelector('button[type="submit"]'); if (btn) btn.disabled = true;
   try {
     await firestoreDb.collection(PAG_LEADS_COLECAO).add({ tenantId: p.tenantId, pagina: p.slug, nome: nome.slice(0, 100), email: email.slice(0, 120), telefone: tel.slice(0, 30), mensagem: extras.slice(0, 1000), servicos: [], criadoEm: new Date().toISOString() });
-    form.outerHTML = `<div class="pgxp-ok"><h2>Enviado ✓</h2><p>${escapeHtml(p.sucesso || 'Em breve entraremos em contato.')}</p>${p.isca ? `<a class="pgxp-link" href="${escapeHtml(p.isca)}" target="_blank" rel="noopener">Acessar o material</a>` : ''}</div>`;
+    form.outerHTML = `<div class="pgxp-ok"><h2>Enviado ✓</h2><p>${escapeHtml(p.sucesso || 'Em breve entraremos em contato.')}</p>${p.isca ? `<a class="pgxp-link" href="${escapeHtml(urlSegura(p.isca))}" target="_blank" rel="noopener">Acessar o material</a>` : ''}</div>`;
   } catch (e) { msg.textContent = 'Não foi possível enviar agora. Tente de novo em instantes.'; if (btn) btn.disabled = false; }
   return false;
 }
@@ -12703,7 +12787,7 @@ function metaHtmlAgendados() {
       ${(a.urls || [])[0] ? `<img class="meta-thumb" src="${escapeHtml(a.urls[0])}" alt="" onerror="this.style.visibility='hidden'">` : `<span class="pgx-ic" style="background:#8b5cf6">${ic('imagem', 'ic-herda')}</span>`}
       <div class="pgx-txt"><strong>${escapeHtml(String(a.legenda || 'Sem legenda').slice(0, 80))}</strong><small>${escapeHtml(new Date(a.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }))} · ${(a.urls || []).length > 1 ? `carrossel (${a.urls.length})` : a.tipo === 'reels' ? 'reels' : 'imagem'}${a.erro ? ' · ' + escapeHtml(a.erro) : ''}</small></div>
       <span class="badge ${st[1]}">${st[0]}</span>
-      <div class="pgx-acoes">${a.link ? `<a class="btn btn-small" href="${escapeHtml(a.link)}" target="_blank" rel="noopener">${ic('abrir', 'ic-herda')} Ver</a>` : ''}${pode && ['agendado', 'erro'].includes(a.status) ? `<button type="button" class="btn btn-small" onclick="metaNovoAgendamento('${escapeParaOnclick(a.id)}')">${ic('lapis', 'ic-herda')}</button><button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="metaCancelar('${escapeParaOnclick(a.id)}')">✕</button>` : ''}</div></div>`; }).join('')}</div>`
+      <div class="pgx-acoes">${a.link ? `<a class="btn btn-small" href="${escapeHtml(urlSegura(a.link))}" target="_blank" rel="noopener">${ic('abrir', 'ic-herda')} Ver</a>` : ''}${pode && ['agendado', 'erro'].includes(a.status) ? `<button type="button" class="btn btn-small" onclick="metaNovoAgendamento('${escapeParaOnclick(a.id)}')">${ic('lapis', 'ic-herda')}</button><button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="metaCancelar('${escapeParaOnclick(a.id)}')">✕</button>` : ''}</div></div>`; }).join('')}</div>`
     : `<div class="atd-vazio">${ic('calendario')}<strong>Nada agendado</strong><span>Agende aqui ou direto pelo conteúdo (Conteúdos → abrir → "Agendar no Instagram").</span></div>`}`;
 }
 function metaUrlsDoConteudo(c) {
@@ -13053,6 +13137,27 @@ function aprVigiaGlobal() {
     });
     lsSave(chave, Array.from(vistos).slice(-200));
   }, () => {});
+}
+async function loginAbrirBloqueadas() {
+  if (nivelUsuario() !== 'superadmin') return;
+  const ov = srvGarantirModal();
+  ov.innerHTML = `<div class="modal kb-modal" style="max-width:640px;"><div class="modal-header"><h2>Contas bloqueadas</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div><p class="kb-vazio">Carregando...</p></div>`;
+  openModal('modal-srv');
+  try {
+    const snap = await firestoreDb.collection('tentativas_login').where('falhas', '>=', 1).get();
+    const l = snap.docs.map((d) => Object.assign({ email: d.id }, d.data())).sort((a, b) => (b.falhas || 0) - (a.falhas || 0));
+    const quando = (t) => (t && t.toDate ? t.toDate().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+    ov.querySelector('.modal').innerHTML = `<div class="modal-header"><h2>Contas bloqueadas</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
+      <p class="cfg-modal-sub">Com ${LOGIN_MAX_FALHAS} senhas erradas seguidas, a conta fica bloqueada até você desbloquear. Abaixo de ${LOGIN_MAX_FALHAS}, o contador zera sozinho quando a pessoa acerta a senha.</p>
+      ${l.length ? `<div class="pgx-lista">${l.map((x) => `<div class="pgx-item"><div class="pgx-txt"><strong>${escapeHtml(x.email)}</strong><small>${x.falhas >= LOGIN_MAX_FALHAS ? '<b style="color:var(--danger);">Bloqueada</b>' : `${Number(x.falhas) || 0} tentativa(s) errada(s)`} · última ${escapeHtml(quando(x.ultimaEm))}</small></div>
+        <div class="pgx-acoes"><button type="button" class="btn btn-small ${x.falhas >= LOGIN_MAX_FALHAS ? 'btn-primary' : ''}" onclick="loginDesbloquear('${escapeParaOnclick(x.email)}')">${x.falhas >= LOGIN_MAX_FALHAS ? 'Desbloquear' : 'Zerar'}</button></div></div>`).join('')}</div>`
+        : `<div class="atd-vazio">${ic('aprovado')}<strong>Nenhuma conta bloqueada</strong><span>Quando alguém errar a senha ${LOGIN_MAX_FALHAS} vezes seguidas, aparece aqui.</span></div>`}`;
+  } catch (e) { avisar('Não foi possível ler as contas bloqueadas. Confira se as regras novas foram publicadas.'); }
+}
+async function loginDesbloquear(email) {
+  if (nivelUsuario() !== 'superadmin') return;
+  try { await firestoreDb.collection('tentativas_login').doc(email).delete(); avisar(`${email} desbloqueada. A pessoa já pode entrar.`, 'Contas bloqueadas'); loginAbrirBloqueadas(); }
+  catch (e) { avisar('Não foi possível desbloquear: ' + mensagemErroFirestore(e)); }
 }
 function renderCrmEmConstrucao(secao) {
   const info = CRM_EM_CONSTRUCAO_INFO[secao];
@@ -13807,7 +13912,7 @@ function renderProfileBox() {
   const avatarEl = document.getElementById('profile-avatar-letter');
   if (avatarEl) {
     if (PERFIL_DATA.logoUrl) {
-      avatarEl.innerHTML = `<img src="${PERFIL_DATA.logoUrl}" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+      avatarEl.innerHTML = `<img src="${escapeHtml(urlImagemSegura(PERFIL_DATA.logoUrl))}" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
     } else {
       avatarEl.textContent = (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa || 'E').trim().charAt(0).toUpperCase();
     }
@@ -14086,7 +14191,7 @@ function onBuscaGlobalInput(valor) {
   }
   resultadosEl.innerHTML = resultados.map((r) => r.acao
     ? `<a class="topbar-search-result-item" href="#" onclick="event.preventDefault(); document.getElementById('topbar-search-results').classList.remove('open'); ${r.acao}"><div class="topbar-search-result-tag">${escapeHtml(r.tag)}</div>${escapeHtml(r.nome || '')}</a>`
-    : `<a class="topbar-search-result-item" href="${escapeHtml(r.href)}"><div class="topbar-search-result-tag">${escapeHtml(r.tag)}</div>${escapeHtml(r.nome || '')}</a>`
+    : `<a class="topbar-search-result-item" href="${escapeHtml(urlSegura(r.href))}"><div class="topbar-search-result-tag">${escapeHtml(r.tag)}</div>${escapeHtml(r.nome || '')}</a>`
   ).join('');
   resultadosEl.classList.add('open');
 }
@@ -21181,7 +21286,7 @@ async function cntEnviarAprovacao(id) {
   const contato = linkContatoCliente(c.cliente);
   const tipo = ((CNT_TIPOS[c.tipo] || {}).nome || 'conteúdo').toLowerCase();
   linkCompartilhar({ titulo: ap.rodada > 1 ? `Aprovação · versão ${ap.rodada}` : 'Aprovação', link, telefone: contato.telefone, email: contato.email,
-    texto: usaPortal ? `É o link do portal do cliente: ele abre direto nesta peça, com os botões Aprovar e Pedir alteração (sem login). Quando ele responder, você recebe o aviso na hora e o cartão do Kanban anda sozinho.` : `Mande o link para o cliente (ele abre sem login). Quando ele responder, você recebe a notificação na hora e o cartão do Kanban anda sozinho.`,
+    texto: (/drive\.google\.com|dropbox\.com/i.test(JSON.stringify(c.midia || {})) ? '⚠ As imagens são do Google Drive/Dropbox: o cliente só vê se o arquivo estiver compartilhado como "Qualquer pessoa com o link" (no Drive: Compartilhar → Acesso geral). Teste abrindo o link numa janela anônima. ' : '') + (usaPortal ? `É o link do portal do cliente: ele abre direto nesta peça, com os botões Aprovar e Pedir alteração (sem login). Quando ele responder, você recebe o aviso na hora e o cartão do Kanban anda sozinho.` : `Mande o link para o cliente (ele abre sem login). Quando ele responder, você recebe a notificação na hora e o cartão do Kanban anda sozinho.`),
     assunto: `${ap.rodada > 1 ? 'Nova versão para aprovação' : 'Para sua aprovação'}: ${c.titulo || 'conteúdo'}`,
     mensagem: `Olá${c.cliente ? ', ' + atdPrimeiroNome(c.cliente) : ''}! ${ap.rodada > 1 ? `Fizemos as alterações no ${tipo} "${c.titulo || ''}".` : `Segue o ${tipo} "${c.titulo || ''}" para sua aprovação.`} É só abrir o link, aprovar ou pedir alteração:\n${link}` });
 }
@@ -25263,7 +25368,7 @@ function montarCabecalhoDocumentoPdf(tituloDocumento, subtituloDocumento) {
   const linhaContato = [documento, endereco, cidadeUf].filter(Boolean).join(' · ');
   const iniciais = (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa || 'E').trim().charAt(0).toUpperCase();
   const logoHtml = PERFIL_DATA.logoUrl
-    ? `<img src="${PERFIL_DATA.logoUrl}" style="width:56px; height:56px; border-radius:10px; object-fit:cover;">`
+    ? `<img src="${escapeHtml(urlImagemSegura(PERFIL_DATA.logoUrl))}" style="width:56px; height:56px; border-radius:10px; object-fit:cover;">`
     : `<div style="width:56px; height:56px; border-radius:10px; background:#3fae12; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; font-family:Inter,sans-serif;">${escapeHtml(iniciais)}</div>`;
 
   return `
@@ -27011,7 +27116,7 @@ function nfseModal(o) {
   const ov = srvGarantirModal();
   ov.innerHTML = `<div class="modal kb-modal" style="max-width:620px;" role="dialog" aria-modal="true">
     <div class="modal-header"><h2>${escapeHtml(o.titulo || 'Emitir NFS-e')}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
-    ${nf.numero ? `<div class="atd-banner">${ic('aprovado', 'ic-herda')}<div><strong>NFS-e nº ${escapeHtml(nf.numero)} já registrada</strong> em ${escapeHtml(formatDatePt(String(nf.emitidaEm || '').slice(0, 10)))}${nf.link ? ` · <a href="${escapeHtml(nf.link)}" target="_blank" rel="noopener">abrir a nota</a>` : ''}.</div></div>` : ''}
+    ${nf.numero ? `<div class="atd-banner">${ic('aprovado', 'ic-herda')}<div><strong>NFS-e nº ${escapeHtml(nf.numero)} já registrada</strong> em ${escapeHtml(formatDatePt(String(nf.emitidaEm || '').slice(0, 10)))}${nf.link ? ` · <a href="${escapeHtml(urlSegura(nf.link))}" target="_blank" rel="noopener">abrir a nota</a>` : ''}.</div></div>` : ''}
     <p class="cfg-modal-sub">1) Copie os dados abaixo. 2) Abra o Emissor Nacional e emita a nota. 3) Volte aqui e registre o número.</p>
     ${faltando.length ? `<p class="cw-erro" style="margin:0 0 10px;">${ic('alerta', 'ic-herda')} Falta no cadastro do cliente: ${faltando.join(', ')}. Dá para preencher direto no portal, ou completar em Cadastros → Clientes e Fornecedores.</p>` : ''}
     <div class="nfse-campos">${campos.map(([rot, val], i) => `<div class="nfse-campo"><span>${escapeHtml(rot)}</span><div><code id="nfse-v-${i}">${escapeHtml(val || '—')}</code>${val ? `<button type="button" class="btn btn-small" onclick="nfseCopiar(${i}, this)">${ic('copiar', 'ic-herda')} Copiar</button>` : ''}</div></div>`).join('')}</div>

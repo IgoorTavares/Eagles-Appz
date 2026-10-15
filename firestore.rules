@@ -143,8 +143,15 @@ service cloud.firestore {
     }
 
     // Sou membro dessa empresa e ela está ativa.
+    // Conta bloqueada por 5 senhas erradas seguidas (só o Super Admin desbloqueia)
+    function contaLivre() {
+      return request.auth.token.email == null ||
+        !exists(/databases/$(database)/documents/tentativas_login/$(request.auth.token.email)) ||
+        get(/databases/$(database)/documents/tentativas_login/$(request.auth.token.email)).data.falhas < 5;
+    }
+
     function souMembroAtivo(tenantId) {
-      return estaLogado() && meuTenantId() != null && meuTenantId() == tenantId && meuRole() != 'Cliente' && empresaAtiva(tenantId);
+      return estaLogado() && meuTenantId() != null && meuTenantId() == tenantId && meuRole() != 'Cliente' && empresaAtiva(tenantId) && contaLivre();
     }
 
     // ---------- usuarios/{uid} ----------
@@ -447,6 +454,21 @@ service cloud.firestore {
         get(/databases/$(database)/documents/paginas_publicas/$(request.resource.data.pagina)).data.tenantId == request.resource.data.tenantId;
       allow read, delete: if estaLogado() && (souSuperAdmin() || (resource.data.tenantId == meuTenantId() && podeOperar()));
       allow update: if false;
+    }
+
+    // ---------- tentativas_login/{email} ----------
+    // Conta as senhas erradas seguidas de cada e-mail. Quem está na tela de
+    // login (sem estar logado) só pode SOMAR 1; ninguém zera nem lê de fora.
+    // Com 5, a conta fica bloqueada (regra contaLivre) até o Super Admin
+    // apagar o registro. Acertar a senha antes de 5 zera o contador.
+    match /tentativas_login/{email} {
+      allow get: if souSuperAdmin() || (estaLogado() && request.auth.token.email == email);
+      allow list: if souSuperAdmin();
+      allow create: if email.size() <= 200 && request.resource.data.keys().hasOnly(['falhas', 'ultimaEm']) &&
+        request.resource.data.falhas == 1 && request.resource.data.ultimaEm == request.time;
+      allow update: if request.resource.data.keys().hasOnly(['falhas', 'ultimaEm']) &&
+        request.resource.data.falhas == resource.data.falhas + 1 && request.resource.data.ultimaEm == request.time;
+      allow delete: if souSuperAdmin() || (estaLogado() && request.auth.token.email == email && resource.data.falhas < 5);
     }
 
     // ---------- erros_app/{id} ----------

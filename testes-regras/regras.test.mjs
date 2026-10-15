@@ -155,3 +155,30 @@ test('erros do sistema: cada um registra o seu, só o Super Admin lê', async ()
   await assertFails(getDoc(doc(db('d1'), 'erros_app/e1')));
   await assertSucceeds(getDoc(doc(db('sa'), 'erros_app/e1')));
 });
+
+// ---------- bloqueio depois de 5 senhas erradas ----------
+test('senha errada: quem está fora do sistema só consegue SOMAR 1 no contador', async () => {
+  const anon = db(), ref = doc(anon, 'tentativas_login/vitima@x.com');
+  const { increment, serverTimestamp } = await import('firebase/firestore');
+  await assertSucceeds(setDoc(ref, { falhas: increment(1), ultimaEm: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(ref, { falhas: increment(1), ultimaEm: serverTimestamp() }, { merge: true }));
+  await assertFails(setDoc(ref, { falhas: 0, ultimaEm: serverTimestamp() }, { merge: true })); // não zera
+  await assertFails(setDoc(ref, { falhas: increment(5), ultimaEm: serverTimestamp() }, { merge: true })); // não pula
+  await assertFails(deleteDoc(ref)); // não apaga
+  await assertFails(getDoc(ref)); // não lê
+  await assertFails(getDocs(collection(anon, 'tentativas_login'))); // não lista
+});
+test('conta com 5 senhas erradas não lê nada, e só o Super Admin desbloqueia', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'tentativas_login/bloq@x.com'), { falhas: 5 }); await setDoc(doc(ctx.firestore(), 'usuarios/ub'), { tenantId: 't1', role: 'Diretor', nome: 'Bloq' }); });
+  const ub = env.authenticatedContext('ub', { email: 'bloq@x.com' }).firestore();
+  await assertFails(getDoc(doc(ub, 'tenants/t1/crm_clientes/x')));
+  await assertFails(deleteDoc(doc(ub, 'tentativas_login/bloq@x.com'))); // o próprio não se desbloqueia
+  await assertSucceeds(getDoc(doc(ub, 'tentativas_login/bloq@x.com'))); // mas vê que está bloqueado
+  await assertSucceeds(deleteDoc(doc(db('sa'), 'tentativas_login/bloq@x.com')));
+  await assertSucceeds(getDoc(doc(ub, 'tenants/t1/crm_clientes/x'))); // desbloqueado: volta a ler
+});
+test('acertou a senha antes da 5ª: a própria pessoa zera o contador', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'tentativas_login/quase@x.com'), { falhas: 3 }); });
+  await assertSucceeds(deleteDoc(doc(env.authenticatedContext('uq', { email: 'quase@x.com' }).firestore(), 'tentativas_login/quase@x.com')));
+  await assertFails(deleteDoc(doc(env.authenticatedContext('outro', { email: 'outro@x.com' }).firestore(), 'tentativas_login/vitima@x.com')));
+});

@@ -11,7 +11,7 @@
 // 4. O Firebase vai mostrar um bloco "firebaseConfig" com os valores
 //    abaixo — copie e cole cada um no lugar de "COLE_AQUI".
 //
-// Configuração já preenchida com o projeto "sevenhomecare-51b1e".
+// Configuração já preenchida com o projeto "labz-18246".
 // Se um dia precisar trocar de projeto, é só substituir os valores abaixo.
 
 const FIREBASE_CONFIG = {

@@ -122,6 +122,7 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
 - O link de aprovação **é o portal do cliente** (v135).
 - O quadro "Produção de Conteúdo" continua sendo um projeto do Kanban (o Igor escolheu deixar assim).
 - **Há uma versão de animações guardada à parte** (`eagles-labz-v142-animacoes.zip`, baseada na v141): aparecer ao rolar, brilho nas caixinhas com a cor do tema, gráficos crescendo, mídia em tela cheia no portal e um Assistente novo com cerca de 70 respostas e botão "Abrir essa tela". **O Igor pediu para ignorá-la por enquanto**; partes dela podem ser reaproveitadas se ele pedir.
+- **Skills do Claude Code** ficam em `.claude/skills/` (origem e licenças em `.claude/skills/ORIGEM.md`). Use frontend-design em telas novas ou quando trabalhar no acabamento visual de animações. Preserve a identidade visual existente do Eagles Labz, incluindo --blue-strong, os temas claro e escuro, a tipografia e os padrões atuais. Não redesenhe telas existentes nem altere funcionalidades sem autorização explícita.
 
 ## 10. Histórico recente
 - v124: escalas de plantão.

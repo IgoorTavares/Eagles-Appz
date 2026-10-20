@@ -6589,6 +6589,11 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '20/10/2026 · Financeiro', itens: [
+    { titulo: 'Financeiro com visual novo', badges: ['melhoria'], texto: 'Cabeçalho mais limpo, abas com sublinhado na cor do tema, indicadores numa faixa com o Lucro do período em destaque e cartões de Receber e Pagar mais leves (a troca entre cartões e lista continua). Venda Rápida é o botão principal; Lançar Despesa continua com o ícone vermelho. Os números não mudaram.' },
+    { titulo: 'Transações mais fáceis de ler', badges: ['melhoria'], texto: 'Entradas em verde e saídas em cor neutra com o sinal de menos. As categorias aparecem com um ponto na cor que você escolheu, e a situação (pago, vencido, pendente) vem com um ponto e o nome. No celular, as transações viram uma lista que cabe na tela.' },
+    { titulo: 'Gráficos nas cores do seu tema', badges: ['melhoria'], texto: 'O Fluxo de caixa e os Relatórios do Financeiro seguem as cores do tema, como no Meu Negócio. O Financeiro dentro do CRM continua igual.' },
+  ] },
   { data: '20/10/2026 · Meu Negócio', itens: [
     { titulo: 'Meu Negócio com visual novo', badges: ['melhoria'], texto: 'Indicadores numa faixa limpa, painéis sem sombras e tabelas mais fáceis de ler (no celular, as tabelas cabem na tela). Os números não mudaram.' },
     { titulo: 'Gráficos nas cores do seu tema', badges: ['melhoria'], texto: 'Os gráficos do Meu Negócio seguem as cores do tema escolhido e ficaram do tamanho certo. As situações têm sempre a mesma cor: faturado e recebido em verde, aberto em laranja, cancelado e vencido em vermelho, pendente em cinza. As cores das categorias continuam as que você escolheu no Financeiro.' },
@@ -12125,10 +12130,20 @@ function finHtmlFluxo() {
       ${p.semanas.map((w) => `<tr><td>${escapeHtml(formatDatePt(w.inicio))} a ${escapeHtml(formatDatePt(atdMaisDias(w.inicio, 6)))}</td><td style="text-align:right;" class="fin-verde">${finV(w.entra)}</td><td style="text-align:right;" class="fin-vermelho">${finV(w.sai)}</td><td style="text-align:right;" class="${w.saldo >= 0 ? '' : 'fin-vermelho'}"><b>${finV(w.saldo)}</b></td></tr>`).join('')}
     </tbody></table></div>`;
 }
+// Gráficos do Financeiro nas cores do tema: só no Meu Negócio (.pg-mn) e na página
+// do Financeiro (.pg-fin). No CRM continuam como estavam.
+function finGraficosNoTema() { return !!(FIN_HOST && FIN_HOST.closest && FIN_HOST.closest('.pg-mn, .pg-fin')); }
 function flxDesenhar() {
   const cv = document.getElementById('fin-g-fluxo');
   if (!cv || typeof Chart === 'undefined') return;
   const p = flxProjetar();
+  if (finGraficosNoTema()) { // v146: mesmos números, com as cores do tema
+    const pal = mnPaleta();
+    FIN_GRAFICOS.push(new Chart(cv, { type: 'line', data: { labels: p.diario.map((d) => formatDatePt(d.data).slice(0, 5)),
+      datasets: [Object.assign({ label: 'Saldo projetado', data: p.diario.map((d) => d.saldo) }, mnLinha(pal.destaque, pal, true, false))] },
+      options: mnOpcoesGrafico('line', pal, { semLegenda: true, dica: { label: (c) => formatMoney(c.parsed.y) }, eixoY: (v) => formatMoney(v) }) }));
+    return;
+  }
   FIN_GRAFICOS.push(new Chart(cv, { type: 'line', data: { labels: p.diario.map((d) => formatDatePt(d.data).slice(0, 5)), datasets: [{ label: 'Saldo projetado', data: p.diario.map((d) => d.saldo), borderColor: '#3fae12', backgroundColor: 'rgba(63,174,18,.12)', fill: true, tension: 0.25, pointRadius: 0 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => formatMoney(c.parsed.y) } } }, scales: { y: { ticks: { callback: (v) => formatMoney(v) } } } } }));
 }
@@ -19531,8 +19546,8 @@ function finDesenharGraficos() {
   const estilo = getComputedStyle(document.documentElement);
   const cTexto = (estilo.getPropertyValue('--text-soft') || '#888').trim() || '#888';
   const opc = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: cTexto, boxWidth: 12 } } }, scales: { x: { ticks: { color: cTexto } }, y: { ticks: { color: cTexto } } } };
-  const noMeuNegocio = !!(FIN_HOST && FIN_HOST.closest && FIN_HOST.closest('.pg-mn')); // v145: estilo do tema só no Meu Negócio
-  const novo = (id, cfg) => { const el = document.getElementById(id); if (el) try { FIN_GRAFICOS.push(new Chart(el, noMeuNegocio ? mnRelatorioNoTema(id, cfg) : cfg)); } catch (e) { console.error(e); } };
+  const noTema = finGraficosNoTema(); // v145/v146: estilo do tema só no Meu Negócio e na página do Financeiro (o CRM fica como está)
+  const novo = (id, cfg) => { const el = document.getElementById(id); if (el) try { FIN_GRAFICOS.push(new Chart(el, noTema ? mnRelatorioNoTema(id, cfg) : cfg)); } catch (e) { console.error(e); } };
   novo('fin-g-recdesp', { type: 'bar', data: { labels: rot, datasets: [{ label: 'Faturamento', data: meses.map((m) => doMes(m, 'receber')), backgroundColor: '#3b82f6' }, { label: 'Despesas', data: meses.map((m) => doMes(m, 'pagar')), backgroundColor: '#f97316' }] }, options: opc });
   // Evolução: as 3 linhas do relatório antigo do Meu Negócio (competência)
   const recM = meses.map((m) => doMes(m, 'receber'));
@@ -25801,7 +25816,7 @@ function renderMnDetalheEstado() {
 function mnCor(variavel) {
   const el = document.createElement('span');
   el.style.color = `var(${variavel})`;
-  (document.querySelector('.pg-mn') || document.body).appendChild(el); // lê as cores de dentro da página
+  (document.querySelector('.pg-mn, .pg-fin') || document.body).appendChild(el); // lê as cores de dentro da página
   const c = getComputedStyle(el).color;
   el.remove();
   const srgb = c.match(/color\(srgb ([\d.e-]+) ([\d.e-]+) ([\d.e-]+)/);
@@ -25861,9 +25876,9 @@ function mnOpcoesGrafico(tipo, p, extra = {}) {
   return o;
 }
 
-// Relatórios financeiros dentro do Meu Negócio: mesmos números e mesmas cores
-// de categoria escolhidas pelo usuário; só o estilo segue o tema. No
-// Financeiro e no CRM este caminho não é usado.
+// Relatórios financeiros no Meu Negócio e na página do Financeiro (v146): mesmos
+// números e mesmas cores de categoria escolhidas pelo usuário; só o estilo segue
+// o tema. No CRM este caminho não é usado.
 function mnRelatorioNoTema(id, cfg) {
   const p = mnPaleta();
   const o = cfg.options || {};

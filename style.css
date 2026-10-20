@@ -5918,3 +5918,206 @@ html .btn:disabled .icone-menu { stroke: currentColor; }
   .pg-mn .fin-top { grid-template-columns: minmax(0, 1fr) auto; }
   .pg-mn .fin-top .kb-barra-prog { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* =====================================================================
+   Financeiro (financeiro.html) — Mesa de Operação Premium (v146)
+   Vale só dentro de <main class="main pg-fin">: nenhuma outra página usa
+   essa classe. O Financeiro dentro do CRM e os Relatórios do Meu Negócio
+   continuam como estão. Os formulários (Venda Rápida, Lançar Despesa,
+   Categorias, Recibos) abrem fora do <main> e não mudam.
+   Mesmos tokens do Meu Negócio (v145): uma camada de superfície com fio
+   fino, indicadores em faixa, cor só para exceção. Entradas em verde,
+   saídas em tinta com o sinal de menos; categorias com o ponto na cor
+   escolhida pelo usuário (--srv-cor). Nenhuma conta muda aqui.
+   Os !important existem onde o código escreve estilo direto no elemento
+   ou onde regras antigas do Financeiro já usam !important.
+   ===================================================================== */
+.pg-fin {
+  --mn-linha: var(--border);
+  --mn-sup: var(--bg-elevated);
+  --mn-muda: var(--text-soft);
+  --mn-muda-fundo: color-mix(in srgb, var(--text-soft) 78%, var(--text));
+  --mn-r: 10px;
+}
+[data-theme="dark"] .pg-fin { --mn-sup: color-mix(in srgb, var(--bg-elevated) 92%, #ffffff); --mn-luz: inset 0 1px 0 rgba(255, 255, 255, .045); }
+
+/* Cabeçalho */
+.pg-fin .fin-cab { align-items: flex-end; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--mn-linha); }
+.pg-fin .fin-cab h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.pg-fin .fin-cab p { font-size: 14px; color: var(--mn-muda-fundo); margin-top: 6px; }
+
+/* Ações: uma principal (cor do tema); despesa e categorias como secundárias */
+.pg-fin .fin-acoes { gap: 8px; margin-bottom: 20px; }
+.pg-fin .fin-acoes .btn { box-shadow: none !important; transform: none !important; min-height: 40px; border-radius: 8px; }
+.pg-fin .fin-btn-venda, .pg-fin .fin-btn-venda:hover { background: var(--blue-strong) !important; border-color: var(--blue-strong) !important; color: var(--on-accent) !important; }
+.pg-fin .fin-btn-despesa, .pg-fin .fin-btn-despesa:hover { background: var(--mn-sup) !important; border: 1px solid var(--mn-linha) !important; color: var(--text) !important; }
+.pg-fin .fin-btn-despesa:hover { background: var(--bg-soft) !important; }
+.pg-fin .fin-btn-despesa .ic { color: var(--danger-texto); }
+
+/* Abas: sublinhado, não pílula */
+.pg-fin .fin-abas.kb-segmento { display: flex; width: 100%; background: transparent; border: 0; border-bottom: 1px solid var(--mn-linha); border-radius: 0; padding: 0; gap: 2px; margin-bottom: 20px; box-shadow: none; }
+.pg-fin .fin-abas.kb-segmento button { background: transparent !important; color: var(--mn-muda-fundo) !important; border-radius: 0 !important; border: 0 !important; border-bottom: 2px solid transparent !important; padding: 10px 12px !important; margin-bottom: -1px; box-shadow: none !important; font-weight: 500; }
+.pg-fin .fin-abas.kb-segmento button:hover { color: var(--text) !important; }
+.pg-fin .fin-abas.kb-segmento button.ativo { color: var(--text) !important; border-bottom-color: var(--blue-strong) !important; font-weight: 600; }
+
+/* Barra de período */
+.pg-fin .fin-periodo { background: transparent; border: 0; padding: 0; margin-bottom: 16px; }
+.pg-fin .fin-periodo-mes { font-size: 16px; font-weight: 600; }
+
+/* Indicadores: faixa contínua; cor só para exceção */
+.pg-fin .fin-cards { gap: 0 !important; background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); overflow: hidden; box-shadow: var(--mn-luz, none); margin-bottom: 16px; }
+.pg-fin .fin-card { background: transparent !important; border: 0 !important; border-left: 1px solid var(--mn-linha) !important; border-radius: 0 !important; box-shadow: none !important; padding: 18px 20px !important; min-width: 0; }
+.pg-fin .fin-card:first-child { border-left: 0 !important; }
+.pg-fin .fin-card::after, .pg-fin .fin-card::before { display: none; }
+.pg-fin .fin-card-tit { font-size: 14px; font-weight: 600; }
+.pg-fin .fin-ic-q, .pg-fin .fin-ic-receber, .pg-fin .fin-ic-pagar, .pg-fin .fin-ic-lucro { background: var(--bg-soft) !important; color: var(--text) !important; box-shadow: none !important; }
+.pg-fin .fin-card .fin-linha { font-size: 13px; color: var(--mn-muda); }
+.pg-fin .fin-card .fin-azul, .pg-fin .fin-card .fin-azul .fin-v, .pg-fin .fin-card .fin-verde, .pg-fin .fin-card .fin-verde .fin-v { color: var(--text); }
+.pg-fin .fin-card .fin-vermelho, .pg-fin .fin-card .fin-vermelho .fin-v { color: var(--danger-texto); }
+.pg-fin .fin-linha-forte { color: var(--text) !important; font-size: 14px !important; }
+.pg-fin .fin-linha-forte .fin-v { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; color: var(--text); font-variant-numeric: tabular-nums; }
+.pg-fin .fin-num, .pg-fin .fin-card-valor { font-size: 24px !important; font-weight: 650 !important; color: var(--text) !important; font-variant-numeric: tabular-nums; }
+.pg-fin .fin-num .fin-v, .pg-fin .fin-card-valor .fin-v { color: inherit; }
+.pg-fin .fin-card-valor.fin-vermelho { color: var(--danger-texto) !important; }
+/* o resultado do período é o destaque, como no Painel */
+.pg-fin .fin-card:has(.fin-ic-lucro) { background: color-mix(in srgb, var(--blue-strong) 7%, var(--mn-sup)) !important; box-shadow: inset 3px 0 0 var(--blue-strong) !important; }
+.pg-fin .fin-card:has(.fin-ic-lucro) .fin-linha-forte .fin-verde .fin-v, .pg-fin .fin-card:has(.fin-ic-lucro) .fin-linha-forte .fin-v { color: var(--success-texto); font-size: 22px; }
+/* sobre o fundo do destaque, os rótulos usam o cinza mais forte */
+.pg-fin .fin-card:has(.fin-ic-lucro) .fin-linha { color: var(--mn-muda-fundo); }
+
+/* Vencidos: faixa neutra com régua de alerta */
+.pg-fin .fin-venc { background: var(--mn-sup) !important; border: 1px solid var(--mn-linha) !important; border-radius: var(--mn-r) !important; box-shadow: inset 3px 0 0 var(--warning) !important; }
+.pg-fin .fin-venc-pagar { box-shadow: inset 3px 0 0 var(--danger) !important; }
+.pg-fin .fin-venc-resumo { text-align: left; margin: 6px 0 0 34px; color: var(--mn-muda); }
+
+/* Painéis e avisos */
+.pg-fin .fin-painel { background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); box-shadow: var(--mn-luz, none); padding: 20px 24px; }
+.pg-fin .fin-painel-cab strong { font-size: 16px; font-weight: 600; }
+.pg-fin .fin-painel-cab > div > strong[style*="18px"], .pg-fin .fin-painel-cab > strong[style*="17px"] { font-size: 20px !important; font-weight: 650; }
+.pg-fin .fin-info { background: transparent; border: 0; border-left: 3px solid var(--mn-linha); border-radius: 0; color: var(--mn-muda); padding: 4px 12px; }
+.pg-fin .fin-info .ic { color: var(--mn-muda); }
+.pg-fin .fin-info-alerta { border-left-color: var(--warning); color: var(--text); }
+.pg-fin .kb-vazio-mini { color: var(--mn-muda); }
+
+/* Chips de total (Receber/Pagar): neutros, com ponto */
+.pg-fin .fin-chip { background: transparent !important; border-color: var(--mn-linha) !important; color: var(--text) !important; font-variant-numeric: tabular-nums; }
+.pg-fin .fin-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--mn-muda); }
+.pg-fin .fin-chip.verde::before { background: var(--success); }
+.pg-fin .fin-chip.laranja::before { background: var(--warning); }
+.pg-fin .fin-chip.vermelho::before { background: var(--danger); }
+.pg-fin .fin-quadradinho { width: 8px; height: 8px; border-radius: 50%; }
+
+/* Situação: ponto + texto (sem pílula colorida) */
+.pg-fin .fin-status { background: transparent !important; padding: 0; font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.pg-fin .fin-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.pg-fin .fin-status.cancelado { color: var(--mn-muda); }
+.pg-fin .fin-status.pendente { color: var(--mn-muda); }
+/* Categoria: ponto na cor escolhida pelo usuário + nome */
+.pg-fin .srv-cat { background: transparent !important; border: 0 !important; padding: 0 !important; font-size: 12.5px; font-weight: 500; color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
+.pg-fin .srv-cat::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--srv-cor); flex-shrink: 0; }
+
+/* Contas (Receber, Pagar, Clientes): cartões planos */
+.pg-fin .fin-contas-grade { gap: 12px; }
+.pg-fin .fin-conta { background: var(--mn-sup) !important; border: 1px solid var(--mn-linha) !important; border-radius: var(--mn-r) !important; box-shadow: none !important; transform: none !important; }
+.pg-fin .fin-conta .fin-verde, .pg-fin .fin-conta .fin-verde .fin-v, .pg-fin .fin-conta .fin-azul, .pg-fin .fin-conta .fin-azul .fin-v { color: var(--text); }
+.pg-fin .fin-conta .fin-v { font-weight: 650; font-variant-numeric: tabular-nums; }
+/* vermelho dos cartões (contas a pagar e vencidos) no tom de texto do tema, legível sobre o cartão */
+.pg-fin .fin-conta .fin-vermelho, .pg-fin .fin-conta .fin-vermelho .fin-v { color: var(--danger-texto); }
+/* iniciais do cliente/fornecedor: neutras e legíveis em todos os temas (antes ficavam brancas sem fundo) */
+.pg-fin .fin-pessoa .kb-avatar { background: var(--bg-soft); color: var(--text); }
+.pg-fin .srv-card-acoes .btn { min-height: 34px; box-shadow: none !important; transform: none !important; border-radius: 8px; font-size: 13px; }
+
+/* Tabelas: legíveis; entrada em verde, saída em tinta (com o sinal) */
+.pg-fin .kb-tabela th { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 600; color: var(--mn-muda); background: transparent; padding: 10px 12px; }
+.pg-fin .kb-tabela td { height: 44px; padding: 0 12px; font-size: 14px; border-bottom-color: var(--mn-linha); }
+.pg-fin .kb-tabela td[style*="right"] { font-variant-numeric: tabular-nums; }
+.pg-fin .kb-tabela tbody tr:hover { background: var(--bg-soft); }
+.pg-fin .kb-tabela .fin-verde, .pg-fin .kb-tabela .fin-verde .fin-v { color: var(--success-texto); }
+.pg-fin .kb-tabela .fin-vermelho, .pg-fin .kb-tabela .fin-vermelho .fin-v { color: var(--text); }
+.pg-fin .kb-tabela .fin-azul, .pg-fin .kb-tabela .fin-azul .fin-v { color: var(--text); }
+/* Relatórios (iguais ao Meu Negócio) */
+.pg-fin .fin-dre .fin-verde, .pg-fin .fin-dre .fin-verde .fin-v { color: var(--text); }
+.pg-fin .fin-dre tr:not(.fin-dre-forte) .fin-vermelho, .pg-fin .fin-dre tr:not(.fin-dre-forte) .fin-vermelho .fin-v { color: var(--mn-muda); }
+.pg-fin .kb-tabela .fin-dre-forte td { font-weight: 650; border-top: 1px solid var(--mn-linha); }
+.pg-fin .fin-dre tbody tr.fin-dre-forte:nth-last-child(2) .fin-verde, .pg-fin .fin-dre tbody tr.fin-dre-forte:nth-last-child(2) .fin-verde .fin-v { color: var(--success-texto); }
+.pg-fin .kb-bolinha { box-shadow: none; }
+.pg-fin .kb-tabela tr:nth-child(1) .kb-bolinha { background: var(--blue-strong) !important; }
+.pg-fin .kb-tabela tr:nth-child(2) .kb-bolinha { background: var(--mn-muda) !important; }
+.pg-fin [class*="fin-top"] [style*="background"] { background: var(--blue-strong) !important; }
+
+/* Estados vazios: discretos */
+.pg-fin .kb-vazio-grande { padding: 32px 16px; }
+.pg-fin .kb-vazio-grande .ic-circulo { background: var(--bg-soft) !important; color: var(--mn-muda) !important; box-shadow: none !important; }
+
+/* Celular */
+@media (max-width: 768px) {
+  .pg-fin .fin-cab { margin-bottom: 16px; }
+  .pg-fin .fin-cab h1 { font-size: 24px; }
+  .pg-fin .fin-abas.kb-segmento { flex-wrap: nowrap; overflow-x: auto; }
+  .pg-fin .fin-cards { grid-template-columns: 1fr !important; }
+  .pg-fin .fin-card { border-left: 0 !important; border-top: 1px solid var(--mn-linha) !important; padding: 14px 16px !important; }
+  .pg-fin .fin-card:first-child { border-top: 0 !important; }
+  .pg-fin .fin-painel { padding: 16px; }
+  .pg-fin .kb-tabela { min-width: 0 !important; }
+  .pg-fin .kb-tabela th, .pg-fin .kb-tabela td { padding: 10px 6px; height: auto; font-size: 13px; }
+  .pg-fin .kb-tabela td[style*="right"] { white-space: nowrap; }
+  /* Transações (a tabela logo abaixo do aviso da Visão Geral) viram lista:
+     descrição e valor em cima; cliente e vencimento no meio; categoria e situação embaixo.
+     As outras tabelas (lista de Receber/Pagar, Recorrentes) mantêm as colunas e as caixinhas de seleção. */
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela thead { display: none; }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "d v" "c t" "m s"; column-gap: 12px; row-gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--mn-linha); }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela td { display: block; height: auto; padding: 0; border: 0; text-align: left !important; min-width: 0; }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela td:nth-child(1) { grid-area: t; text-align: right !important; font-size: 13px; color: var(--mn-muda); }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela td:nth-child(2) { grid-area: d; font-weight: 600; }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela td:nth-child(3) { grid-area: c; font-size: 13px; color: var(--mn-muda); }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela td:nth-child(4) { grid-area: m; }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela td:nth-child(5) { grid-area: s; text-align: right !important; }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela td:nth-child(6) { grid-area: v; text-align: right !important; font-weight: 600; }
+}
+@media (max-width: 420px) {
+  .pg-fin .kb-tabela th, .pg-fin .kb-tabela td { padding: 8px 4px; font-size: 12px; }
+  .pg-fin .fin-contas-grade { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 360px) {
+  /* telas muito estreitas (ou celular com zoom de 200%): tudo em uma coluna, sem rolar para o lado */
+  .pg-fin .fin-filtros > *, .pg-fin .fin-filtros .srv-select, .pg-fin .fin-filtros input[type="date"] { flex: 1 1 100%; min-width: 0; max-width: 100%; }
+  .pg-fin .kb-busca input, .pg-fin select, .pg-fin input { min-width: 0; max-width: 100%; }
+  .pg-fin .fin-linha, .pg-fin .fin-conta-linha, .pg-fin .fin-conta-cab, .pg-fin .fin-venc-cab, .pg-fin .fin-painel-cab, .pg-fin .fin-periodo { flex-wrap: wrap; }
+  .pg-fin .fin-v, .pg-fin .fin-conta strong, .pg-fin .fin-conta small, .pg-fin .fin-chip { overflow-wrap: anywhere; min-width: 0; }
+  .pg-fin .fin-chip { white-space: normal; }
+  .pg-fin .fin-venc-resumo { margin-left: 0; }
+  .pg-fin .btn { white-space: normal; max-width: 100%; }
+  .pg-fin .srv-card-acoes { flex-wrap: wrap; }
+  .pg-fin .srv-card-acoes .btn { min-width: 0; }
+  /* despesas recorrentes (aba Pagar): nome, fornecedor e valor em cima; pausar e excluir na linha de baixo */
+  .pg-fin .srv-cat-linha { flex-wrap: wrap; }
+  .pg-fin .srv-cat-linha > span[style*="flex"] { flex-basis: calc(100% - 24px); min-width: 0; }
+  .pg-fin .fin-graficos { grid-template-columns: minmax(0, 1fr); }
+  .pg-fin .fin-graficos > *, .pg-fin .fin-grafico { min-width: 0; }
+  /* Relatórios (tabelas de 3 colunas: Competência × Caixa) e Fluxo de caixa (4 colunas) viram lista */
+  .pg-fin .kb-tabela:not(:has(th:nth-child(5))) thead { display: none; }
+  .pg-fin .kb-tabela:not(:has(th:nth-child(5))) tr { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--mn-linha); }
+  .pg-fin .kb-tabela:not(:has(th:nth-child(5))) td { display: block; height: auto; padding: 0; border: 0; text-align: left !important; white-space: normal !important; }
+  .pg-fin .kb-tabela:not(:has(th:nth-child(5))) td:first-child { grid-column: 1 / -1; margin-bottom: 4px; }
+  .pg-fin .kb-tabela:not(:has(th:nth-child(4))) td:nth-child(2)::before { content: "Competência"; display: block; font-size: 11px; font-weight: 500; color: var(--mn-muda); }
+  .pg-fin .kb-tabela:not(:has(th:nth-child(4))) td:nth-child(3)::before { content: "Caixa"; display: block; font-size: 11px; font-weight: 500; color: var(--mn-muda); }
+  .pg-fin .kb-tabela:has(th:nth-child(4)):not(:has(th:nth-child(5))) td:nth-child(2)::before { content: "Entra"; display: block; font-size: 11px; font-weight: 500; color: var(--mn-muda); }
+  .pg-fin .kb-tabela:has(th:nth-child(4)):not(:has(th:nth-child(5))) td:nth-child(3)::before { content: "Sai"; display: block; font-size: 11px; font-weight: 500; color: var(--mn-muda); }
+  .pg-fin .kb-tabela:has(th:nth-child(4)):not(:has(th:nth-child(5))) td:nth-child(4)::before { content: "Saldo no fim"; display: block; font-size: 11px; font-weight: 500; color: var(--mn-muda); }
+  .pg-fin .kb-tabela .fin-dre-forte td { border-top: 0; }
+}
+@media (max-width: 240px) {
+  /* zoom muito alto: os valores um embaixo do outro */
+  .pg-fin .kb-tabela:not(:has(th:nth-child(5))) tr { grid-template-columns: 1fr; row-gap: 4px; }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela tr { grid-template-columns: minmax(0, 1fr); grid-template-areas: "d" "v" "c" "t" "m" "s"; }
+  .pg-fin .fin-filtros + .fin-info + .kb-tabela-wrap .kb-tabela td { text-align: left !important; }
+  .pg-fin .kb-segmento:not(.fin-abas) { display: flex; flex-wrap: wrap; }
+  .pg-fin .fin-top { grid-template-columns: minmax(0, 1fr) auto; }
+  .pg-fin .fin-top .kb-barra-prog { grid-column: 1 / -1; grid-row: 2; }
+  /* cartões de conta: nome em cima, situação embaixo; valores sem quebrar no meio */
+  .pg-fin .fin-conta-cab > div { flex: 1 1 100% !important; }
+  .pg-fin .fin-card .fin-v, .pg-fin .fin-conta .fin-v { overflow-wrap: normal; }
+  .pg-fin .fin-linha-forte .fin-v, .pg-fin .fin-card:has(.fin-ic-lucro) .fin-linha-forte .fin-v { font-size: 17px; }
+  .pg-fin .fin-num, .pg-fin .fin-card-valor { font-size: 19px !important; }
+  .pg-fin .fin-card, .pg-fin .fin-painel { padding-left: 12px !important; padding-right: 12px !important; }
+}

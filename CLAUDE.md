@@ -1,7 +1,7 @@
 # Eagles Labz — ERP + CRM (white label)
 
-Documento de passagem para o Claude Code. Versão publicada: **v144** (cache `eagles-cache-v144` no `sw.js`), integrada na `main` pelo merge `22f638c` e aprovada pelo Igor no site oficial.
-Versão em trabalho: **v145** (cache `eagles-cache-v145`), na branch de trabalho `claude/v145-meu-negocio`, **em revisão**: commit, push, merge e publicação dependem de autorização explícita do Igor.
+Documento de passagem para o Claude Code. Versão publicada: **v145** (cache `eagles-cache-v145` no `sw.js`), integrada na `main` pelo merge `f743681` e aprovada pelo Igor no site oficial.
+Versão em trabalho: **v146** (cache `eagles-cache-v146`), na branch de trabalho `claude/v146-financeiro`, **em revisão**: commit, push, merge e publicação dependem de autorização explícita do Igor.
 A v142 foi uma entrega externa, fora deste repositório (ver item 10).
 O dono do projeto (Igor) **não é programador**: explique tudo em português simples, sem jargão, e diga
 sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
@@ -147,7 +147,8 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
 - v142 (entrega externa, fora deste repositório): o tema não ficava salvo ao sair (passou a ficar também no cadastro). O código dessa correção **não está** no GitHub nem na v143.
 - v143: Etapa A do acabamento visual, feita sobre a v141: contraste de botões, valores e etiquetas em todos os temas (texto claro ou escuro escolhido automaticamente sobre a cor de destaque), espaçamento dos formulários e botão desabilitado.
 - v144 (publicada em 20/10/2026, merge `22f638c`): Etapa B0 e piloto do Painel (`index.html`) no estilo "Mesa de operação": blocos por pergunta, Resultado do mês em destaque, regras novas só dentro de `.pg-painel`, texto da receita corrigido e títulos do Tutorial alinhados. Nenhum cálculo mudou.
-- v145 (em revisão, ainda não publicada): Meu Negócio na "Mesa de Operação Premium": indicadores em faixa, painéis de uma camada, tabelas que cabem no celular e gráficos nas cores do tema (`mnPaleta`, `mnOpcoesGrafico`). Regras novas só dentro de `.pg-mn`. Os Relatórios dentro do Meu Negócio usam o mesmo código do Financeiro; o estilo do tema só entra lá (`mnRelatorioNoTema`), e as cores das categorias escolhidas pelo usuário são mantidas. "Estoque baixo"/"Sem estoque" só ficam vermelhos acima de zero. Nenhum cálculo mudou.
+- v145 (publicada em 20/10/2026, merge `f743681`): Meu Negócio na "Mesa de Operação Premium": indicadores em faixa, painéis de uma camada, tabelas que cabem no celular e gráficos nas cores do tema (`mnPaleta`, `mnOpcoesGrafico`). Regras novas só dentro de `.pg-mn`. Os Relatórios dentro do Meu Negócio usam o mesmo código do Financeiro; o estilo do tema só entra lá (`mnRelatorioNoTema`), e as cores das categorias escolhidas pelo usuário são mantidas. "Estoque baixo"/"Sem estoque" só ficam vermelhos acima de zero. Nenhum cálculo mudou.
+- v146 (em revisão, ainda não publicada): Financeiro (`financeiro.html`) na "Mesa de Operação Premium", com regras só dentro de `.pg-fin` (o Financeiro do CRM não muda). Venda Rápida como ação principal, Lançar Despesa secundária com o ícone vermelho, abas com sublinhado, indicadores em faixa com o Lucro do período em destaque, vencidos em faixas neutras com borda lateral, entradas em verde e saídas neutras com o sinal de menos, categorias com ponto na cor do usuário (`--srv-cor`), transações em lista no celular e telas estreitas (320px e zoom de 200%) sem rolar para o lado. Fluxo de caixa e Relatórios com as cores do tema (`finGraficosNoTema`, que vale para `.pg-mn` e `.pg-fin`). Nenhum cálculo mudou.
 
 ## 11. Pendências e ideias
 - **Plano Blaze**: liga o servidor (e-mails automáticos, Meta e o processamento das aprovações mesmo com o sistema fechado) e permitiria **enviar imagens direto pelo sistema** (Firebase Storage) em vez de usar o Drive.

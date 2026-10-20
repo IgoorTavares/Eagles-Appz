@@ -5449,3 +5449,114 @@ body.ap-body #ap-conteudo { max-width: none; padding: 0; }
 .img-drive-falhou { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 100%; min-height: 180px; padding: 16px; box-sizing: border-box; text-align: center; background: rgba(245,158,11,.08); color: #c9cfc6; font-size: 13px; line-height: 1.45; }
 .img-drive-falhou b { color: #f59e0b; font-size: 14px; }
 .img-drive-falhou a { margin-top: 4px; padding: 8px 14px; border-radius: 10px; background: #f59e0b; color: #1b1300; font-weight: 700; text-decoration: none; }
+
+/* =====================================================================
+   Contraste do verde e espaçamento dos formulários
+   - Texto escuro sobre o verde (o branco ficava com contraste 1,9:1).
+     Os temas personalizados já calculam o --on-accent sozinhos.
+   - Verde de "sucesso", vermelho de erro e azul de informação do tema
+     claro um pouco mais escuros, para os valores passarem de 4,5:1.
+   - Texto sobre fundo colorido segue a cor do fundo (--on-accent,
+     --on-success, --on-danger) em vez de branco ou preto fixo.
+   - Rótulo mais perto do próprio campo do que do campo de cima.
+   - Botão desabilitado: cinza discreto, ainda legível.
+   ===================================================================== */
+:root { --on-accent: #10220b; --success: #267842; --on-success: #ffffff; --danger: #c3342c; --on-danger: #ffffff; --info: #0a5ce2; --warning: #8f601a; --on-warning: #ffffff; --success-degrade: color-mix(in srgb, var(--success) 82%, #000000); }
+[data-theme="dark"] { --on-accent: #0c1a06; --success: #6ed38b; --on-success: #0c1a06; --danger: #eb7770; --on-danger: #14181a; --info: #5392f7; --warning: #ddb15f; --on-warning: #14181a; --success-degrade: color-mix(in srgb, var(--success) 82%, #ffffff); }
+
+.btn-primary,
+.btn-primary:hover,
+.btn-primary:active,
+.btn-primary:focus,
+.topbar-profile-avatar,
+.filtro-data-dia.selecionado,
+.atd-chips button.ativo,
+.atd-badge,
+.an-n,
+.sis-versao-ic,
+.sis-passo.feito > span,
+.tt-item.feita .tt-check,
+.cw-passos button.ativo span,
+.cw-passos button.feito span,
+.chatbot-header,
+.chatbot-header button,
+.chatbot-msg.user,
+.chatbot-input-row button,
+.crm-filtro-avatar-circulo,
+.crm-wizard-bolha.ativa,
+.funil-card-avatar { color: var(--on-accent); }
+::selection { color: var(--on-accent); }
+.btn-primary .icone-menu { stroke: currentColor; }
+.sis-passo > span { color: var(--text); }
+.topbar-profile-avatar,
+.chatbot-launcher { background: linear-gradient(145deg, var(--blue-strong), var(--eagle-accent-strong)); }
+.chatbot-header { background: linear-gradient(135deg, var(--blue-strong), var(--eagle-accent-strong)); }
+
+.fin-btn-venda,
+.fin-seg button.ativo,
+.dsh-modo button.ativo,
+.crm-wizard-bolha.feita,
+.funil-card-btn-ganha,
+.srv-status,
+.fin-ic-lucro,
+.cnt-formato.ativo,
+.ag-dia.hoje .ag-dia-n,
+.ag-h-cab button.hoje b { color: var(--on-success); }
+
+.fin-btn-venda:hover { background: var(--success); border-color: var(--success); }
+.fin-btn-despesa:hover { background: var(--danger); border-color: var(--danger); }
+
+.fin-btn-despesa,
+.crm-badge-contador,
+.fin-badge-n,
+.crm-estagio-btn.atual { color: var(--on-danger); }
+[data-theme="dark"] .crm-estagio-btn.atual { background: linear-gradient(135deg, var(--danger), color-mix(in srgb, var(--danger) 82%, #ffffff)); }
+
+.fin-azul { color: var(--info); }
+.fin-status.pendente { background: color-mix(in srgb, var(--info) 15%, transparent); }
+
+/* Etiquetas com texto colorido sobre o próprio tom claro: texto um pouco
+   mais forte (misturado com a cor do texto do tema). */
+:root {
+  --success-texto: color-mix(in srgb, var(--success) 78%, var(--text));
+  --danger-texto: color-mix(in srgb, var(--danger) 78%, var(--text));
+  --info-texto: color-mix(in srgb, var(--info) 78%, var(--text));
+  --warning-texto: color-mix(in srgb, var(--warning) 78%, var(--text));
+}
+.fin-status.pago, .pag-status.ok, .srv-tag.ativo, .bkp-status.ok, .ag-num, .cfg-update-badge.novo, .fin-chip.verde { color: var(--success-texto); }
+.fin-status.vencido, .kb-selo-situacao.cancelado, .ag-num.vermelho, .erpan-imp.alto, .cnt-atraso, .crm-beta, .cfg-update-badge.corrigido, .fin-chip.vermelho { color: var(--danger-texto); }
+.fin-status.pendente { color: var(--info-texto); }
+.badge-warning, .alerta-warning, .fin-chip.laranja, .fin-status.parcial, .nivel-titular, .kb-selo-situacao.pausado,
+.bkp-status.atrasado, .bkp-status.nunca, .erpan-imp.medio, .cfg-integ-st.nao { color: var(--warning-texto); }
+.offline-banner { background: var(--warning); color: var(--on-warning); }
+/* Texto cinza sobre o fundo laranja/vermelho claro dos vencidos (o fundo ficou um pouco mais escuro). */
+.fin-venc-resumo { color: color-mix(in srgb, var(--text-soft) 85%, var(--text)); }
+
+/* A ilustração do Login (Etapa D) fica com as cores de antes. */
+:root:not([data-theme="dark"]) .login-ilustracao-wrap { --success: #35a95d; --danger: #d85850; --warning: #b77b21; }
+/* O cartão "Resultado do mês" (Etapa C) também fica como estava. */
+:root:not([data-theme="dark"]) .fin-balao { --danger: #d85850; }
+.pgxp-form button, .pgxp-ok .pgxp-link,
+.pgxp-dias button.ativo, .pgxp-horas button.ativo,
+.pgxp-dias button.ativo small { color: var(--pgx-cor-txt, #0b0f0b); }
+
+.empty-cadastro-titulo { color: var(--blue-text); }
+
+.form-grid + .form-grid { margin-top: 14px; }
+.fin-form-grade { row-gap: 14px; }
+.kb-wiz-corpo > .field { margin-bottom: 14px; }
+.pv-totais-grid + .pv-totais-grid { margin-top: 14px; }
+
+html .btn:disabled,
+html .btn:disabled:hover,
+html .btn:disabled:focus,
+html .btn:disabled:active {
+  background: var(--bg-soft) !important;
+  border-color: var(--border) !important;
+  color: color-mix(in srgb, var(--text-soft) 75%, var(--text)) !important;
+  box-shadow: none !important;
+  filter: none;
+  transform: none;
+  cursor: not-allowed;
+}
+html .btn:disabled .icone-menu { stroke: currentColor; }

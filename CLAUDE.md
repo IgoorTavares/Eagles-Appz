@@ -1,6 +1,7 @@
 # Eagles Labz — ERP + CRM (white label)
 
-Documento de passagem para o Claude Code. Versão atual: **v142** (cache `eagles-cache-v142` no `sw.js`).
+Documento de passagem para o Claude Code. Versão atual: **v143** (cache `eagles-cache-v143` no `sw.js`), feita sobre a v141 do GitHub.
+A v142 foi uma entrega externa, fora deste repositório (ver item 10).
 O dono do projeto (Igor) **não é programador**: explique tudo em português simples, sem jargão, e diga
 sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
 
@@ -95,11 +96,11 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
   Se uma imagem do Drive não abrir, o sistema tenta outros endereços e depois mostra o aviso "Abrir a arte". **O arquivo precisa estar como "Qualquer pessoa com o link"**.
 - **Segurança de login**: 5 senhas erradas seguidas bloqueiam a conta (`tentativas_login/{email}`, que só aceita somar 1; regra `contaLivre`).
   O Super Admin desbloqueia em Empresas → Contas bloqueadas (`loginAbrirBloqueadas`). Ao sair (`logout`/`logoutLimparAparelho`), o sistema apaga os dados da empresa do navegador, mas **mantém as preferências** (tema etc.).
-- **Tema**: `salvarAparenciaSistema` guarda no `localStorage` (`eagles_aparencia_sistema_v1`) **e** em `usuarios/{uid}.aparencia`. Ao entrar, `aplicarAparenciaDoCadastro` aplica o tema salvo.
+- **Tema**: `salvarAparenciaSistema` guarda no `localStorage` (`eagles_aparencia_sistema_v1`). A v142 externa também guardava em `usuarios/{uid}.aparencia` e aplicava ao entrar (`aplicarAparenciaDoCadastro`), mas **esse código não está neste repositório** (nem na v143).
 - **Assistente (robozinho)**: `CHATBOT_FAQ` + `CHATBOT_KB`, com a função `chatbotResponder`. As novidades das versões ficam em `CFG_CHANGELOG` (Configurações → Atualizações).
 
 ## 7. Regras de entrega (o ritual)
-1. Suba o número do `CACHE_NAME` no `sw.js` (v142 → v143...).
+1. Suba o número do `CACHE_NAME` no `sw.js` (v143 → v144...).
 2. Escreva a mudança em **`CFG_CHANGELOG`** (no topo da lista) e, se fizer sentido, no Assistente.
 3. Teste antes de entregar (ver item 8).
 4. **Mudou o `firestore.rules`?** Avise o Igor: **primeiro publicar as regras no console do Firebase, depois subir os arquivos**. Se ele subir os arquivos antes das regras, as telas novas ficam sem permissão.
@@ -143,7 +144,8 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
 - v139: ícone de link e página avulsa com o visual do portal.
 - v140: auditoria de segurança (bloqueio de login, limpeza ao sair, links perigosos, proteção contra abertura dentro de outro site).
 - v141: fallback das imagens do Drive.
-- v142: o tema não ficava salvo ao sair (agora também fica no cadastro).
+- v142 (entrega externa, fora deste repositório): o tema não ficava salvo ao sair (passou a ficar também no cadastro). O código dessa correção **não está** no GitHub nem na v143.
+- v143: Etapa A do acabamento visual, feita sobre a v141: contraste de botões, valores e etiquetas em todos os temas (texto claro ou escuro escolhido automaticamente sobre a cor de destaque), espaçamento dos formulários e botão desabilitado.
 
 ## 11. Pendências e ideias
 - **Plano Blaze**: liga o servidor (e-mails automáticos, Meta e o processamento das aprovações mesmo com o sistema fechado) e permitiria **enviar imagens direto pelo sistema** (Firebase Storage) em vez de usar o Drive.

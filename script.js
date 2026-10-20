@@ -24,7 +24,7 @@ const TEMAS_SISTEMA = [
   { id: 'personalizado', grupo: 'escuro', nome: 'Personalizado', desc: 'Escolha sua cor', modo: 'dark', personalizado: true, cores: { bg: '#050505', bgSoft: '#0d0d0d', bgElev: '#111111', border: '#222222', text: '#f5f5f5', textSoft: '#9a9a9a', accent: null } },
   { id: 'padrao-claro', grupo: 'claro', nome: 'Padrão Claro', desc: 'Claro com verde Eagles', modo: 'light', amostra: ['#f6f8f5', '#63d629', '#ffffff'], cores: null },
   { id: 'monocromatico', grupo: 'claro', nome: 'Monocromático', desc: 'Preto e branco, claro', modo: 'light', amostra: ['#f5f5f5', '#161616', '#ffffff'], cores: { bg: '#f5f5f5', bgSoft: '#ececec', bgElev: '#ffffff', border: '#dedede', text: '#111111', textSoft: '#666666', accent: '#161616' } },
-  { id: 'rosa-claro', grupo: 'claro', nome: 'Rosa Claro', desc: 'Claro com rosa vibrante', modo: 'light', amostra: ['#fdf5f8', '#e91e63', '#ffffff'], cores: { bg: '#fdf5f8', bgSoft: '#f9e9ef', bgElev: '#ffffff', border: '#f0dbe3', text: '#1d1216', textSoft: '#7a6a70', accent: '#e91e63' } },
+  { id: 'rosa-claro', grupo: 'claro', nome: 'Rosa Claro', desc: 'Claro com rosa vibrante', modo: 'light', amostra: ['#fdf5f8', '#e3165c', '#ffffff'], cores: { bg: '#fdf5f8', bgSoft: '#f9e9ef', bgElev: '#ffffff', border: '#f0dbe3', text: '#1d1216', textSoft: '#7a6a70', accent: '#e3165c' } },
   { id: 'azul-claro', grupo: 'claro', nome: 'Azul Claro', desc: 'Claro com azul suave', modo: 'light', amostra: ['#f3f6fc', '#3b82f6', '#ffffff'], cores: { bg: '#f3f6fc', bgSoft: '#e8eef9', bgElev: '#ffffff', border: '#dbe3f1', text: '#111827', textSoft: '#64708a', accent: '#3b82f6' } },
 ];
 
@@ -61,6 +61,24 @@ function luminanciaHex(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+// Cor do texto sobre um fundo colorido: branco ou quase preto, o que tiver
+// mais contraste (mínimo 4,5:1; se nenhum chegar, usa preto puro).
+function corTextoSobre(hex) {
+  const l = luminanciaHex(hex);
+  const contraste = (outra) => (Math.max(l, outra) + 0.05) / (Math.min(l, outra) + 0.05);
+  const branco = contraste(1), escuro = contraste(luminanciaHex('#0b0d0b'));
+  if (branco >= escuro) return branco >= 4.5 ? '#ffffff' : '#000000';
+  return escuro >= 4.5 ? '#0b0d0b' : '#000000';
+}
+
+// O degradê dos botões vai do destaque para um tom que se afasta do texto
+// (o escolhido pelo cliente, se houver), assim o contraste nunca fica menor
+// que o da cor de destaque.
+function corDegradeDestaque(hex, texto) {
+  const claro = luminanciaHex(texto || corTextoSobre(hex)) > 0.5;
+  return `color-mix(in srgb, ${hex} 82%, ${claro ? '#000000' : '#ffffff'})`;
+}
+
 // Traduz as preferências em: modo (light/dark) + variáveis de CSS. Se não
 // sobra nenhuma variável, é o tema padrão puro (o CSS original manda).
 function calcularTemaAplicado(prefs) {
@@ -74,11 +92,11 @@ function calcularTemaAplicado(prefs) {
   const accent = prefs.cores.destaque || (tema.personalizado ? prefs.corPersonalizada : (c && c.accent)) || '';
   if (accent) {
     vars['--blue-strong'] = accent;
-    vars['--eagle-accent-strong'] = `color-mix(in srgb, ${accent} 82%, ${tema.modo === 'dark' ? '#ffffff' : '#000000'})`;
+    vars['--eagle-accent-strong'] = corDegradeDestaque(accent, prefs.cores.textoBotao);
     vars['--blue-text'] = `color-mix(in srgb, ${accent} ${tema.modo === 'dark' ? '78%, #ffffff' : '72%, #000000'})`;
     vars['--blue'] = `color-mix(in srgb, ${accent} 22%, var(--bg))`;
     vars['--blue-tint'] = `color-mix(in srgb, ${accent} 12%, var(--bg))`;
-    vars['--on-accent'] = luminanciaHex(accent) > 0.3 ? '#0b0d0b' : '#ffffff';
+    vars['--on-accent'] = corTextoSobre(accent);
   }
   if (prefs.cores.fundo) vars['--bg'] = prefs.cores.fundo;
   if (prefs.cores.textoBotao) vars['--on-accent'] = prefs.cores.textoBotao;
@@ -1586,6 +1604,10 @@ function renderPropostaPublica() {
   if (vc.corPrimaria) {
     document.documentElement.style.setProperty('--blue-strong', vc.corPrimaria);
     document.documentElement.style.setProperty('--blue-text', vc.corPrimaria);
+    if (corHexValida(vc.corPrimaria)) {
+      document.documentElement.style.setProperty('--on-accent', corTextoSobre(vc.corPrimaria));
+      document.documentElement.style.setProperty('--eagle-accent-strong', corDegradeDestaque(vc.corPrimaria, corHexValida(vc.corTextoBotao)));
+    }
   }
   aplicarVisualCheckoutPublico(vc);
 
@@ -5333,7 +5355,7 @@ function renderAbaPerfilConfig() {
         <div style="display:flex; align-items:center; gap:14px; margin-top:6px;">
           <div id="cfg-perfil-avatar-preview" style="width:64px; height:64px; border-radius:50%; background:var(--bg-soft); display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;"></div>
           <div>
-            <button type="button" class="btn btn-small" onclick="document.getElementById('cfg-input-logo').click()">Fazer Upload</button>
+            <button type="button" class="btn btn-small" onclick="document.getElementById('cfg-input-logo').click()">Fazer upload</button>
             <input type="file" id="cfg-input-logo" accept="image/*" style="display:none;" onchange="selecionarLogoPerfilConfig(this)">
             <p style="font-size:11px; color:var(--text-soft); margin:6px 0 0;">PNG, JPG até 5MB.</p>
           </div>
@@ -5396,7 +5418,7 @@ function renderAbaPerfilConfig() {
       </div>
       <p id="trocar-senha-erro" style="display:none; color:var(--danger); font-size:12.5px; margin:4px 0;"></p>
       <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
-        <button type="button" class="btn btn-primary" id="btn-trocar-senha" onclick="trocarMinhaSenha()">Atualizar Senha</button>
+        <button type="button" class="btn btn-primary" id="btn-trocar-senha" onclick="trocarMinhaSenha()">Atualizar senha</button>
         <span id="trocar-senha-sucesso" style="display:none; color:var(--success); font-size:13px;">Senha alterada ✓</span>
       </div>
     </div>`;
@@ -6320,7 +6342,9 @@ function aplicarVisualBriefingPublico(visual) {
   if (destaque) {
     root.style.setProperty('--brf-destaque', destaque);
     root.style.setProperty('--blue-strong', destaque);
-    root.style.setProperty('--brf-texto-destaque', luminanciaHex(destaque) > 0.3 ? '#0b0d0b' : '#ffffff');
+    root.style.setProperty('--brf-texto-destaque', corTextoSobre(destaque));
+    root.style.setProperty('--on-accent', corTextoSobre(destaque));
+    root.style.setProperty('--eagle-accent-strong', corDegradeDestaque(destaque));
   }
   if (fundo) {
     root.style.setProperty('--bg', fundo);
@@ -6565,6 +6589,11 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '20/10/2026 · Aparência', itens: [
+    { titulo: 'Botões e valores mais fáceis de ler', badges: ['melhoria'], texto: 'O texto dos botões verdes ficou escuro (o branco quase sumia no verde). Nos temas de outras cores, o sistema escolhe sozinho o texto claro ou escuro que dá mais leitura. Valores em verde, azul, vermelho e laranja, etiquetas de status, o aviso de sem internet e as bolinhas do funil também ficaram mais legíveis.' },
+    { titulo: 'Formulários mais organizados', badges: ['melhoria'], texto: 'Cada nome de campo fica mais perto do próprio campo do que do campo de cima (Perfil, Venda Rápida, Pedido de venda e outras janelas).' },
+    { titulo: 'Botão desabilitado', badges: ['melhoria'], texto: 'Quando um botão não pode ser usado, ele fica cinza, para não parecer ativo.' },
+  ]},
   { data: '16/10/2026 · Segurança', itens: [
     { titulo: 'Bloqueio depois de 5 senhas erradas', badges: ['novo'], texto: 'Errar a senha 5 vezes seguidas bloqueia a conta. A pessoa vê quantas tentativas restam e, ao bloquear, a mensagem para falar com o administrador. Só o super administrador desbloqueia (Empresas → Contas bloqueadas). O bloqueio vale também nas regras do banco: mesmo entrando por fora da tela de login, a conta bloqueada não lê nada. Acertar a senha antes da 5ª zera o contador.' },
     { titulo: 'Sair apaga os dados do aparelho', badges: ['melhoria'], texto: 'Ao sair, o sistema apaga a cópia dos dados da empresa guardada no navegador (cache e banco para funcionar sem internet). Importante em computador compartilhado.' },
@@ -12378,6 +12407,7 @@ async function pgxPublicoIniciar() {
 function pgxPublicoRender() {
   const p = PGX_PUB, el = document.getElementById('pp-conteudo');
   document.documentElement.style.setProperty('--pgx-cor', p.cor || '#3fae12');
+  document.documentElement.style.setProperty('--pgx-cor-txt', /^#[0-9a-f]{6}$/i.test(p.cor || '') ? corTextoSobre(p.cor) : '#0b0f0b');
   const topo = `${p.fotoUrl ? `<img class="pgxp-foto" src="${escapeHtml(p.fotoUrl)}" alt="">` : ''}<h1>${escapeHtml(p.titulo)}</h1>${p.descricao ? `<p class="pgxp-desc">${escapeHtml(p.descricao)}</p>` : ''}`;
   const formContato = (botao) => `<form class="pgxp-form" onsubmit="return pgxEnviarLead(event)"><input type="text" name="site" class="pgxp-armadilha" tabindex="-1" autocomplete="off">
     <input type="text" name="nome" placeholder="Seu nome" required maxlength="100"><input type="tel" name="telefone" placeholder="Seu WhatsApp" maxlength="30"><input type="email" name="email" placeholder="Seu e-mail" maxlength="120">
@@ -13180,7 +13210,7 @@ function renderCrmDashboard() {
     resumoEl.innerHTML = CRM_ETAPAS.map((etapa) => {
       const doGrupo = negocios.filter((n) => (n.etapa || 'lead') === etapa.key);
       const total = doGrupo.reduce((a, n) => a + Number(n.valor || 0), 0);
-      return `<div class="list-row"><div class="icon-dot" style="background:${etapa.cor}; color:#fff;">${doGrupo.length}</div><div class="list-row-main"><div class="list-row-title">${escapeHtml(etapa.label)}</div></div><div class="list-row-value">${formatMoney(total)}</div></div>`;
+      return `<div class="list-row"><div class="icon-dot" style="background:${etapa.cor}; color:#14181a;">${doGrupo.length}</div><div class="list-row-main"><div class="list-row-title">${escapeHtml(etapa.label)}</div></div><div class="list-row-value">${formatMoney(total)}</div></div>`;
     }).join('');
   }
 
@@ -21966,7 +21996,7 @@ function pcRender() {
     <footer class="pv-rodape">${cfg.rodape ? `<p>${escapeHtml(cfg.rodape)}</p>` : ''}${cfg.ocultarMarca ? '' : '<small>Feito com Eagles Labz</small>'}</footer>
   </div>`;
 }
-function pcContraste(hex) { const h = String(hex || '').replace('#', ''); if (h.length !== 6) return '#ffffff'; const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#0b0f0b' : '#ffffff'; }
+function pcContraste(hex) { return /^#[0-9a-f]{6}$/i.test(String(hex || '')) ? corTextoSobre(hex) : '#ffffff'; }
 function pcTag(c) { const k = pcCategoria(c), cat = PC_CATS[k]; const respondido = k === 'aguardando' && c.portalResposta; return `<span class="pv-tag" style="--c:${respondido ? '#22c55e' : cat.cor};">${respondido ? (c.portalResposta === 'aprovado' ? 'Você aprovou ✓' : 'Ajuste pedido ✓') : cat.curto}</span>`; }
 function pcMeta(c) { return [((CNT_TIPOS[c.tipo] || {}).nome || ''), c.publicacao ? '📅 ' + formatDatePt(c.publicacao) + (c.publicacaoHora ? ' às ' + c.publicacaoHora : '') : ''].filter(Boolean).map(escapeHtml).join(' · '); }
 function pcMidiaHtml(c, grande) {

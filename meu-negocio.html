@@ -76,7 +76,7 @@
   </div>
 </header>
 <div class="app">
-<main class="main">
+<main class="main pg-mn">
 
 <div class="page-header">
   <div>
@@ -128,43 +128,43 @@
   <div>
 
     <div class="mn-secao" id="mn-secao-visao-geral">
-      <div class="page-header" style="margin-bottom:16px;">
-        <div><h2 style="margin:0; font-size:17px;">Visão geral do negócio</h2><p style="margin:2px 0 0;">Vendas, estoque e clientes — tudo num só lugar</p></div>
+      <div class="page-header mn-secao-cab">
+        <div><h2>Visão geral do negócio</h2><p>Vendas, estoque e clientes — tudo num só lugar</p></div>
       </div>
 
       <div class="stat-grid stat-grid-5" style="margin-bottom:20px;" id="vg-kpis">
-        <div class="stat-card"><div class="stat-label">Clientes ativos</div><div class="stat-value" id="vg-kpi-clientes" style="font-size:22px;">—</div></div>
-        <div class="stat-card"><div class="stat-label">Produtos cadastrados</div><div class="stat-value" id="vg-kpi-produtos" style="font-size:22px;">—</div></div>
-        <div class="stat-card danger"><div class="stat-label">Estoque baixo</div><div class="stat-value" id="vg-kpi-estoque-baixo" style="font-size:22px;">—</div></div>
-        <div class="stat-card"><div class="stat-label">Pedidos em aberto</div><div class="stat-value" id="vg-kpi-pedidos-abertos" style="font-size:22px;">—</div></div>
-        <div class="stat-card"><div class="stat-label">Ticket médio</div><div class="stat-value" id="vg-kpi-ticket-medio" style="font-size:20px;">—</div></div>
+        <div class="stat-card"><div class="stat-label">Clientes ativos</div><div class="stat-value" id="vg-kpi-clientes">—</div></div>
+        <div class="stat-card"><div class="stat-label">Produtos cadastrados</div><div class="stat-value" id="vg-kpi-produtos">—</div></div>
+        <div class="stat-card"><div class="stat-label">Estoque baixo</div><div class="stat-value" id="vg-kpi-estoque-baixo">—</div></div>
+        <div class="stat-card"><div class="stat-label">Pedidos em aberto</div><div class="stat-value" id="vg-kpi-pedidos-abertos">—</div></div>
+        <div class="stat-card"><div class="stat-label">Ticket médio</div><div class="stat-value" id="vg-kpi-ticket-medio">—</div></div>
       </div>
 
       <div class="grid-2" style="align-items:start; margin-bottom:20px;">
         <div class="panel">
           <div class="panel-title"><h2>Vendas por produto</h2><span>participação de cada produto no total vendido</span></div>
-          <canvas id="vg-chart-produto-pizza" height="240"></canvas>
+          <div class="mn-graf mn-graf-rosca"><canvas id="vg-chart-produto-pizza" height="240"></canvas></div>
         </div>
         <div class="panel">
           <div class="panel-title"><h2>Situação dos pedidos</h2><span>o que já faturou, o que está aberto ou cancelado</span></div>
-          <canvas id="vg-chart-situacao-pizza" height="240"></canvas>
+          <div class="mn-graf mn-graf-rosca"><canvas id="vg-chart-situacao-pizza" height="240"></canvas></div>
         </div>
       </div>
 
       <div class="grid-2" style="align-items:start; margin-bottom:20px;">
         <div class="panel">
           <div class="panel-title"><h2>Clientes por tipo</h2><span>clientes x fornecedores cadastrados</span></div>
-          <canvas id="vg-chart-clientes-pizza" height="200"></canvas>
+          <div class="mn-graf mn-graf-rosca"><canvas id="vg-chart-clientes-pizza" height="200"></canvas></div>
         </div>
         <div class="panel">
           <div class="panel-title"><h2>Estoque por situação</h2><span>produtos ativos, inativos e com estoque baixo</span></div>
-          <canvas id="vg-chart-estoque-pizza" height="200"></canvas>
+          <div class="mn-graf mn-graf-rosca"><canvas id="vg-chart-estoque-pizza" height="200"></canvas></div>
         </div>
       </div>
 
       <div class="panel">
         <div class="panel-title"><h2>Top 5 produtos que mais venderam</h2></div>
-        <canvas id="vg-chart-top-produtos" height="140"></canvas>
+        <div class="mn-graf mn-graf-barra"><canvas id="vg-chart-top-produtos" height="140"></canvas></div>
       </div>
 
       <div class="panel" id="vg-estoque-baixo-painel">
@@ -174,8 +174,8 @@
     </div>
 
     <div class="mn-secao" id="mn-secao-vendas-pedidos" style="display:none;">
-      <div class="page-header" style="margin-bottom:16px;">
-        <div><h2 style="margin:0; font-size:17px;">Pedidos de venda</h2><p style="margin:2px 0 0;">Compare o período atual com o anterior</p></div>
+      <div class="page-header mn-secao-cab">
+        <div><h2>Pedidos de venda</h2><p>Compare o período atual com o anterior</p></div>
         <a href="pedidos-venda.html" class="btn btn-small">Ver lista completa</a>
       </div>
       <div class="panel" style="margin-bottom:16px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
@@ -189,25 +189,25 @@
       <div class="grid-2" style="align-items:start;">
         <div class="panel">
           <div class="panel-title"><h2>Valor total de pedidos por dia</h2></div>
-          <canvas id="vp-chart-linha" height="220"></canvas>
+          <div class="mn-graf mn-graf-linha"><canvas id="vp-chart-linha" height="220"></canvas></div>
         </div>
         <div class="panel">
           <div class="panel-title"><h2>Situação</h2></div>
-          <canvas id="vp-chart-situacao" height="220"></canvas>
+          <div class="mn-graf mn-graf-rosca"><canvas id="vp-chart-situacao" height="220"></canvas></div>
         </div>
       </div>
     </div>
 
     <div class="mn-secao" id="mn-secao-estoque" style="display:none;">
-      <div class="page-header" style="margin-bottom:16px;">
-        <div><h2 style="margin:0; font-size:17px;">Produtos em estoque</h2><p style="margin:2px 0 0;">Situação atual do seu estoque</p></div>
+      <div class="page-header mn-secao-cab">
+        <div><h2>Produtos em estoque</h2><p>Situação atual do seu estoque</p></div>
         <a href="produtos.html" class="btn btn-small">Ver lista completa</a>
       </div>
       <div class="stat-grid" id="es-kpis" style="margin-bottom:20px;"></div>
       <div class="grid-2" style="align-items:start;">
         <div class="panel">
           <div class="panel-title"><h2>Maior valor em estoque</h2><span>top 8 produtos</span></div>
-          <canvas id="es-chart-top" height="240"></canvas>
+          <div class="mn-graf mn-graf-barra"><canvas id="es-chart-top" height="240"></canvas></div>
         </div>
         <div class="panel">
           <div class="panel-title"><h2>Precisa de atenção</h2><span>sem estoque ou estoque baixo</span></div>
@@ -217,8 +217,8 @@
     </div>
 
     <div class="mn-secao" id="mn-secao-clientes" style="display:none;">
-      <div class="page-header" style="margin-bottom:16px;">
-        <div><h2 style="margin:0; font-size:17px;">Clientes — Novos x Recorrentes</h2><p style="margin:2px 0 0;">Quem comprou no período e quem já era cliente antes</p></div>
+      <div class="page-header mn-secao-cab">
+        <div><h2>Clientes — Novos x Recorrentes</h2><p>Quem comprou no período e quem já era cliente antes</p></div>
         <a href="clientes-fornecedores.html" class="btn btn-small">Ver lista completa</a>
       </div>
       <div class="panel" style="margin-bottom:16px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
@@ -228,7 +228,7 @@
       </div>
       <div class="grid-2" style="align-items:start; margin-bottom:20px;">
         <div class="stat-grid" id="cl-kpis" style="grid-template-columns:1fr; gap:12px;"></div>
-        <div class="panel"><canvas id="cl-chart-pizza" height="180"></canvas></div>
+        <div class="panel"><div class="mn-graf mn-graf-rosca"><canvas id="cl-chart-pizza" height="180"></canvas></div></div>
       </div>
       <div class="panel">
         <div class="panel-title"><h2>Atividade da carteira</h2><span>quem está há mais tempo sem comprar aparece primeiro</span></div>
@@ -266,31 +266,31 @@
       <div class="grid-2" style="align-items:start;">
         <div class="panel">
           <div class="panel-title"><h2>Situação da venda</h2></div>
-          <canvas id="mn-chart-status" height="220"></canvas>
+          <div class="mn-graf mn-graf-rosca"><canvas id="mn-chart-status" height="220"></canvas></div>
         </div>
         <div class="panel">
           <div class="panel-title"><h2>Vendas por estado</h2></div>
-          <canvas id="mn-chart-estado" height="220"></canvas>
+          <div class="mn-graf mn-graf-barra"><canvas id="mn-chart-estado" height="220"></canvas></div>
         </div>
       </div>
       <div class="panel">
         <div class="panel-title"><h2>Vendas por produto</h2></div>
-        <canvas id="mn-chart-produto" height="140"></canvas>
+        <div class="mn-graf mn-graf-barra"><canvas id="mn-chart-produto" height="140"></canvas></div>
       </div>
     </div>
 
     <div class="mn-secao" id="mn-secao-vendedor" style="display:none;">
       <div class="panel">
         <div class="panel-title"><h2>Vendas por vendedor</h2></div>
-        <canvas id="mn-chart-vendedor" height="160"></canvas>
+        <div class="mn-graf mn-graf-barra"><canvas id="mn-chart-vendedor" height="160"></canvas></div>
       </div>
       <div class="panel">
         <div class="panel-title"><h2>Vendas por produto</h2></div>
-        <canvas id="mn-chart-produto-2" height="160"></canvas>
+        <div class="mn-graf mn-graf-barra"><canvas id="mn-chart-produto-2" height="160"></canvas></div>
       </div>
       <div class="panel">
         <div class="panel-title"><h2>Evolução</h2><span>total vendido mês a mês</span></div>
-        <canvas id="mn-chart-evolucao" height="140"></canvas>
+        <div class="mn-graf mn-graf-linha"><canvas id="mn-chart-evolucao" height="140"></canvas></div>
       </div>
     </div>
 

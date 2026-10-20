@@ -1,6 +1,7 @@
 # Eagles Labz — ERP + CRM (white label)
 
-Documento de passagem para o Claude Code. Versão atual: **v143** (cache `eagles-cache-v143` no `sw.js`), feita sobre a v141 do GitHub.
+Documento de passagem para o Claude Code. Versão publicada: **v143** (cache `eagles-cache-v143` no `sw.js`), feita sobre a v141 do GitHub; continua sendo a que está na `main`.
+Versão em trabalho: **v144** (cache `eagles-cache-v144`), na branch de trabalho `claude/etapa-b-painel-v144`, **com commit local**. Ainda **não foi enviada ao GitHub, integrada nem publicada**: push, merge e publicação dependem de autorização explícita do Igor.
 A v142 foi uma entrega externa, fora deste repositório (ver item 10).
 O dono do projeto (Igor) **não é programador**: explique tudo em português simples, sem jargão, e diga
 sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
@@ -145,6 +146,7 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
 - v141: fallback das imagens do Drive.
 - v142 (entrega externa, fora deste repositório): o tema não ficava salvo ao sair (passou a ficar também no cadastro). O código dessa correção **não está** no GitHub nem na v143.
 - v143: Etapa A do acabamento visual, feita sobre a v141: contraste de botões, valores e etiquetas em todos os temas (texto claro ou escuro escolhido automaticamente sobre a cor de destaque), espaçamento dos formulários e botão desabilitado.
+- v144 (commit local na branch de trabalho; não enviada ao GitHub, não integrada nem publicada): Etapa B0 e piloto do Painel (`index.html`) no estilo "Mesa de operação": blocos por pergunta, Resultado do mês em destaque, regras novas só dentro de `.pg-painel`, texto da receita corrigido e títulos do Tutorial alinhados. Nenhum cálculo mudou.
 
 ## 11. Pendências e ideias
 - **Plano Blaze**: liga o servidor (e-mails automáticos, Meta e o processamento das aprovações mesmo com o sistema fechado) e permitiria **enviar imagens direto pelo sistema** (Firebase Storage) em vez de usar o Drive.

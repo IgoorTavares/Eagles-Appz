@@ -6589,6 +6589,10 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '20/10/2026 · Painel', itens: [
+    { titulo: 'Painel com visual novo', badges: ['melhoria'], texto: 'O Painel foi reorganizado em blocos: como fechou o mês (com o Resultado do mês em destaque), comparado ao mês anterior, o que falta receber e a agenda do mês. Visual mais limpo, sem sombras nem caixas dentro de caixas, e números alinhados. As contas não mudaram.' },
+    { titulo: 'Texto da receita corrigido', badges: ['corrigido'], texto: 'Embaixo do Total de receita, o texto agora explica o que a soma considera: tudo a receber no mês, incluindo pagos e pendentes.' },
+  ] },
   { data: '20/10/2026 · Aparência', itens: [
     { titulo: 'Botões e valores mais fáceis de ler', badges: ['melhoria'], texto: 'O texto dos botões verdes ficou escuro (o branco quase sumia no verde). Nos temas de outras cores, o sistema escolhe sozinho o texto claro ou escuro que dá mais leitura. Valores em verde, azul, vermelho e laranja, etiquetas de status, o aviso de sem internet e as bolinhas do funil também ficaram mais legíveis.' },
     { titulo: 'Formulários mais organizados', badges: ['melhoria'], texto: 'Cada nome de campo fica mais perto do próprio campo do que do campo de cima (Perfil, Venda Rápida, Pedido de venda e outras janelas).' },
@@ -16719,11 +16723,11 @@ const TOURS_CRM = {
 TOURS_CRM['painel-erp'] = [
   { alvo: '.page-header h1', titulo: 'Painel', texto: 'O resumo do mês da sua empresa. Aqui é só pra consultar — pra lançar ou editar valores, use o Financeiro.' },
   { alvo: '#painel-mes', titulo: 'Mês de referência', texto: 'Troque o mês pra ver o resumo de qualquer período. Todos os números da tela acompanham.' },
-  { alvo: '#painel-resumo', titulo: 'Receita, despesas e resultado', texto: 'A receita soma os clientes ativos do mês; as despesas somam pagamentos, adiantamentos e saídas variáveis.' },
+  { alvo: '#painel-resumo', titulo: 'Receita, despesas e resultado', texto: 'A receita é o total a receber no mês, incluindo pagos e pendentes; as despesas somam pagamentos, adiantamentos e saídas variáveis.' },
   { alvo: '#fin-balao-lucro', titulo: 'Resultado do mês', texto: 'Receitas menos despesas. Fica verde quando o mês dá lucro e vermelho quando fecha no prejuízo.' },
   { alvo: '#painel-despesas-detalhe', titulo: 'De onde saem as despesas', texto: 'As despesas separadas em pagamentos, adiantamentos e saídas variáveis — pra você ver o que mais pesa.' },
-  { alvo: '#fin-comp-grid', titulo: 'Comparativo', texto: 'Receita, despesas e lucro comparados com o mês anterior, e a categoria de despesa que mais pesou no mês.' },
-  { alvo: '#fin-pendentes-lista', titulo: 'Pendente', texto: 'As receitas do mês que ainda não foram pagas, com o total em aberto. Pra marcar como pago, vá no Financeiro.' },
+  { alvo: '#fin-comp-grid', titulo: 'Comparado ao mês anterior', texto: 'Receita, despesas e lucro comparados com o mês anterior, e a categoria de despesa que mais pesou no mês.' },
+  { alvo: '#fin-pendentes-lista', titulo: 'O que falta receber', texto: 'As receitas do mês que ainda não foram pagas, com o total em aberto. Pra marcar como pago, vá no Financeiro.' },
   { alvo: '#fin-calendario-grid', titulo: 'Calendário financeiro', texto: 'Os dias de acerto dos clientes e de pagamento das despesas. Clique num dia pra ver o detalhe ao lado.' },
   { alvo: '#fin-dia-detalhe', titulo: 'Detalhe do dia', texto: 'Mostra o que entra e o que sai no dia que você clicou no calendário.' },
   { alvo: '#chatbot-launcher', titulo: 'Ficou com dúvida?', texto: 'O robozinho no canto responde as perguntas mais comuns sobre o sistema a qualquer hora.' },

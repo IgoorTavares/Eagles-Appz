@@ -76,7 +76,7 @@
   </div>
 </header>
 <div class="app">
-<main class="main">
+<main class="main pg-painel">
 
 <div id="perfil-op-aviso"></div>
 <div class="page-header">
@@ -84,9 +84,9 @@
     <h1>Painel</h1>
     <p>Resumo do mês — para editar lançamentos, vá em Financeiro</p>
   </div>
-  <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"><span id="perfil-op-selo-lugar"></span>
+  <div class="pnl-cab-acoes"><span id="perfil-op-selo-lugar"></span>
   <button type="button" class="kb-btn kb-btn-tutorial" onclick="iniciarTourCrm('painel-erp')"><svg class="kb-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg> Tutorial</button>
-  <label style="font-size:13px; color:var(--text-soft); display:flex; align-items:center; gap:8px;">
+  <label class="pnl-mes">
     Mês de referência
     <input type="month" id="painel-mes" onchange="mudarMesPainel()">
   </label>
@@ -95,42 +95,47 @@
 
 <div id="sis-painel"></div>
 
-<div class="stat-grid" id="painel-resumo" style="grid-template-columns: 1fr 1fr 1.2fr;">
+<section class="pnl-secao" aria-labelledby="pnl-t-mes">
+<h2 class="pnl-secao-titulo" id="pnl-t-mes">Como fechou o mês</h2>
+<div class="stat-grid" id="painel-resumo">
+  <div class="fin-balao" id="fin-balao-lucro">
+    <div class="fin-balao-label">Resultado do mês (Lucro)</div>
+    <div class="fin-balao-valor" id="fin-lucro">R$ 0,00</div>
+    <div class="fin-balao-sub">Receitas totais − Despesas totais</div>
+  </div>
   <div class="stat-card">
     <div class="stat-label">Total de receita</div>
     <div class="stat-value" id="fin-total-receita">R$ 0,00</div>
-    <div class="stat-sub">Soma de todos os clientes ativos</div>
+    <div class="stat-sub">Total a receber no mês, incluindo pagos e pendentes</div>
   </div>
   <div class="stat-card danger">
     <div class="stat-label">Total de despesas</div>
     <div class="stat-value" id="fin-total-despesas">R$ 0,00</div>
     <div class="stat-sub">Pagamentos + adiantamentos + saídas variáveis</div>
   </div>
-  <div class="fin-balao" id="fin-balao-lucro">
-    <div class="fin-balao-label">Resultado do mês (Lucro)</div>
-    <div class="fin-balao-valor" id="fin-lucro">R$ 0,00</div>
-    <div class="fin-balao-sub">Receitas totais − Despesas totais</div>
-  </div>
 </div>
 
-<div class="stat-grid" id="painel-despesas-detalhe" style="grid-template-columns: repeat(3, 1fr); margin-bottom:28px;">
-  <div class="stat-card"><div class="stat-label">Pagamentos</div><div class="stat-value" id="fin-desp-pagamentos" style="font-size:19px;">R$ 0,00</div></div>
-  <div class="stat-card"><div class="stat-label">Adiantamentos</div><div class="stat-value" id="fin-desp-adiantamentos" style="font-size:19px;">R$ 0,00</div></div>
-  <div class="stat-card"><div class="stat-label">Saídas variáveis</div><div class="stat-value" id="fin-desp-variaveis" style="font-size:19px;">R$ 0,00</div></div>
+<div class="stat-grid" id="painel-despesas-detalhe">
+  <div class="stat-card"><div class="stat-label">Pagamentos</div><div class="stat-value" id="fin-desp-pagamentos">R$ 0,00</div></div>
+  <div class="stat-card"><div class="stat-label">Adiantamentos</div><div class="stat-value" id="fin-desp-adiantamentos">R$ 0,00</div></div>
+  <div class="stat-card"><div class="stat-label">Saídas variáveis</div><div class="stat-value" id="fin-desp-variaveis">R$ 0,00</div></div>
 </div>
+</section>
 
-<div class="panel">
-  <div class="panel-title"><h2>Comparativo com o mês anterior</h2><span id="fin-comp-mes-label"></span></div>
+<div class="panel pnl-bloco">
+  <div class="panel-title"><h2>Comparado ao mês anterior</h2><span id="fin-comp-mes-label"></span></div>
   <div class="fin-comp-grid" id="fin-comp-grid"></div>
 </div>
 
-<div class="panel">
-  <div class="panel-title"><h2>Pendente</h2><span id="fin-pendentes-total"></span></div>
+<div class="panel pnl-bloco">
+  <div class="panel-title"><h2>O que falta receber</h2><span id="fin-pendentes-total"></span></div>
   <div id="fin-pendentes-lista"></div>
 </div>
 
-<div class="grid-2" style="align-items:start;">
-  <div class="panel">
+<section class="pnl-secao" aria-labelledby="pnl-t-agenda">
+<h2 class="pnl-secao-titulo" id="pnl-t-agenda">Agenda do mês</h2>
+<div class="grid-2 pnl-agenda" style="align-items:start;">
+  <div class="panel pnl-bloco">
     <div class="panel-title"><h2>Calendário financeiro</h2><span>acertos e pagamentos do mês</span></div>
     <div class="fin-cal-legenda">
       <span><span class="fin-dot fin-dot-receita"></span> Acerto de cliente</span>
@@ -138,13 +143,14 @@
     </div>
     <div class="fin-cal-scroll"><div class="fin-cal-grid" id="fin-calendario-grid"></div></div>
   </div>
-  <div class="panel">
+  <div class="panel pnl-bloco">
     <div class="panel-title"><h2>Detalhe do dia</h2><span>clique em um dia no calendário</span></div>
     <div id="fin-dia-detalhe"></div>
   </div>
 </div>
+</section>
 
-<p style="text-align:center; color:var(--text-soft); font-size:13px; margin-top:4px;">
+<p class="pnl-rodape" style="text-align:center; color:var(--text-soft); font-size:13px; margin-top:4px;">
   Precisa editar algum lançamento, marcar pagamentos ou exportar relatórios? Vá em <strong>Financeiro</strong> ou use <strong>Meu Negócio</strong> na barra superior.
 </p>
 

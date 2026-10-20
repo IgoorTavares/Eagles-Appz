@@ -5560,3 +5560,184 @@ html .btn:disabled:active {
   cursor: not-allowed;
 }
 html .btn:disabled .icone-menu { stroke: currentColor; }
+
+/* =====================================================================
+   Painel (index.html) — piloto da Etapa B, "Mesa de operação" (v144)
+   Vale só dentro de <main class="main pg-painel">: nenhuma outra página
+   usa essa classe. Uma camada de superfície, réguas finas no lugar de
+   sombras, números alinhados e a cor de destaque só no Resultado do mês.
+   As cores saem das variáveis do tema, então acompanham os 16 temas, a
+   cor personalizada e o modo escuro. Nenhuma conta muda aqui.
+   ===================================================================== */
+.pg-painel {
+  --pnl-linha: var(--border);
+  --pnl-sup: var(--bg-elevated);
+  --pnl-faixa: color-mix(in srgb, var(--bg-soft) 55%, var(--bg-elevated));
+  --pnl-muda: var(--text-soft);
+  --pnl-r: 10px;
+  --pnl-r-s: 6px;
+}
+
+/* Cabeçalho: título firme e uma régua embaixo */
+.pg-painel > .page-header { align-items: flex-end; padding-bottom: 20px; margin-bottom: 28px; border-bottom: 1px solid var(--pnl-linha); }
+.pg-painel > .page-header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.pg-painel > .page-header p { font-size: 14px; margin-top: 6px; }
+.pg-painel .pnl-cab-acoes { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pg-painel .pnl-mes { font-size: 13px; color: var(--pnl-muda); display: flex; align-items: center; gap: 8px; }
+
+/* Seções que respondem uma pergunta cada */
+.pg-painel .pnl-secao { margin-bottom: 32px; }
+.pg-painel .pnl-secao-titulo { margin: 0 0 12px; font-size: 16px; font-weight: 600; letter-spacing: 0; color: var(--text); }
+
+/* "Como fechou o mês": uma faixa contínua, sem caixas soltas */
+.pg-painel #painel-resumo,
+.pg-painel #painel-despesas-detalhe {
+  gap: 0; margin: 0; border: 1px solid var(--pnl-linha); background: var(--pnl-sup); overflow: hidden;
+}
+.pg-painel #painel-resumo { grid-template-columns: 1.4fr 1fr 1fr; border-radius: var(--pnl-r) var(--pnl-r) 0 0; }
+.pg-painel #painel-despesas-detalhe { grid-template-columns: repeat(3, 1fr); border-top: 0; border-radius: 0 0 var(--pnl-r) var(--pnl-r); background: var(--pnl-faixa); }
+.pg-painel #painel-resumo > *,
+.pg-painel #painel-despesas-detalhe > * { min-width: 0; }
+.pg-painel #painel-resumo .stat-card,
+.pg-painel #painel-despesas-detalhe .stat-card {
+  background: transparent; border: 0; border-left: 1px solid var(--pnl-linha); border-radius: 0; box-shadow: none; transform: none; padding: 20px 24px;
+}
+/* a faixa de despesas por tipo não tem réguas verticais: as colunas dela não
+   coincidem com as de cima, e a régua desalinhada pareceria erro */
+.pg-painel #painel-despesas-detalhe .stat-card { padding: 12px 24px; border-left: 0; }
+.pg-painel #painel-resumo .stat-card::after,
+.pg-painel #painel-despesas-detalhe .stat-card::after { display: none; }
+.pg-painel #painel-resumo .stat-card:hover,
+.pg-painel #painel-despesas-detalhe .stat-card:hover { transform: none; box-shadow: none; }
+.pg-painel #painel-resumo .stat-label,
+.pg-painel #painel-despesas-detalhe .stat-label { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--pnl-muda); margin-bottom: 6px; }
+.pg-painel #painel-resumo .stat-value { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; color: var(--text); font-variant-numeric: tabular-nums; }
+.pg-painel #painel-despesas-detalhe .stat-label { margin-bottom: 2px; }
+.pg-painel #painel-despesas-detalhe .stat-value { font-size: 16px; font-weight: 600; letter-spacing: 0; color: var(--text); font-variant-numeric: tabular-nums; }
+.pg-painel #painel-resumo .stat-sub { font-size: 12px; color: var(--pnl-muda); opacity: 1; margin-top: 6px; }
+
+/* Resultado do mês: o destaque da tela. Fundo leve da cor do tema e uma
+   régua na cor de destaque; o valor segue verde (zero ou lucro) ou
+   vermelho (prejuízo), pelas mesmas classes que o sistema já liga. */
+.pg-painel .fin-balao {
+  background: color-mix(in srgb, var(--blue-strong) 8%, var(--pnl-sup));
+  color: var(--text); border-radius: 0; box-shadow: inset 4px 0 0 var(--blue-strong); padding: 20px 24px 20px 28px;
+}
+.pg-painel .fin-balao-label { font-size: 13px; font-weight: 600; color: var(--text); opacity: 1; margin-bottom: 6px; }
+.pg-painel .fin-balao-valor { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.pg-painel .fin-balao.lucro-positivo .fin-balao-valor { color: var(--success-texto); }
+.pg-painel .fin-balao.lucro-negativo .fin-balao-valor { color: var(--danger-texto); }
+/* Prejuízo: o tom da cor do tema sai do fundo (que fica neutro) e a régua
+   da esquerda passa a ser vermelha, junto com o número. */
+.pg-painel .fin-balao.lucro-negativo { background: var(--pnl-sup); box-shadow: inset 4px 0 0 var(--danger-texto); }
+/* sobre o fundo tingido, o cinza fica um pouco mais escuro para passar de 4,5:1 */
+.pg-painel .fin-balao-sub { font-size: 12px; color: color-mix(in srgb, var(--pnl-muda) 80%, var(--text)); opacity: 1; margin-top: 6px; }
+
+/* Blocos (comparativo, pendentes, calendário e detalhe): uma camada só */
+.pg-painel .pnl-bloco { background: var(--pnl-sup); border: 1px solid var(--pnl-linha); border-radius: var(--pnl-r); box-shadow: none; padding: 20px 24px; margin-bottom: 32px; }
+.pg-painel .pnl-agenda .pnl-bloco { margin-bottom: 0; }
+.pg-painel .pnl-bloco::before, .pg-painel .pnl-bloco::after { display: none; }
+.pg-painel .pnl-bloco > .panel-title { margin-bottom: 16px; }
+.pg-painel .pnl-bloco > .panel-title h2 { font-size: 16px; font-weight: 600; letter-spacing: 0; }
+.pg-painel .pnl-bloco > .panel-title span { font-size: 13px; color: var(--pnl-muda); }
+.pg-painel #fin-pendentes-total { font-variant-numeric: tabular-nums; }
+
+/* Comparativo: colunas separadas por régua, sem cartão dentro de cartão */
+.pg-painel #fin-comp-grid { gap: 0; }
+.pg-painel #fin-comp-grid .fin-comp-card { background: transparent; border: 0; border-left: 1px solid var(--pnl-linha); border-radius: 0; box-shadow: none; padding: 2px 20px; min-width: 0; }
+.pg-painel #fin-comp-grid .fin-comp-card:first-child { border-left: 0; padding-left: 0; }
+.pg-painel #fin-comp-grid .fin-comp-card:last-child { padding-right: 0; }
+.pg-painel #fin-comp-grid .fin-comp-card::after { display: none; }
+.pg-painel #fin-comp-grid .fin-comp-titulo { font-size: 13px; color: var(--pnl-muda); }
+.pg-painel #fin-comp-grid .fin-comp-valor { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+.pg-painel #fin-comp-grid .fin-comp-var.up { color: var(--success-texto); }
+.pg-painel #fin-comp-grid .fin-comp-var.down { color: var(--danger-texto); }
+.pg-painel #fin-comp-grid .fin-comp-bar-track { height: 4px; background: var(--bg-soft); }
+.pg-painel #fin-comp-grid .fin-comp-bar-legenda { font-size: 12px; color: var(--pnl-muda); }
+
+/* Listas (O que falta receber e Detalhe do dia): linhas limpas, iniciais
+   neutras, valor alinhado e situação como ponto + texto */
+.pg-painel #fin-pendentes-lista .list-row,
+.pg-painel #fin-dia-detalhe .list-row { padding: 12px 0; border-top-color: var(--pnl-linha); }
+.pg-painel #fin-pendentes-lista .icon-dot,
+.pg-painel #fin-dia-detalhe .icon-dot { width: 32px; height: 32px; font-size: 12px; background: var(--bg-soft); color: var(--text); box-shadow: none; }
+.pg-painel #fin-pendentes-lista .list-row-sub,
+.pg-painel #fin-dia-detalhe .list-row-sub { font-size: 13px; color: var(--pnl-muda); }
+.pg-painel #fin-pendentes-lista .list-row-value,
+.pg-painel #fin-dia-detalhe .list-row-value { font-variant-numeric: tabular-nums; }
+.pg-painel #fin-pendentes-lista .badge,
+.pg-painel #fin-dia-detalhe .badge {
+  background: transparent; border: 0; box-shadow: none; padding: 0; min-height: 0; gap: 6px; font-size: 12px; font-weight: 500;
+}
+.pg-painel #fin-pendentes-lista .badge::before,
+.pg-painel #fin-dia-detalhe .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.pg-painel #fin-pendentes-lista .badge-success,
+.pg-painel #fin-dia-detalhe .badge-success { color: var(--success-texto); }
+.pg-painel #fin-pendentes-lista .badge-danger,
+.pg-painel #fin-dia-detalhe .badge-danger { color: var(--danger-texto); }
+.pg-painel #fin-pendentes-lista .badge-neutral,
+.pg-painel #fin-dia-detalhe .badge-neutral { color: var(--pnl-muda); }
+.pg-painel #fin-pendentes-lista .empty-state,
+.pg-painel #fin-dia-detalhe .empty-state { text-align: left; padding: 4px 0; font-size: 14px; }
+
+/* Calendário: casas planas; só o dia com movimento se destaca */
+.pg-painel .fin-cal-legenda { gap: 16px; margin-bottom: 14px; }
+.pg-painel .fin-cal-legenda > span { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 13px; font-weight: 500; }
+.pg-painel .fin-dot { box-shadow: none; }
+.pg-painel #fin-calendario-grid { gap: 4px; }
+.pg-painel #fin-calendario-grid .fin-cal-weekday { text-transform: capitalize; letter-spacing: 0; font-size: 12px; font-weight: 600; }
+.pg-painel #fin-calendario-grid .fin-cal-day {
+  min-height: 48px; border: 1px solid transparent; border-radius: var(--pnl-r-s); background: transparent; box-shadow: none; transform: none; transition: background .15s ease, border-color .15s ease;
+}
+.pg-painel #fin-calendario-grid .fin-cal-day::before { display: none; }
+.pg-painel #fin-calendario-grid .fin-cal-day:hover { background: var(--bg-soft); border-color: transparent; transform: none; box-shadow: none; }
+.pg-painel #fin-calendario-grid .fin-cal-day.has-events { background: color-mix(in srgb, var(--blue-strong) 9%, var(--pnl-sup)); }
+.pg-painel #fin-calendario-grid .fin-cal-day.selected { border: 2px solid var(--blue-strong); background: color-mix(in srgb, var(--blue-strong) 9%, var(--pnl-sup)); box-shadow: none; }
+.pg-painel #fin-calendario-grid .fin-cal-day.fin-cal-blank { background: transparent; border-color: transparent; }
+.pg-painel #fin-calendario-grid .fin-cal-num { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Celular (a tela inicial com atalhos aparece só no Painel) */
+@media (max-width: 860px) {
+  .pg-painel .crm-home-rotulo { font-size: 16px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text); margin: 4px 0 10px; }
+  .pg-painel .crm-home-grade { gap: 4px; margin-bottom: 24px; }
+  .pg-painel .crm-home-tile { border: 0; border-radius: var(--pnl-r); background: transparent; padding: 10px 2px; }
+  .pg-painel .crm-home-tile:active { background: var(--bg-soft); border-color: transparent; }
+  .pg-painel .crm-home-ic { width: 40px; height: 40px; border-radius: var(--pnl-r); background: var(--bg-soft); color: var(--text); box-shadow: none; }
+  .pg-painel .crm-home-txt { font-size: 12px; color: var(--text); }
+}
+@media (max-width: 768px) {
+  .pg-painel > .page-header { align-items: stretch; margin-bottom: 20px; }
+  .pg-painel > .page-header h1 { font-size: 24px; }
+  .pg-painel .pnl-secao { margin-bottom: 24px; }
+  .pg-painel #painel-resumo { grid-template-columns: 1fr 1fr !important; }
+  .pg-painel #painel-resumo .fin-balao { grid-column: 1 / -1; }
+  .pg-painel #painel-resumo .stat-card { padding: 14px 16px; border-top: 1px solid var(--pnl-linha); }
+  .pg-painel #painel-resumo .stat-card:nth-child(2) { border-left: 0; }
+  .pg-painel #painel-resumo .stat-value { font-size: 18px; }
+  .pg-painel #painel-resumo .fin-balao { padding: 16px 16px 16px 20px; }
+  /* despesas por tipo: uma linha por tipo, nome à esquerda e valor à direita */
+  .pg-painel #painel-despesas-detalhe { grid-template-columns: 1fr !important; }
+  .pg-painel #painel-despesas-detalhe .stat-card { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 16px; border-left: 0; border-top: 1px solid var(--pnl-linha); }
+  .pg-painel #painel-despesas-detalhe .stat-card:first-child { border-top: 0; }
+  .pg-painel #painel-despesas-detalhe .stat-label { margin: 0; }
+  .pg-painel .pnl-bloco { padding: 16px; border-radius: var(--pnl-r); margin-bottom: 24px; }
+  .pg-painel .pnl-agenda .pnl-bloco { margin-bottom: 0; }
+  .pg-painel #fin-comp-grid { grid-template-columns: 1fr 1fr !important; row-gap: 16px; }
+  .pg-painel #fin-comp-grid .fin-comp-card { padding: 0 0 0 14px; }
+  .pg-painel #fin-comp-grid .fin-comp-card:nth-child(odd) { border-left: 0; padding-left: 0; }
+  .pg-painel #fin-comp-grid .fin-comp-valor { font-size: 17px; }
+  .pg-painel #fin-calendario-grid .fin-cal-day { min-height: 40px; }
+}
+/* Telas muito estreitas (ou celular com zoom de 200%): uma coluna e o valor
+   desce para baixo do nome quando não cabe ao lado */
+@media (max-width: 360px) {
+  .pg-painel #painel-resumo { grid-template-columns: 1fr !important; }
+  .pg-painel #painel-resumo .stat-card { border-left: 0; }
+  .pg-painel #painel-despesas-detalhe .stat-card { flex-wrap: wrap; }
+  .pg-painel #fin-comp-grid { grid-template-columns: 1fr !important; }
+  .pg-painel #fin-comp-grid .fin-comp-card { border-left: 0; padding-left: 0; }
+  .pg-painel #fin-comp-grid .fin-comp-card + .fin-comp-card { border-top: 1px solid var(--pnl-linha); padding-top: 16px; }
+  .pg-painel #painel-resumo .fin-balao { padding: 14px 14px 14px 18px; }
+  .pg-painel .fin-balao-valor { font-size: 20px; overflow-wrap: anywhere; }
+  .pg-painel #fin-comp-grid .fin-comp-valor { overflow-wrap: anywhere; }
+}

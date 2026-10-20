@@ -6589,6 +6589,11 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '20/10/2026 · Meu Negócio', itens: [
+    { titulo: 'Meu Negócio com visual novo', badges: ['melhoria'], texto: 'Indicadores numa faixa limpa, painéis sem sombras e tabelas mais fáceis de ler (no celular, as tabelas cabem na tela). Os números não mudaram.' },
+    { titulo: 'Gráficos nas cores do seu tema', badges: ['melhoria'], texto: 'Os gráficos do Meu Negócio seguem as cores do tema escolhido e ficaram do tamanho certo. As situações têm sempre a mesma cor: faturado e recebido em verde, aberto em laranja, cancelado e vencido em vermelho, pendente em cinza. As cores das categorias continuam as que você escolheu no Financeiro.' },
+    { titulo: 'Estoque em vermelho só quando precisa', badges: ['corrigido'], texto: '"Estoque baixo" e "Sem estoque" só ficam vermelhos quando há algum produto nessa situação.' },
+  ] },
   { data: '20/10/2026 · Painel', itens: [
     { titulo: 'Painel com visual novo', badges: ['melhoria'], texto: 'O Painel foi reorganizado em blocos: como fechou o mês (com o Resultado do mês em destaque), comparado ao mês anterior, o que falta receber e a agenda do mês. Visual mais limpo, sem sombras nem caixas dentro de caixas, e números alinhados. As contas não mudaram.' },
     { titulo: 'Texto da receita corrigido', badges: ['corrigido'], texto: 'Embaixo do Total de receita, o texto agora explica o que a soma considera: tudo a receber no mês, incluindo pagos e pendentes.' },
@@ -19526,7 +19531,8 @@ function finDesenharGraficos() {
   const estilo = getComputedStyle(document.documentElement);
   const cTexto = (estilo.getPropertyValue('--text-soft') || '#888').trim() || '#888';
   const opc = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: cTexto, boxWidth: 12 } } }, scales: { x: { ticks: { color: cTexto } }, y: { ticks: { color: cTexto } } } };
-  const novo = (id, cfg) => { const el = document.getElementById(id); if (el) try { FIN_GRAFICOS.push(new Chart(el, cfg)); } catch (e) { console.error(e); } };
+  const noMeuNegocio = !!(FIN_HOST && FIN_HOST.closest && FIN_HOST.closest('.pg-mn')); // v145: estilo do tema só no Meu Negócio
+  const novo = (id, cfg) => { const el = document.getElementById(id); if (el) try { FIN_GRAFICOS.push(new Chart(el, noMeuNegocio ? mnRelatorioNoTema(id, cfg) : cfg)); } catch (e) { console.error(e); } };
   novo('fin-g-recdesp', { type: 'bar', data: { labels: rot, datasets: [{ label: 'Faturamento', data: meses.map((m) => doMes(m, 'receber')), backgroundColor: '#3b82f6' }, { label: 'Despesas', data: meses.map((m) => doMes(m, 'pagar')), backgroundColor: '#f97316' }] }, options: opc });
   // Evolução: as 3 linhas do relatório antigo do Meu Negócio (competência)
   const recM = meses.map((m) => doMes(m, 'receber'));
@@ -25786,12 +25792,103 @@ function renderMnDetalheEstado() {
 
 // ---------- Boxes do dashboard "Vendas" ----------
 
+// ---------- Meu Negócio: aparência dos gráficos (v145) ----------
+// Só a aparência: as cores saem do tema (destaque, texto, linhas e as cores de
+// situação), então os gráficos acompanham os 16 temas e a cor personalizada.
+// Os números de cada gráfico não mudam. Cada gráfico recebe as próprias opções;
+// a configuração global do Chart.js não é tocada.
+
+function mnCor(variavel) {
+  const el = document.createElement('span');
+  el.style.color = `var(${variavel})`;
+  (document.querySelector('.pg-mn') || document.body).appendChild(el); // lê as cores de dentro da página
+  const c = getComputedStyle(el).color;
+  el.remove();
+  const srgb = c.match(/color\(srgb ([\d.e-]+) ([\d.e-]+) ([\d.e-]+)/);
+  if (srgb) return [srgb[1], srgb[2], srgb[3]].map((x) => Math.round(Number(x) * 255));
+  const m = c.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [128, 128, 128];
+}
+function mnRgba(c, alfa = 1) { return `rgba(${c[0]},${c[1]},${c[2]},${alfa})`; }
+function mnMistura(a, b, t) { return a.map((x, i) => Math.round(x * t + b[i] * (1 - t))); }
+
+function mnPaleta() {
+  const p = { destaque: mnCor('--blue-strong'), texto: mnCor('--text'), suave: mnCor('--text-soft'), fundo: mnCor('--mn-sup, var(--bg-elevated)'),
+    linha: mnCor('--border'), ok: mnCor('--success'), alerta: mnCor('--warning'), erro: mnCor('--danger') };
+  // categorias (produtos, tipos de cliente...): tons da cor do tema e neutros, sem arco-íris
+  p.categorias = [p.destaque, mnMistura(p.destaque, p.texto, 0.55), mnMistura(p.destaque, p.fundo, 0.55), p.suave,
+    mnMistura(p.suave, p.fundo, 0.5), mnMistura(p.destaque, p.texto, 0.25), mnMistura(p.destaque, p.fundo, 0.3)].map((c) => mnRgba(c));
+  return p;
+}
+
+// Situações sempre com o mesmo significado (e sempre com o nome escrito na legenda)
+const MN_COR_SITUACAO = { faturado: 'ok', recebido: 'ok', aberto: 'alerta', parcial: 'alerta', cancelado: 'erro', vencido: 'erro', pendente: 'suave',
+  'estoque normal': 'ok', 'estoque baixo': 'alerta', 'sem estoque': 'erro' };
+function mnCoresFatias(rotulos, p, porSituacao) {
+  return rotulos.map((r, i) => {
+    const s = porSituacao && MN_COR_SITUACAO[String(r).toLowerCase()];
+    return s ? mnRgba(p[s]) : p.categorias[i % p.categorias.length];
+  });
+}
+function mnFatias(cores, p) { return { backgroundColor: cores, borderColor: mnRgba(p.fundo), borderWidth: 2, hoverOffset: 4 }; }
+function mnBarras(p) { return { backgroundColor: mnRgba(p.destaque), borderRadius: 4, maxBarThickness: 22, borderWidth: 0 }; }
+// linha principal: cor do tema e área suave (vermelha abaixo de zero); secundária: neutra
+function mnLinha(cor, p, principal, tracejada) {
+  return { borderColor: mnRgba(cor), backgroundColor: mnRgba(cor), borderWidth: principal ? 2.5 : 1.75, pointRadius: 0, pointHoverRadius: 4, tension: 0.35,
+    borderDash: tracejada ? [5, 4] : [], fill: principal ? { target: 'origin', above: mnRgba(cor, 0.1), below: mnRgba(p.erro, 0.1) } : false };
+}
+
+// Opções de um gráfico; "extra" traz o que ele já tinha (valores em R$ nos eixos e nas dicas)
+function mnOpcoesGrafico(tipo, p, extra = {}) {
+  const fonte = { family: 'Inter', size: 12 };
+  const legenda = { display: !extra.semLegenda, labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 7, boxHeight: 7, padding: 12, color: mnRgba(p.texto), font: fonte } };
+  const dica = { backgroundColor: mnRgba(p.texto), titleColor: mnRgba(p.fundo), bodyColor: mnRgba(p.fundo), padding: 10, cornerRadius: 6,
+    usePointStyle: true, boxWidth: 7, boxHeight: 7, titleFont: { family: 'Inter', weight: '600' }, bodyFont: fonte };
+  if (extra.dica) dica.callbacks = extra.dica;
+  const o = { responsive: true, maintainAspectRatio: false, plugins: { legend: legenda, tooltip: dica } };
+  if (tipo === 'doughnut') {
+    o.cutout = '72%';
+    legenda.position = window.matchMedia && window.matchMedia('(max-width: 700px)').matches ? 'bottom' : 'right';
+    return o;
+  }
+  const deitado = extra.indexAxis === 'y';
+  const eixo = (grade, formato) => ({ grid: { display: grade, color: mnRgba(p.linha, 0.7), drawTicks: false }, border: { display: false },
+    ticks: Object.assign({ color: mnRgba(p.suave), font: fonte, padding: 8 }, formato ? { callback: formato } : {}) });
+  o.scales = { x: eixo(deitado, extra.eixoX), y: eixo(!deitado, extra.eixoY) };
+  if (deitado) o.indexAxis = 'y';
+  if (extra.interacao) o.interaction = extra.interacao;
+  legenda.align = 'end';
+  return o;
+}
+
+// Relatórios financeiros dentro do Meu Negócio: mesmos números e mesmas cores
+// de categoria escolhidas pelo usuário; só o estilo segue o tema. No
+// Financeiro e no CRM este caminho não é usado.
+function mnRelatorioNoTema(id, cfg) {
+  const p = mnPaleta();
+  const o = cfg.options || {};
+  const dica = o.plugins && o.plugins.tooltip && o.plugins.tooltip.callbacks;
+  const formato = (eixo) => o.scales && o.scales[eixo] && o.scales[eixo].ticks && o.scales[eixo].ticks.callback;
+  if (cfg.type === 'doughnut') {
+    const ds = cfg.data.datasets[0];
+    const cores = id === 'fin-g-status' ? mnCoresFatias(cfg.data.labels, p, true) : ds.backgroundColor; // categorias: cor do usuário
+    Object.assign(ds, mnFatias(cores, p));
+  } else {
+    cfg.data.datasets.forEach((ds) => {
+      const nome = String(ds.label || '').toLowerCase();
+      if (cfg.type === 'bar') Object.assign(ds, mnBarras(p), /despes/.test(nome) ? { backgroundColor: mnRgba(p.suave) } : {});
+      else if (/despes/.test(nome)) Object.assign(ds, mnLinha(p.suave, p, false, true));
+      else if (/receita/.test(nome)) Object.assign(ds, mnLinha(p.texto, p, false, false));
+      else Object.assign(ds, mnLinha(p.destaque, p, true, false));
+    });
+  }
+  return Object.assign({}, cfg, { options: mnOpcoesGrafico(cfg.type, p, { dica, eixoX: formato('x'), eixoY: formato('y'), interacao: o.interaction }) });
+}
+
 // ---------- Visão geral: KPIs cruzando vendas, estoque e clientes ----------
 
 let VG_CHART_PRODUTO = null, VG_CHART_SITUACAO = null, VG_CHART_CLIENTES = null;
 let VG_CHART_ESTOQUE = null, VG_CHART_TOP_PRODUTOS = null;
-
-const CORES_PIZZA = ['#3fae12', '#4fa8d8', '#d6a34e', '#e2726c', '#8a6fd8', '#5be7c4'];
 
 function produtoTemEstoqueBaixo(p) {
   const min = Number(p.quantidadeMinima || 0);
@@ -25817,14 +25914,12 @@ function renderVisaoGeral() {
   setText('vg-kpi-estoque-baixo', String(produtosEstoqueBaixo.length));
   setText('vg-kpi-pedidos-abertos', String(pedidosAbertos));
   setText('vg-kpi-ticket-medio', formatMoney(ticketMedio));
+  // vermelho só quando há produto com estoque baixo
+  const cartaoEstoque = document.getElementById('vg-kpi-estoque-baixo');
+  if (cartaoEstoque && cartaoEstoque.closest('.stat-card')) cartaoEstoque.closest('.stat-card').classList.toggle('danger', produtosEstoqueBaixo.length > 0);
 
-  const opcoesPizza = {
-    responsive: true,
-    plugins: {
-      legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
-      tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${formatMoney(ctx.parsed)}` } },
-    },
-  };
+  const pal = mnPaleta();
+  const opcoesPizza = mnOpcoesGrafico('doughnut', pal, { dica: { label: (ctx) => `${ctx.label}: ${formatMoney(ctx.parsed)}` } });
 
   // ---------- Vendas por produto (pizza) ----------
   const porProduto = agregarProdutosDosItens(pedidos);
@@ -25834,7 +25929,7 @@ function renderVisaoGeral() {
   if (ctxProduto) {
     VG_CHART_PRODUTO = new Chart(ctxProduto.getContext('2d'), {
       type: 'doughnut',
-      data: { labels: produtosOrdenados, datasets: [{ data: produtosOrdenados.map((p) => porProduto[p]), backgroundColor: CORES_PIZZA }] },
+      data: { labels: produtosOrdenados, datasets: [Object.assign({ data: produtosOrdenados.map((p) => porProduto[p]) }, mnFatias(mnCoresFatias(produtosOrdenados, pal, false), pal))] },
       options: opcoesPizza,
     });
   }
@@ -25848,7 +25943,7 @@ function renderVisaoGeral() {
   if (ctxSituacao) {
     VG_CHART_SITUACAO = new Chart(ctxSituacao.getContext('2d'), {
       type: 'doughnut',
-      data: { labels: statusChaves.map((s) => statusLabels[s] || s), datasets: [{ data: statusChaves.map((s) => porStatus[s]), backgroundColor: ['#d6a34e', '#3fae12', '#e2726c', '#4fa8d8'] }] },
+      data: { labels: statusChaves.map((s) => statusLabels[s] || s), datasets: [Object.assign({ data: statusChaves.map((s) => porStatus[s]) }, mnFatias(mnCoresFatias(statusChaves, pal, true), pal))] },
       options: opcoesPizza,
     });
   }
@@ -25864,9 +25959,9 @@ function renderVisaoGeral() {
       type: 'doughnut',
       data: {
         labels: ['Só clientes', 'Só fornecedores', 'Cliente e fornecedor'],
-        datasets: [{ data: [totalClientesSo, totalFornecedoresSo, totalAmbos], backgroundColor: ['#3fae12', '#d6a34e', '#4fa8d8'] }],
+        datasets: [Object.assign({ data: [totalClientesSo, totalFornecedoresSo, totalAmbos] }, mnFatias(pal.categorias.slice(0, 3), pal))],
       },
-      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } } } },
+      options: mnOpcoesGrafico('doughnut', pal),
     });
   }
 
@@ -25881,9 +25976,9 @@ function renderVisaoGeral() {
       type: 'doughnut',
       data: {
         labels: ['Estoque normal', 'Estoque baixo', 'Sem estoque'],
-        datasets: [{ data: [estoqueNormal, estoqueBaixoCount, semEstoque], backgroundColor: ['#3fae12', '#d6a34e', '#e2726c'] }],
+        datasets: [Object.assign({ data: [estoqueNormal, estoqueBaixoCount, semEstoque] }, mnFatias(mnCoresFatias(['Estoque normal', 'Estoque baixo', 'Sem estoque'], pal, true), pal))],
       },
-      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } } } },
+      options: mnOpcoesGrafico('doughnut', pal),
     });
   }
 
@@ -25894,8 +25989,8 @@ function renderVisaoGeral() {
   if (ctxTop) {
     VG_CHART_TOP_PRODUTOS = new Chart(ctxTop.getContext('2d'), {
       type: 'bar',
-      data: { labels: top5, datasets: [{ label: 'Vendido', data: top5.map((p) => porProduto[p]), backgroundColor: '#3fae12' }] },
-      options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatMoney(ctx.parsed.x) } } }, scales: { x: { ticks: { callback: (v) => formatMoney(v) } } } },
+      data: { labels: top5, datasets: [Object.assign({ label: 'Vendido', data: top5.map((p) => porProduto[p]) }, mnBarras(pal))] },
+      options: mnOpcoesGrafico('bar', pal, { indexAxis: 'y', semLegenda: true, dica: { label: (ctx) => formatMoney(ctx.parsed.x) }, eixoX: (v) => formatMoney(v) }),
     });
   }
 
@@ -25938,21 +26033,18 @@ function definirPeriodoPadrao(prefixo) {
 }
 
 function badgeVariacao(atual, anterior) {
-  if (!anterior) return '<span style="font-size:11px; color:var(--text-soft);">sem período anterior</span>';
+  if (!anterior) return '<span class="mn-variacao">sem período anterior</span>';
   const variacao = ((atual - anterior) / anterior) * 100;
   const subiu = variacao >= 0;
-  const cor = subiu ? 'var(--success)' : 'var(--danger)';
   const seta = subiu ? '▲' : '▼';
-  return `<span style="font-size:11px; font-weight:700; color:${cor};">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
+  return `<span class="mn-variacao ${subiu ? 'sobe' : 'desce'}">${seta} ${Math.abs(variacao).toFixed(0)}%</span>`;
 }
 
 function cardKpi(label, valorFormatado, valorAnteriorFormatado, badgeHtml) {
   return `<div class="stat-card">
     <div class="stat-label">${escapeHtml(label)}</div>
-    <div class="stat-value" style="font-size:22px;">${valorFormatado}</div>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:11px; color:var(--text-soft);">
-      ${badgeHtml}<span>ant.: ${valorAnteriorFormatado}</span>
-    </div>
+    <div class="stat-value">${valorFormatado}</div>
+    <div class="mn-kpi-rodape">${badgeHtml}<span>ant.: ${valorAnteriorFormatado}</span></div>
   </div>`;
 }
 
@@ -26012,6 +26104,7 @@ function renderVendasPedidosDashboard() {
   const maxDias = Math.max(valoresAtual.length, valoresAnteriores.length);
   const labels = Array.from({ length: maxDias }, (_, i) => `Dia ${i + 1}`);
 
+  const pal = mnPaleta();
   if (MN_CHART_VP_LINHA) MN_CHART_VP_LINHA.destroy();
   const ctxLinha = document.getElementById('vp-chart-linha');
   if (ctxLinha) {
@@ -26020,11 +26113,11 @@ function renderVendasPedidosDashboard() {
       data: {
         labels,
         datasets: [
-          { label: 'Período atual', data: valoresAtual, borderColor: '#3fae12', backgroundColor: 'rgba(63,174,18,0.12)', tension: 0.3, fill: true },
-          { label: 'Período anterior', data: valoresAnteriores, borderColor: '#8a94a3', borderDash: [5, 4], tension: 0.3, fill: false },
+          Object.assign({ label: 'Período atual', data: valoresAtual }, mnLinha(pal.destaque, pal, true, false)),
+          Object.assign({ label: 'Período anterior', data: valoresAnteriores }, mnLinha(pal.suave, pal, false, true)),
         ],
       },
-      options: { responsive: true, plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}` } } }, scales: { y: { ticks: { callback: (v) => formatMoney(v) } } } },
+      options: mnOpcoesGrafico('line', pal, { dica: { label: (ctx) => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}` }, eixoY: (v) => formatMoney(v) }),
     });
   }
 
@@ -26036,8 +26129,8 @@ function renderVendasPedidosDashboard() {
   if (ctxSit) {
     MN_CHART_VP_SITUACAO = new Chart(ctxSit.getContext('2d'), {
       type: 'doughnut',
-      data: { labels: statusChaves.map((s) => statusLabels[s] || s), datasets: [{ data: statusChaves.map((s) => porStatus[s]), backgroundColor: ['#d6a34e', '#3fae12', '#e2726c'] }] },
-      options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+      data: { labels: statusChaves.map((s) => statusLabels[s] || s), datasets: [Object.assign({ data: statusChaves.map((s) => porStatus[s]) }, mnFatias(mnCoresFatias(statusChaves, pal, true), pal))] },
+      options: mnOpcoesGrafico('doughnut', pal),
     });
   }
 }
@@ -26054,10 +26147,10 @@ function renderEstoqueDashboard() {
   const semEstoque = produtos.filter((p) => Number(p.estoque || 0) === 0);
 
   document.getElementById('es-kpis').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Produtos cadastrados</div><div class="stat-value" style="font-size:22px;">${totalProdutos}</div></div>
-    <div class="stat-card"><div class="stat-label">Valor total em estoque</div><div class="stat-value" style="font-size:20px;">${formatMoney(valorEmEstoque)}</div></div>
-    <div class="stat-card danger"><div class="stat-label">Estoque baixo</div><div class="stat-value" style="font-size:22px;">${estoqueBaixo.length}</div></div>
-    <div class="stat-card danger"><div class="stat-label">Sem estoque</div><div class="stat-value" style="font-size:22px;">${semEstoque.length}</div></div>`;
+    <div class="stat-card"><div class="stat-label">Produtos cadastrados</div><div class="stat-value">${totalProdutos}</div></div>
+    <div class="stat-card"><div class="stat-label">Valor total em estoque</div><div class="stat-value">${formatMoney(valorEmEstoque)}</div></div>
+    <div class="stat-card${estoqueBaixo.length > 0 ? ' danger' : ''}"><div class="stat-label">Estoque baixo</div><div class="stat-value">${estoqueBaixo.length}</div></div>
+    <div class="stat-card${semEstoque.length > 0 ? ' danger' : ''}"><div class="stat-label">Sem estoque</div><div class="stat-value">${semEstoque.length}</div></div>`;
 
   const listaEl = document.getElementById('es-lista-atencao');
   const atencao = [...semEstoque, ...estoqueBaixo.filter((p) => Number(p.estoque || 0) > 0)];
@@ -26077,8 +26170,8 @@ function renderEstoqueDashboard() {
   if (ctx) {
     MN_CHART_ESTOQUE_TOP = new Chart(ctx.getContext('2d'), {
       type: 'bar',
-      data: { labels: porValor.map((p) => p.nome), datasets: [{ label: 'Valor em estoque', data: porValor.map((p) => p.valor), backgroundColor: '#4fa8d8' }] },
-      options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatMoney(ctx.parsed.x) } } }, scales: { x: { ticks: { callback: (v) => formatMoney(v) } } } },
+      data: { labels: porValor.map((p) => p.nome), datasets: [Object.assign({ label: 'Valor em estoque', data: porValor.map((p) => p.valor) }, mnBarras(mnPaleta()))] },
+      options: mnOpcoesGrafico('bar', mnPaleta(), { indexAxis: 'y', semLegenda: true, dica: { label: (ctx) => formatMoney(ctx.parsed.x) }, eixoX: (v) => formatMoney(v) }),
     });
   }
 }
@@ -26103,9 +26196,9 @@ function renderClientesDashboard() {
   });
 
   document.getElementById('cl-kpis').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Clientes que compraram</div><div class="stat-value" style="font-size:22px;">${clientesNoPeriodo.length}</div></div>
-    <div class="stat-card"><div class="stat-label">Clientes novos</div><div class="stat-value" style="font-size:22px; color:var(--blue-text);">${novos}</div></div>
-    <div class="stat-card"><div class="stat-label">Clientes recorrentes</div><div class="stat-value" style="font-size:22px; color:var(--success);">${recorrentes}</div></div>`;
+    <div class="stat-card"><div class="stat-label">Clientes que compraram</div><div class="stat-value">${clientesNoPeriodo.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Clientes novos</div><div class="stat-value">${novos}</div></div>
+    <div class="stat-card"><div class="stat-label">Clientes recorrentes</div><div class="stat-value">${recorrentes}</div></div>`;
 
   if (typeof Chart !== 'undefined') {
     if (MN_CHART_CLIENTES_PIZZA) MN_CHART_CLIENTES_PIZZA.destroy();
@@ -26113,8 +26206,8 @@ function renderClientesDashboard() {
     if (ctx) {
       MN_CHART_CLIENTES_PIZZA = new Chart(ctx.getContext('2d'), {
         type: 'doughnut',
-        data: { labels: ['Novos', 'Recorrentes'], datasets: [{ data: [novos, recorrentes], backgroundColor: ['#4fa8d8', '#3fae12'] }] },
-        options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+        data: { labels: ['Novos', 'Recorrentes'], datasets: [Object.assign({ data: [novos, recorrentes] }, mnFatias(mnPaleta().categorias.slice(0, 2), mnPaleta()))] },
+        options: mnOpcoesGrafico('doughnut', mnPaleta()),
       });
     }
   }
@@ -26148,6 +26241,7 @@ function renderDashboardVendas() {
 
   renderMapaBrasil();
 
+  const pal = mnPaleta();
   // 2) Situação da venda
   const porStatus = agregarPorChave(pedidos, 'status');
   if (MN_CHART_STATUS) MN_CHART_STATUS.destroy();
@@ -26155,8 +26249,8 @@ function renderDashboardVendas() {
   if (ctxStatus) {
     MN_CHART_STATUS = new Chart(ctxStatus.getContext('2d'), {
       type: 'doughnut',
-      data: { labels: Object.keys(porStatus), datasets: [{ data: Object.values(porStatus), backgroundColor: ['#3fae12', '#b8862f', '#d0554f', '#4fa8d8'] }] },
-      options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+      data: { labels: Object.keys(porStatus), datasets: [Object.assign({ data: Object.values(porStatus) }, mnFatias(mnCoresFatias(Object.keys(porStatus), pal, true), pal))] },
+      options: mnOpcoesGrafico('doughnut', pal),
     });
   }
 
@@ -26168,8 +26262,8 @@ function renderDashboardVendas() {
   if (ctxEstado) {
     MN_CHART_ESTADO = new Chart(ctxEstado.getContext('2d'), {
       type: 'bar',
-      data: { labels: estadosOrdenados, datasets: [{ label: 'Vendas', data: estadosOrdenados.map((e) => porEstado[e]), backgroundColor: '#3fae12' }] },
-      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v) => formatMoney(v) } } } },
+      data: { labels: estadosOrdenados, datasets: [Object.assign({ label: 'Vendas', data: estadosOrdenados.map((e) => porEstado[e]) }, mnBarras(pal))] },
+      options: mnOpcoesGrafico('bar', pal, { semLegenda: true, eixoY: (v) => formatMoney(v) }),
     });
   }
 
@@ -26181,8 +26275,8 @@ function renderDashboardVendas() {
   if (ctxProduto) {
     MN_CHART_PRODUTO = new Chart(ctxProduto.getContext('2d'), {
       type: 'bar',
-      data: { labels: produtosOrdenados, datasets: [{ label: 'Vendas', data: produtosOrdenados.map((p) => porProduto[p]), backgroundColor: '#4fa8d8' }] },
-      options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: (v) => formatMoney(v) } } } },
+      data: { labels: produtosOrdenados, datasets: [Object.assign({ label: 'Vendas', data: produtosOrdenados.map((p) => porProduto[p]) }, mnBarras(pal))] },
+      options: mnOpcoesGrafico('bar', pal, { indexAxis: 'y', semLegenda: true, eixoX: (v) => formatMoney(v) }),
     });
   }
 }
@@ -26193,6 +26287,7 @@ function renderDashboardVendedor() {
   if (typeof Chart === 'undefined') return;
   const pedidos = getPedidosVenda();
 
+  const pal = mnPaleta();
   // 1) Vendas por vendedor
   const porVendedor = agregarPorChave(pedidos, 'vendedor');
   const vendedoresOrdenados = Object.keys(porVendedor).sort((a, b) => porVendedor[b] - porVendedor[a]);
@@ -26201,8 +26296,8 @@ function renderDashboardVendedor() {
   if (ctxVendedor) {
     MN_CHART_VENDEDOR = new Chart(ctxVendedor.getContext('2d'), {
       type: 'bar',
-      data: { labels: vendedoresOrdenados, datasets: [{ label: 'Vendas', data: vendedoresOrdenados.map((v) => porVendedor[v]), backgroundColor: '#3fae12' }] },
-      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v) => formatMoney(v) } } } },
+      data: { labels: vendedoresOrdenados, datasets: [Object.assign({ label: 'Vendas', data: vendedoresOrdenados.map((v) => porVendedor[v]) }, mnBarras(pal))] },
+      options: mnOpcoesGrafico('bar', pal, { semLegenda: true, eixoY: (v) => formatMoney(v) }),
     });
   }
 
@@ -26214,8 +26309,8 @@ function renderDashboardVendedor() {
   if (ctxProduto2) {
     MN_CHART_PRODUTO2 = new Chart(ctxProduto2.getContext('2d'), {
       type: 'bar',
-      data: { labels: produtosOrdenados, datasets: [{ label: 'Vendas', data: produtosOrdenados.map((p) => porProduto[p]), backgroundColor: '#4fa8d8' }] },
-      options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: (v) => formatMoney(v) } } } },
+      data: { labels: produtosOrdenados, datasets: [Object.assign({ label: 'Vendas', data: produtosOrdenados.map((p) => porProduto[p]) }, mnBarras(pal))] },
+      options: mnOpcoesGrafico('bar', pal, { indexAxis: 'y', semLegenda: true, eixoX: (v) => formatMoney(v) }),
     });
   }
 
@@ -26232,8 +26327,8 @@ function renderDashboardVendedor() {
   if (ctxEvolucao) {
     MN_CHART_EVOLUCAO = new Chart(ctxEvolucao.getContext('2d'), {
       type: 'line',
-      data: { labels: mesesOrdenados.map((m) => formatMesLabelCurto(m)), datasets: [{ label: 'Vendas', data: mesesOrdenados.map((m) => porMes[m]), borderColor: '#3fae12', backgroundColor: 'rgba(63,174,18,0.14)', fill: true, tension: 0.3 }] },
-      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v) => formatMoney(v) } } } },
+      data: { labels: mesesOrdenados.map((m) => formatMesLabelCurto(m)), datasets: [Object.assign({ label: 'Vendas', data: mesesOrdenados.map((m) => porMes[m]) }, mnLinha(pal.destaque, pal, true, false))] },
+      options: mnOpcoesGrafico('line', pal, { semLegenda: true, eixoY: (v) => formatMoney(v) }),
     });
   }
 }

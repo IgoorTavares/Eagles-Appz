@@ -5741,3 +5741,180 @@ html .btn:disabled .icone-menu { stroke: currentColor; }
   .pg-painel .fin-balao-valor { font-size: 20px; overflow-wrap: anywhere; }
   .pg-painel #fin-comp-grid .fin-comp-valor { overflow-wrap: anywhere; }
 }
+
+/* =====================================================================
+   Meu Negócio (meu-negocio.html) — Mesa de Operação Premium (v145)
+   Vale só dentro de <main class="main pg-mn">: nenhuma outra página usa
+   essa classe (os Relatórios do Financeiro e do CRM continuam como estão).
+   Uma camada de superfície com fio fino; no escuro, o painel fica um pouco
+   mais claro que o fundo. Indicadores em faixa, cor só para exceção,
+   tabelas legíveis e gráficos com altura contida (as cores dos gráficos
+   vêm do tema, em script.js). Nenhuma conta muda aqui.
+   Os !important existem só onde a página ou o código já escrevem estilo
+   direto no elemento (ou onde regras antigas do celular já usam !important).
+   ===================================================================== */
+.pg-mn {
+  --mn-linha: var(--border);
+  --mn-sup: var(--bg-elevated);
+  --mn-muda: var(--text-soft);
+  /* cinza dos textos que ficam direto sobre o fundo da página (que tem um leve degradê) */
+  --mn-muda-fundo: color-mix(in srgb, var(--text-soft) 78%, var(--text));
+  --mn-r: 10px;
+}
+[data-theme="dark"] .pg-mn { --mn-sup: color-mix(in srgb, var(--bg-elevated) 92%, #ffffff); --mn-luz: inset 0 1px 0 rgba(255, 255, 255, .045); }
+
+/* Cabeçalho da página e de cada seção */
+.pg-mn > .page-header { align-items: flex-end; padding-bottom: 20px; margin-bottom: 28px; border-bottom: 1px solid var(--mn-linha); }
+.pg-mn > .page-header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.pg-mn > .page-header p { font-size: 14px; margin-top: 6px; color: var(--mn-muda-fundo); }
+.pg-mn .mn-secao-cab { margin-bottom: 20px; align-items: flex-end; }
+.pg-mn .mn-secao-cab h2 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+.pg-mn .mn-secao-cab p { margin: 4px 0 0; font-size: 14px; color: var(--mn-muda-fundo); }
+
+/* Menu lateral: lista plana; o item ativo leva uma régua na cor do tema */
+.pg-mn .mn-layout { gap: 32px; }
+.pg-mn .panel.mn-menu-painel { background: transparent; border: 0; box-shadow: none; padding: 0 !important; }
+.pg-mn .mn-nav-item, .pg-mn .mn-nav-sublink { border-radius: 6px; box-shadow: none; transform: none; font-size: 14px; font-weight: 500; color: var(--mn-muda-fundo); }
+.pg-mn .mn-nav-sublink { font-size: 13px; }
+.pg-mn .mn-nav-item:hover, .pg-mn .mn-nav-sublink:hover { background: var(--bg-soft); color: var(--text); transform: none; }
+.pg-mn .mn-nav-item.active, .pg-mn .mn-nav-sublink.active { background: transparent; color: var(--text); font-weight: 600; box-shadow: inset 2px 0 0 var(--blue-strong); }
+.pg-mn [id^="mn-sub-"] { border-left: 1px solid var(--mn-linha); margin-left: 18px; padding-left: 6px !important; }
+
+/* Indicadores: uma faixa contínua; vermelho só quando há o que olhar */
+.pg-mn .stat-grid { gap: 0 !important; background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); overflow: hidden; box-shadow: var(--mn-luz, none); margin-bottom: 24px !important; }
+.pg-mn .stat-card { background: transparent; border: 0; border-left: 1px solid var(--mn-linha); border-radius: 0; box-shadow: none; transform: none; padding: 18px 20px; min-width: 0; }
+.pg-mn .stat-card:first-child { border-left: 0; }
+.pg-mn .stat-card::before, .pg-mn .stat-card::after { display: none; }
+.pg-mn .stat-card:hover { transform: none; box-shadow: none; }
+.pg-mn .stat-label { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--mn-muda); text-transform: none; }
+.pg-mn .stat-value { font-size: 26px; font-weight: 650; letter-spacing: -0.015em; color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pg-mn .stat-card.danger { background: transparent; }
+.pg-mn .stat-card.danger .stat-label { color: var(--mn-muda); }
+.pg-mn .stat-card.danger .stat-value { color: var(--danger-texto); }
+.pg-mn .stat-card.danger .stat-label::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--danger-texto); margin-right: 6px; vertical-align: 1px; }
+/* clientes: a faixa fica em pé, ao lado do gráfico */
+.pg-mn #cl-kpis .stat-card { border-left: 0; border-top: 1px solid var(--mn-linha); }
+.pg-mn #cl-kpis .stat-card:first-child { border-top: 0; }
+/* comparação com o período anterior (seta + número, não só cor) */
+.pg-mn .mn-kpi-rodape { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--mn-muda); }
+.pg-mn .mn-variacao { font-size: 12px; font-weight: 600; color: var(--mn-muda); }
+.pg-mn .mn-variacao.sobe { color: var(--success-texto); }
+.pg-mn .mn-variacao.desce { color: var(--danger-texto); }
+
+/* Painéis: uma camada, fio fino, subtítulo embaixo do título */
+.pg-mn .panel, .pg-mn .fin-painel { background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); box-shadow: var(--mn-luz, none); padding: 20px 24px; }
+.pg-mn .panel::before, .pg-mn .panel::after { display: none; }
+.pg-mn .panel-title { display: block; margin-bottom: 16px; }
+.pg-mn .panel-title h2 { font-size: 16px; font-weight: 600; letter-spacing: 0; }
+.pg-mn .panel-title span { display: block; font-size: 13px; color: var(--mn-muda); margin-top: 2px; }
+.pg-mn .grid-2 { gap: 16px; }
+
+/* Gráficos: altura contida (antes cresciam até 900px) */
+.pg-mn .mn-graf { position: relative; width: 100%; }
+.pg-mn .mn-graf-rosca { height: 200px; }
+.pg-mn .mn-graf-barra { height: 240px; }
+.pg-mn .mn-graf-linha { height: 260px; }
+
+/* Listas: iniciais neutras; o que pede atenção vem com ponto + texto */
+.pg-mn .list-row { padding: 12px 0; border-top-color: var(--mn-linha); }
+.pg-mn .list-row .icon-dot { width: 32px; height: 32px; font-size: 12px; background: var(--bg-soft); color: var(--text); box-shadow: none; }
+.pg-mn .list-row-sub { font-size: 13px; color: var(--mn-muda); }
+.pg-mn .list-row-value[style*="danger"] { color: var(--danger-texto) !important; font-weight: 500; }
+.pg-mn .list-row-value[style*="danger"]::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px; }
+
+/* Relatórios financeiros (mesmo código do Financeiro; aqui, só a aparência):
+   tabelas legíveis, valores em tinta e cor só nos resultados */
+.pg-mn .fin-painel-cab strong { font-size: 16px; font-weight: 600; }
+.pg-mn .fin-painel-cab > div > strong[style*="18px"] { font-size: 20px !important; font-weight: 650; }
+.pg-mn .fin-painel-cab .kb-vazio-mini { color: var(--mn-muda-fundo); }
+.pg-mn .kb-tabela th { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 600; color: var(--mn-muda); background: transparent; padding: 10px 12px; }
+.pg-mn .kb-tabela td { height: 44px; padding: 0 12px; font-size: 14px; border-bottom-color: var(--mn-linha); }
+.pg-mn .kb-tabela td[style*="right"] { font-variant-numeric: tabular-nums; }
+.pg-mn .kb-tabela tbody tr:hover { background: var(--bg-soft); }
+.pg-mn .kb-tabela .fin-azul, .pg-mn .kb-tabela .fin-azul .fin-v, .pg-mn .kb-tabela .fin-verde, .pg-mn .kb-tabela .fin-verde .fin-v { color: var(--text); }
+.pg-mn .kb-tabela tr:not(.fin-dre-forte) .fin-vermelho, .pg-mn .kb-tabela tr:not(.fin-dre-forte) .fin-vermelho .fin-v { color: var(--mn-muda); }
+.pg-mn .kb-tabela .fin-dre-forte td { font-weight: 650; border-top: 1px solid var(--mn-linha); }
+.pg-mn .kb-tabela .fin-dre-forte .fin-verde, .pg-mn .kb-tabela .fin-dre-forte .fin-verde .fin-v { color: var(--success-texto); }
+.pg-mn .kb-tabela .fin-dre-forte .fin-vermelho, .pg-mn .kb-tabela .fin-dre-forte .fin-vermelho .fin-v { color: var(--danger-texto); }
+/* DRE: resultados intermediários em tinta; verde só no Lucro líquido (penúltima linha) */
+.pg-mn .fin-dre tbody tr.fin-dre-forte .fin-verde, .pg-mn .fin-dre tbody tr.fin-dre-forte .fin-verde .fin-v { color: var(--text); }
+.pg-mn .fin-dre tbody tr.fin-dre-forte:nth-last-child(2) .fin-verde, .pg-mn .fin-dre tbody tr.fin-dre-forte:nth-last-child(2) .fin-verde .fin-v { color: var(--success-texto); }
+.pg-mn .kb-bolinha { box-shadow: none; }
+.pg-mn .kb-tabela tr:nth-child(1) .kb-bolinha { background: var(--blue-strong) !important; }
+.pg-mn .kb-tabela tr:nth-child(2) .kb-bolinha { background: var(--mn-muda) !important; }
+.pg-mn .fin-cards { gap: 0; }
+.pg-mn .fin-card { background: transparent; border: 0; border-left: 1px solid var(--mn-linha); border-radius: 0; box-shadow: none; padding: 4px 20px; }
+.pg-mn .fin-card:first-child { border-left: 0; padding-left: 0; }
+.pg-mn .fin-num { font-size: 24px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
+.pg-mn .fin-num.fin-azul, .pg-mn .fin-num.fin-verde, .pg-mn .fin-azul .fin-num, .pg-mn .fin-verde .fin-num { color: var(--text); }
+.pg-mn [class*="fin-top"] [style*="background"] { background: var(--blue-strong) !important; }
+
+/* Celular */
+@media (max-width: 860px) {
+  .pg-mn .mn-layout { gap: 16px; }
+  /* o menu vira faixa de abas presa no topo: precisa de fundo próprio */
+  .pg-mn .panel.mn-menu-painel { background: var(--bg); border-bottom: 1px solid var(--mn-linha); border-radius: 0; padding: 4px 0 !important; }
+  .pg-mn .mn-nav-item.active, .pg-mn .mn-nav-sublink.active { box-shadow: inset 0 -2px 0 var(--blue-strong); border-radius: 0; }
+  .pg-mn [id^="mn-sub-"] { border-left: 0; margin-left: 0; }
+  .pg-mn .stat-grid { grid-template-columns: 1fr 1fr !important; }
+  .pg-mn .stat-card { border-left: 0; border-top: 1px solid var(--mn-linha); padding: 14px 16px; }
+  .pg-mn .stat-card:nth-child(1), .pg-mn .stat-card:nth-child(2) { border-top: 0; }
+  .pg-mn .stat-card:nth-child(even) { border-left: 1px solid var(--mn-linha); }
+  .pg-mn .stat-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .pg-mn .stat-value { font-size: 20px !important; }
+  .pg-mn #cl-kpis { grid-template-columns: 1fr 1fr 1fr !important; }
+  .pg-mn #cl-kpis .stat-card { border-top: 0; border-left: 1px solid var(--mn-linha); grid-column: auto; }
+  .pg-mn #cl-kpis .stat-card:first-child { border-left: 0; }
+  .pg-mn .panel, .pg-mn .fin-painel { padding: 16px; }
+  .pg-mn .mn-secao-cab h2 { font-size: 18px; }
+  .pg-mn .mn-graf-rosca { height: 240px; }
+  .pg-mn .fin-cards { grid-template-columns: 1fr !important; }
+  .pg-mn .fin-card { border-left: 0; border-top: 1px solid var(--mn-linha); padding: 12px 0; }
+  .pg-mn .fin-card:first-child { border-top: 0; }
+}
+@media (max-width: 768px) {
+  .pg-mn > .page-header { align-items: stretch; margin-bottom: 20px; }
+  .pg-mn > .page-header h1 { font-size: 24px; }
+  .pg-mn .mn-secao-cab { align-items: stretch; }
+  /* tabelas cabem na tela: sem largura mínima e colunas de valor compactas */
+  .pg-mn .kb-tabela, .pg-mn table { min-width: 0 !important; }
+  .pg-mn .kb-tabela th, .pg-mn .kb-tabela td { padding: 10px 6px; height: auto; font-size: 13px; }
+  .pg-mn .kb-tabela td:first-child, .pg-mn .kb-tabela th:first-child { padding-left: 0; }
+  .pg-mn .kb-tabela td:last-child, .pg-mn .kb-tabela th:last-child { padding-right: 0; }
+  .pg-mn .kb-tabela td[style*="right"] { white-space: nowrap; }
+}
+@media (max-width: 420px) {
+  /* tabelas dos relatórios em 320px: letra e espaços menores para as duas colunas de valor caberem */
+  .pg-mn .kb-tabela th, .pg-mn .kb-tabela td { padding: 8px 4px; font-size: 12px; }
+}
+@media (max-width: 360px) {
+  /* telas muito estreitas (ou celular com zoom de 200%): tudo em uma coluna */
+  .pg-mn .stat-grid, .pg-mn #cl-kpis { grid-template-columns: 1fr !important; }
+  .pg-mn .stat-card, .pg-mn #cl-kpis .stat-card { border-left: 0; border-top: 1px solid var(--mn-linha); grid-column: auto; }
+  .pg-mn .stat-card:first-child, .pg-mn #cl-kpis .stat-card:first-child { border-top: 0; }
+  .pg-mn .stat-card:nth-child(2) { border-top: 1px solid var(--mn-linha); }
+  .pg-mn .stat-card:nth-child(even) { border-left: 0; }
+  .pg-mn .mn-kpi-rodape { flex-wrap: wrap; }
+  .pg-mn .mn-secao-cab .btn, .pg-mn #mn-mapa-voltar { white-space: normal; }
+  .pg-mn .panel .field { flex: 1 1 100%; min-width: 0; }
+  .pg-mn .panel .field input { width: 100%; min-width: 0; }
+  /* tabelas Competência × Caixa viram lista: o nome da linha em cima, os dois valores embaixo */
+  .pg-mn .kb-tabela thead { display: none; }
+  .pg-mn .kb-tabela tr { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--mn-linha); }
+  .pg-mn .kb-tabela td { display: block; height: auto; padding: 0; border: 0; text-align: left !important; white-space: normal !important; }
+  .pg-mn .kb-tabela td:first-child { grid-column: 1 / -1; margin-bottom: 4px; }
+  .pg-mn .kb-tabela td:nth-child(2)::before { content: "Competência"; display: block; font-size: 11px; font-weight: 500; color: var(--mn-muda); }
+  .pg-mn .kb-tabela td:nth-child(3)::before { content: "Caixa"; display: block; font-size: 11px; font-weight: 500; color: var(--mn-muda); }
+  .pg-mn .kb-tabela .fin-dre-forte td { border-top: 0; }
+}
+@media (max-width: 240px) {
+  /* zoom muito alto: os dois valores um embaixo do outro, e a data da lista desce de linha */
+  .pg-mn .kb-tabela tr { grid-template-columns: 1fr; row-gap: 4px; }
+  .pg-mn .list-row { flex-wrap: wrap; }
+  .pg-mn .list-row-value { flex-shrink: 1; white-space: normal; margin-left: 44px; }
+  .pg-mn .kb-segmento { display: flex; flex-wrap: wrap; }
+  .pg-mn .srv-cat-linha { flex-wrap: wrap; }
+  .pg-mn .fin-graficos > * { min-width: 0; }
+  .pg-mn .fin-top { grid-template-columns: minmax(0, 1fr) auto; }
+  .pg-mn .fin-top .kb-barra-prog { grid-column: 1 / -1; grid-row: 2; }
+}

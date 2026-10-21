@@ -76,20 +76,20 @@
   </div>
 </header>
 <div class="app">
-<main class="main">
+<main class="main pg-cad">
 
 <div class="page-header">
   <div>
     <h1>Lançamentos de estoque</h1>
     <p>Movimentações de entrada e saída</p>
   </div>
-  <button type="button" class="btn btn-primary" onclick="openModal('modal-novo-lancamento-estoque')">+ Novo(a) Lançamentos de estoque</button>
+  <button type="button" class="btn btn-primary" onclick="openModal('modal-novo-lancamento-estoque')">+ Novo lançamento de estoque</button>
 </div>
 
 <div class="panel">
   <div class="table-scroll">
     <table id="tabela-lancamento-estoque">
-      <thead><tr><th>Produto</th><th>Tipo</th><th>Qtd.</th><th>Data</th><th>Motivo</th><th></th></tr></thead>
+      <thead><tr><th>Produto</th><th>Tipo</th><th>Qtd.</th><th>Data</th><th>Saldo depois</th><th>Motivo</th><th></th></tr></thead>
       <tbody id="tabela-lancamento-estoque-body"></tbody>
     </table>
   </div>
@@ -97,7 +97,7 @@
 
 <div class="modal-overlay" id="modal-novo-lancamento-estoque">
   <div class="modal">
-    <div class="modal-header"><h2>Novo(a) Lançamentos de estoque</h2><button class="close-btn" onclick="closeModal('modal-novo-lancamento-estoque')">&times;</button></div>
+    <div class="modal-header"><h2>Novo lançamento de estoque</h2><button class="close-btn" onclick="closeModal('modal-novo-lancamento-estoque')">&times;</button></div>
     <form id="form-novo-lancamento-estoque">
       <div class="form-grid">
         <div class="field full"><label>Produto</label><input type="text" data-novo-key="produto"></div>

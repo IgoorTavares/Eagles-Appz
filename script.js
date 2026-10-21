@@ -6589,6 +6589,11 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: 'Não publicada (v148) · Cadastros do ERP', itens: [
+    { titulo: 'Cadastros com visual novo', badges: ['melhoria'], texto: 'Produtos, Vendedores, Funcionários, Contratos, Pedido de compras, Notas fiscais de entrada, Objetos de postagem e Lançamentos de estoque ganharam cabeçalho mais limpo, tabela mais leve com valores alinhados à direita e situação com um ponto colorido (verde para ok, âmbar para atenção, vermelho para cancelado ou saída e cinza para inativo). Os dados não mudaram.' },
+    { titulo: 'Cadastros no celular', badges: ['melhoria'], texto: 'No celular, cada tabela vira uma lista com o nome de cada campo, sem nada escondido à direita. A busca de Produtos voltou a aparecer no celular e no tablet. Os formulários de Novo e Editar ficam acima da barra de baixo, com o botão Salvar sempre à vista, e os botões flutuantes somem enquanto o formulário está aberto.' },
+    { titulo: 'Textos corrigidos', badges: ['corrigido'], texto: 'Botões como "Novo(a) Vendedore" agora dizem "Novo vendedor", e a lista de Lançamentos de estoque mostra a coluna "Saldo depois" com o título certo.' },
+  ] },
   { data: '21/10/2026 · Dashboard do CRM', itens: [
     { titulo: 'Dashboard do CRM com visual novo', badges: ['melhoria'], texto: 'Indicadores do mês numa faixa limpa (rótulo em cima, valor em destaque e o recebido embaixo), painéis sem sombras, títulos mais firmes e rótulos sem letras maiúsculas. A ordem dos blocos e os números não mudaram.' },
     { titulo: 'Gráfico nas cores do seu tema', badges: ['melhoria'], texto: 'A Análise financeira usa a cor do tema no faturamento total, despesas tracejadas e o faturamento em dólar pontilhado. A legenda mostra o traço de cada linha. O vermelho fica só para atrasos, alertas e vencimentos; as cores das etapas do funil continuam.' },
@@ -12178,14 +12183,14 @@ function comRender() {
   const veFin = !FIREBASE_PRONTO || !TENANT_ID || nivelVeFinanceiro();
   el.innerHTML = `<div class="panel">
     <div class="fin-painel-cab" style="flex-wrap:wrap; gap:8px;"><strong style="font-size:16px;">Comissões</strong><span class="kb-espaco"></span>
-      <button type="button" class="btn btn-small" onclick="COM_MES = finSomarMeses(COM_MES, -1); comRender()">‹</button><strong>${escapeHtml(finNomeMes(COM_MES))}</strong><button type="button" class="btn btn-small" onclick="COM_MES = finSomarMeses(COM_MES, 1); comRender()">›</button></div>
+      <span class="cad-mes"><button type="button" class="btn btn-small" aria-label="Mês anterior" onclick="COM_MES = finSomarMeses(COM_MES, -1); comRender()">‹</button><strong>${escapeHtml(finNomeMes(COM_MES))}</strong><button type="button" class="btn btn-small" aria-label="Próximo mês" onclick="COM_MES = finSomarMeses(COM_MES, 1); comRender()">›</button></span></div>
     <p class="kb-vazio-mini" style="margin:4px 0 10px;">Pedidos de venda faturados no mês × o % de comissão de cada vendedor (no cadastro dele).</p>
     ${c.linhas.length ? `<div class="table-scroll"><table><thead><tr><th>Vendedor</th><th style="text-align:right;">Pedidos</th><th style="text-align:right;">Vendido</th><th style="text-align:right;">Meta</th><th style="text-align:right;">%</th><th style="text-align:right;">Comissão</th><th></th></tr></thead><tbody>
-      ${c.linhas.map((l) => `<tr><td><strong>${escapeHtml(l.v.nome || '')}</strong></td><td style="text-align:right;">${l.pedidos}</td><td style="text-align:right;">${formatMoney(l.vendido)}</td>
-        <td style="text-align:right;">${l.meta ? `${Math.round((l.vendido / l.meta) * 100)}% de ${formatMoney(l.meta)}` : '—'}</td><td style="text-align:right;">${l.pct ? String(l.pct).replace('.', ',') + '%' : '<span class="kb-vazio-mini">sem %</span>'}</td>
-        <td style="text-align:right;"><b>${formatMoney(l.comissao)}</b></td>
-        <td style="text-align:right;">${l.lancado ? '<span class="badge badge-success">Lançada no Financeiro</span>' : l.comissao > 0 && veFin ? `<button type="button" class="btn btn-small" onclick="comLancar('${escapeParaOnclick(l.v.id)}')">Lançar no Financeiro</button>` : ''}</td></tr>`).join('')}
-      <tr><td colspan="5" style="text-align:right;"><b>Total</b></td><td style="text-align:right;"><b>${formatMoney(c.total)}</b></td><td></td></tr></tbody></table></div>` : '<p class="kb-vazio-mini">Cadastre os vendedores (com o % de comissão) para calcular.</p>'}
+      ${c.linhas.map((l) => `<tr><td><strong>${escapeHtml(l.v.nome || '')}</strong></td><td data-label="Pedidos" class="cad-num" style="text-align:right;">${l.pedidos}</td><td data-label="Vendido" class="cad-num" style="text-align:right;">${formatMoney(l.vendido)}</td>
+        <td data-label="Meta" class="cad-num" style="text-align:right;">${l.meta ? `${Math.round((l.vendido / l.meta) * 100)}% de ${formatMoney(l.meta)}` : '—'}</td><td data-label="%" class="cad-num" style="text-align:right;">${l.pct ? String(l.pct).replace('.', ',') + '%' : '<span class="kb-vazio-mini">sem %</span>'}</td>
+        <td data-label="Comissão" class="cad-num" style="text-align:right;"><b>${formatMoney(l.comissao)}</b></td>
+        <td class="cad-acoes" style="text-align:right;">${l.lancado ? '<span class="badge badge-success">Lançada no Financeiro</span>' : l.comissao > 0 && veFin ? `<button type="button" class="btn btn-small" onclick="comLancar('${escapeParaOnclick(l.v.id)}')">Lançar no Financeiro</button>` : ''}</td></tr>`).join('')}
+      <tr class="cad-total"><td colspan="5" style="text-align:right;"><b>Total</b></td><td class="cad-num" style="text-align:right;"><b>${formatMoney(c.total)}</b></td><td class="cad-acoes"></td></tr></tbody></table></div>` : '<p class="kb-vazio-mini">Cadastre os vendedores (com o % de comissão) para calcular.</p>'}
     ${c.semVendedor.length ? `<p class="kb-vazio-mini" style="margin:8px 0 0;">${c.semVendedor.length} pedido(s) faturado(s) no mês sem vendedor cadastrado (${formatMoney(c.semVendedor.reduce((a, p) => a + (Number(p.valor) || 0), 0))}).</p>` : ''}
   </div>`;
 }
@@ -23528,14 +23533,17 @@ function renderCadastroTabela(moduloKey, dadosFiltrados) {
     return;
   }
   if (typeof def.aposRender === 'function') { try { def.aposRender(); } catch (e) { console.error(e); } }
+  // v148: cada célula leva o nome da coluna (no celular a tabela vira lista) e as colunas de número ficam à direita
+  const ths = tbody.closest('table') ? tbody.closest('table').querySelectorAll('thead th') : [];
+  def.colunas.forEach((c, i) => { if (ths[i]) ths[i].classList.toggle('cad-num', !!c.num); });
   tbody.innerHTML = dados.map((item) => {
-    const cols = def.colunas.map((c) => `<td>${c.render ? c.render(item) : (item[c.key] !== undefined ? escapeHtml(item[c.key]) : '—')}</td>`).join('');
+    const cols = def.colunas.map((c) => `<td data-label="${escapeHtml(c.label)}"${c.num ? ' class="cad-num"' : ''}>${c.render ? c.render(item) : (item[c.key] !== undefined ? escapeHtml(item[c.key]) : '—')}</td>`).join('');
     const editarAttr = def.onEditarCustom ? `${def.onEditarCustom}('${item.id}')` : `abrirCadastroModal('${moduloKey}','${item.id}')`;
     const acoesHtml = def.renderAcoes
       ? def.renderAcoes(item)
       : `<button class="btn btn-small btn-ghost" onclick="${editarAttr}">Editar</button>
          <button class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="excluirCadastroItem('${moduloKey}','${item.id}')">Excluir</button>`;
-    return `<tr>${cols}<td style="white-space:nowrap; text-align:right;">${acoesHtml}</td></tr>`;
+    return `<tr>${cols}<td class="cad-acoes" style="white-space:nowrap; text-align:right;">${acoesHtml}</td></tr>`;
   }).join('');
 }
 
@@ -23617,6 +23625,14 @@ function excluirCadastroItem(moduloKey, id) {
 
 // ---------- Definições dos módulos (seeds + campos + colunas) ----------
 
+// v148: situação com significado, sem mudar o valor gravado. mapa: valor → [texto, tom, classe antiga].
+// Tom: ok, alerta, erro ou neutro (a cor só aparece dentro de .pg-cad); valor desconhecido fica neutro.
+function cadSituacao(valor, mapa) {
+  const m = mapa[valor] || [valor ? String(valor) : '—', 'neutro', 'badge-neutral'];
+  return `<span class="badge ${m[2]} cad-${m[1]}">${escapeHtml(m[0])}</span>`;
+}
+const CAD_ATIVO = { ativo: ['Ativo', 'ok', 'badge-blue'], inativo: ['Inativo', 'neutro', 'badge-neutral'] };
+
 function produtosSeed() {
   return [];
 }
@@ -23672,9 +23688,9 @@ registrarModuloCadastro('produto', {
   colunas: [
     { key: 'nome', label: 'Produto' },
     { key: 'sku', label: 'SKU' },
-    { key: 'estoque', label: 'Estoque', render: (i) => (estControla(i) ? `${estNum(i.estoque)}${estReservado(i.id) ? ` <small class="kb-vazio-mini">(${estDisponivel(i)} disp.)</small>` : ''}` : `<span class="kb-vazio-mini">${estNatureza(i) === 'servico' ? 'serviço' : 'sem controle'}</span>`) },
-    { key: 'precoVenda', label: 'Preço de venda', render: (i) => formatMoney(i.precoVenda) },
-    { key: 'situacao', label: 'Status', render: (i) => `<span class="badge ${i.situacao === 'ativo' ? 'badge-blue' : 'badge-neutral'}">${i.situacao === 'ativo' ? 'Ativo' : 'Inativo'}</span>` },
+    { key: 'estoque', label: 'Estoque', num: true, render: (i) => (estControla(i) ? `${estNum(i.estoque)}${estReservado(i.id) ? ` <small class="kb-vazio-mini">(${estDisponivel(i)} disp.)</small>` : ''}` : `<span class="kb-vazio-mini">${estNatureza(i) === 'servico' ? 'serviço' : 'sem controle'}</span>`) },
+    { key: 'precoVenda', label: 'Preço de venda', num: true, render: (i) => formatMoney(i.precoVenda) },
+    { key: 'situacao', label: 'Status', render: (i) => cadSituacao(i.situacao === 'ativo' ? 'ativo' : 'inativo', CAD_ATIVO) },
   ],
   aoCriar: (novo) => estAoCriarProduto(novo),
   aoEditar: (antes, item) => estAoEditarProduto(antes, item),
@@ -23719,8 +23735,8 @@ registrarModuloCadastro('vendedor', {
     { key: 'nome', label: 'Vendedor' },
     { key: 'telefone', label: 'Telefone' },
     { key: 'email', label: 'E-mail' },
-    { key: 'comissao', label: 'Comissão' },
-    { key: 'status', label: 'Status', render: (i) => `<span class="badge ${i.status === 'ativo' ? 'badge-blue' : 'badge-neutral'}">${i.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>` },
+    { key: 'comissao', label: 'Comissão', num: true },
+    { key: 'status', label: 'Status', render: (i) => cadSituacao(i.status === 'ativo' ? 'ativo' : 'inativo', CAD_ATIVO) },
   ],
   aposRender: () => { if (typeof comIniciar === 'function') comIniciar(); },
 });
@@ -23762,7 +23778,7 @@ registrarModuloCadastro('funcionario', {
     { key: 'nome', label: 'Funcionário' },
     { key: 'cargo', label: 'Cargo' },
     { key: 'telefone', label: 'Telefone' },
-    { key: 'status', label: 'Status', render: (i) => `<span class="badge ${i.status === 'ativo' ? 'badge-blue' : 'badge-neutral'}">${i.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>` },
+    { key: 'status', label: 'Status', render: (i) => cadSituacao(i.status === 'ativo' ? 'ativo' : 'inativo', CAD_ATIVO) },
   ],
   renderAcoes: (i) => escAcoes(i),
   aposRender: () => { if (typeof escIniciar === 'function') escIniciar(); },
@@ -23832,8 +23848,8 @@ registrarModuloCadastro('objeto-postagem', {
     { key: 'codigoRastreio', label: 'Rastreio' },
     { key: 'pedidoRelacionado', label: 'Pedido' },
     { key: 'transportadora', label: 'Transportadora' },
-    { key: 'dataEnvio', label: 'Envio', render: (i) => formatDatePt(i.dataEnvio) },
-    { key: 'status', label: 'Status', render: (i) => `<span class="badge badge-blue">${(i.status || '').replace('_', ' ')}</span>` },
+    { key: 'dataEnvio', label: 'Envio', render: (i) => escapeHtml(formatDatePt(i.dataEnvio)) },
+    { key: 'status', label: 'Status', render: (i) => cadSituacao(i.status, { postado: ['Postado', 'alerta', 'badge-blue'], em_transito: ['Em trânsito', 'alerta', 'badge-blue'], entregue: ['Entregue', 'ok', 'badge-blue'] }) },
   ],
 });
 
@@ -23861,9 +23877,9 @@ registrarModuloCadastro('contrato', {
   colunas: [
     { key: 'titulo', label: 'Contrato' },
     { key: 'cliente', label: 'Cliente' },
-    { key: 'dataFim', label: 'Vigência até', render: (i) => formatDatePt(i.dataFim) },
-    { key: 'valor', label: 'Valor', render: (i) => formatMoney(i.valor) },
-    { key: 'status', label: 'Status', render: (i) => `<span class="badge ${i.status === 'vigente' ? 'badge-blue' : 'badge-neutral'}">${i.status || '—'}</span>` },
+    { key: 'dataFim', label: 'Vigência até', render: (i) => escapeHtml(formatDatePt(i.dataFim)) },
+    { key: 'valor', label: 'Valor', num: true, render: (i) => formatMoney(i.valor) },
+    { key: 'status', label: 'Status', render: (i) => cadSituacao(i.status, { vigente: ['Vigente', 'ok', 'badge-blue'], encerrado: ['Encerrado', 'neutro', 'badge-neutral'] }) },
   ],
   renderAcoes: (i) => ectAcoes(i),
   aposRender: () => ectRenderResumo(),
@@ -23892,9 +23908,9 @@ registrarModuloCadastro('pedido-compra', {
   colunas: [
     { key: 'numero', label: 'Nº' },
     { key: 'fornecedor', label: 'Fornecedor' },
-    { key: 'data', label: 'Data', render: (i) => formatDatePt(i.data) },
-    { key: 'valor', label: 'Valor', render: (i) => formatMoney(i.valor) },
-    { key: 'status', label: 'Status', render: (i) => `<span class="badge badge-blue">${i.status || '—'}</span>` },
+    { key: 'data', label: 'Data', render: (i) => escapeHtml(formatDatePt(i.data)) },
+    { key: 'valor', label: 'Valor', num: true, render: (i) => formatMoney(i.valor) },
+    { key: 'status', label: 'Status', render: (i) => cadSituacao(i.status, { aberto: ['Aberto', 'alerta', 'badge-blue'], recebido: ['Recebido', 'ok', 'badge-blue'], cancelado: ['Cancelado', 'erro', 'badge-blue'] }) },
   ],
   renderAcoes: (i) => cmpAcoes('pedido-compra')(i),
   aposRender: () => { if (typeof estAgendar === 'function') estAgendar(); },
@@ -23923,9 +23939,9 @@ registrarModuloCadastro('nota-fiscal', {
   colunas: [
     { key: 'numeroNota', label: 'NF-e' },
     { key: 'fornecedor', label: 'Fornecedor' },
-    { key: 'dataEmissao', label: 'Emissão', render: (i) => formatDatePt(i.dataEmissao) },
-    { key: 'valor', label: 'Valor', render: (i) => formatMoney(i.valor) },
-    { key: 'status', label: 'Status', render: (i) => `<span class="badge ${i.status === 'lancada' ? 'badge-success' : 'badge-warning'}">${i.status === 'lancada' ? 'Lançada' : 'Pendente'}</span>` },
+    { key: 'dataEmissao', label: 'Emissão', render: (i) => escapeHtml(formatDatePt(i.dataEmissao)) },
+    { key: 'valor', label: 'Valor', num: true, render: (i) => formatMoney(i.valor) },
+    { key: 'status', label: 'Status', render: (i) => cadSituacao(i.status === 'lancada' ? 'lancada' : 'pendente', { lancada: ['Lançada', 'ok', 'badge-success'], pendente: ['Pendente', 'alerta', 'badge-warning'] }) },
   ],
   renderAcoes: (i) => cmpAcoes('nota-fiscal')(i),
   aposRender: () => { if (typeof estAgendar === 'function') estAgendar(); },
@@ -23953,10 +23969,10 @@ registrarModuloCadastro('lancamento-estoque', {
   ],
   colunas: [
     { key: 'produto', label: 'Produto' },
-    { key: 'tipo', label: 'Tipo', render: (i) => `<span class="badge ${i.tipo === 'entrada' ? 'badge-success' : i.tipo === 'ajuste' ? 'badge-warning' : 'badge-danger'}">${i.tipo === 'entrada' ? 'Entrada' : i.tipo === 'ajuste' ? 'Ajuste' : 'Saída'}</span>${i.automatico ? ' <small class="kb-vazio-mini">automático</small>' : ''}` },
-    { key: 'quantidade', label: 'Qtd.' },
-    { key: 'data', label: 'Data', render: (i) => formatDatePt(i.data) },
-    { key: 'saldoApos', label: 'Saldo depois', render: (i) => (i.saldoApos !== undefined && i.saldoApos !== '' ? String(estNum(i.saldoApos)) : '—') },
+    { key: 'tipo', label: 'Tipo', render: (i) => `${cadSituacao(i.tipo === 'entrada' || i.tipo === 'ajuste' ? i.tipo : 'saida', { entrada: ['Entrada', 'ok', 'badge-success'], ajuste: ['Ajuste', 'alerta', 'badge-warning'], saida: ['Saída', 'erro', 'badge-danger'] })}${i.automatico ? ' <small class="kb-vazio-mini">automático</small>' : ''}` },
+    { key: 'quantidade', label: 'Qtd.', num: true },
+    { key: 'data', label: 'Data', render: (i) => escapeHtml(formatDatePt(i.data)) },
+    { key: 'saldoApos', label: 'Saldo depois', num: true, render: (i) => (i.saldoApos !== undefined && i.saldoApos !== '' ? String(estNum(i.saldoApos)) : '—') },
     { key: 'motivo', label: 'Motivo' },
   ],
   aoCriar: (novo) => estAoCriarLancamento(novo),

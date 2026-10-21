@@ -6322,3 +6322,181 @@ html .btn:disabled .icone-menu { stroke: currentColor; }
   .pg-crmdash #crm-tarefas-lista .list-row-main { flex-basis: calc(100% - 60px); }
   .pg-crmdash #crm-dash-nps > div[style*="grid"], .pg-crmdash #crm-dash-saude-relacionamento > div[style*="grid"] { grid-template-columns: 1fr !important; text-align: left !important; }
 }
+
+/* =====================================================================
+   Cadastros do ERP — Mesa de Operação Premium (v148)
+   Vale só dentro de <main class="main pg-cad">, nas 8 páginas do motor
+   comum de cadastros: Produtos, Vendedores, Funcionários, Contratos,
+   Pedido de compras, Notas fiscais de entrada, Objetos de postagem e
+   Lançamentos de estoque. Pedidos de venda, Clientes e Fornecedores,
+   Estoque e Inventário não usam essa classe e não mudam.
+   Mesmos tokens das v145 a v147: uma camada de superfície com fio fino,
+   cor só para o significado (situação: ok, alerta, erro, neutro).
+   No celular a tabela vira lista (o nome de cada coluna vem do
+   data-label, escrito por renderCadastroTabela). As janelas de Novo e
+   Editar ficam dentro do <main>, por isso também entram aqui.
+   Os !important existem só onde o código escreve estilo direto no
+   elemento ou onde regras antigas já usam. Nenhum dado ou conta muda.
+   ===================================================================== */
+.pg-cad {
+  --mn-linha: var(--border);
+  --mn-sup: var(--bg-elevated);
+  --mn-muda: var(--text-soft);
+  --mn-muda-fundo: color-mix(in srgb, var(--text-soft) 78%, var(--text));
+  --mn-r: 10px;
+}
+/* no escuro, a linha entre os itens fica um pouco mais visível */
+[data-theme="dark"] .pg-cad { --mn-sup: color-mix(in srgb, var(--bg-elevated) 92%, #ffffff); --mn-luz: inset 0 1px 0 rgba(255, 255, 255, .045); --mn-linha: color-mix(in srgb, var(--text) 13%, transparent); }
+
+/* Cabeçalho: título firme, fio fino embaixo, ações planas */
+.pg-cad .page-header { align-items: flex-end; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--mn-linha); }
+.pg-cad .page-header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.pg-cad .page-header p { font-size: 14px; color: var(--mn-muda-fundo); margin-top: 6px; }
+.pg-cad .btn { box-shadow: none !important; transform: none !important; border-radius: 8px; }
+.pg-cad .page-header .btn { min-height: 40px; }
+.pg-cad .btn-primary, .pg-cad .btn-primary:hover { background: var(--blue-strong); border-color: var(--blue-strong); color: var(--on-accent); }
+
+/* Painéis: uma camada, fio fino */
+.pg-cad .panel { background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); box-shadow: var(--mn-luz, none); }
+.pg-cad .panel::before, .pg-cad .panel::after { display: none; }
+.pg-cad .panel:has(table) { padding: 4px 20px 8px; }
+.pg-cad #com-painel .panel { padding: 18px 20px 10px; margin-bottom: 16px; }
+.pg-cad .cad-mes { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.pg-cad .cad-mes .btn { min-width: 32px; min-height: 32px; justify-content: center; }
+
+/* Busca de Produtos: sempre visível (a regra global esconde a busca da barra
+   superior até 980px; aqui é a busca da página), com lupa e 40px de altura */
+.pg-cad .panel:has(.topbar-search) { padding: 12px; margin-bottom: 16px !important; }
+.pg-cad .panel .topbar-search { display: flex; position: relative; align-items: center; flex: 1; width: auto; min-width: 0; }
+.pg-cad .panel .topbar-search::before { content: ""; position: absolute; left: 12px; width: 16px; height: 16px; background: var(--mn-muda); pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E") center / contain no-repeat; }
+.pg-cad .panel .topbar-search input { width: 100%; height: 40px; padding-left: 36px; border-radius: 8px; background: var(--bg); border: 1px solid var(--mn-linha); box-shadow: none; }
+.pg-cad .btn-filtro-data { width: 40px; height: 40px; border-radius: 8px; box-shadow: none; flex-shrink: 0; }
+
+/* Tabela: títulos em letra normal, linhas de 48px, números à direita */
+.pg-cad .table-scroll { margin: 0; }
+.pg-cad th { font-size: 12.5px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--mn-muda); background: transparent; border-radius: 0 !important; padding: 14px 12px 10px; border-bottom: 1px solid var(--mn-linha); }
+.pg-cad td { padding: 12px; height: 48px; border-bottom: 1px solid var(--mn-linha); font-size: 14px; }
+.pg-cad tbody tr:last-child td { border-bottom: 0; }
+.pg-cad tbody tr:hover { background: color-mix(in srgb, var(--bg-soft) 70%, transparent); }
+.pg-cad td:first-child { font-weight: 500; color: var(--text); }
+.pg-cad th.cad-num, .pg-cad td.cad-num { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-cad .kb-vazio-mini { color: var(--mn-muda); }
+
+/* Situação: ponto + nome; a cor só diz o significado */
+.pg-cad .badge[class*="cad-"] { background: transparent; padding: 0; border: 0; border-radius: 0; font-size: 13px; font-weight: 500; color: var(--text); text-transform: none; letter-spacing: 0; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pg-cad .badge[class*="cad-"]::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--mn-muda); flex-shrink: 0; }
+.pg-cad .badge.cad-ok::before { background: var(--success); }
+.pg-cad .badge.cad-alerta::before { background: var(--warning); }
+.pg-cad .badge.cad-erro::before { background: var(--danger); }
+.pg-cad .badge.cad-erro { color: var(--danger-texto); }
+.pg-cad .badge.cad-neutro { color: var(--mn-muda-fundo); }
+
+/* Ações da linha: Editar discreto; Excluir só como texto vermelho (a confirmação continua) */
+.pg-cad .cad-acoes .btn-small { min-height: 32px; padding: 6px 10px; border-radius: 8px; }
+.pg-cad .cad-acoes .btn-ghost { background: transparent; border: 1px solid var(--mn-linha); color: var(--text); }
+.pg-cad .cad-acoes .btn-ghost:hover { background: var(--bg-soft); }
+.pg-cad .cad-acoes .btn-ghost[style*="danger"] { border-color: transparent; color: var(--danger-texto) !important; }
+.pg-cad .cad-acoes .btn-ghost[style*="danger"]:hover { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.pg-cad .empty-cadastro .btn { min-height: 40px; max-width: 100%; white-space: normal; }
+.pg-cad .empty-cadastro { padding-left: 0; padding-right: 0; min-width: 0; }
+
+/* Resumo dos contratos: faixa contínua, cor só para exceção */
+.pg-cad #erp-contratos-resumo { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0 !important; background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); overflow: hidden; box-shadow: var(--mn-luz, none); }
+.pg-cad #erp-contratos-resumo .stat-card { background: transparent; border: 0; border-left: 1px solid var(--mn-linha); border-radius: 0; box-shadow: none; transform: none; padding: 16px 18px; min-width: 0; container-type: inline-size; }
+.pg-cad #erp-contratos-resumo .stat-card:first-child { border-left: 0; }
+.pg-cad #erp-contratos-resumo .stat-card::before, .pg-cad #erp-contratos-resumo .stat-card::after { display: none; }
+.pg-cad #erp-contratos-resumo .stat-label { font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--mn-muda); }
+.pg-cad #erp-contratos-resumo .stat-value { font-size: 24px; font-weight: 650; letter-spacing: -0.015em; color: var(--text) !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-cad #erp-contratos-resumo .stat-card:nth-child(3) .stat-value { font-size: clamp(14px, 11cqi, 19px) !important; }
+.pg-cad #erp-contratos-resumo .stat-card.danger .stat-value, .pg-cad #erp-contratos-resumo [style*="color:var(--danger)"] { color: var(--danger-texto) !important; }
+.pg-cad #erp-contratos-resumo .stat-card.danger { box-shadow: inset 3px 0 0 var(--danger); }
+.pg-cad #erp-contratos-resumo .stat-card.danger .stat-label { color: var(--mn-muda); }
+
+/* Formulários (janelas de Novo e Editar): cabeçalho e botões fixos, campos de 40px */
+.pg-cad .modal { padding: 0; border-radius: 12px; border: 1px solid var(--mn-linha); box-shadow: 0 24px 64px rgba(0, 0, 0, .18); overflow: auto; max-height: calc(100vh - 80px); }
+.pg-cad .modal-header { padding: 18px 24px; margin: 0; border-bottom: 1px solid var(--mn-linha); position: sticky; top: 0; background: var(--bg-elevated); z-index: 2; }
+.pg-cad .modal-header h2 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+.pg-cad .modal form { padding: 20px 24px 0; }
+.pg-cad .form-grid { gap: 14px 16px; }
+.pg-cad .field label { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+.pg-cad .field input, .pg-cad .field select, .pg-cad .field textarea { min-height: 40px; border-radius: 8px; box-shadow: none; }
+.pg-cad .field input:focus, .pg-cad .field select:focus, .pg-cad .field textarea:focus { border-color: var(--blue-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue-strong) 22%, transparent); outline: none; }
+/* títulos das seções da ficha (escritos com estilo direto em renderFichaCampos) */
+.pg-cad .form-grid .full > div[style*="uppercase"] { text-transform: none !important; letter-spacing: 0 !important; font-size: 14px !important; font-weight: 600 !important; color: var(--text) !important; }
+.pg-cad .modal-actions { position: sticky; bottom: 0; z-index: 2; background: var(--bg-elevated); margin: 20px -24px 0; padding: 14px 24px; border-top: 1px solid var(--mn-linha); }
+.pg-cad .modal-actions .btn { min-height: 40px; }
+
+/* Celular e tablet: a tabela vira lista — nome em destaque, depois
+   "rótulo … valor" e as ações embaixo; nada fica escondido à direita */
+@media (max-width: 768px) {
+  .pg-cad .page-header { text-align: left; align-items: stretch; }
+  .pg-cad .page-header h1 { font-size: 24px; }
+  .pg-cad .panel:has(table) { padding: 0 14px; }
+  .pg-cad #com-painel .panel { padding: 14px 14px 4px; }
+  .pg-cad .table-scroll { overflow: visible; }
+  .pg-cad table, .pg-cad tbody { display: block; min-width: 0 !important; width: 100%; }
+  .pg-cad thead { display: none; }
+  .pg-cad tbody tr { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 4px; padding: 14px 0; border-bottom: 1px solid var(--mn-linha); }
+  .pg-cad tbody tr:last-child { border-bottom: 0; }
+  .pg-cad tbody tr:hover { background: transparent; }
+  .pg-cad td { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; height: auto; padding: 0; border: 0; font-size: 13.5px; min-width: 0; text-align: right !important; overflow-wrap: anywhere; }
+  .pg-cad td::before { content: attr(data-label); color: var(--mn-muda); font-weight: 400; text-align: left; flex-shrink: 0; overflow-wrap: normal; }
+  .pg-cad td:first-child { display: block; font-size: 15px; font-weight: 600; text-align: left !important; margin-bottom: 4px; }
+  .pg-cad td:first-child::before, .pg-cad td.cad-acoes::before, .pg-cad td[colspan]::before { display: none; }
+  .pg-cad td.cad-num { overflow-wrap: normal; }
+  .pg-cad td.cad-acoes { justify-content: flex-end; flex-wrap: wrap; gap: 6px; margin-top: 6px; white-space: normal !important; }
+  .pg-cad td.cad-acoes:empty { display: none; }
+  .pg-cad td[colspan] { display: block; text-align: center !important; font-weight: 400; }
+  .pg-cad tr.cad-total td:first-child { display: none; }
+  .pg-cad tr.cad-total td.cad-num::before { content: "Total"; display: inline; font-weight: 600; color: var(--text); }
+  .pg-cad .fin-painel-cab { row-gap: 8px; }
+  .pg-cad #erp-contratos-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .pg-cad #erp-contratos-resumo .stat-card { border-left: 0; border-top: 1px solid var(--mn-linha); }
+  .pg-cad #erp-contratos-resumo .stat-card:nth-child(even) { border-left: 1px solid var(--mn-linha); }
+  .pg-cad #erp-contratos-resumo .stat-card:nth-child(-n + 2) { border-top: 0; }
+  .pg-cad #erp-contratos-resumo .stat-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .pg-cad .modal-overlay { padding: 8px; align-items: stretch; }
+  .pg-cad .modal { width: 100%; max-width: 100%; max-height: none; margin: 0; border-radius: 12px; }
+  .pg-cad .modal-header { padding: 14px 16px; }
+  .pg-cad .modal form { padding: 16px 16px 0; }
+  .pg-cad .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .pg-cad .modal-actions { margin: 16px -16px 0; padding: 12px 16px; }
+  .pg-cad .modal-actions .btn { flex: 1; justify-content: center; }
+}
+/* a barra de baixo do celular fica por cima das janelas: a janela termina acima dela */
+@media (max-width: 860px) {
+  .pagina-erp-mob .pg-cad .modal-overlay { bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  /* espaço no fim da lista para as ações do último item não ficarem embaixo dos botões flutuantes */
+  .pagina-erp-mob .main.pg-cad { padding-bottom: calc(210px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+/* com uma janela aberta nestas páginas, os botões flutuantes (gráfico e
+   Assistente) somem no celular; voltam ao fechar */
+@media (max-width: 768px) {
+  body:has(main.pg-cad):has(.modal-overlay.open) #chatbot-launcher,
+  body:has(main.pg-cad):has(.modal-overlay.open) #erpan-launcher { display: none !important; }
+}
+/* Telas estreitas (320px) e zoom de 200% (188px): os botões do cabeçalho
+   descem e ocupam a largura; rótulo e valor se empilham quando não cabem */
+@media (max-width: 360px) {
+  .pg-cad .page-header { flex-wrap: wrap; }
+  .pg-cad .page-header > .btn, .pg-cad .page-header > div:last-child:not(:first-child) { width: 100%; }
+  .pg-cad .page-header > div[style*="flex"] { flex-direction: column; align-items: stretch; }
+  .pg-cad .page-header .btn { justify-content: center; white-space: normal; text-align: center; }
+  .pg-cad .fin-painel-cab .kb-espaco { display: none; }
+  .pg-cad #erp-contratos-resumo { grid-template-columns: minmax(0, 1fr) !important; }
+  .pg-cad #erp-contratos-resumo .stat-card { border-left: 0 !important; border-top: 1px solid var(--mn-linha); }
+  .pg-cad #erp-contratos-resumo .stat-card:first-child { border-top: 0; }
+}
+@media (max-width: 240px) {
+  .pg-cad .page-header h1 { font-size: 21px; }
+  .pg-cad .panel:has(table) { padding: 0 10px; }
+  .pg-cad #com-painel .panel { padding: 12px 10px 4px; }
+  .pg-cad td:not(.cad-num):not(.cad-acoes):not(:first-child) { flex-direction: column; align-items: flex-start; gap: 0; text-align: left !important; }
+  .pg-cad td.cad-num { flex-wrap: wrap; column-gap: 8px; }
+  .pg-cad .cad-acoes .btn { flex: 1 1 auto; justify-content: center; }
+  .pg-cad .panel:has(.topbar-search) { padding: 8px; }
+  .pg-cad .cad-mes { width: 100%; justify-content: space-between; gap: 4px; white-space: normal; }
+  .pg-cad .cad-mes strong { flex: 1; min-width: 0; text-align: center; font-size: 14px; }
+}

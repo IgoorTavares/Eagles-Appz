@@ -6589,6 +6589,11 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: 'Não publicada (v150) · ERP Premium Completo', itens: [
+    { titulo: 'Pedidos, Clientes, Estoque e Inventário com visual novo', badges: ['melhoria'], texto: 'As últimas telas do ERP ganharam o mesmo visual dos Cadastros: cabeçalho limpo, tabelas mais leves com valores à direita e indicadores numa faixa. O status do pedido agora tem cor de significado: aberto em âmbar, faturado em verde e cancelado em vermelho. A ficha do cliente aparece dividida em Identificação, Contato, Endereço e Comercial. Os dados e as contas não mudaram.' },
+    { titulo: 'ERP no celular', badges: ['melhoria'], texto: 'No celular, pedidos, clientes, produtos do estoque e a contagem do inventário viram listas sem nada escondido à direita. No pedido, cada item vira um cartão e os botões Cancelar e Salvar ficam no alto enquanto você rola. Em Clientes, os filtros ficam atrás do botão "Filtros", que mostra quantos estão em uso. No inventário, o campo da quantidade contada ficou grande e sempre à vista.' },
+    { titulo: 'Busca de Produtos em notebooks', badges: ['corrigido'], texto: 'Em telas de notebook, a busca de Produtos e a de Pedidos ficam inteiras e no lugar, com o texto de exemplo visível, sem cobrir o botão do calendário.' },
+  ] },
   { data: '21/10/2026 · Cadastros do ERP', itens: [
     { titulo: 'Cadastros com visual novo', badges: ['melhoria'], texto: 'Produtos, Vendedores, Funcionários, Contratos, Pedido de compras, Notas fiscais de entrada, Objetos de postagem e Lançamentos de estoque ganharam cabeçalho mais limpo, tabela mais leve com valores alinhados à direita e situação com um ponto colorido (verde para ok, âmbar para atenção, vermelho para cancelado ou saída e cinza para inativo). Os dados não mudaram.' },
     { titulo: 'Cadastros no celular', badges: ['melhoria'], texto: 'No celular, cada tabela vira uma lista com o nome de cada campo, sem nada escondido à direita. A busca de Produtos voltou a aparecer no celular e no tablet. Os formulários de Novo e Editar ficam acima da barra de baixo, com o botão Salvar sempre à vista, e os botões flutuantes somem enquanto o formulário está aberto.' },
@@ -10926,6 +10931,8 @@ function estSituacao(p) {
   return 'ok';
 }
 const EST_SIT = { ok: ['Ok', 'badge-success'], baixo: ['Abaixo do mínimo', 'badge-warning'], zerado: ['Zerado', 'badge-danger'], reservado: ['Tudo reservado', 'badge-warning'] };
+// v150: tom de cada situação (a cor só aparece dentro de .pg-cad)
+const EST_SIT_TOM = { ok: 'ok', baixo: 'alerta', zerado: 'erro', reservado: 'alerta' };
 function estRenderPosicao() {
   const el = document.getElementById('est-posicao');
   if (!el) return;
@@ -10949,10 +10956,10 @@ function estRenderPosicao() {
         <select class="srv-select" onchange="EST_FILTRO.situacao = this.value; estRenderPosicao()"><option value="">Todas as situações</option>${Object.keys(EST_SIT).map((k) => `<option value="${k}" ${EST_FILTRO.situacao === k ? 'selected' : ''}>${EST_SIT[k][0]}</option>`).join('')}</select></div>
       <div class="table-scroll"><table><thead><tr><th>Produto</th><th>SKU</th><th style="text-align:right;">Em estoque</th><th style="text-align:right;">Reservado</th><th style="text-align:right;">Disponível</th><th style="text-align:right;">Mínimo</th><th>Situação</th><th></th></tr></thead>
       <tbody>${lista.length ? lista.map((p) => { const s = estSituacao(p), r = estReservado(p.id), d = estDisponivel(p), id = escapeParaOnclick(p.id); return `<tr>
-        <td><strong>${escapeHtml(p.nome)}</strong>${p.unidade ? ` <small class="kb-vazio-mini">${escapeHtml(p.unidade)}</small>` : ''}</td><td>${escapeHtml(p.sku || '—')}</td>
-        <td style="text-align:right;">${estNum(p.estoque)}</td><td style="text-align:right; color:var(--text-soft);">${r || '—'}</td><td style="text-align:right; font-weight:700; color:${d <= 0 ? 'var(--danger)' : 'inherit'};">${d}</td>
-        <td style="text-align:right; color:var(--text-soft);">${estNum(p.quantidadeMinima) || '—'}</td><td><span class="badge ${EST_SIT[s][1]}">${EST_SIT[s][0]}</span></td>
-        <td style="white-space:nowrap; text-align:right;"><button type="button" class="btn btn-small btn-ghost" onclick="estAbrirMov('${id}','entrada')">+ Entrada</button><button type="button" class="btn btn-small btn-ghost" onclick="estAbrirMov('${id}','saida')">− Saída</button><button type="button" class="btn btn-small btn-ghost" onclick="estAbrirMov('${id}','ajuste')">Ajustar</button><button type="button" class="btn btn-small btn-ghost" onclick="estHistorico('${id}')">Histórico</button></td>
+        <td><strong>${escapeHtml(p.nome)}</strong>${p.unidade ? ` <small class="kb-vazio-mini">${escapeHtml(p.unidade)}</small>` : ''}</td><td data-label="SKU">${escapeHtml(p.sku || '—')}</td>
+        <td data-label="Em estoque" class="cad-num" style="text-align:right;">${estNum(p.estoque)}</td><td data-label="Reservado" class="cad-num" style="text-align:right; color:var(--text-soft);">${r || '—'}</td><td data-label="Disponível" class="cad-num" style="text-align:right; font-weight:700; color:${d <= 0 ? 'var(--danger)' : 'inherit'};">${d}</td>
+        <td data-label="Mínimo" class="cad-num" style="text-align:right; color:var(--text-soft);">${estNum(p.quantidadeMinima) || '—'}</td><td data-label="Situação"><span class="badge ${EST_SIT[s][1]} cad-${EST_SIT_TOM[s] || 'neutro'}">${EST_SIT[s][0]}</span></td>
+        <td class="cad-acoes" style="white-space:nowrap; text-align:right;"><button type="button" class="btn btn-small btn-ghost" onclick="estAbrirMov('${id}','entrada')">+ Entrada</button><button type="button" class="btn btn-small btn-ghost" onclick="estAbrirMov('${id}','saida')">− Saída</button><button type="button" class="btn btn-small btn-ghost" onclick="estAbrirMov('${id}','ajuste')">Ajustar</button><button type="button" class="btn btn-small btn-ghost" onclick="estHistorico('${id}')">Histórico</button></td>
       </tr>`; }).join('') : `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-soft);">${todos.length ? 'Nada com esse filtro.' : 'Nenhum produto com controle de estoque. Cadastre em Cadastros → Produtos.'}</td></tr>`}</tbody></table></div>
     </div>`;
   const b = document.getElementById('est-busca'); if (b && document.activeElement && document.activeElement.id === 'est-busca') { b.focus(); b.setSelectionRange(b.value.length, b.value.length); }
@@ -10993,7 +11000,7 @@ function estHistorico(id) {
   ov.innerHTML = `<div class="modal kb-modal" style="max-width:640px;" role="dialog" aria-modal="true">
     <div class="modal-header"><h2>Histórico · ${escapeHtml(p.nome)}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
     <p class="cfg-modal-sub">Saldo atual: <b>${estNum(p.estoque)}</b> · disponível: <b>${estDisponivel(p)}</b></p>
-    ${movs.length ? `<div class="table-scroll"><table><thead><tr><th>Data</th><th>Movimento</th><th style="text-align:right;">Qtd.</th><th style="text-align:right;">Saldo</th><th>Motivo</th></tr></thead><tbody>${movs.map((m) => `<tr><td style="white-space:nowrap;">${escapeHtml(formatDatePt(String(m.data || '').slice(0, 10)))}</td><td>${escapeHtml({ entrada: 'Entrada', saida: 'Saída', ajuste: 'Ajuste' }[m.tipo] || m.tipo || '')}</td><td style="text-align:right; color:${sinal(m) === '−' ? 'var(--danger)' : 'var(--success)'};">${sinal(m)}${estNum(m.quantidade)}</td><td style="text-align:right;">${m.saldoApos !== undefined && m.saldoApos !== '' ? estNum(m.saldoApos) : '—'}</td><td style="font-size:12.5px;">${escapeHtml(m.motivo || '')}${m.por ? ` <span class="kb-vazio-mini">· ${escapeHtml(m.por)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="kb-vazio">Nenhuma movimentação ainda.</p>'}
+    ${movs.length ? `<div class="table-scroll"><table><thead><tr><th>Data</th><th>Movimento</th><th style="text-align:right;">Qtd.</th><th style="text-align:right;">Saldo</th><th>Motivo</th></tr></thead><tbody>${movs.map((m) => `<tr><td style="white-space:nowrap;">${escapeHtml(formatDatePt(String(m.data || '').slice(0, 10)))}</td><td data-label="Movimento">${escapeHtml({ entrada: 'Entrada', saida: 'Saída', ajuste: 'Ajuste' }[m.tipo] || m.tipo || '')}</td><td data-label="Qtd." class="cad-num" style="text-align:right; color:${sinal(m) === '−' ? 'var(--danger)' : 'var(--success)'};">${sinal(m)}${estNum(m.quantidade)}</td><td data-label="Saldo" class="cad-num" style="text-align:right;">${m.saldoApos !== undefined && m.saldoApos !== '' ? estNum(m.saldoApos) : '—'}</td><td data-label="Motivo" style="font-size:12.5px;">${escapeHtml(m.motivo || '')}${m.por ? ` <span class="kb-vazio-mini">· ${escapeHtml(m.por)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="kb-vazio">Nenhuma movimentação ainda.</p>'}
   </div>`;
   openModal('modal-srv');
 }
@@ -11861,16 +11868,16 @@ function invRender() {
       <div class="est-filtros"><input type="search" id="inv-busca" placeholder="Buscar produto ou SKU..." value="${escapeHtml(INV.busca)}" oninput="INV.busca = this.value; invRender()">
         <select class="srv-select" onchange="INV.filtro = this.value; invRender()"><option value="">Todos</option><option value="faltam" ${INV.filtro === 'faltam' ? 'selected' : ''}>Ainda não contados</option><option value="diferenca" ${INV.filtro === 'diferenca' ? 'selected' : ''}>Com diferença</option></select></div>
       <div class="table-scroll"><table><thead><tr><th>Produto</th><th>SKU</th><th style="text-align:right;">No sistema</th><th style="width:130px;">Contado</th><th style="text-align:right;">Diferença</th></tr></thead><tbody>
-        ${lista.length ? lista.map((p) => { const c = r.contagens[p.id], dif = c === undefined ? null : Math.round((estNum(c) - estNum(p.estoque)) * 1000) / 1000; return `<tr><td><strong>${escapeHtml(p.nome)}</strong></td><td>${escapeHtml(p.sku || '—')}</td><td style="text-align:right;">${estNum(p.estoque)}</td>
-          <td><input type="number" min="0" step="any" class="inv-input" id="inv-c-${escapeHtml(p.id)}" value="${c === undefined ? '' : c}" placeholder="—" oninput="invContar('${escapeParaOnclick(p.id)}', this.value)"></td>
-          <td style="text-align:right;" id="inv-dif-${escapeHtml(p.id)}">${dif === null ? '—' : `<b class="${dif === 0 ? 'fin-verde' : 'fin-vermelho'}">${dif > 0 ? '+' : ''}${dif}</b>`}</td></tr>`; }).join('') : `<tr><td colspan="5" style="text-align:center; padding:26px; color:var(--text-soft);">${todos.length ? 'Nada com esse filtro.' : 'Nenhum produto com controle de estoque.'}</td></tr>`}
+        ${lista.length ? lista.map((p) => { const c = r.contagens[p.id], dif = c === undefined ? null : Math.round((estNum(c) - estNum(p.estoque)) * 1000) / 1000; return `<tr><td><strong>${escapeHtml(p.nome)}</strong></td><td data-label="SKU">${escapeHtml(p.sku || '—')}</td><td data-label="No sistema" class="cad-num" style="text-align:right;">${estNum(p.estoque)}</td>
+          <td data-label="Contado" class="inv-contado"><input type="number" min="0" step="any" class="inv-input" id="inv-c-${escapeHtml(p.id)}" value="${c === undefined ? '' : c}" placeholder="—" oninput="invContar('${escapeParaOnclick(p.id)}', this.value)"></td>
+          <td data-label="Diferença" class="cad-num" style="text-align:right;" id="inv-dif-${escapeHtml(p.id)}">${dif === null ? '—' : `<b class="${dif === 0 ? 'fin-verde' : 'fin-vermelho'}">${dif > 0 ? '+' : ''}${dif}</b>`}</td></tr>`; }).join('') : `<tr><td colspan="5" style="text-align:center; padding:26px; color:var(--text-soft);">${todos.length ? 'Nada com esse filtro.' : 'Nenhum produto com controle de estoque.'}</td></tr>`}
       </tbody></table></div>
       <div class="cmp-rodape" style="margin-top:12px;"><button type="button" class="btn btn-small btn-ghost" onclick="invDescartar()">Descartar a contagem</button><span class="kb-espaco"></span><button type="button" class="btn btn-primary" onclick="invConcluir()">Concluir inventário</button></div>
       <p class="kb-vazio-mini" style="margin:8px 0 0;">A contagem fica guardada neste aparelho enquanto você conta. Só os produtos contados são ajustados.</p>
     </div>
     <div class="panel"><strong>Inventários concluídos</strong>
-      ${hist.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th>Data</th><th>Por</th><th style="text-align:right;">Contados</th><th style="text-align:right;">Com diferença</th><th style="text-align:right;">Ajuste</th><th></th></tr></thead><tbody>${hist.map((h) => `<tr><td>${escapeHtml(formatDatePt(String(h.data).slice(0, 10)))}</td><td>${escapeHtml(h.por || '')}</td><td style="text-align:right;">${(h.itens || []).length}</td><td style="text-align:right;">${h.divergencias || 0}</td><td style="text-align:right;">${h.ajusteUnidades > 0 ? '+' : ''}${h.ajusteUnidades || 0} un.</td><td><button type="button" class="btn btn-small btn-ghost" onclick="invVer('${escapeParaOnclick(h.id)}')">Ver</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="kb-vazio-mini" style="margin:8px 0 0;">Nenhum inventário concluído ainda.</p>'}
-      ${antigas.length ? `<details style="margin-top:10px;"><summary class="kb-vazio-mini">Conferências antigas (${antigas.length})</summary><div class="table-scroll"><table><thead><tr><th>Produto</th><th>Data</th><th>Sistema</th><th>Contado</th></tr></thead><tbody>${antigas.map((a) => `<tr><td>${escapeHtml(a.produto || '')}</td><td>${escapeHtml(formatDatePt(a.data))}</td><td>${escapeHtml(String(a.estoqueSistema ?? ''))}</td><td>${escapeHtml(String(a.estoqueContado ?? ''))}</td></tr>`).join('')}</tbody></table></div></details>` : ''}
+      ${hist.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th>Data</th><th>Por</th><th style="text-align:right;">Contados</th><th style="text-align:right;">Com diferença</th><th style="text-align:right;">Ajuste</th><th></th></tr></thead><tbody>${hist.map((h) => `<tr><td>${escapeHtml(formatDatePt(String(h.data).slice(0, 10)))}</td><td data-label="Por">${escapeHtml(h.por || '')}</td><td data-label="Contados" class="cad-num" style="text-align:right;">${(h.itens || []).length}</td><td data-label="Com diferença" class="cad-num" style="text-align:right;">${h.divergencias || 0}</td><td data-label="Ajuste" class="cad-num" style="text-align:right;">${h.ajusteUnidades > 0 ? '+' : ''}${h.ajusteUnidades || 0} un.</td><td class="cad-acoes"><button type="button" class="btn btn-small btn-ghost" onclick="invVer('${escapeParaOnclick(h.id)}')">Ver</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="kb-vazio-mini" style="margin:8px 0 0;">Nenhum inventário concluído ainda.</p>'}
+      ${antigas.length ? `<details style="margin-top:10px;"><summary class="kb-vazio-mini">Conferências antigas (${antigas.length})</summary><div class="table-scroll"><table><thead><tr><th>Produto</th><th>Data</th><th>Sistema</th><th>Contado</th></tr></thead><tbody>${antigas.map((a) => `<tr><td>${escapeHtml(a.produto || '')}</td><td data-label="Data">${escapeHtml(formatDatePt(a.data))}</td><td data-label="Sistema">${escapeHtml(String(a.estoqueSistema ?? ''))}</td><td data-label="Contado">${escapeHtml(String(a.estoqueContado ?? ''))}</td></tr>`).join('')}</tbody></table></div></details>` : ''}
     </div>`;
   invRenderResumo();
   if (foco) { const f = document.getElementById(foco); if (f) { f.focus(); try { f.setSelectionRange(f.value.length, f.value.length); } catch (e) {} } }
@@ -11899,7 +11906,7 @@ function invVer(id) {
   if (!h) return;
   const ov = srvGarantirModal();
   ov.innerHTML = `<div class="modal kb-modal" style="max-width:620px;" role="dialog" aria-modal="true"><div class="modal-header"><h2>Inventário de ${escapeHtml(formatDatePt(String(h.data).slice(0, 10)))}</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
-    <div class="table-scroll"><table><thead><tr><th>Produto</th><th style="text-align:right;">Sistema</th><th style="text-align:right;">Contado</th><th style="text-align:right;">Diferença</th></tr></thead><tbody>${(h.itens || []).map((i) => `<tr><td>${escapeHtml(i.nome)}</td><td style="text-align:right;">${i.sistema}</td><td style="text-align:right;">${i.contado}</td><td style="text-align:right;"><b class="${i.diferenca === 0 ? 'fin-verde' : 'fin-vermelho'}">${i.diferenca > 0 ? '+' : ''}${i.diferenca}</b></td></tr>`).join('')}</tbody></table></div></div>`;
+    <div class="table-scroll"><table><thead><tr><th>Produto</th><th style="text-align:right;">Sistema</th><th style="text-align:right;">Contado</th><th style="text-align:right;">Diferença</th></tr></thead><tbody>${(h.itens || []).map((i) => `<tr><td>${escapeHtml(i.nome)}</td><td data-label="Sistema" class="cad-num" style="text-align:right;">${i.sistema}</td><td data-label="Contado" class="cad-num" style="text-align:right;">${i.contado}</td><td data-label="Diferença" class="cad-num" style="text-align:right;"><b class="${i.diferenca === 0 ? 'fin-verde' : 'fin-vermelho'}">${i.diferenca > 0 ? '+' : ''}${i.diferenca}</b></td></tr>`).join('')}</tbody></table></div></div>`;
   openModal('modal-srv');
 }
 
@@ -23817,9 +23824,10 @@ registrarModuloCadastro('pedido-venda', {
     { key: 'cliente', label: 'Cliente' },
     { key: 'vendedor', label: 'Vendedor' },
     { key: 'estado', label: 'UF' },
-    { key: 'data', label: 'Data', render: (i) => formatDatePt(i.data) },
-    { key: 'valor', label: 'Valor', render: (i) => formatMoney(i.valor) },
-    { key: 'status', label: 'Status', render: (i) => `<span class="badge badge-blue">${i.status || '—'}</span>` },
+    { key: 'data', label: 'Data', render: (i) => escapeHtml(formatDatePt(i.data)) },
+    { key: 'valor', label: 'Valor', num: true, render: (i) => formatMoney(i.valor) },
+    // v150: status com significado (aberto em âmbar, faturado em verde, cancelado em vermelho); o valor gravado não muda
+    { key: 'status', label: 'Status', render: (i) => cadSituacao(i.status, { aberto: ['Aberto', 'alerta', 'badge-blue'], faturado: ['Faturado', 'ok', 'badge-blue'], cancelado: ['Cancelado', 'erro', 'badge-blue'] }) },
   ],
   aposRender: () => { if (typeof estAgendar === 'function') estAgendar(); },
 });
@@ -24068,11 +24076,11 @@ function renderClientesFornTabela(dadosParaExibir) {
         : '<span class="badge badge-blue">Cliente</span>';
     return `<tr class="clickable" data-id="${c.id}" data-tipo="${c.tipoCadastro}">
       <td><div class="person-cell"><div class="avatar">${escapeHtml(initials(c.fantasia || c.nome))}</div><div><div class="person-name">${escapeHtml(c.fantasia || c.nome)}</div><div class="person-sub">${c.nome !== c.fantasia ? escapeHtml(c.nome) : ''}</div></div></div></td>
-      <td>${escapeHtml(doc)}</td>
-      <td>${escapeHtml(c.cidade || '—')}${c.estado ? '/' + escapeHtml(c.estado) : ''}</td>
-      <td>${escapeHtml(c.telefone1 || c.whatsapp || '—')}</td>
-      <td>${tipoBadge}</td>
-      <td><button class="btn btn-small btn-ghost" onclick="abrirClienteFornDetalhe('${c.id}')">Ver</button></td>
+      <td data-label="CPF/CNPJ">${escapeHtml(doc)}</td>
+      <td data-label="Cidade/UF">${escapeHtml(c.cidade || '—')}${c.estado ? '/' + escapeHtml(c.estado) : ''}</td>
+      <td data-label="Telefone">${escapeHtml(c.telefone1 || c.whatsapp || '—')}</td>
+      <td data-label="Tipo">${tipoBadge}</td>
+      <td class="cad-acoes"><button class="btn btn-small btn-ghost" onclick="abrirClienteFornDetalhe('${c.id}')">Ver</button></td>
     </tr>`;
   }).join('');
 }
@@ -24351,6 +24359,7 @@ function filtrarClientesForn() {
 
   renderClientesFornTabela(filtrado);
   renderBadgeFiltroData('cliente');
+  cfAtualizarIndicadorFiltros();
 }
 
 function limparFiltroClientesForn() {
@@ -24363,6 +24372,26 @@ function limparFiltroClientesForn() {
     if (el) el.selectedIndex = 0;
   });
   renderClientesFornTabela();
+  cfAtualizarIndicadorFiltros();
+}
+
+// v150: no celular os filtros ficam recolhidos atrás do botão "Filtros", que mostra quantos estão em uso.
+// Só aparência: os filtros e a forma de filtrar continuam os mesmos.
+function cfAlternarFiltros(abrir) {
+  const f = document.getElementById('cf-filtros'), b = document.getElementById('cf-filtros-toggle');
+  if (!f || !b) return;
+  const aberto = f.classList.toggle('aberto', abrir === undefined ? !f.classList.contains('aberto') : !!abrir);
+  b.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+}
+function cfAtualizarIndicadorFiltros() {
+  const el = document.getElementById('cf-filtros-contador'), b = document.getElementById('cf-filtros-toggle');
+  if (!el || !b) return;
+  const texto = ['busca-cliente-forn', 'filtro-vendedor', 'filtro-telefone', 'filtro-email', 'filtro-estado', 'filtro-municipio'].filter((id) => ((document.getElementById(id) || {}).value || '').trim()).length;
+  const selects = ['filtro-tipo-cadastro', 'filtro-situacao', 'filtro-tipo-pessoa', 'filtro-lista-preco'].filter((id) => { const s = document.getElementById(id); return s && s.selectedIndex > 0; }).length;
+  const n = texto + selects + (window.FILTRO_DATA_ATIVO_cliente ? 1 : 0);
+  el.textContent = n ? String(n) : '';
+  b.classList.toggle('tem-filtro', n > 0);
+  b.setAttribute('aria-label', n ? `Filtros (${n} em uso)` : 'Filtros');
 }
 
 // Sem CPF e sem CNPJ: dá para salvar, depois de confirmar. Documento
@@ -24435,7 +24464,7 @@ function handleNovoClienteForn(e) {
 }
 
 const CLIENTE_FORN_FIELDS = [
-  { key: 'tipoPessoa', label: 'Tipo de pessoa', type: 'select', options: [{ value: 'PJ', label: 'Pessoa Jurídica' }, { value: 'PF', label: 'Pessoa Física' }] },
+  { key: 'tipoPessoa', label: 'Tipo de pessoa', secao: 'Identificação', type: 'select', options: [{ value: 'PJ', label: 'Pessoa Jurídica' }, { value: 'PF', label: 'Pessoa Física' }] },
   { key: 'nome', label: 'Razão social / Nome completo', type: 'text', full: true },
   { key: 'fantasia', label: 'Nome fantasia', type: 'text', full: true },
   { key: 'cnpj', label: 'CNPJ', type: 'text' },
@@ -24443,17 +24472,17 @@ const CLIENTE_FORN_FIELDS = [
   { key: 'inscricaoEstadual', label: 'Inscrição Estadual', type: 'text' },
   { key: 'isento', label: 'Isenção', type: 'checkbox', checkboxLabel: 'Empresa isenta de Inscrição Estadual' },
   { key: 'tipoCadastro', label: 'Tipo de cadastro', type: 'select', options: [{ value: 'cliente', label: 'Cliente' }, { value: 'fornecedor', label: 'Fornecedor' }, { value: 'ambos', label: 'Cliente e fornecedor' }] },
-  { key: 'email', label: 'E-mail', type: 'email' },
+  { key: 'email', label: 'E-mail', secao: 'Contato', type: 'email' },
   { key: 'telefone1', label: 'Telefone 1', type: 'tel' },
   { key: 'telefone2', label: 'Telefone 2', type: 'tel' },
   { key: 'whatsapp', label: 'WhatsApp', type: 'tel' },
-  { key: 'endereco', label: 'Endereço', type: 'text', full: true },
+  { key: 'endereco', label: 'Endereço', secao: 'Endereço', type: 'text', full: true },
   { key: 'numero', label: 'Número', type: 'text' },
   { key: 'bairro', label: 'Bairro', type: 'text' },
   { key: 'cidade', label: 'Cidade', type: 'text' },
   { key: 'estado', label: 'Estado (UF)', type: 'text' },
   { key: 'cep', label: 'CEP', type: 'text' },
-  { key: 'vendedor', label: 'Vendedor vinculado', type: 'text' },
+  { key: 'vendedor', label: 'Vendedor vinculado', secao: 'Comercial', type: 'text' },
   { key: 'proximaVisita', label: 'Próxima visita', type: 'date' },
   { key: 'listaPreco', label: 'Lista de preço', type: 'select', options: [{ value: 'Nenhuma lista', label: 'Nenhuma lista' }, { value: 'Lista padrão', label: 'Lista padrão' }, { value: 'Lista atacado', label: 'Lista atacado' }] },
   { key: 'situacao', label: 'Situação', type: 'select', options: [{ value: 'ativo', label: 'Ativo' }, { value: 'inativo', label: 'Inativo' }] },
@@ -24471,8 +24500,8 @@ function renderClienteFornDetalheModal() {
   const c = CLIENTES_FORN_DATA.find((x) => x.id === CLIENTE_FORN_DETALHE_ID);
   if (!c) return;
   document.getElementById('cliente-forn-detalhe-titulo').textContent = c.fantasia || c.nome;
-  document.getElementById('cliente-forn-detalhe-campos').innerHTML =
-    CLIENTE_FORN_FIELDS.map((f) => renderCampoHtml(f, c[f.key], CLIENTE_FORN_MODO_EDICAO)).join('');
+  // v150: mesmos campos e valores; renderFichaCampos só acrescenta o título de cada seção
+  document.getElementById('cliente-forn-detalhe-campos').innerHTML = renderFichaCampos(CLIENTE_FORN_FIELDS, c, CLIENTE_FORN_MODO_EDICAO);
   document.getElementById('cliente-forn-detalhe-acoes').innerHTML = CLIENTE_FORN_MODO_EDICAO
     ? `<button type="button" class="btn" onclick="cancelarEdicaoClienteForn()">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarClienteFornDetalhe()">Salvar</button>`
     : `<button type="button" class="btn" style="margin-right:auto; color:var(--danger); border-color:var(--danger);" onclick="excluirClienteForn('${c.id}')">Excluir</button><button type="button" class="btn" onclick="exportarDadosClienteLGPD('${c.id}')">Exportar dados (LGPD)</button><button type="button" class="btn" onclick="closeModal('modal-cliente-forn-detalhe')">Fechar</button><button type="button" class="btn btn-primary" onclick="entrarModoEdicaoClienteForn()">Editar</button>`;
@@ -26619,16 +26648,16 @@ function renderItensPedidoForm() {
     const precoUn = calcularPrecoUnitario(item);
     const precoTotal = precoUn * Number(item.quantidade || 0);
     return `<tr>
-      <td style="color:var(--text-soft); font-size:12px;">${idx + 1}</td>
-      <td><input type="text" value="${escapeHtml(item.descricao)}" list="pv-lista-produtos" oninput="atualizarItemPedido(${idx},'descricao',this.value)" placeholder="Pesquise por código, descrição ou GTIN"><span class="est-item-slot">${typeof estHtmlDisponivelItem === 'function' ? estHtmlDisponivelItem(item) : ''}</span></td>
-      <td style="width:90px;"><input type="text" value="${escapeHtml(item.codigo)}" oninput="atualizarItemPedido(${idx},'codigo',this.value)"></td>
-      <td style="width:60px;"><input type="text" value="${escapeHtml(item.unidade)}" oninput="atualizarItemPedido(${idx},'unidade',this.value)"></td>
-      <td style="width:80px;"><input type="number" value="${item.quantidade}" min="0" oninput="atualizarItemPedido(${idx},'quantidade',this.value)"></td>
-      <td style="width:100px;"><input type="number" value="${item.precoLista}" min="0" step="0.01" oninput="atualizarItemPedido(${idx},'precoLista',this.value)"></td>
-      <td style="width:80px;"><input type="number" value="${item.descontoPct}" min="0" max="100" step="0.1" oninput="atualizarItemPedido(${idx},'descontoPct',this.value)"></td>
-      <td class="pv-item-preco-un" style="text-align:right; padding-right:10px; font-size:13px; white-space:nowrap;">${formatMoney(precoUn)}</td>
-      <td class="pv-item-preco-total" style="text-align:right; padding-right:10px; font-size:13px; font-weight:600; white-space:nowrap;">${formatMoney(precoTotal)}</td>
-      <td><button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerItemPedido(${idx})" title="Remover item"><svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></td>
+      <td class="ped-item-n" style="color:var(--text-soft); font-size:12px;">${idx + 1}</td>
+      <td data-label="Descrição"><input type="text" aria-label="Descrição do item ${idx + 1}" value="${escapeHtml(item.descricao)}" list="pv-lista-produtos" oninput="atualizarItemPedido(${idx},'descricao',this.value)" placeholder="Pesquise por código, descrição ou GTIN"><span class="est-item-slot">${typeof estHtmlDisponivelItem === 'function' ? estHtmlDisponivelItem(item) : ''}</span></td>
+      <td data-label="Código" style="width:90px;"><input type="text" aria-label="Código do item ${idx + 1}" value="${escapeHtml(item.codigo)}" oninput="atualizarItemPedido(${idx},'codigo',this.value)"></td>
+      <td data-label="Un" style="width:60px;"><input type="text" aria-label="Unidade do item ${idx + 1}" value="${escapeHtml(item.unidade)}" oninput="atualizarItemPedido(${idx},'unidade',this.value)"></td>
+      <td data-label="Quantidade" style="width:80px;"><input type="number" aria-label="Quantidade do item ${idx + 1}" value="${item.quantidade}" min="0" oninput="atualizarItemPedido(${idx},'quantidade',this.value)"></td>
+      <td data-label="Preço lista" style="width:100px;"><input type="number" aria-label="Preço de lista do item ${idx + 1}" value="${item.precoLista}" min="0" step="0.01" oninput="atualizarItemPedido(${idx},'precoLista',this.value)"></td>
+      <td data-label="Desc (%)" style="width:80px;"><input type="number" aria-label="Desconto em % do item ${idx + 1}" value="${item.descontoPct}" min="0" max="100" step="0.1" oninput="atualizarItemPedido(${idx},'descontoPct',this.value)"></td>
+      <td data-label="Preço un" class="pv-item-preco-un cad-num" style="text-align:right; padding-right:10px; font-size:13px; white-space:nowrap;">${formatMoney(precoUn)}</td>
+      <td data-label="Preço total" class="pv-item-preco-total cad-num" style="text-align:right; padding-right:10px; font-size:13px; font-weight:600; white-space:nowrap;">${formatMoney(precoTotal)}</td>
+      <td class="cad-acoes"><button type="button" class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerItemPedido(${idx})" title="Remover item" aria-label="Remover o item ${idx + 1}"><svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></td>
     </tr>`;
   }).join('');
 }

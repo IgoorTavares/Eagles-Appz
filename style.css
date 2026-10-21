@@ -6500,3 +6500,174 @@ html .btn:disabled .icone-menu { stroke: currentColor; }
   .pg-cad .cad-mes { width: 100%; justify-content: space-between; gap: 4px; white-space: normal; }
   .pg-cad .cad-mes strong { flex: 1; min-width: 0; text-align: center; font-size: 14px; }
 }
+
+/* =====================================================================
+   ERP Premium Completo (v150): Pedidos de venda, Clientes e Fornecedores,
+   Posição de estoque e Inventário — Mesa de Operação Premium
+   Reaproveita a base .pg-cad da v148 (cabeçalho, painéis, tabela que vira
+   lista no celular, situação com ponto, janelas) e acrescenta só o que é
+   de cada módulo, sempre dentro da classe dele:
+   .pg-pv (Pedidos de venda — na lista, no editor e na janela de parcelas;
+   não no <main>, para a área de impressão continuar igual), .pg-cf
+   (Clientes e Fornecedores), .pg-est (Posição de estoque) e .pg-inv
+   (Inventário). As janelas de estoque e inventário abrem fora do <main>
+   (#modal-srv, compartilhada por muitas telas); o estilo delas só vale
+   quando a página é a do estoque ou a do inventário. Nenhuma conta muda.
+   ===================================================================== */
+
+/* Busca dentro das páginas .pg-cad (Produtos e Pedidos de venda): de 861 a
+   1400px uma regra da barra superior encolhia a busca, apagava o texto de
+   exemplo e a fazia "flutuar" ao digitar. Aqui ela fica sempre inteira,
+   no lugar, com a lupa centrada e o texto de exemplo visível. */
+.pg-cad .panel .topbar-search, .pg-cad .panel .topbar-search:focus-within { display: flex !important; position: relative !important; left: auto !important; transform: none !important; width: auto !important; flex: 1 1 auto !important; z-index: auto !important; }
+.pg-cad .panel .topbar-search input, .pg-cad .panel .topbar-search:focus-within input { width: 100% !important; height: 40px !important; padding: 8px 12px 8px 36px !important; color: var(--text) !important; cursor: text !important; border-radius: 8px !important; box-shadow: none !important; }
+.pg-cad .panel .topbar-search input::placeholder { color: var(--text-soft) !important; }
+.pg-cad .panel .topbar-search::before { top: 50%; transform: translateY(-50%); }
+
+/* Comum aos 4: busca da tabela com lupa, lista de situação que encolhe, abas sublinhadas */
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .srv-select { min-width: 0; max-width: 100%; height: 40px; border-radius: 8px; box-shadow: none; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .est-filtros { gap: 8px; margin-bottom: 4px; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .est-filtros input { height: 40px; border-radius: 8px; padding-left: 36px; min-width: 0; background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E") 12px center / 16px no-repeat; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .fin-painel-cab { align-items: center; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .fin-painel-cab > strong, :is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .panel > strong { font-size: 16px; font-weight: 600; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .section-tabs { display: flex; gap: 2px; background: transparent; border: 0; border-bottom: 1px solid var(--mn-linha); border-radius: 0; padding: 0; box-shadow: none; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .section-tabs button { background: transparent !important; color: var(--mn-muda-fundo) !important; border-radius: 0 !important; border: 0 !important; border-bottom: 2px solid transparent !important; padding: 10px 12px !important; box-shadow: none !important; font-weight: 500; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .section-tabs button.active { color: var(--text) !important; border-bottom-color: var(--blue-strong) !important; font-weight: 600; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) td[style*="color:var(--danger)"], :is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .fin-vermelho { color: var(--danger-texto) !important; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .fin-verde { color: var(--success-texto) !important; }
+:is(.pg-pv, .pg-cf, .pg-est, .pg-inv) td[style*="color:var(--success)"] { color: var(--success-texto) !important; }
+
+/* Indicadores em faixa: Posição de estoque e Comissões do pedido */
+.pg-est #est-posicao > .stat-grid, .pg-pv #pv-aba-comissoes .stat-grid { gap: 0 !important; background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); overflow: hidden; box-shadow: var(--mn-luz, none); margin-bottom: 16px !important; }
+.pg-est #est-posicao > .stat-grid .stat-card, .pg-pv #pv-aba-comissoes .stat-card { background: transparent !important; border: 0; border-left: 1px solid var(--mn-linha); border-radius: 0; box-shadow: none !important; transform: none; padding: 16px 18px; min-width: 0; container-type: inline-size; }
+.pg-est #est-posicao > .stat-grid .stat-card:first-child, .pg-pv #pv-aba-comissoes .stat-card:first-child { border-left: 0; }
+.pg-est #est-posicao > .stat-grid .stat-card::before, .pg-est #est-posicao > .stat-grid .stat-card::after, .pg-pv #pv-aba-comissoes .stat-card::before, .pg-pv #pv-aba-comissoes .stat-card::after { display: none; }
+.pg-est #est-posicao .stat-label, .pg-pv #pv-aba-comissoes .stat-label { font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--mn-muda); }
+.pg-est #est-posicao > .stat-grid .stat-value { font-size: 24px !important; font-weight: 650; letter-spacing: -0.015em; color: var(--text) !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-est #est-posicao > .stat-grid .stat-card:last-child .stat-value { font-size: clamp(14px, 11cqi, 22px) !important; }
+.pg-est #est-posicao > .stat-grid .stat-card.danger { box-shadow: inset 3px 0 0 var(--danger) !important; }
+.pg-est #est-posicao > .stat-grid .stat-card.danger .stat-value { color: var(--danger-texto) !important; }
+.pg-est #est-posicao > .stat-grid .stat-card.danger .stat-label { color: var(--mn-muda); }
+.pg-est #est-posicao > .stat-grid .stat-value[style*="warning"] { color: var(--warning-texto) !important; }
+.pg-pv #pv-aba-comissoes .stat-value { color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* Posição de estoque e Inventário */
+.pg-est td[data-label="SKU"], .pg-inv td[data-label="SKU"] { white-space: nowrap; }
+.pg-inv .inv-resumo { font-size: 13px; color: var(--mn-muda); }
+.pg-inv .inv-resumo b { color: var(--text); font-size: 15px; }
+.pg-inv .inv-input { width: 120px; height: 40px; border-radius: 8px; text-align: right; font-variant-numeric: tabular-nums; font-size: 15px; }
+.pg-inv .inv-input:focus { border-color: var(--blue-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue-strong) 22%, transparent); outline: none; }
+.pg-inv .cmp-rodape { border-top: 1px solid var(--mn-linha); padding-top: 14px; }
+.pg-inv details summary { cursor: pointer; min-height: 24px; }
+/* tablet e notebook pequeno (769 a 1200px): os 4 botões de ação da Posição de estoque em 2 linhas de 2, sem rolar a tabela para o lado */
+@media (min-width: 769px) and (max-width: 1200px) {
+  .pg-est td.cad-acoes { display: grid !important; grid-template-columns: repeat(2, auto); gap: 4px; justify-content: end; height: auto; white-space: normal !important; }
+  .pg-est td.cad-acoes .btn { justify-content: center; }
+}
+/* janelas do estoque e do inventário (#modal-srv fica fora do <main>): só nessas duas páginas */
+body:has(main.pg-est) #modal-srv .modal, body:has(main.pg-inv) #modal-srv .modal { border-radius: 12px; border: 1px solid var(--border); }
+body:has(main.pg-est) #modal-srv .modal-header h2, body:has(main.pg-inv) #modal-srv .modal-header h2 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+body:has(main.pg-est) #modal-srv th, body:has(main.pg-inv) #modal-srv th { font-size: 12.5px; font-weight: 500; text-transform: none; letter-spacing: 0; background: transparent; border-radius: 0 !important; color: var(--text-soft); }
+body:has(main.pg-est) #modal-srv td[style*="color:var(--danger)"], body:has(main.pg-inv) #modal-srv .fin-vermelho { color: var(--danger-texto) !important; }
+body:has(main.pg-est) #modal-srv td[style*="color:var(--success)"], body:has(main.pg-inv) #modal-srv .fin-verde { color: var(--success-texto) !important; }
+
+/* Clientes e Fornecedores */
+.pg-cf .ficha-layout { gap: 16px; }
+.pg-cf .ficha-filtros { background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); box-shadow: none; padding: 16px; }
+.pg-cf .ficha-filtros .field label { font-size: 12.5px; font-weight: 500; color: var(--mn-muda); }
+.pg-cf .ficha-filtros input, .pg-cf .ficha-filtros select { height: 38px; border-radius: 8px; box-shadow: none; }
+.pg-cf .avatar { background: color-mix(in srgb, var(--blue-strong) 12%, var(--mn-sup)); color: var(--text); border-radius: 50%; font-weight: 600; }
+.pg-cf .person-name { font-weight: 600; }
+.pg-cf .person-sub { color: var(--mn-muda); }
+.pg-cf .cf-filtros-toggle { display: none; }
+.pg-cf .cf-filtros-contador:not(:empty) { margin-left: 8px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--blue-strong); color: var(--on-accent); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Pedidos de venda: editor */
+.pg-pv .pv-form-header { align-items: flex-end; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--mn-linha); }
+.pg-pv .pv-form-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.pg-pv .pv-form-header .btn { min-height: 40px; }
+.pg-pv .pv-secao-titulo { font-size: 15px !important; font-weight: 600 !important; text-transform: none !important; letter-spacing: 0 !important; color: var(--text) !important; border-bottom: 1px solid var(--mn-linha); padding-bottom: 8px; }
+.pg-pv#pv-form-view > .panel { padding: 20px 24px; }
+.pg-pv .pv-itens-table th { white-space: nowrap; }
+.pg-pv .pv-itens-table td { height: auto; }
+.pg-pv .pv-itens-table input { min-height: 36px; border-radius: 6px; border: 1px solid var(--mn-linha); background: var(--bg); }
+.pg-pv .pv-itens-table td[data-label="Código"] input { min-width: 84px; }
+.pg-pv .pv-itens-table td.ped-item-n { font-weight: 500; }
+.pg-pv .pv-totais-grid input:disabled { background: transparent; border-color: transparent; padding-left: 0; font-variant-numeric: tabular-nums; color: var(--text); opacity: 1; -webkit-text-fill-color: var(--text); }
+.pg-pv .pv-totais-grid + .pv-totais-grid .field:last-child { background: color-mix(in srgb, var(--blue-strong) 7%, var(--mn-sup)); box-shadow: inset 3px 0 0 var(--blue-strong); border-radius: 8px; padding: 8px 12px; }
+.pg-pv .pv-totais-grid + .pv-totais-grid .field:last-child input { font-size: 20px; font-weight: 650; }
+.pg-pv .row-menu-btn { width: 32px; height: 32px; border-radius: 8px; }
+/* Pedidos não tem .pg-cad no <main> (por causa da impressão): os mesmos cuidados da v148, pela classe da lista e do editor */
+@media (max-width: 860px) {
+  .pagina-erp-mob .pg-pv.modal-overlay, .pagina-erp-mob .pg-pv .modal-overlay { bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .pagina-erp-mob .main:has(> .pg-pv) { padding-bottom: calc(210px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+
+/* Celular e tablet */
+@media (max-width: 768px) {
+  .pg-est #est-posicao > .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .pg-est #est-posicao > .stat-grid .stat-card { border-left: 0; border-top: 1px solid var(--mn-linha); }
+  .pg-est #est-posicao > .stat-grid .stat-card:nth-child(even) { border-left: 1px solid var(--mn-linha); }
+  .pg-est #est-posicao > .stat-grid .stat-card:nth-child(-n + 2) { border-top: 0; }
+  .pg-est td.cad-acoes { display: grid !important; grid-template-columns: repeat(4, auto); justify-content: end; }
+  :is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .est-filtros { flex-wrap: wrap; }
+  :is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .est-filtros > * { flex: 1 1 100%; }
+  /* Inventário: a quantidade contada fica sempre visível, com campo grande */
+  .pg-inv td.inv-contado { align-items: center; padding: 6px 0 !important; }
+  .pg-inv td.inv-contado::before { font-weight: 600; color: var(--text); }
+  .pg-inv .inv-input { width: 132px; height: 44px; font-size: 16px; }
+  .pg-inv .cmp-rodape { flex-direction: column-reverse; align-items: stretch !important; gap: 8px; }
+  .pg-inv .cmp-rodape .btn { width: 100%; justify-content: center; min-height: 40px; }
+  .pg-inv .cmp-rodape .kb-espaco { display: none; }
+  /* janelas do estoque e do inventário: a tabela vira lista também */
+  body:has(main.pg-est) #modal-srv .modal, body:has(main.pg-inv) #modal-srv .modal { width: 100%; max-width: 100% !important; }
+  body:has(main.pg-est) #modal-srv .table-scroll, body:has(main.pg-inv) #modal-srv .table-scroll { overflow: visible; }
+  body:has(main.pg-est) #modal-srv table, body:has(main.pg-est) #modal-srv tbody, body:has(main.pg-inv) #modal-srv table, body:has(main.pg-inv) #modal-srv tbody { display: block; min-width: 0 !important; width: 100%; }
+  body:has(main.pg-est) #modal-srv thead, body:has(main.pg-inv) #modal-srv thead { display: none; }
+  body:has(main.pg-est) #modal-srv tbody tr, body:has(main.pg-inv) #modal-srv tbody tr { display: grid; row-gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  body:has(main.pg-est) #modal-srv td, body:has(main.pg-inv) #modal-srv td { display: flex; justify-content: space-between; gap: 12px; padding: 0; border: 0; height: auto; text-align: right !important; min-width: 0; overflow-wrap: anywhere; }
+  body:has(main.pg-est) #modal-srv td::before, body:has(main.pg-inv) #modal-srv td::before { content: attr(data-label); color: var(--text-soft); text-align: left; flex-shrink: 0; }
+  body:has(main.pg-est) #modal-srv td:first-child, body:has(main.pg-inv) #modal-srv td:first-child { display: block; font-weight: 600; text-align: left !important; }
+  body:has(main.pg-est) #modal-srv td:first-child::before, body:has(main.pg-inv) #modal-srv td:first-child::before { display: none; }
+  /* Clientes: filtros recolhidos atrás do botão "Filtros" (com a contagem dos que estão em uso); a lista aparece primeiro */
+  .pg-cf .cf-filtros-toggle { display: flex; width: 100%; justify-content: center; align-items: center; min-height: 40px; margin-bottom: 8px; }
+  .pg-cf .cf-filtros-toggle.tem-filtro { border-color: var(--blue-strong); }
+  .pg-cf .ficha-filtros { display: none; }
+  .pg-cf .ficha-filtros.aberto { display: block; }
+  /* Pedido: Cancelar e Salvar ficam no alto ao rolar; cada item vira um cartão */
+  .pg-pv .pv-form-header { position: sticky; top: 64px; z-index: 5; background: var(--bg); margin: 0 0 16px; padding: 10px 0; flex-wrap: wrap; gap: 8px; }
+  .pg-pv .pv-form-header h1 { font-size: 20px; flex: 1 1 100%; }
+  .pg-pv .pv-form-header > div { width: 100%; }
+  .pg-pv .pv-form-header .btn { flex: 1; justify-content: center; }
+  .pg-pv#pv-form-view > .panel { padding: 14px; }
+  .pg-pv .pv-itens-table tbody tr { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; row-gap: 8px; }
+  .pg-pv .pv-itens-table tbody td { display: flex; flex-direction: column; align-items: stretch; text-align: left !important; font-size: 13px; width: auto !important; padding: 0 !important; }
+  .pg-pv .pv-itens-table tbody td::before { margin-bottom: 2px; font-size: 12px; }
+  .pg-pv .pv-itens-table tbody td.ped-item-n { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; gap: 4px; font-size: 12px; font-weight: 600; color: var(--mn-muda); margin: 0; }
+  .pg-pv .pv-itens-table tbody td.ped-item-n::before { display: inline; content: "Item"; margin: 0; }
+  .pg-pv .pv-itens-table tbody td[data-label="Descrição"] { grid-column: 1 / -1; }
+  .pg-pv .pv-itens-table tbody td.cad-acoes { grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; }
+  .pg-pv .pv-totais-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .pg-pv .pv-totais-grid + .pv-totais-grid .field:last-child { grid-column: 1 / -1; }
+  .pg-pv #pv-aba-comissoes .stat-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .pg-pv #pv-aba-comissoes .stat-card { border-left: 0; border-top: 1px solid var(--mn-linha); }
+  .pg-pv #pv-aba-comissoes .stat-card:first-child { border-top: 0; }
+}
+@media (max-width: 768px) {
+  body:has(.pg-pv .modal-overlay.open) #chatbot-launcher, body:has(.pg-pv .modal-overlay.open) #erpan-launcher, body:has(.pg-pv.modal-overlay.open) #chatbot-launcher, body:has(.pg-pv.modal-overlay.open) #erpan-launcher,
+  body:has(main.pg-est):has(#modal-srv.open) #chatbot-launcher, body:has(main.pg-est):has(#modal-srv.open) #erpan-launcher,
+  body:has(main.pg-inv):has(#modal-srv.open) #chatbot-launcher, body:has(main.pg-inv):has(#modal-srv.open) #erpan-launcher { display: none !important; }
+}
+@media (max-width: 240px) {
+  :is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .section-tabs { flex-wrap: wrap; }
+  :is(.pg-pv, .pg-cf, .pg-est, .pg-inv) .section-tabs button { white-space: normal; text-align: left; }
+  .pg-pv .pv-form-header > div { flex-direction: column; }
+  .pg-pv #pv-aba-itens > .btn { white-space: normal; max-width: 100%; }
+  .pg-pv .pv-itens-table tbody tr, .pg-pv .pv-totais-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .pg-est td.cad-acoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-est #est-posicao > .stat-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .pg-est #est-posicao > .stat-grid .stat-card { border-left: 0 !important; border-top: 1px solid var(--mn-linha); }
+  .pg-est #est-posicao > .stat-grid .stat-card:first-child { border-top: 0; }
+  .pg-inv td.inv-contado { flex-direction: column; align-items: stretch; }
+  .pg-inv .inv-input { width: 100%; }
+}

@@ -6589,7 +6589,7 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
-  { data: 'Não publicada (v147) · Dashboard do CRM', itens: [
+  { data: '21/10/2026 · Dashboard do CRM', itens: [
     { titulo: 'Dashboard do CRM com visual novo', badges: ['melhoria'], texto: 'Indicadores do mês numa faixa limpa (rótulo em cima, valor em destaque e o recebido embaixo), painéis sem sombras, títulos mais firmes e rótulos sem letras maiúsculas. A ordem dos blocos e os números não mudaram.' },
     { titulo: 'Gráfico nas cores do seu tema', badges: ['melhoria'], texto: 'A Análise financeira usa a cor do tema no faturamento total, despesas tracejadas e o faturamento em dólar pontilhado. A legenda mostra o traço de cada linha. O vermelho fica só para atrasos, alertas e vencimentos; as cores das etapas do funil continuam.' },
     { titulo: 'Dashboard no celular', badges: ['melhoria'], texto: 'Em telas estreitas e com zoom, o que não cabe lado a lado desce para a linha de baixo: valores legíveis, nada escondido e sem rolar para o lado.' },

@@ -6589,7 +6589,7 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
-  { data: 'Não publicada (v148) · Cadastros do ERP', itens: [
+  { data: '21/10/2026 · Cadastros do ERP', itens: [
     { titulo: 'Cadastros com visual novo', badges: ['melhoria'], texto: 'Produtos, Vendedores, Funcionários, Contratos, Pedido de compras, Notas fiscais de entrada, Objetos de postagem e Lançamentos de estoque ganharam cabeçalho mais limpo, tabela mais leve com valores alinhados à direita e situação com um ponto colorido (verde para ok, âmbar para atenção, vermelho para cancelado ou saída e cinza para inativo). Os dados não mudaram.' },
     { titulo: 'Cadastros no celular', badges: ['melhoria'], texto: 'No celular, cada tabela vira uma lista com o nome de cada campo, sem nada escondido à direita. A busca de Produtos voltou a aparecer no celular e no tablet. Os formulários de Novo e Editar ficam acima da barra de baixo, com o botão Salvar sempre à vista, e os botões flutuantes somem enquanto o formulário está aberto.' },
     { titulo: 'Textos corrigidos', badges: ['corrigido'], texto: 'Botões como "Novo(a) Vendedore" agora dizem "Novo vendedor", e a lista de Lançamentos de estoque mostra a coluna "Saldo depois" com o título certo.' },

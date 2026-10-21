@@ -6589,6 +6589,11 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: 'Não publicada (v147) · Dashboard do CRM', itens: [
+    { titulo: 'Dashboard do CRM com visual novo', badges: ['melhoria'], texto: 'Indicadores do mês numa faixa limpa (rótulo em cima, valor em destaque e o recebido embaixo), painéis sem sombras, títulos mais firmes e rótulos sem letras maiúsculas. A ordem dos blocos e os números não mudaram.' },
+    { titulo: 'Gráfico nas cores do seu tema', badges: ['melhoria'], texto: 'A Análise financeira usa a cor do tema no faturamento total, despesas tracejadas e o faturamento em dólar pontilhado. A legenda mostra o traço de cada linha. O vermelho fica só para atrasos, alertas e vencimentos; as cores das etapas do funil continuam.' },
+    { titulo: 'Dashboard no celular', badges: ['melhoria'], texto: 'Em telas estreitas e com zoom, o que não cabe lado a lado desce para a linha de baixo: valores legíveis, nada escondido e sem rolar para o lado.' },
+  ] },
   { data: '20/10/2026 · Financeiro', itens: [
     { titulo: 'Financeiro com visual novo', badges: ['melhoria'], texto: 'Cabeçalho mais limpo, abas com sublinhado na cor do tema, indicadores numa faixa com o Lucro do período em destaque e cartões de Receber e Pagar mais leves (a troca entre cartões e lista continua). Venda Rápida é o botão principal; Lançar Despesa continua com o ícone vermelho. Os números não mudaram.' },
     { titulo: 'Transações mais fáceis de ler', badges: ['melhoria'], texto: 'Entradas em verde e saídas em cor neutra com o sinal de menos. As categorias aparecem com um ponto na cor que você escolheu, e a situação (pago, vencido, pendente) vem com um ponto e o nome. No celular, as transações viram uma lista que cabe na tela.' },
@@ -13282,6 +13287,8 @@ function dshRecebidoMes(mes) {
   return (typeof FIN_LANC !== 'undefined' ? FIN_LANC : []).filter((l) => l.tipo === 'receber' && l.status !== 'cancelado' && String(l.dataPagamento || '').slice(0, 7) === mes && dshDoCliente(l.cliente)).reduce((a, l) => a + (Number(l.valorPago) || 0), 0);
 }
 
+// v147: valor em R$ a partir de 1 milhão: a letra se ajusta à largura do cartão para o valor caber inteiro
+function cdValorLongo(v) { return Math.abs(Number(v) || 0) >= 1e6 ? ' cd-longo' : ''; }
 function renderCrmDashTopo() {
   const el = document.getElementById('crm-dash-topo');
   if (!el) return;
@@ -13296,41 +13303,62 @@ function renderCrmDashTopo() {
   const novosLeads = negocios.filter((n) => (n.etapa || 'lead') === 'lead' && (n.criadoEm || '').slice(0, 7) === mesAtual).length;
   const fechadosMes = negocios.filter((n) => n.etapa === 'fechado' && (n.atualizadoEm || '').slice(0, 7) === mesAtual).length;
 
+  // v147: rótulo em cima, valor em destaque e o detalhe embaixo (os números são os mesmos)
   el.innerHTML = `
-    <div class="stat-card">
-      <div class="stat-label" style="display:flex; justify-content:space-between; align-items:center;">Meta de Receita <button type="button" onclick="abrirEditarMetaReceitaCrm()" style="background:none; border:none; color:var(--danger); cursor:pointer; padding:0;" title="Editar meta"><svg viewBox="0 0 24 24" style="width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button></div>
-      <p style="font-size:11.5px; color:var(--text-soft); margin:2px 0 10px;">Progresso do mês atual · ${usaFin ? 'receitas do Financeiro' : 'negócios fechados'}</p>
-      <div style="display:flex; justify-content:space-between; font-size:13px; margin:6px 0 4px;"><span style="color:var(--text);">${formatMoney(fat)}</span><span style="color:var(--danger); font-weight:700;">${formatMoney(meta)}</span></div>
-      <div style="height:6px; background:var(--bg-soft); border-radius:100px; overflow:hidden;"><div style="height:100%; width:${pctMeta}%; background:var(--success);"></div></div>
-      <div style="font-size:11px; color:var(--text-soft); margin-top:6px;">${pctMeta}% alcançado · Faltam ${formatMoney(faltam)}</div>
+    <div class="stat-card cd-meta">
+      <div class="stat-label cd-meta-cab">Meta de Receita <button type="button" class="cd-meta-editar" onclick="abrirEditarMetaReceitaCrm()" title="Editar meta" aria-label="Editar meta"><svg viewBox="0 0 24 24" style="width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button></div>
+      <p class="cd-meta-sub">Progresso do mês atual · ${usaFin ? 'receitas do Financeiro' : 'negócios fechados'}</p>
+      <div class="cd-meta-valores"><span>${formatMoney(fat)}</span><strong>${formatMoney(meta)}</strong></div>
+      <div class="cd-meta-barra"><div style="width:${pctMeta}%;"></div></div>
+      <div class="cd-meta-pct">${pctMeta}% alcançado · Faltam ${formatMoney(faltam)}</div>
     </div>
     <div class="stat-card">
-      <div class="crm-stat-icone-badge">${iconeDashboardTopo('cifrao')}</div>
-      <div class="stat-value" style="color:var(--success);">${formatMoney(fat)}</div>
-      <p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Faturamento do mês${usaFin ? ` · recebido ${formatMoney(recebido)}` : ' (negócios fechados no funil)'}</p>
+      <div class="stat-label">Faturamento do mês${usaFin ? '' : ' (negócios fechados no funil)'}</div>
+      <div class="stat-value${cdValorLongo(fat)}">${formatMoney(fat)}</div>
+      ${usaFin ? `<div class="cd-rodape">Recebido ${formatMoney(recebido)}</div>` : ''}
     </div>
     <div class="stat-card">
-      <div class="crm-stat-icone-badge">${iconeDashboardTopo('pessoas')}</div>
+      <div class="stat-label">Novos leads</div>
       <div class="stat-value">${novosLeads}</div>
-      <p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Novos leads</p>
     </div>
     <div class="stat-card">
-      <div class="crm-stat-icone-badge">${iconeDashboardTopo('tendencia')}</div>
+      <div class="stat-label">Clientes fechados</div>
       <div class="stat-value">${fechadosMes}</div>
-      <p style="font-size:12px; color:var(--text-soft); margin:2px 0 0;">Clientes fechados</p>
     </div>`;
 }
 
-function iconeDashboardTopo(tipo) {
-  const paths = {
-    cifrao: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
-    pessoas: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-    tendencia: '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
-  };
-  return `<svg viewBox="0 0 24 24">${paths[tipo]}</svg>`;
-}
-
 let CRM_CHART_FINANCEIRO = null;
+let CRM_CHART_TEMA_OBS = null, CRM_CHART_TEMA_T = null;
+
+// v147: contraste da linha principal do gráfico. Lê a cor de fundo realmente desenhada atrás do
+// gráfico (misturando as camadas semitransparentes) e, se a cor do tema não chega a 3:1 contra ela,
+// mistura a cor do tema com a cor do texto, de 5 em 5%, só o necessário. Temas que já passam não mudam.
+function cdLerCor(s) {
+  const srgb = String(s).match(/color\(srgb ([\d.e-]+) ([\d.e-]+) ([\d.e-]+)(?: \/ ([\d.e-]+))?/);
+  if (srgb) return [srgb[1], srgb[2], srgb[3]].map((x) => Math.round(Number(x) * 255)).concat(srgb[4] === undefined ? 1 : Number(srgb[4]));
+  const m = String(s).match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])] : null;
+}
+function cdFundoEfetivo(el) {
+  const camadas = [];
+  for (let e = el; e; e = e.parentElement) {
+    const c = cdLerCor(getComputedStyle(e).backgroundColor);
+    if (c && c[3] > 0) { camadas.push(c); if (c[3] >= 1) break; }
+  }
+  let r = [255, 255, 255];
+  for (let i = camadas.length - 1; i >= 0; i--) { const q = camadas[i]; r = [0, 1, 2].map((k) => q[k] * q[3] + r[k] * (1 - q[3])); }
+  return r.map(Math.round);
+}
+function cdContraste(a, b) {
+  const lum = (c) => { const f = (x) => ((x /= 255) <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4); return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const x = lum(a), y = lum(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+function cdCorComContraste(cor, fundo, texto, alvo = 3) {
+  let c = cor;
+  for (let t = 5; cdContraste(c, fundo) < alvo && t <= 100; t += 5) c = mnMistura(texto, cor, t / 100);
+  return c;
+}
 
 function renderCrmDashChartFinanceiro() {
   if (typeof Chart === 'undefined') return;
@@ -13350,34 +13378,42 @@ function renderCrmDashChartFinanceiro() {
   const despesas = meses.map((m) => despesasDoMesCrm(m));
 
   if (CRM_CHART_FINANCEIRO) CRM_CHART_FINANCEIRO.destroy();
+  // v147: trocou o tema na própria página (menu Claro/Escuro)? o gráfico redesenha com as cores novas
+  if (!CRM_CHART_TEMA_OBS && typeof MutationObserver !== 'undefined') {
+    CRM_CHART_TEMA_OBS = new MutationObserver(() => {
+      clearTimeout(CRM_CHART_TEMA_T);
+      CRM_CHART_TEMA_T = setTimeout(() => { const s = document.getElementById('crm-secao-dashboard'); if (CRM_CHART_FINANCEIRO && s && s.style.display !== 'none') renderCrmDashChartFinanceiro(); }, 60);
+    });
+    CRM_CHART_TEMA_OBS.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-tema-custom', 'style'] });
+  }
+  const pal = mnPaleta();
+  const corTotal = cdCorComContraste(pal.destaque, cdFundoEfetivo(ctx), pal.texto);
+  const estreito = window.matchMedia && window.matchMedia('(max-width: 360px)').matches;
+  const opcoes = mnOpcoesGrafico('line', pal, { semLegenda: true, dica: { label: (c) => `${c.dataset.label}: ${formatMoney(c.parsed.y)}` }, eixoY: (v) => formatMoney(v), interacao: { mode: 'index', intersect: false } });
+  Object.assign(opcoes.plugins.tooltip, { mode: 'index', intersect: false });
+  if (estreito) ['x', 'y'].forEach((k) => { opcoes.scales[k].ticks.font = { family: 'Inter', size: 10 }; opcoes.scales[k].ticks.padding = 4; });
   CRM_CHART_FINANCEIRO = new Chart(ctx.getContext('2d'), {
     type: 'line',
     data: {
       labels,
       datasets: [
-        { label: 'Faturamento Total', data: fatTotal, borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.08)', tension: 0.3, fill: false, pointRadius: 3 },
-        { label: 'Faturamento USD', data: fatUsd, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.08)', tension: 0.3, fill: false, pointRadius: 3 },
-        { label: 'Faturamento BRL', data: fatBrl, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', tension: 0.3, fill: false, pointRadius: 3 },
-        { label: 'Despesas', data: despesas, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.08)', tension: 0.3, fill: false, pointRadius: 3 },
+        // v147: cores do tema. Total na cor de destaque; BRL em tinta; USD pontilhado; despesas tracejadas
+        // a área embaixo continua na cor do tema; só o traço ganha contraste (e a legenda acompanha o traço)
+        Object.assign({ label: 'Faturamento Total', data: fatTotal }, mnLinha(pal.destaque, pal, true, false), { borderColor: mnRgba(corTotal), backgroundColor: mnRgba(corTotal) }),
+        Object.assign({ label: 'Faturamento USD', data: fatUsd }, mnLinha(pal.suave, pal, false, false), { borderDash: [2, 3] }),
+        Object.assign({ label: 'Faturamento BRL', data: fatBrl }, mnLinha(pal.texto, pal, false, false)),
+        Object.assign({ label: 'Despesas', data: despesas }, mnLinha(pal.suave, pal, false, true)),
       ],
     },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: { mode: 'index', intersect: false, callbacks: { label: (c) => `${c.dataset.label} : ${formatMoney(c.parsed.y)}` } },
-      },
-      interaction: { mode: 'index', intersect: false },
-      scales: { y: { ticks: { callback: (v) => formatMoney(v) } } },
-    },
+    options: opcoes,
   });
 
   const legendaEl = document.getElementById('crm-dash-chart-legenda');
   if (legendaEl) {
+    // a legenda mostra o traço de cada série (contínuo, pontilhado ou tracejado), não só a cor
+    const traco = (ds) => (ds.borderDash && ds.borderDash.length ? (ds.borderDash[0] < 4 ? 'dotted' : 'dashed') : 'solid');
     legendaEl.innerHTML = CRM_CHART_FINANCEIRO.data.datasets.map((ds) => `
-      <span style="display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--text-soft); margin-right:14px;">
-        <span style="width:9px; height:9px; border-radius:50%; background:${ds.borderColor}; display:inline-block;"></span>${escapeHtml(ds.label)}
-      </span>`).join('');
+      <span class="cd-leg"><span class="cd-leg-traco" style="border-top:${ds.borderWidth > 2 ? 3 : 2}px ${traco(ds)} ${ds.borderColor};"></span>${escapeHtml(ds.label)}</span>`).join('');
   }
 }
 
@@ -13455,11 +13491,11 @@ function renderCrmFinanceiroResumo() {
     Object.assign(FIN_REL, antes);
   }
   el.innerHTML = `
-    <div class="stat-card"><div class="stat-label">MRR (receita recorrente)</div><div class="stat-value" style="font-size:20px;">${formatMoney(mrr)}</div><div style="font-size:11px; color:var(--text-soft);">${recAtivas.length} ${recAtivas.length === 1 ? 'assinatura ativa' : 'assinaturas ativas'}</div></div>
+    <div class="stat-card"><div class="stat-label">MRR (receita recorrente)</div><div class="stat-value${cdValorLongo(mrr)}" style="font-size:20px;">${formatMoney(mrr)}</div><div style="font-size:11px; color:var(--text-soft);">${recAtivas.length} ${recAtivas.length === 1 ? 'assinatura ativa' : 'assinaturas ativas'}</div></div>
     <div class="stat-card${churnMes > 0 ? ' danger' : ''}"><div class="stat-label">Churn este mês</div><div class="stat-value">${churnMes}</div></div>
-    <div class="stat-card"><div class="stat-label">A receber (pendente)</div><div class="stat-value" style="font-size:18px;">${formatMoney(totalReceberPendente)}</div><div style="font-size:11px; color:${vencidas ? 'var(--danger)' : 'var(--text-soft)'};">${vencidas} vencida(s)</div></div>
-    <div class="stat-card"><div class="stat-label">A pagar (pendente)</div><div class="stat-value" style="font-size:18px;">${formatMoney(totalPagarPendente)}</div></div>
-    <div class="stat-card"><div class="stat-label">Lucro líquido do mês (DRE)</div><div class="stat-value" style="font-size:18px; color:${lucroLiquido >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatMoney(lucroLiquido)}</div></div>`;
+    <div class="stat-card"><div class="stat-label">A receber (pendente)</div><div class="stat-value${cdValorLongo(totalReceberPendente)}" style="font-size:18px;">${formatMoney(totalReceberPendente)}</div><div style="font-size:11px; color:${vencidas ? 'var(--danger)' : 'var(--text-soft)'};">${vencidas} vencida(s)</div></div>
+    <div class="stat-card"><div class="stat-label">A pagar (pendente)</div><div class="stat-value${cdValorLongo(totalPagarPendente)}" style="font-size:18px;">${formatMoney(totalPagarPendente)}</div></div>
+    <div class="stat-card"><div class="stat-label">Lucro líquido do mês (DRE)</div><div class="stat-value${cdValorLongo(lucroLiquido)}" style="font-size:18px; color:${lucroLiquido >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatMoney(lucroLiquido)}</div></div>`;
 }
 
 // Dropdown de tarefas na barra superior — mostra as tarefas de hoje
@@ -22456,11 +22492,11 @@ function renderCrmDashEntregas() {
     <button type="button" class="dsh-ent-recolher" aria-label="${DSH_ENT.recolhido ? 'Expandir' : 'Recolher'}" onclick="DSH_ENT.recolhido = !DSH_ENT.recolhido; renderCrmDashEntregas();">${kbIc(DSH_ENT.recolhido ? 'setaBaixo' : 'setaCima')}</button>
     <div class="dsh-ent-topo">
       <div class="dsh-anel"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="dsh-anel-fundo"/><circle cx="40" cy="40" r="34" class="dsh-anel-valor" stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - Math.min(1, pct / 100))}"/></svg><div><b>${pct}<small>%</small></b><span>${entregues.length}/${meta}</span></div></div>
-      <div class="dsh-ent-tit"><div><strong>ENTREGAS</strong><span class="dsh-mes"><button type="button" aria-label="Mês anterior" onclick="DSH_ENT.mes = finSomarMeses(DSH_ENT.mes || finMesAtual(), -1); renderCrmDashEntregas();">${kbIc('setaEsq')}</button>${escapeHtml(finNomeMes(mes).replace(/^(\w{3})\w*/, '$1'))}<button type="button" aria-label="Próximo mês" onclick="DSH_ENT.mes = finSomarMeses(DSH_ENT.mes || finMesAtual(), 1); renderCrmDashEntregas();">${kbIc('seta')}</button></span></div><em style="color:${corMsg};">${msg}</em></div>
+      <div class="dsh-ent-tit"><div><strong>Entregas</strong><span class="dsh-mes"><button type="button" aria-label="Mês anterior" onclick="DSH_ENT.mes = finSomarMeses(DSH_ENT.mes || finMesAtual(), -1); renderCrmDashEntregas();">${kbIc('setaEsq')}</button>${escapeHtml(finNomeMes(mes).replace(/^(\w{3})\w*/, '$1'))}<button type="button" aria-label="Próximo mês" onclick="DSH_ENT.mes = finSomarMeses(DSH_ENT.mes || finMesAtual(), 1); renderCrmDashEntregas();">${kbIc('seta')}</button></span></div><em style="color:${corMsg};">${msg}</em></div>
       <span class="kb-espaco"></span>
-      <div class="dsh-kpis"><div><small>CLIENTES ATIVOS ${info('Clientes com conteúdo no mês')}</small><b>${clientes}</b></div>
-        <div><small>META DO MÊS ${info('Conteúdos com publicação ou entrega no mês')}</small><b>${meta}</b>${faltam ? `<button type="button" class="dsh-faltam" onclick="CNT_FILTRO.mes = '${mes}'; mostrarSecaoCrm('conteudos', document.querySelector('[data-menu-id=&quot;conteudos&quot;]'));">faltam ${faltam} →</button>` : ''}</div>
-        <div><small>ENTREGUES ${info('Conteúdos na última etapa ou publicados')}</small><b class="fin-verde">${entregues.length}</b></div></div>
+      <div class="dsh-kpis"><div><small>Clientes ativos ${info('Clientes com conteúdo no mês')}</small><b>${clientes}</b></div>
+        <div><small>Meta do mês ${info('Conteúdos com publicação ou entrega no mês')}</small><b>${meta}</b>${faltam ? `<button type="button" class="dsh-faltam" onclick="CNT_FILTRO.mes = '${mes}'; mostrarSecaoCrm('conteudos', document.querySelector('[data-menu-id=&quot;conteudos&quot;]'));">faltam ${faltam} →</button>` : ''}</div>
+        <div><small>Entregues ${info('Conteúdos na última etapa ou publicados')}</small><b class="fin-verde">${entregues.length}</b></div></div>
     </div>
     ${DSH_ENT.recolhido ? '' : `<div class="dsh-ent-ind">
       <span>Lead time ${info('Tempo médio, em dias, do conteúdo criado até aprovado/publicado')} <b>${leadTime === null ? '—' : leadTime.toFixed(1).replace('.', ',') + ' d'}</b></span>
@@ -22468,10 +22504,10 @@ function renderCrmDashEntregas() {
       <span>Retrabalho ${info('Conteúdos que voltaram pra revisão ou tiveram pedido de ajuste')} <b>${retrab}%</b></span>
       <span>Qualidade ${info('Aprovados de primeira, sem pedido de ajuste')} <b>${qualidade === null ? '—' : qualidade + '%'}</b></span>
     </div>
-    <div class="dsh-ent-membros"><strong>TOP MEMBROS</strong>
+    <div class="dsh-ent-membros"><strong>Top membros</strong>
       ${top.length ? top.map((r) => `<span class="dsh-membro">${kbAvatar(r.uid, 'p')} ${escapeHtml(kbNomeUsuario(r.uid) || '')} <b>${DSH_ENT.modo === 'meta' ? r.pct + '%' : r.feitos}</b></span>`).join('') : '<span class="kb-vazio-mini">sem responsável nos conteúdos do período</span>'}
       <span class="kb-espaco"></span>
-      <span class="dsh-modo">${[['meta', 'POR META'], ['geral', 'GERAL']].map(([v, t]) => `<button type="button" class="${DSH_ENT.modo === v ? 'ativo' : ''}" onclick="DSH_ENT.modo = '${v}'; renderCrmDashEntregas();">${t}</button>`).join('')}</span>
+      <span class="dsh-modo">${[['meta', 'Por meta'], ['geral', 'Geral']].map(([v, t]) => `<button type="button" class="${DSH_ENT.modo === v ? 'ativo' : ''}" onclick="DSH_ENT.modo = '${v}'; renderCrmDashEntregas();">${t}</button>`).join('')}</span>
       <select class="srv-select" aria-label="Período" onchange="DSH_ENT.periodo = this.value; renderCrmDashEntregas();">${[['mes', 'Este mês'], ['3m', '3 meses'], ['6m', '6 meses'], ['ano', 'Este ano']].map(([v, t]) => `<option value="${v}"${DSH_ENT.periodo === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
     </div>`}
   </div>`;

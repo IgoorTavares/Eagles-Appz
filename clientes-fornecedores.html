@@ -76,7 +76,7 @@
   </div>
 </header>
 <div class="app">
-<main class="main">
+<main class="main pg-cad pg-cf">
 
 <div class="page-header">
   <div>
@@ -86,8 +86,9 @@
   <button type="button" class="btn btn-primary" onclick="openModal('modal-novo-cliente-forn')">+ Incluir cadastro</button>
 </div>
 
+<button type="button" class="btn cf-filtros-toggle" id="cf-filtros-toggle" aria-expanded="false" aria-controls="cf-filtros" onclick="cfAlternarFiltros()">Filtros<span class="cf-filtros-contador" id="cf-filtros-contador"></span></button>
 <div class="ficha-layout">
-  <div class="ficha-filtros">
+  <div class="ficha-filtros" id="cf-filtros">
     <div class="field" style="position:relative;">
       <label>Buscar por nome</label>
       <div style="display:flex; gap:8px;">

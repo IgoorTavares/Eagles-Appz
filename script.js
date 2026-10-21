@@ -6589,7 +6589,7 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
-  { data: 'Não publicada (v150) · ERP Premium Completo', itens: [
+  { data: '21/10/2026 · ERP Premium Completo', itens: [
     { titulo: 'Pedidos, Clientes, Estoque e Inventário com visual novo', badges: ['melhoria'], texto: 'As últimas telas do ERP ganharam o mesmo visual dos Cadastros: cabeçalho limpo, tabelas mais leves com valores à direita e indicadores numa faixa. O status do pedido agora tem cor de significado: aberto em âmbar, faturado em verde e cancelado em vermelho. A ficha do cliente aparece dividida em Identificação, Contato, Endereço e Comercial. Os dados e as contas não mudaram.' },
     { titulo: 'ERP no celular', badges: ['melhoria'], texto: 'No celular, pedidos, clientes, produtos do estoque e a contagem do inventário viram listas sem nada escondido à direita. No pedido, cada item vira um cartão e os botões Cancelar e Salvar ficam no alto enquanto você rola. Em Clientes, os filtros ficam atrás do botão "Filtros", que mostra quantos estão em uso. No inventário, o campo da quantidade contada ficou grande e sempre à vista.' },
     { titulo: 'Busca de Produtos em notebooks', badges: ['corrigido'], texto: 'Em telas de notebook, a busca de Produtos e a de Pedidos ficam inteiras e no lugar, com o texto de exemplo visível, sem cobrir o botão do calendário.' },

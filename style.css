@@ -2850,8 +2850,6 @@ tbody tr:hover { background: color-mix(in srgb, var(--blue-tint) 55%, transparen
 .brf-opcao-radio .brf-bolinha { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--text-soft); flex-shrink: 0; }
 .brf-opcao-radio.selecionada .brf-bolinha { border-color: var(--success); background: radial-gradient(circle, var(--success) 40%, transparent 44%); }
 
-.crm-stat-icone-badge { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, #e0544a, #c73b3b); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
-.crm-stat-icone-badge svg { width: 21px; height: 21px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 .crm-recorrencia-opcoes { display: flex; flex-direction: column; gap: 10px; }
 .crm-radio-linha { display: flex; align-items: center; gap: 10px; font-size: 13.5px; cursor: pointer; }
@@ -6120,4 +6118,207 @@ html .btn:disabled .icone-menu { stroke: currentColor; }
   .pg-fin .fin-linha-forte .fin-v, .pg-fin .fin-card:has(.fin-ic-lucro) .fin-linha-forte .fin-v { font-size: 17px; }
   .pg-fin .fin-num, .pg-fin .fin-card-valor { font-size: 19px !important; }
   .pg-fin .fin-card, .pg-fin .fin-painel { padding-left: 12px !important; padding-right: 12px !important; }
+}
+
+/* =====================================================================
+   Dashboard do CRM (crm.html, seção #crm-secao-dashboard) — Mesa de
+   Operação Premium (v147)
+   Vale só dentro de <div class="crm-secao pg-crmdash">: as outras seções
+   do CRM (Clientes, Pipeline, Kanban, Financeiro...) e as outras páginas
+   não usam essa classe. Mesmos tokens do Meu Negócio (v145) e do
+   Financeiro (v146): uma camada de superfície com fio fino, indicadores
+   em faixa, cor só para exceção (vermelho para atraso, alerta e
+   vencimento; as cores das etapas do funil continuam). As cores do
+   gráfico vêm do tema, em script.js. Nenhuma conta muda aqui.
+   Os !important existem só onde o código escreve estilo direto no
+   elemento (o Dashboard tem muitos) ou onde regras antigas já usam.
+   ===================================================================== */
+.pg-crmdash {
+  --mn-linha: var(--border);
+  --mn-sup: var(--bg-elevated);
+  --mn-muda: var(--text-soft);
+  --mn-muda-fundo: color-mix(in srgb, var(--text-soft) 78%, var(--text));
+  --mn-r: 10px;
+}
+[data-theme="dark"] .pg-crmdash { --mn-sup: color-mix(in srgb, var(--bg-elevated) 92%, #ffffff); --mn-luz: inset 0 1px 0 rgba(255, 255, 255, .045); }
+
+/* Aviso "Personalize o seu sistema": faixa neutra com régua na cor do tema */
+.pg-crmdash #sis-painel > * { background: var(--mn-sup) !important; border: 1px solid var(--mn-linha) !important; border-radius: var(--mn-r) !important; box-shadow: inset 3px 0 0 var(--blue-strong) !important; }
+
+/* Entregas: uma camada, sem degradê; o anel e o modo ativo na cor do tema */
+.pg-crmdash .dsh-ent { background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); box-shadow: var(--mn-luz, none); margin-bottom: 16px; }
+.pg-crmdash .dsh-ent::before, .pg-crmdash .dsh-ent::after { display: none; }
+.pg-crmdash .dsh-anel-valor { stroke: var(--blue-strong); }
+.pg-crmdash .dsh-ent-tit strong { font-size: 16px; font-weight: 650; letter-spacing: 0; }
+.pg-crmdash .dsh-kpis small, .pg-crmdash .dsh-ent-membros > strong { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--mn-muda); }
+.pg-crmdash .dsh-kpis b { font-size: 26px; font-weight: 650; letter-spacing: -0.015em; font-variant-numeric: tabular-nums; }
+.pg-crmdash .dsh-kpis b.fin-verde { color: var(--success-texto); }
+.pg-crmdash .dsh-ent-ind { border-top-color: var(--mn-linha); }
+.pg-crmdash .dsh-ent-ind span { color: var(--mn-muda); }
+.pg-crmdash .dsh-ent-membros { border-top-color: var(--mn-linha); }
+.pg-crmdash .dsh-membro b { color: var(--text); }
+.pg-crmdash .dsh-modo { border-color: var(--mn-linha); }
+.pg-crmdash .dsh-modo button.ativo { background: var(--blue-strong) !important; color: var(--on-accent) !important; }
+.pg-crmdash .dsh-mes { background: transparent; border: 1px solid var(--mn-linha); font-weight: 600; text-transform: none; white-space: nowrap; }
+.pg-crmdash .dsh-faltam { color: var(--danger-texto); min-height: 24px; }
+/* alvos de toque com pelo menos 24px (setas do mês, modo, editar meta) */
+.pg-crmdash .dsh-mes button { min-width: 24px; min-height: 24px; align-items: center; justify-content: center; }
+.pg-crmdash .dsh-modo button { min-height: 24px; }
+
+/* Indicadores do mês: uma faixa contínua (como no Painel e no Meu Negócio) */
+.pg-crmdash #crm-dash-topo { gap: 0 !important; background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); overflow: hidden; box-shadow: var(--mn-luz, none); margin-bottom: 16px !important; }
+.pg-crmdash #crm-dash-topo .stat-card { background: transparent; border: 0; border-left: 1px solid var(--mn-linha); border-radius: 0; box-shadow: none; transform: none; padding: 18px 20px; min-width: 0; }
+.pg-crmdash #crm-dash-topo .stat-card:first-child { border-left: 0; }
+.pg-crmdash .stat-card::before, .pg-crmdash .stat-card::after { display: none !important; }
+.pg-crmdash .stat-card:hover { transform: none; box-shadow: none; }
+.pg-crmdash .stat-label { font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--mn-muda); }
+.pg-crmdash #crm-dash-topo .stat-label { margin-bottom: 6px; }
+.pg-crmdash #crm-dash-topo .stat-value { font-size: 26px; font-weight: 650; letter-spacing: -0.015em; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* valores em R$ nunca quebram no meio: a letra só diminui quando o cartão é estreito demais para o valor
+   (o fator é menor a partir de 1 milhão, .cd-longo, que tem mais dígitos). As contagens mantêm o tamanho. */
+.pg-crmdash #crm-dash-topo .stat-card, .pg-crmdash .stat-grid:not(#crm-dash-topo) .stat-card { container-type: inline-size; }
+.pg-crmdash #crm-dash-topo .stat-card:nth-child(2) .stat-value { font-size: clamp(14px, 12cqi, 26px); }
+.pg-crmdash #crm-dash-topo .stat-value.cd-longo { font-size: clamp(13px, 9.5cqi, 26px); }
+.pg-crmdash .cd-rodape { margin-top: 6px; font-size: 12.5px; color: var(--mn-muda); font-variant-numeric: tabular-nums; }
+/* meta de receita: valores em tinta, barra fina na cor do tema */
+.pg-crmdash .cd-meta-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pg-crmdash .cd-meta-editar { background: none; border: 0; padding: 3px; margin: -3px; color: var(--mn-muda); cursor: pointer; display: inline-flex; }
+.pg-crmdash .cd-meta-editar:hover { color: var(--text); }
+.pg-crmdash .cd-meta-sub { font-size: 12.5px; color: var(--mn-muda); margin: 0 0 10px; }
+.pg-crmdash .cd-meta-valores { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; margin: 6px 0; font-variant-numeric: tabular-nums; }
+.pg-crmdash .cd-meta-valores strong { font-weight: 650; }
+.pg-crmdash .cd-meta-barra { height: 4px; background: var(--bg-soft); border-radius: 100px; overflow: hidden; }
+.pg-crmdash .cd-meta-barra > div { height: 100%; background: var(--blue-strong); }
+.pg-crmdash .cd-meta-pct { font-size: 12px; color: var(--mn-muda); margin-top: 6px; }
+
+/* Painéis: uma camada, fio fino, títulos firmes e ícones neutros */
+.pg-crmdash .panel { background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); box-shadow: var(--mn-luz, none); padding: 20px 24px; }
+.pg-crmdash .panel::before, .pg-crmdash .panel::after { display: none; }
+.pg-crmdash .crm-dash-grid-3, .pg-crmdash .crm-dash-grid-2 { gap: 16px; margin-bottom: 16px !important; }
+.pg-crmdash .crm-dash-grid-3 > *, .pg-crmdash .crm-dash-grid-2 > *, .pg-crmdash .dsh-ent-ind > * { min-width: 0; }
+.pg-crmdash .panel[style*="margin-bottom"] { margin-bottom: 16px !important; }
+.pg-crmdash .panel-title { margin-bottom: 14px; align-items: baseline !important; }
+.pg-crmdash .panel-title h2 { font-size: 16px; font-weight: 600; letter-spacing: 0; color: var(--text) !important; display: flex; align-items: center; gap: 8px; }
+.pg-crmdash .panel-title h2 .ic { width: 16px; height: 16px; color: var(--mn-muda); flex-shrink: 0; }
+.pg-crmdash .panel-title h2 .ic-perigo { color: var(--danger-texto); }
+.pg-crmdash .panel-title > span { font-size: 13px; color: var(--mn-muda); }
+
+/* Gráfico: altura contida; legenda com o traço de cada série */
+.pg-crmdash .cd-graf { position: relative; height: 260px; }
+.pg-crmdash #crm-dash-chart-legenda { display: flex; flex-wrap: wrap; gap: 6px 16px; text-align: left !important; margin-top: 14px !important; }
+.pg-crmdash .cd-leg { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); }
+.pg-crmdash .cd-leg-traco { display: inline-block; width: 16px; height: 0; }
+
+/* Listas: linhas finas, origem como etiqueta discreta, ícones de atividade em fundo neutro */
+.pg-crmdash .list-row { padding: 11px 0; border-top-color: var(--mn-linha); }
+.pg-crmdash .list-row-main { min-width: 0; }
+.pg-crmdash .list-row-title { font-size: 14px; font-weight: 500; overflow-wrap: break-word; }
+.pg-crmdash .list-row-sub { font-size: 12.5px; color: var(--mn-muda); overflow-wrap: break-word; }
+.pg-crmdash .dsh-origem { background: transparent; border: 1px solid var(--mn-linha); color: var(--mn-muda); font-size: 11.5px; padding: 1px 8px; }
+.pg-crmdash .dsh-ev-ic { background: var(--bg-soft); }
+/* campo de lembrete pode encolher: o botão + fica sempre dentro do painel */
+.pg-crmdash #crm-novo-lembrete { min-width: 0; }
+.pg-crmdash .dsh-check { border-color: var(--mn-linha); }
+.pg-crmdash .icon-dot { box-shadow: none; }
+.pg-crmdash .cw-rotulo { font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--mn-muda); }
+
+/* Kanban (visão rápida): faixa com divisórias no lugar de caixinhas */
+.pg-crmdash .dsh-kb-nums { gap: 0; border: 1px solid var(--mn-linha); border-radius: var(--mn-r); overflow: hidden; }
+.pg-crmdash .dsh-kb-num { background: transparent; border: 0; border-radius: 0; border-left: 1px solid var(--mn-linha); border-top: 1px solid var(--mn-linha); min-width: 0; }
+.pg-crmdash .dsh-kb-num:nth-child(3n + 1) { border-left: 0; }
+.pg-crmdash .dsh-kb-num:nth-child(-n + 3) { border-top: 0; }
+.pg-crmdash .dsh-kb-num b { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.pg-crmdash .dsh-kb-num.neg b { color: var(--danger-texto); }
+.pg-crmdash .dsh-kb-num.pos b { color: var(--success-texto); }
+
+/* Contas de hoje e resumo financeiro: valores alinhados; cor só para o que pede atenção */
+.pg-crmdash .dsh-venc-tot { color: var(--mn-muda); }
+.pg-crmdash .fin-verde { color: var(--success-texto); }
+.pg-crmdash .fin-vermelho { color: var(--danger-texto); }
+.pg-crmdash .stat-grid:not(#crm-dash-topo) { gap: 0 !important; border: 1px solid var(--mn-linha); border-radius: var(--mn-r); overflow: hidden; }
+.pg-crmdash .stat-grid:not(#crm-dash-topo) .stat-card { background: transparent; border: 0; border-left: 1px solid var(--mn-linha); border-top: 1px solid var(--mn-linha); border-radius: 0; box-shadow: none; margin: 0 !important; padding: 14px 16px; min-width: 0; }
+.pg-crmdash .stat-grid:not(#crm-dash-topo) .stat-value { font-size: 20px !important; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-crmdash .stat-grid:not(#crm-dash-topo) .stat-value { font-size: clamp(13px, 12cqi, 20px) !important; }
+.pg-crmdash .stat-grid:not(#crm-dash-topo) .stat-value.cd-longo { font-size: clamp(13px, 9.5cqi, 20px) !important; }
+/* cores escritas direto no elemento (avisos, NPS, datas): no tom de texto do tema, legível */
+.pg-crmdash [style*="color:var(--warning)"] { color: var(--warning-texto) !important; }
+.pg-crmdash [style*="color:var(--success)"] { color: var(--success-texto) !important; }
+.pg-crmdash [style*="color:var(--danger)"] { color: var(--danger-texto) !important; }
+
+/* Diagnóstico: aviso compacto, alinhado à esquerda */
+.pg-crmdash .crm-dash-diagnostico { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; text-align: left; padding: 18px 24px; }
+.pg-crmdash .crm-dash-diagnostico .ic-circulo { grid-row: 1 / 3; width: 40px; height: 40px; margin: 0; background: var(--bg-soft) !important; color: var(--mn-muda) !important; box-shadow: none !important; }
+.pg-crmdash .crm-dash-diagnostico h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+.pg-crmdash .crm-dash-diagnostico p { margin: 0; max-width: none; color: var(--mn-muda); }
+.pg-crmdash .crm-dash-vazio { padding: 22px 8px; color: var(--mn-muda); }
+.pg-crmdash .btn { box-shadow: none !important; transform: none !important; }
+
+/* Celular: atalhos planos (como no Painel), indicadores em 2×2 */
+@media (max-width: 768px) {
+  .pg-crmdash .crm-home-rotulo { font-size: 16px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text); margin: 4px 0 10px; }
+  .pg-crmdash .crm-home-grade { gap: 4px; margin-bottom: 20px; }
+  .pg-crmdash .crm-home-tile { border: 0; border-radius: var(--mn-r); background: transparent; padding: 10px 2px; }
+  .pg-crmdash .crm-home-ic { background: var(--bg-soft); color: var(--text); border-radius: 12px; }
+  .pg-crmdash #crm-dash-topo { grid-template-columns: 1fr 1fr !important; }
+  .pg-crmdash #crm-dash-topo .stat-card { border-left: 0; border-top: 1px solid var(--mn-linha); padding: 14px 16px; }
+  .pg-crmdash #crm-dash-topo .stat-card:first-child { border-top: 0; }
+  .pg-crmdash #crm-dash-topo .stat-card:nth-child(-n + 2) { grid-column: 1 / -1; }
+  .pg-crmdash #crm-dash-topo .stat-card:nth-child(4) { border-left: 1px solid var(--mn-linha); }
+  .pg-crmdash #crm-dash-topo .stat-value { font-size: 20px; }
+  .pg-crmdash #crm-dash-topo .stat-card:nth-child(2) .stat-value { font-size: clamp(14px, 12cqi, 20px); }
+  .pg-crmdash #crm-dash-topo .stat-value.cd-longo { font-size: clamp(13px, 9.5cqi, 20px); }
+  .pg-crmdash .panel { padding: 16px; }
+  .pg-crmdash .cd-graf { height: 220px; }
+  .pg-crmdash .dsh-ent-topo { padding: 16px; }
+}
+/* Telas estreitas (320px) e celular com zoom de 200% (188px): o que não cabe
+   lado a lado desce para a linha de baixo — nada fica escondido nem
+   quebrado letra por letra */
+@media (max-width: 360px) {
+  .pg-crmdash #crm-dash-topo { grid-template-columns: 1fr !important; }
+  .pg-crmdash #crm-dash-topo .stat-card { border-left: 0 !important; }
+  .pg-crmdash #crm-financeiro-resumo { grid-template-columns: 1fr !important; }
+  .pg-crmdash #crm-financeiro-resumo .stat-card { border-left: 0; }
+  .pg-crmdash .panel-title { flex-wrap: wrap; gap: 6px; }
+  .pg-crmdash .dsh-ent-topo, .pg-crmdash .dsh-ent-membros { flex-wrap: wrap; }
+  .pg-crmdash .dsh-ent-tit > div { flex-wrap: wrap; row-gap: 6px; }
+  .pg-crmdash .dsh-kpis { flex-wrap: wrap; gap: 12px 20px; justify-content: flex-start; }
+  .pg-crmdash .dsh-ent-ind { grid-template-columns: 1fr; }
+  .pg-crmdash .dsh-ent-ind span { justify-content: space-between; padding: 8px 16px; }
+  .pg-crmdash .dsh-kb-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-crmdash .dsh-kb-num:nth-child(n) { border-left: 1px solid var(--mn-linha); border-top: 1px solid var(--mn-linha); }
+  .pg-crmdash .dsh-kb-num:nth-child(2n + 1) { border-left: 0; }
+  .pg-crmdash .dsh-kb-num:nth-child(-n + 2) { border-top: 0; }
+  .pg-crmdash .crm-dash-diagnostico { grid-template-columns: 1fr; }
+  .pg-crmdash .crm-dash-diagnostico .ic-circulo { grid-row: auto; margin-bottom: 8px; }
+  .pg-crmdash #crm-novo-lembrete { width: 100%; }
+  .pg-crmdash .dsh-ent-membros .srv-select { min-width: 0; max-width: 100%; flex: 1 1 100%; }
+  /* linhas das listas: o texto ocupa a largura toda; etiqueta de origem e botões descem */
+  .pg-crmdash .list-row { flex-wrap: wrap; }
+  .pg-crmdash .list-row-main { flex: 1 1 calc(100% - 60px); }
+  .pg-crmdash .list-row .dsh-origem, .pg-crmdash .list-row .btn-ghost { margin-left: auto; }
+  /* tarefas diárias: em 320px o botão de excluir ainda cabe na mesma linha */
+  .pg-crmdash #crm-tarefas-lista .list-row-main { flex-basis: 0; }
+}
+@media (max-width: 240px) {
+  .pg-crmdash .panel, .pg-crmdash .dsh-ent-topo, .pg-crmdash #crm-dash-topo .stat-card { padding-left: 12px; padding-right: 12px; }
+  .pg-crmdash .crm-home-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-crmdash .crm-home-txt { white-space: normal; }
+  .pg-crmdash .dsh-kb-nums { grid-template-columns: minmax(0, 1fr); }
+  .pg-crmdash .dsh-kb-num:nth-child(n) { border-left: 0; border-top: 1px solid var(--mn-linha); }
+  .pg-crmdash .dsh-kb-num:first-child { border-top: 0; }
+  .pg-crmdash .dsh-kpis > div { flex: 1 1 100%; align-items: flex-start; }
+  .pg-crmdash .cd-meta-valores { flex-direction: column; gap: 2px; }
+  .pg-crmdash #crm-dash-topo .stat-value { font-size: 19px; }
+  .pg-crmdash #crm-dash-topo .stat-card:nth-child(2) .stat-value { font-size: clamp(14px, 12cqi, 19px); }
+  .pg-crmdash #crm-dash-topo .stat-value.cd-longo { font-size: clamp(13px, 9.5cqi, 19px); }
+  .pg-crmdash .stat-grid:not(#crm-dash-topo) .stat-card { padding-left: 12px; padding-right: 12px; }
+  .pg-crmdash .stat-grid:not(#crm-dash-topo) .stat-value { font-size: clamp(13px, 12cqi, 18px) !important; }
+  .pg-crmdash .stat-grid:not(#crm-dash-topo) .stat-value.cd-longo { font-size: clamp(13px, 9.5cqi, 18px) !important; }
+  /* atividade recente: ícone mais junto do texto, para o valor em R$ caber inteiro na linha */
+  .pg-crmdash .list-row { gap: 8px; }
+  .pg-crmdash .dsh-ev-ic { margin-right: 0; width: 24px; height: 24px; }
+  .pg-crmdash .list-row-main { flex-basis: calc(100% - 40px); }
+  .pg-crmdash #crm-tarefas-lista .list-row-main { flex-basis: calc(100% - 60px); }
+  .pg-crmdash #crm-dash-nps > div[style*="grid"], .pg-crmdash #crm-dash-saude-relacionamento > div[style*="grid"] { grid-template-columns: 1fr !important; text-align: left !important; }
 }

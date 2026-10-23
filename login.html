@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Entrar · Eagles Labz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -131,7 +131,6 @@
 let LOGIN_EM_ANDAMENTO = false;
 function loginDestino() { const v = String(new URLSearchParams(location.search).get('voltar') || '').toLowerCase(); return /^[a-z0-9-]+\.html$/.test(v) && v !== 'login.html' ? v : 'index.html'; }
 initFirebase();
-bloquearZoomMobile();
 
 if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length) {
   firebase.auth().onAuthStateChanged(async (user) => {

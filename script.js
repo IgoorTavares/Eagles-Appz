@@ -6589,6 +6589,13 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: 'Não publicada (v153) · Premium Experience', itens: [
+    { titulo: 'Login, Configurações, Usuários, Meu Perfil, Empresas e Tarefas com visual novo', badges: ['melhoria'], texto: 'Essas telas ganharam o mesmo visual do ERP: cabeçalho limpo, painéis leves, abas com sublinhado e campos maiores. No Login, as mensagens de erro aparecem numa faixa fácil de ler. Em Empresas, a situação aparece com um ponto (verde para ativa, vermelho para suspensa).' },
+    { titulo: 'Usuários e Empresas no celular', badges: ['melhoria'], texto: 'No celular, cada pessoa e cada empresa vira um cartão com todas as ações (mudar nível, remover acesso, suspender, reativar, trocar plano, restaurar backup e excluir), sem nada escondido à direita, e o assistente não cobre nenhum botão.' },
+    { titulo: 'Kanban mais leve', badges: ['melhoria'], texto: 'Colunas e cartões mais leves. O nome da coluna fica sempre legível e a cor escolhida aparece num ponto ao lado. Etiquetas com um ponto colorido, e o prazo diz "atrasada" ou "hoje" por extenso. O arrastar, os nomes das colunas e a ligação com Conteúdos e Tarefas do dia não mudaram.' },
+    { titulo: 'Barra superior', badges: ['melhoria'], texto: 'Setas dos menus mais discretas, item ativo sublinhado e busca mais limpa. Em celulares muito estreitos, a barra cabe na tela.' },
+    { titulo: 'Segurança e acessibilidade', badges: ['corrigido'], texto: 'A cor de uma coluna do Kanban só é desenhada se for uma cor válida. Os campos do Login estão ligados aos seus nomes e o erro é anunciado para leitores de tela.' },
+  ] },
   { data: '21/10/2026 · ERP Premium Completo', itens: [
     { titulo: 'Pedidos, Clientes, Estoque e Inventário com visual novo', badges: ['melhoria'], texto: 'As últimas telas do ERP ganharam o mesmo visual dos Cadastros: cabeçalho limpo, tabelas mais leves com valores à direita e indicadores numa faixa. O status do pedido agora tem cor de significado: aberto em âmbar, faturado em verde e cancelado em vermelho. A ficha do cliente aparece dividida em Identificação, Contato, Endereço e Comercial. Os dados e as contas não mudaram.' },
     { titulo: 'ERP no celular', badges: ['melhoria'], texto: 'No celular, pedidos, clientes, produtos do estoque e a contagem do inventário viram listas sem nada escondido à direita. No pedido, cada item vira um cartão e os botões Cancelar e Salvar ficam no alto enquanto você rola. Em Clientes, os filtros ficam atrás do botão "Filtros", que mostra quantos estão em uso. No inventário, o campo da quantidade contada ficou grande e sempre à vista.' },
@@ -13919,6 +13926,11 @@ function renderTopbar(activeKey) {
     }
   });
   nav.innerHTML = html;
+  // nomes para os botões que só têm símbolo (leitores de tela)
+  const ajuda = document.querySelector('#help-item > .topbar-help-btn');
+  if (ajuda && !ajuda.getAttribute('aria-label')) ajuda.setAttribute('aria-label', 'Ajuda');
+  const menuCel = document.querySelector('.topbar-mobile-toggle');
+  if (menuCel && !menuCel.getAttribute('aria-label') && !menuCel.textContent.trim()) menuCel.setAttribute('aria-label', 'Abrir o menu');
 }
 
 function toggleDropdown(id) {
@@ -14356,6 +14368,8 @@ function kbChaveLocal() { return chaveLocalTenant('eagles_kanban_tarefas_local_v
 function kbColunasGlobais() {
   return KB_CONFIG && Array.isArray(KB_CONFIG.colunas) && KB_CONFIG.colunas.length ? KB_CONFIG.colunas : KB_COLUNAS_PADRAO;
 }
+// cor de coluna para desenhar: só hexadecimal (a que vem da nuvem pode ter sido gravada por fora); se não for, cinza neutro
+function kbCorSegura(cor) { return corHexValida(cor) || '#94a3b8'; }
 function kbColunasDoProjeto(projetoId) {
   const pj = projetoId && typeof kbProjeto === 'function' ? kbProjeto(projetoId) : null;
   return pj && Array.isArray(pj.colunas) && pj.colunas.length ? pj.colunas : null;
@@ -14982,7 +14996,7 @@ function kbRenderQuadro(lista, p) {
     return `
     <section class="kb-coluna" ${g.drop ? `data-kb-drop="${g.drop}"` : ''}>
       <header class="kb-coluna-cab">
-        <span class="kb-coluna-nome" style="color:${g.cor};">${g.icone ? kbIc(g.icone) + ' ' : ''}${escapeHtml(g.nome)}</span><span class="kb-coluna-n">(${g.tarefas.length + (g.coluna ? projDaColuna(g.id).length : 0)})</span>
+        <span class="kb-coluna-nome" style="color:${kbCorSegura(g.cor)}; --kb-col-cor:${kbCorSegura(g.cor)};">${g.icone ? kbIc(g.icone) + ' ' : ''}${escapeHtml(g.nome)}</span><span class="kb-coluna-n">(${g.tarefas.length + (g.coluna ? projDaColuna(g.id).length : 0)})</span>
         <span class="kb-espaco"></span>
         ${g.drop ? `<button type="button" class="kb-btn-ic" title="Nova tarefa aqui" aria-label="Nova tarefa aqui" onclick="kbNovaNoGrupo('${g.drop}')">${kbIc('mais')}</button>` : ''}
         ${g.coluna ? `<button type="button" class="kb-btn-ic${modoOrdem !== 'manual' ? ' ativo' : ''}" title="Ordenar: ${rotulosOrdem[modoOrdem]}" aria-label="Ordenar" onclick="kbCiclarOrdenacao('${g.id}')">${kbIc('ordenar')}</button>` : ''}
@@ -15019,10 +15033,10 @@ function kbRenderLista(lista, p) {
   return `<div class="kb-lista">${grupos.map((g) => {
     const aberto = fechados[g.id] === undefined ? g.tarefas.length > 0 : !fechados[g.id];
     return `
-    <div class="kb-lista-grupo" style="--kb-cor:${g.cor};" ${g.drop ? `data-kb-drop="${g.drop}"` : ''}>
+    <div class="kb-lista-grupo" style="--kb-cor:${kbCorSegura(g.cor)};" ${g.drop ? `data-kb-drop="${g.drop}"` : ''}>
       <button type="button" class="kb-lista-cab" onclick="kbAlternarGrupo('${g.id}', ${aberto ? 'true' : 'false'})">
         <span class="kb-lista-seta${aberto ? ' aberta' : ''}">${kbIc('seta')}</span>
-        ${g.icone ? kbIc(g.icone) : `<span class="kb-bolinha" style="background:${g.cor};"></span>`}
+        ${g.icone ? kbIc(g.icone) : `<span class="kb-bolinha" style="background:${kbCorSegura(g.cor)};"></span>`}
         <span class="kb-lista-nome">${escapeHtml(g.nome)}</span>
         <span class="kb-espaco"></span>
         <span class="kb-lista-n">${g.tarefas.length}</span>
@@ -15067,7 +15081,7 @@ function kbAlternarGrupo(gid, estavaAberto) {
 function kbSelectStatusHtml(t) {
   const cols = kbColunasDaTarefa(t);
   const col = cols.find((c) => c.id === t.status) || kbColuna(kbColunaNoQuadro(t));
-  return `<span class="kb-status-pill" style="--kb-cor:${col.cor};" onclick="event.stopPropagation();"><select aria-label="Status" onchange="kbAtualizar('${escapeParaOnclick(t.id)}', { status: this.value })">
+  return `<span class="kb-status-pill" style="--kb-cor:${kbCorSegura(col.cor)};" onclick="event.stopPropagation();"><select aria-label="Status" onchange="kbAtualizar('${escapeParaOnclick(t.id)}', { status: this.value })">
     ${cols.map((c) => `<option value="${escapeHtml(c.id)}"${c.id === col.id ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}
   </select></span>`;
 }
@@ -15825,7 +15839,7 @@ function kbRenderProjetos() {
       <div class="kb-projeto-num"><strong>${pr.pct}%</strong><span>${pr.feitas} de ${pr.total} tarefas concluídas</span></div>
       <span class="kb-barra-prog kb-barra-grossa"><i style="width:${pr.pct}%; background:${cor};"></i></span>
       <div class="kb-card-rodape">
-        ${pj.situacao === 'pausado' || pj.situacao === 'cancelado' ? `<span class="kb-selo-situacao ${pj.situacao}">${pj.situacao === 'pausado' ? 'Pausado' : 'Cancelado'}</span>` : `<span class="kb-status-mini" style="color:${col.cor};">● ${escapeHtml(col.nome)}</span>`}
+        ${pj.situacao === 'pausado' || pj.situacao === 'cancelado' ? `<span class="kb-selo-situacao ${pj.situacao}">${pj.situacao === 'pausado' ? 'Pausado' : 'Cancelado'}</span>` : `<span class="kb-status-mini" style="color:${kbCorSegura(col.cor)};">● ${escapeHtml(col.nome)}</span>`}
         ${pj.valor ? `<span class="kb-status-mini">${formatMoney(Number(pj.valor))}</span>` : ''}${pj.recorrente ? `<span class="kb-recorrente" title="Projeto recorrente (mensal)">${kbIc('atualizar')}</span>` : ''}
         ${pr.atrasadas ? `<span class="kb-prazo atrasado">${pr.atrasadas} atrasada(s)</span>` : ''}
         <span class="kb-espaco"></span>${pj.prazo ? `<span class="kb-prazo">${kbIc('relogio')} ${kbDataCurta(pj.prazo)}</span>` : ''}${kbAvatar(pj.responsavel, 'p')}
@@ -15968,7 +15982,7 @@ function kbRenderSubtarefasModal() {
     <div class="kb-m-check">
       <input type="checkbox" ${kbConcluida(s) ? 'checked' : ''} aria-label="Concluída" onchange="kbAlternarConcluida('${escapeParaOnclick(s.id)}'); kbRenderSubtarefasModal();">
       <button type="button" class="kb-sub-link${kbConcluida(s) ? ' feito' : ''}" onclick="kbAbrirTarefa('${escapeParaOnclick(s.id)}')">${escapeHtml(s.titulo)}</button>
-      <span class="kb-status-mini" style="color:${kbColuna(s.status).cor};">● ${escapeHtml(kbColuna(s.status).nome)}</span>
+      <span class="kb-status-mini" style="color:${kbCorSegura(kbColuna(s.status).cor)};">● ${escapeHtml(kbColuna(s.status).nome)}</span>
     </div>`).join('') || '<p class="kb-vazio-mini">Nenhuma subtarefa.</p>';
 }
 
@@ -27496,11 +27510,11 @@ function renderUsuariosTenant() {
     return `
     <tr>
       <td><div class="person-cell"><div class="avatar">${escapeHtml(initials(u.nome || u.email))}</div><div class="person-name">${escapeHtml(u.nome || '—')}${u.titular ? '<span class="nivel-titular" title="Quem contratou o serviço. Só a Eagles Labz altera ou remove.">Titular</span>' : ''}</div></div></td>
-      <td>${escapeHtml(u.email || '—')}</td>
-      <td>${fixo
+      <td data-label="E-mail">${escapeHtml(u.email || '—')}</td>
+      <td data-label="Nível">${fixo
         ? `<span class="badge badge-blue">${escapeHtml(traduzirRole(u.role))}</span>`
         : `<select class="nivel-select" aria-label="Nível de acesso" onchange="alterarNivelUsuario('${uid}', this.value, this)">${['Diretor', 'Administrativo', 'Financeiro'].map((r) => `<option value="${r}"${nivel === nivelDoRole(r) ? ' selected' : ''}>${r}</option>`).join('')}</select>`}</td>
-      <td style="text-align:right;">
+      <td class="cad-acoes" style="text-align:right;">
         ${u.uid === USUARIO_UID ? '<span style="font-size:12px; color:var(--text-soft);">você</span>'
           : u.titular ? '<span style="font-size:12px; color:var(--text-soft);">titular da conta</span>'
           : `<button class="btn btn-small btn-ghost" style="color:var(--danger);" onclick="removerAcessoUsuario('${uid}')">Remover acesso</button>`}
@@ -27713,10 +27727,10 @@ function renderTenantsLista() {
     return `
     <tr>
       <td>${escapeHtml(t.nomeEmpresa || t.id)}</td>
-      <td style="font-size:12px; color:var(--text-soft);">${escapeHtml(t.id)}</td>
-      <td>${t.criadoEm ? formatDatePt(t.criadoEm.slice(0, 10)) : '—'}</td>
-      <td><button type="button" class="btn btn-small btn-ghost" style="padding:0; border:none;" onclick="abrirModalTrocarPlano('${t.id}','${plano}','${escapeParaOnclick(t.nomeEmpresa || '')}')"><span class="badge ${planoCores[plano]}">${planoLabels[plano]} ✎</span></button></td>
-      <td>${(() => {
+      <td data-label="ID interno" style="font-size:12px; color:var(--text-soft);">${escapeHtml(t.id)}</td>
+      <td data-label="Criada em">${t.criadoEm ? formatDatePt(t.criadoEm.slice(0, 10)) : '—'}</td>
+      <td data-label="Plano"><button type="button" class="btn btn-small btn-ghost" style="padding:0; border:none;" onclick="abrirModalTrocarPlano('${t.id}','${plano}','${escapeParaOnclick(t.nomeEmpresa || '')}')"><span class="badge ${planoCores[plano]}">${planoLabels[plano]} ✎</span></button></td>
+      <td data-label="Usuários">${(() => {
         const qtd = USUARIOS_TODOS.filter((u) => u.tenantId === t.id).length;
         const lim = Number(t.limiteUsuarios) || 0;
         const titular = USUARIOS_TODOS.find((u) => u.tenantId === t.id && u.titular);
@@ -27724,8 +27738,8 @@ function renderTenantsLista() {
           <span class="badge ${lim && qtd > lim ? 'badge-danger' : lim && qtd === lim ? 'badge-warning' : 'badge-neutral'}">${qtd}/${lim || '—'}</span>
           <span style="display:block; font-size:11px; color:var(--text-soft); margin-top:3px;">${titular ? escapeHtml(titular.email || titular.nome || '') : 'sem titular'}</span></button>`;
       })()}</td>
-      <td>${ativo ? '<span class="badge badge-success">Ativa</span>' : '<span class="badge badge-danger">Suspensa</span>'}</td>
-      <td style="text-align:right; white-space:nowrap;">
+      <td data-label="Status">${ativo ? '<span class="badge badge-success pm-sit">Ativa</span>' : '<span class="badge badge-danger pm-sit erro">Suspensa</span>'}</td>
+      <td class="cad-acoes" style="text-align:right; white-space:nowrap;">
         <button class="btn btn-small btn-ghost" style="color:var(--blue-text);" onclick="abrirModalNovoAcessoEmpresa('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">+ Criar acesso</button>
         ${ativo
           ? `<button class="btn btn-small btn-ghost" style="color:var(--warning);" onclick="suspenderEmpresa('${t.id}','${escapeParaOnclick(t.nomeEmpresa || '')}')">Suspender</button>`

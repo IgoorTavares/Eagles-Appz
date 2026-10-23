@@ -55,7 +55,7 @@
 <body>
 <div id="offline-banner" class="offline-banner"><svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg> Sem conexão — trabalhando offline.</div>
 
-<div class="login-page">
+<div class="login-page pg-login">
 
   <div class="login-lado-ilustracao">
     <div class="login-ilustracao-wrap">
@@ -104,15 +104,15 @@
 
       <form id="form-login">
         <div class="field full" style="margin-bottom:14px;">
-          <label>E-mail</label>
+          <label for="login-email">E-mail</label>
           <input type="email" id="login-email" required placeholder="seuemail@exemplo.com" autocomplete="username">
         </div>
         <div class="field full">
-          <label>Senha</label>
+          <label for="login-senha">Senha</label>
           <input type="password" id="login-senha" required placeholder="••••••••" autocomplete="current-password">
         </div>
-        <p id="login-erro" style="color:var(--danger); font-size:13px; display:none; margin:12px 0 0;"></p>
-        <p id="login-info" style="color:var(--success); font-size:13px; display:none; margin:12px 0 0;"></p>
+        <p id="login-erro" role="alert" style="color:var(--danger); font-size:13px; display:none; margin:12px 0 0;"></p>
+        <p id="login-info" role="status" style="color:var(--success); font-size:13px; display:none; margin:12px 0 0;"></p>
         <button type="submit" class="btn btn-primary" id="btn-login" style="width:100%; justify-content:center; margin-top:18px;">Entrar</button>
         <button type="button" id="btn-esqueci-senha" onclick="recuperarSenha()" style="width:100%; text-align:center; background:none; border:none; color:var(--text-soft); font-size:13px; margin-top:14px; cursor:pointer; text-decoration:underline; font-family:inherit;">Esqueceu a senha?</button>
       </form>

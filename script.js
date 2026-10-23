@@ -139,14 +139,22 @@ function salvarAparenciaSistema(prefs) {
   aplicarTemaCalculado(t);
 }
 
-// Botões Claro/Escuro do menu do perfil: voltam pro tema padrão daquele
-// modo, mas mantêm as outras preferências (fonte, cores individuais).
+// Botões Claro/Escuro do menu do perfil. Clicar no modo em que já está não
+// muda nada (o tema escolhido, inclusive o Personalizado, continua). Clicar no
+// outro modo vai para o último tema usado naquele modo (ou o padrão dele) e
+// guarda o atual para quando voltar. Fonte e cores individuais não mudam.
 function definirTema(tema) {
   const prefs = lerAparenciaSistema();
-  prefs.tema = tema === 'dark' ? 'padrao-escuro' : 'padrao-claro';
-  salvarAparenciaSistema(prefs);
+  const modo = tema === 'dark' ? 'dark' : 'light';
+  const atual = TEMAS_SISTEMA.find((t) => t.id === prefs.tema) || TEMAS_SISTEMA[0];
+  if (atual.modo !== modo) {
+    prefs[atual.modo === 'dark' ? 'ultimoEscuro' : 'ultimoClaro'] = prefs.tema;
+    const lembrado = TEMAS_SISTEMA.find((t) => t.id === prefs[modo === 'dark' ? 'ultimoEscuro' : 'ultimoClaro'] && t.modo === modo);
+    prefs.tema = lembrado ? lembrado.id : (modo === 'dark' ? 'padrao-escuro' : 'padrao-claro');
+    salvarAparenciaSistema(prefs);
+  }
   if (typeof fecharTodosDropdowns === 'function') fecharTodosDropdowns();
-  if (document.getElementById('cfg-ap-temas-escuros')) { if (CFG_FORM && CFG_FORM.tema) CFG_FORM.tema = prefs.tema; renderTemasAparenciaSistema(); }
+  if (document.getElementById('cfg-ap-temas-escuros')) { if (CFG_FORM && CFG_FORM.tema) Object.assign(CFG_FORM, { tema: prefs.tema, ultimoClaro: prefs.ultimoClaro, ultimoEscuro: prefs.ultimoEscuro }); renderTemasAparenciaSistema(); }
 }
 
 // ---------- Tamanho da fonte ----------
@@ -525,6 +533,7 @@ function checarDocumento(inputId, hintId, tipo) {
   const input = document.getElementById(inputId);
   const hint = document.getElementById(hintId);
   if (!input || !hint) return;
+  hint.style.color = ''; // a cor de "inválido" não pode ficar presa quando o número é corrigido
   const bruto = input.value;
   input.value = tipo === 'cpf' ? formatarCPF(bruto) : formatarCNPJ(bruto);
   const numeros = limparNumeros(input.value);
@@ -942,6 +951,44 @@ function cloudSet(key, data) {
   return true;
 }
 
+// Espera a resposta do servidor de uma gravação do Firestore e devolve o
+// estado REAL: 'confirmado' ou 'falha'. Se o servidor demorar (ou o aparelho
+// estiver sem internet), chama aoPendente — a tela avisa que ainda não foi
+// confirmado, sem dizer "Salvo". Quando a conexão volta, o Firestore envia a
+// gravação guardada e a promessa termina como 'confirmado'.
+function aguardarConfirmacaoGravacao(promessa, aoPendente, rotulo) {
+  let terminou = false;
+  const semInternet = typeof navigator !== 'undefined' && navigator.onLine === false;
+  const timer = setTimeout(() => { if (!terminou && typeof aoPendente === 'function') aoPendente(); }, semInternet ? 0 : 2500);
+  return promessa.then(() => {
+    terminou = true; clearTimeout(timer);
+    atualizarIndicadorSincronizacao('ok');
+    return 'confirmado';
+  }).catch((err) => {
+    terminou = true; clearTimeout(timer);
+    console.error('Erro ao salvar "' + (rotulo || '') + '" na nuvem:', err);
+    atualizarIndicadorSincronizacao('erro');
+    return 'falha';
+  });
+}
+
+// Grava SÓ os campos informados de uma chave comum (tenants/{id}/dados/{chave},
+// campo valor), juntando com o que já está no banco (set com merge). Campos que
+// a tela não conhece e mudanças feitas por outro aparelho em outros campos ficam
+// preservados; o formato do documento não muda. Devolve uma promessa com:
+// 'confirmado', 'local' (modo sem nuvem: salvo no aparelho), 'sem-permissao',
+// 'nao-pronto' (dados ainda carregando; nada foi enviado) ou 'falha'.
+function cloudSalvarCampos(key, campos, aoPendente) {
+  if (FIREBASE_PRONTO && TENANT_ID && !nivelPodeGravarChave(key)) { avisarSemPermissaoNivel(); return Promise.resolve('sem-permissao'); }
+  if (!chaveProntaParaGravar(key)) return Promise.resolve('nao-pronto');
+  if (!FIREBASE_PRONTO || !TENANT_ID) {
+    const atual = lsLoad(chaveLocalTenant(key), {});
+    lsSave(chaveLocalTenant(key), Object.assign({}, atual && typeof atual === 'object' ? atual : {}, campos));
+    return Promise.resolve('local');
+  }
+  return aguardarConfirmacaoGravacao(caminhoTenantDoc(key).set({ valor: campos }, { merge: true }), aoPendente, key);
+}
+
 async function cloudGetForce(key, fallback) {
   if (!FIREBASE_PRONTO || !TENANT_ID) return lsLoad(chaveLocalTenant(key), fallback);
   if (CHAVES_COLECAO[key]) return colGetForce(key, fallback);
@@ -1211,7 +1258,8 @@ async function loginConferirBloqueio(user) {
 // ---------- sair: não deixa dados da empresa guardados no aparelho ----------
 function logoutLimparAparelho() {
   try {
-    const manter = /^(eagles_tema|eagles_prefs_|eagles_login_falhas::|eagles_sis_teste_off)/;
+    // fica só o que é preferência do aparelho (tema, aparência, avisos); dados da empresa saem
+    const manter = /^(eagles_tema|eagles_aparencia_|eagles_prefs_|eagles_login_falhas::|eagles_sis_teste_off)/;
     Object.keys(localStorage).forEach((k) => {
       if (manter.test(k)) return;
       if (k.includes('::') || /^eagles_/.test(k)) localStorage.removeItem(k);
@@ -5308,6 +5356,8 @@ function initConfiguracoesPage() {
   }
   cloudWatch(PAG_PIXELS_KEY, PAG_PIXELS, (d) => { PAG_PIXELS = Object.assign({ meta: {}, ga: {} }, d || {}); });
   if (/^#portal/.test(window.location.hash || '')) { mostrarAbaConfig('aparencia'); setTimeout(() => { if (typeof abrirCardAparenciaConfig === 'function') abrirCardAparenciaConfig('portal'); }, 0); return; }
+  // atalho da aba Tema do Meu Perfil: abre direto a escolha de temas
+  if (/^#aparencia-sistema/.test(window.location.hash || '')) { mostrarAbaConfig('aparencia'); setTimeout(() => abrirCfgAparenciaSistema(), 0); return; }
   if (/^#integracoes-pixels/.test(window.location.hash || '')) { mostrarAbaConfig('integracoes'); setTimeout(() => cfgAbrirPixels('meta'), 0); return; }
   const abaInicial = (window.location.hash || '').replace('#', '');
   mostrarAbaConfig(['perfil', 'meusistema', 'aparencia', 'notificacoes', 'emails', 'email', 'automacoes', 'integracoes', 'conteudos', 'backup', 'atualizacoes'].includes(abaInicial) ? abaInicial : 'perfil');
@@ -5342,57 +5392,25 @@ function mostrarAbaConfig(aba) {
 
 function renderAbaPerfilConfig() {
   const el = document.getElementById('cfg-conteudo-aba');
-  const d = PERFIL_DATA || perfilSeed();
+  // Aqui ficam só os dados da pessoa e da conta. Os dados da empresa (nome,
+  // CNPJ, endereço e logotipo) ficam só em Meu Perfil: as duas telas gravavam
+  // o mesmo documento e uma apagava campos da outra.
   el.innerHTML = `
     <div class="cfg-painel">
       <div class="cfg-painel-titulo">
         <div class="cfg-painel-titulo-icone"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-        <div><h2>Perfil</h2><p>Informações pessoais e profissionais</p></div>
-      </div>
-
-      <div class="field full" style="margin-bottom:18px;">
-        <label>Foto de Perfil / Logo</label>
-        <div style="display:flex; align-items:center; gap:14px; margin-top:6px;">
-          <div id="cfg-perfil-avatar-preview" style="width:64px; height:64px; border-radius:50%; background:var(--bg-soft); display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;"></div>
-          <div>
-            <button type="button" class="btn btn-small" onclick="document.getElementById('cfg-input-logo').click()">Fazer upload</button>
-            <input type="file" id="cfg-input-logo" accept="image/*" style="display:none;" onchange="selecionarLogoPerfilConfig(this)">
-            <p style="font-size:11px; color:var(--text-soft); margin:6px 0 0;">PNG, JPG até 5MB.</p>
-          </div>
-        </div>
+        <div><h2>Perfil</h2><p>Seus dados pessoais e da sua conta</p></div>
       </div>
 
       <div class="form-grid">
-        <div class="field"><label>Idioma</label><select id="cfg-idioma"><option value="pt-BR">Português (BR)</option><option value="en">English</option><option value="es">Español</option></select></div>
-        <div class="field"><label>E-mail da conta</label><input type="email" id="cfg-email-conta" disabled></div>
+        <div class="field"><label for="cfg-email-conta">E-mail da conta</label><input type="email" id="cfg-email-conta" disabled></div>
+        <div class="field"><label for="cfg-nome-completo">Nome Completo *</label><input type="text" id="cfg-nome-completo" autocomplete="name"></div>
       </div>
-      <div class="form-grid">
-        <div class="field"><label>Nome Completo *</label><input type="text" id="cfg-nome-completo"></div>
-        <div class="field"><label>Nome da Empresa</label><input type="text" id="cfg-nome-empresa"></div>
-      </div>
-      <div class="form-grid">
-        <div class="field"><label>Telefone</label><input type="text" id="cfg-telefone"></div>
-        <div class="field"><label>CPF/CNPJ</label><input type="text" id="cfg-cpf-cnpj" placeholder="000.000.000-00"></div>
-      </div>
-      <div class="form-grid">
-        <div class="field"><label>Endereço</label><input type="text" id="cfg-endereco"></div>
-        <div class="field"><label>Número</label><input type="text" id="cfg-numero"></div>
-      </div>
-      <div class="form-grid">
-        <div class="field"><label>Bairro</label><input type="text" id="cfg-bairro"></div>
-        <div class="field"><label>Cidade</label><input type="text" id="cfg-cidade"></div>
-      </div>
-      <div class="form-grid">
-        <div class="field"><label>Estado</label><input type="text" id="cfg-estado" maxlength="2"></div>
-        <div class="field"><label>CEP</label><input type="text" id="cfg-cep"></div>
-      </div>
-      <div class="form-grid">
-        <div class="field"><label>País</label><input type="text" id="cfg-pais" value="BR"></div>
-        <div class="field"><label>Moeda</label><select id="cfg-moeda"><option value="BRL">R$ BRL - Real Brasileiro</option><option value="USD">$ USD - Dólar Americano</option><option value="EUR">€ EUR - Euro</option></select></div>
-      </div>
+      <p class="cfg-aviso-info" style="margin:14px 0 0;">Os dados da empresa (nome, CNPJ, endereço, contatos e logotipo) ficam em <strong>Meu Perfil</strong>. <a href="meu-perfil.html">Abrir Meu Perfil</a></p>
 
-      <div style="display:flex; justify-content:flex-end; margin-top:18px;">
-        <button type="button" class="btn btn-primary" onclick="salvarPerfilConfig()">Salvar</button>
+      <div style="display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-top:18px;">
+        <span id="cfg-perfil-status" role="status" aria-live="polite" style="display:none; font-size:13px;"></span>
+        <button type="button" class="btn btn-primary" id="btn-salvar-perfil-config" onclick="salvarPerfilConfig()">Salvar</button>
       </div>
     </div>
 
@@ -5412,9 +5430,9 @@ function renderAbaPerfilConfig() {
       <p style="font-size:13px; font-weight:700; margin-bottom:2px;">Alterar Senha</p>
       <p style="font-size:12px; color:var(--text-soft); margin:0 0 14px;">Digite sua senha atual e a nova senha para alterá-la.</p>
       <div class="form-grid">
-        <div class="field full"><input type="password" id="senha-atual" placeholder="Senha atual"></div>
-        <div class="field full"><input type="password" id="senha-nova" placeholder="Nova senha"></div>
-        <div class="field full"><input type="password" id="senha-nova-confirmar" placeholder="Confirmar nova senha"></div>
+        <div class="field full"><input type="password" id="senha-atual" placeholder="Senha atual" aria-label="Senha atual" autocomplete="current-password"></div>
+        <div class="field full"><input type="password" id="senha-nova" placeholder="Nova senha" aria-label="Nova senha (mínimo 8 caracteres)" autocomplete="new-password" minlength="8"></div>
+        <div class="field full"><input type="password" id="senha-nova-confirmar" placeholder="Confirmar nova senha" aria-label="Confirmar nova senha" autocomplete="new-password" minlength="8"></div>
       </div>
       <p id="trocar-senha-erro" style="display:none; color:var(--danger); font-size:12.5px; margin:4px 0;"></p>
       <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
@@ -5423,85 +5441,49 @@ function renderAbaPerfilConfig() {
       </div>
     </div>`;
 
-  document.getElementById('cfg-email-conta').value = (typeof firebase !== 'undefined' && firebase.auth().currentUser && firebase.auth().currentUser.email) || '';
+
+  document.getElementById('cfg-email-conta').value = (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length && firebase.auth().currentUser && firebase.auth().currentUser.email) || '';
   document.getElementById('cfg-nome-completo').value = USUARIO_NOME || '';
-  document.getElementById('cfg-nome-empresa').value = d.nomeFantasia || d.nomeEmpresa || '';
-  document.getElementById('cfg-telefone').value = d.telefone1 || '';
-  document.getElementById('cfg-cpf-cnpj').value = d.cnpj || d.cpf || '';
-  document.getElementById('cfg-endereco').value = d.endereco || '';
-  document.getElementById('cfg-numero').value = d.numero || '';
-  document.getElementById('cfg-bairro').value = d.bairro || '';
-  document.getElementById('cfg-cidade').value = d.cidade || '';
-  document.getElementById('cfg-estado').value = d.estado || '';
-  document.getElementById('cfg-cep').value = d.cep || '';
-  document.getElementById('cfg-idioma').value = localStorage.getItem('eagles_idioma') || 'pt-BR';
-  document.getElementById('cfg-moeda').value = d.moeda || 'BRL';
-  atualizarPreviewAvatarConfig();
 }
 
-function atualizarPreviewAvatarConfig() {
-  const el = document.getElementById('cfg-perfil-avatar-preview');
+// Configurações → Perfil grava só o nome da própria pessoa (usuarios/{uid}.nome,
+// que as regras deixam cada um alterar). "Salvo ✓" só depois da confirmação.
+function cfgPerfilStatus(texto, tom, fixo) {
+  const el = document.getElementById('cfg-perfil-status');
   if (!el) return;
-  if (PERFIL_DATA.logoUrl) el.innerHTML = `<img src="${escapeHtml(urlImagemSegura(PERFIL_DATA.logoUrl))}" style="width:100%; height:100%; object-fit:cover;">`;
-  else el.innerHTML = `<svg viewBox="0 0 24 24" style="width:28px; height:28px; stroke:var(--text-soft); fill:none; stroke-width:2;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
-}
-
-function selecionarLogoPerfilConfig(input) {
-  const file = input.files && input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      const tam = 300;
-      const canvas = document.createElement('canvas');
-      canvas.width = tam; canvas.height = tam;
-      const ctx = canvas.getContext('2d');
-      const escala = Math.max(tam / img.width, tam / img.height);
-      const w = img.width * escala, h = img.height * escala;
-      ctx.drawImage(img, (tam - w) / 2, (tam - h) / 2, w, h);
-      PERFIL_DATA.logoUrl = canvas.toDataURL('image/png', 0.9);
-      atualizarPreviewAvatarConfig();
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+  clearTimeout(cfgPerfilStatus.timer);
+  const cores = { ok: 'var(--success)', erro: 'var(--danger)', alerta: 'var(--warning)', neutro: 'var(--text-soft)' };
+  el.textContent = texto;
+  el.style.color = cores[tom] || cores.neutro;
+  el.style.display = 'inline';
+  if (!fixo) cfgPerfilStatus.timer = setTimeout(() => { el.style.display = 'none'; }, tom === 'ok' ? 2500 : 6000);
 }
 
 function salvarPerfilConfig() {
-  const get = (id) => document.getElementById(id).value.trim();
-  localStorage.setItem('eagles_idioma', get('cfg-idioma'));
-
-  PERFIL_DATA = {
-    ...PERFIL_DATA,
-    nomeEmpresa: get('cfg-nome-empresa') || PERFIL_DATA.nomeEmpresa,
-    nomeFantasia: get('cfg-nome-empresa') || PERFIL_DATA.nomeFantasia,
-    telefone1: get('cfg-telefone'),
-    cnpj: get('cfg-cpf-cnpj'),
-    endereco: get('cfg-endereco'),
-    numero: get('cfg-numero'),
-    bairro: get('cfg-bairro'),
-    cidade: get('cfg-cidade'),
-    estado: get('cfg-estado'),
-    cep: get('cfg-cep'),
-    pais: get('cfg-pais'),
-    moeda: get('cfg-moeda'),
-  };
-  cloudSet(PERFIL_KEY, PERFIL_DATA);
-  renderProfileBox();
-
-  const nomeCompleto = get('cfg-nome-completo');
-  if (nomeCompleto && nomeCompleto !== USUARIO_NOME) {
-    USUARIO_NOME = nomeCompleto;
-    const user = typeof firebase !== 'undefined' ? firebase.auth().currentUser : null;
-    if (user) firestoreDb.collection('usuarios').doc(user.uid).set({ nome: nomeCompleto }, { merge: true });
-    const elNome = document.getElementById('usuario-logado');
-    if (elNome) elNome.textContent = nomeCompleto;
-  }
-
-  avisar('Configurações de perfil salvas com sucesso!');
+  const nome = (document.getElementById('cfg-nome-completo').value || '').trim();
+  if (!nome) { cfgPerfilStatus('Preencha o nome completo.', 'erro'); return Promise.resolve('invalido'); }
+  if (nome === USUARIO_NOME) { cfgPerfilStatus('Nenhuma alteração para salvar.', 'neutro'); return Promise.resolve('sem-mudanca'); }
+  const user = FIREBASE_PRONTO && typeof firebase !== 'undefined' ? firebase.auth().currentUser : null;
+  if (!user) { cfgPerfilStatus('Sem login na nuvem: o nome não pode ser salvo neste modo.', 'erro'); return Promise.resolve('sem-login'); }
+  const btn = document.getElementById('btn-salvar-perfil-config');
+  if (btn) btn.disabled = true;
+  cfgPerfilStatus('Salvando…', 'neutro', true);
+  const gravacao = firestoreDb.collection('usuarios').doc(user.uid).set({ nome }, { merge: true });
+  return aguardarConfirmacaoGravacao(gravacao, () => {
+    cfgPerfilStatus('Ainda não confirmado: aguardando a conexão com o servidor.', 'alerta', true);
+  }, 'usuarios/nome').then((estado) => {
+    if (btn) btn.disabled = false;
+    if (estado === 'confirmado') {
+      USUARIO_NOME = nome;
+      const elNome = document.getElementById('usuario-logado');
+      if (elNome) elNome.textContent = nome;
+      cfgPerfilStatus('Salvo ✓', 'ok');
+    } else {
+      cfgPerfilStatus('Não foi possível salvar. Confira a internet e tente de novo.', 'erro');
+    }
+    return estado;
+  });
 }
-
 
 // ----- Aba: Aparência -----
 
@@ -6589,6 +6571,14 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '23/10/2026 · Estabilidade e correções', itens: [
+    { titulo: 'Troca de senha sem erro falso', badges: ['corrigido'], texto: 'Em Configurações → Perfil, a troca de senha dava certo mas mostrava uma mensagem de erro. Agora aparece "Senha alterada ✓" e os campos são limpos. Todas as telas pedem o mesmo mínimo: 8 caracteres.' },
+    { titulo: '"Salvo" só quando foi salvo de verdade', badges: ['corrigido'], texto: 'Os dados da empresa só mostram "Salvo ✓" depois que o servidor confirma. Sem internet, o aviso diz que ainda falta confirmar e muda sozinho quando a conexão volta. Se der erro, o que você digitou continua na tela. Administrativo e Financeiro consultam os dados da empresa, mas só o Diretor altera.' },
+    { titulo: 'Dados da empresa num lugar só', badges: ['melhoria'], texto: 'Razão social, CNPJ, endereço, contatos e logotipo ficam só em Meu Perfil. Configurações → Perfil fica com o seu nome e a sua senha. Antes, salvar em Configurações podia trocar a razão social pelo nome fantasia. Salvar agora grava só o que você mudou, então nada que já estava guardado se perde, mesmo com duas pessoas editando ao mesmo tempo.' },
+    { titulo: 'Avisos do Meu Perfil', badges: ['corrigido'], texto: 'A dica do CNPJ/CPF volta para a cor certa quando o número é corrigido, e os avisos de "Salvo" e "Senha alterada" aparecem uma vez e somem sozinhos.' },
+    { titulo: 'O tema continua depois de sair', badges: ['corrigido'], texto: 'O tema escolhido, as cores e o tamanho da letra ficam guardados no aparelho mesmo depois de sair do sistema (os dados da empresa continuam sendo apagados ao sair). Os botões Claro/Escuro lembram o último tema de cada modo e não apagam mais o tema personalizado. A aba Tema do Meu Perfil leva direto para Configurações → Aparência.' },
+    { titulo: 'Zoom liberado no celular', badges: ['melhoria'], texto: 'Agora dá para ampliar a tela com dois dedos em todas as páginas. No celular, os campos de texto têm letra de 16px, para o iPhone não aproximar a tela sozinho ao tocar num campo.' },
+  ] },
   { data: '23/10/2026 · Premium Experience', itens: [
     { titulo: 'Login, Configurações, Usuários, Meu Perfil, Empresas e Tarefas com visual novo', badges: ['melhoria'], texto: 'Essas telas ganharam o mesmo visual do ERP: cabeçalho limpo, painéis leves, abas com sublinhado e campos maiores. No Login, as mensagens de erro aparecem numa faixa fácil de ler. Em Empresas, a situação aparece com um ponto (verde para ativa, vermelho para suspensa).' },
     { titulo: 'Usuários e Empresas no celular', badges: ['melhoria'], texto: 'No celular, cada pessoa e cada empresa vira um cartão com todas as ações (mudar nível, remover acesso, suspender, reativar, trocar plano, restaurar backup e excluir), sem nada escondido à direita, e o assistente não cobre nenhum botão.' },
@@ -10028,7 +10018,7 @@ function eqAbrirNovo() {
     <div class="modal-header"><h2>Novo membro da equipe</h2><button type="button" class="close-btn" aria-label="Fechar" onclick="srvFecharModal()">✕</button></div>
     <div class="field full"><label>Nome</label><input type="text" id="eq-nome" maxlength="80"></div>
     <div class="field full"><label>E-mail (é o login)</label><input type="email" id="eq-email" maxlength="120" autocomplete="off"></div>
-    <div class="field full"><label>Senha inicial (mínimo 8 caracteres)</label><input type="text" id="eq-senha" maxlength="60" autocomplete="new-password"></div>
+    <div class="field full"><label>Senha inicial (mínimo 8 caracteres)</label><input type="password" id="eq-senha" maxlength="60" minlength="8" autocomplete="new-password"></div>
     <div class="field full"><label>Nível de acesso</label><select id="eq-role"><option>Administrativo</option><option>Financeiro</option><option>Diretor</option></select></div>
     <div class="field full"><label>WhatsApp (opcional)</label><input type="tel" id="eq-whats" maxlength="30" placeholder="(11) 99999-9999"></div>
     <p class="kb-vazio-mini">Passe o e-mail e a senha para a pessoa. Ela pode trocar a senha depois, no "Esqueci a senha" da tela de login.</p>
@@ -14033,7 +14023,62 @@ function renderProfileBox() {
   }
 }
 
+// Campos do formulário "Dados da empresa" (chave do dado → id do campo).
+const PERFIL_CAMPOS_FORM = {
+  tipoPessoa: 'perfil-tipo-pessoa', responsavel: 'perfil-responsavel', nomeEmpresa: 'perfil-nome-empresa', nomeFantasia: 'perfil-nome-fantasia',
+  cnpj: 'perfil-cnpj', cpf: 'perfil-cpf', inscricaoEstadual: 'perfil-ie', isento: 'perfil-isento', email: 'perfil-email',
+  telefone1: 'perfil-telefone1', telefone2: 'perfil-telefone2', whatsapp: 'perfil-whatsapp', endereco: 'perfil-endereco',
+  numero: 'perfil-numero', bairro: 'perfil-bairro', cidade: 'perfil-cidade', estado: 'perfil-estado', cep: 'perfil-cep',
+};
+// Valor de cada campo como veio do banco na última vez que a tela foi preenchida:
+// o que difere disso foi editado pela pessoa (só isso é gravado, e uma
+// atualização vinda de outro aparelho não apaga o que ela está digitando).
+let PERFIL_FORM_BASE = {};
+let PERFIL_FORM_SALVANDO = {}; // campos enviados e ainda sem resposta do servidor
+let PERFIL_AVISO_TIMER = null;
+
+function perfilLerCampo(campo) {
+  const el = document.getElementById(PERFIL_CAMPOS_FORM[campo]);
+  if (!el) return undefined;
+  return el.type === 'checkbox' ? el.checked : el.value;
+}
+function perfilValorDoBanco(d, campo) {
+  if (campo === 'isento') return !!d.isento;
+  if (campo === 'tipoPessoa') return d.tipoPessoa || 'PJ';
+  return d[campo] == null ? '' : String(d[campo]);
+}
+function perfilPodeEditar() { return nivelPodeGravarChave(PERFIL_KEY); }
+
+// Um aviso só ao lado do botão: tom ok (verde), erro, alerta ou neutro.
+// fixo = não some sozinho (ex.: "Salvando…", gravação pendente).
+function perfilMostrarAviso(texto, tom, fixo) {
+  const el = document.getElementById('perfil-salvo-aviso');
+  if (!el) return;
+  clearTimeout(PERFIL_AVISO_TIMER);
+  const cores = { ok: 'var(--success)', erro: 'var(--danger)', alerta: 'var(--warning)', neutro: 'var(--text-soft)' };
+  el.textContent = texto;
+  el.style.color = cores[tom] || cores.neutro;
+  el.style.display = 'inline';
+  if (!fixo) PERFIL_AVISO_TIMER = setTimeout(() => { el.style.display = 'none'; }, tom === 'ok' ? 2500 : 6000);
+}
+
+// Administrativo e Financeiro veem os dados da empresa, mas só o Diretor altera.
+function perfilAplicarPermissao() {
+  const pode = perfilPodeEditar();
+  const form = document.getElementById('form-perfil-empresa');
+  if (form) form.querySelectorAll('input, select, textarea, button').forEach((el) => { el.disabled = !pode; });
+  const aviso = document.getElementById('perfil-somente-leitura');
+  if (aviso) aviso.style.display = pode ? 'none' : '';
+}
+
 function initMeuPerfilPage() {
+  // Os vigias do CNPJ/CPF são ligados uma vez só (antes, cada atualização do
+  // perfil somava mais um e a checagem rodava várias vezes por letra).
+  const cnpjEl = document.getElementById('perfil-cnpj');
+  if (cnpjEl) cnpjEl.addEventListener('input', () => checarDocumento('perfil-cnpj', 'perfil-hint-cnpj', 'cnpj'));
+  const cpfEl = document.getElementById('perfil-cpf');
+  if (cpfEl) cpfEl.addEventListener('input', () => checarDocumento('perfil-cpf', 'perfil-hint-cpf', 'cpf'));
+  perfilAplicarPermissao();
   cloudWatch(PERFIL_KEY, perfilSeed(), (data) => {
     PERFIL_DATA = Object.assign(perfilSeed(), data);
     renderProfileBox();
@@ -14043,33 +14088,17 @@ function initMeuPerfilPage() {
 
 function preencherFormPerfil() {
   const d = PERFIL_DATA;
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-  set('perfil-tipo-pessoa', d.tipoPessoa || 'PJ');
-  set('perfil-responsavel', d.responsavel);
-  set('perfil-nome-empresa', d.nomeEmpresa);
-  set('perfil-nome-fantasia', d.nomeFantasia);
-  set('perfil-cnpj', d.cnpj);
-  set('perfil-cpf', d.cpf);
-  set('perfil-ie', d.inscricaoEstadual);
-  const isentoEl = document.getElementById('perfil-isento');
-  if (isentoEl) isentoEl.checked = !!d.isento;
-  set('perfil-email', d.email);
-  set('perfil-telefone1', d.telefone1);
-  set('perfil-telefone2', d.telefone2);
-  set('perfil-whatsapp', d.whatsapp);
-  set('perfil-endereco', d.endereco);
-  set('perfil-numero', d.numero);
-  set('perfil-bairro', d.bairro);
-  set('perfil-cidade', d.cidade);
-  set('perfil-estado', d.estado);
-  set('perfil-cep', d.cep);
+  Object.keys(PERFIL_CAMPOS_FORM).forEach((campo) => {
+    const el = document.getElementById(PERFIL_CAMPOS_FORM[campo]);
+    if (!el) return;
+    const editado = campo in PERFIL_FORM_BASE && perfilLerCampo(campo) !== PERFIL_FORM_BASE[campo];
+    if (editado || campo in PERFIL_FORM_SALVANDO) return;
+    const valor = perfilValorDoBanco(d, campo);
+    if (el.type === 'checkbox') el.checked = valor; else el.value = valor;
+    PERFIL_FORM_BASE[campo] = perfilLerCampo(campo);
+  });
   alternarTipoPessoaPerfil();
   atualizarPreviewLogoPerfil();
-
-  const cnpjEl = document.getElementById('perfil-cnpj');
-  if (cnpjEl) cnpjEl.addEventListener('input', () => checarDocumento('perfil-cnpj', 'perfil-hint-cnpj', 'cnpj'));
-  const cpfEl = document.getElementById('perfil-cpf');
-  if (cpfEl) cpfEl.addEventListener('input', () => checarDocumento('perfil-cpf', 'perfil-hint-cpf', 'cpf'));
 }
 
 function alternarTipoPessoaPerfil() {
@@ -14078,36 +14107,63 @@ function alternarTipoPessoaPerfil() {
   document.getElementById('perfil-campo-cpf').style.display = tipo === 'PF' ? '' : 'none';
 }
 
+// Grava só os campos informados (juntando com o que já existe no banco) e
+// mostra o estado real: "Salvo ✓" só quando TODAS as gravações em andamento
+// foram confirmadas. Se uma falhar e uma gravação seguinte não levar de novo
+// aqueles campos, o aviso final é de erro.
+let PERFIL_GRAVACOES_PENDENTES = 0;
+let PERFIL_CAMPOS_FALHARAM = {};
+function perfilGravar(campos) {
+  Object.assign(PERFIL_FORM_SALVANDO, campos);
+  PERFIL_GRAVACOES_PENDENTES++;
+  perfilMostrarAviso('Salvando…', 'neutro', true);
+  return cloudSalvarCampos(PERFIL_KEY, campos, () => {
+    perfilMostrarAviso('Ainda não confirmado: aguardando a conexão com o servidor. O aviso muda para "Salvo ✓" quando a gravação for confirmada.', 'alerta', true);
+  }).then((estado) => {
+    PERFIL_GRAVACOES_PENDENTES = Math.max(0, PERFIL_GRAVACOES_PENDENTES - 1);
+    Object.keys(campos).forEach((k) => { if (PERFIL_FORM_SALVANDO[k] === campos[k]) delete PERFIL_FORM_SALVANDO[k]; });
+    if (estado === 'confirmado' || estado === 'local') {
+      Object.keys(campos).forEach((k) => {
+        delete PERFIL_CAMPOS_FALHARAM[k];
+        if (k in PERFIL_CAMPOS_FORM && perfilLerCampo(k) === campos[k]) PERFIL_FORM_BASE[k] = campos[k];
+      });
+      PERFIL_DATA = Object.assign({}, PERFIL_DATA, campos);
+      renderProfileBox();
+      atualizarPreviewLogoPerfil();
+    } else if (estado === 'falha') {
+      Object.assign(PERFIL_CAMPOS_FALHARAM, campos);
+    } else {
+      // sem permissão ou dados ainda carregando: nada foi enviado e o próprio sistema já abriu o aviso
+      if (!PERFIL_GRAVACOES_PENDENTES) { const el = document.getElementById('perfil-salvo-aviso'); if (el) { clearTimeout(PERFIL_AVISO_TIMER); el.style.display = 'none'; } }
+      return estado;
+    }
+    if (PERFIL_GRAVACOES_PENDENTES) return estado; // ainda há gravação esperando o servidor: o aviso continua
+    if (Object.keys(PERFIL_CAMPOS_FALHARAM).length) {
+      PERFIL_CAMPOS_FALHARAM = {};
+      perfilMostrarAviso('Não foi possível salvar. Confira a internet e tente de novo — o que você digitou continua na tela.', 'erro');
+    } else {
+      perfilMostrarAviso('Salvo ✓', 'ok');
+    }
+    return estado;
+  });
+}
+
 function salvarPerfilEmpresa() {
-  const get = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
-  PERFIL_DATA = {
-    logoUrl: PERFIL_DATA.logoUrl || '',
-    tipoPessoa: get('perfil-tipo-pessoa'),
-    responsavel: get('perfil-responsavel'),
-    nomeEmpresa: get('perfil-nome-empresa'),
-    nomeFantasia: get('perfil-nome-fantasia') || get('perfil-nome-empresa'),
-    cnpj: get('perfil-cnpj'),
-    cpf: get('perfil-cpf'),
-    inscricaoEstadual: get('perfil-ie'),
-    isento: document.getElementById('perfil-isento').checked,
-    email: get('perfil-email'),
-    telefone1: get('perfil-telefone1'),
-    telefone2: get('perfil-telefone2'),
-    whatsapp: get('perfil-whatsapp'),
-    endereco: get('perfil-endereco'),
-    numero: get('perfil-numero'),
-    bairro: get('perfil-bairro'),
-    cidade: get('perfil-cidade'),
-    estado: get('perfil-estado'),
-    cep: get('perfil-cep'),
-  };
-  cloudSet(PERFIL_KEY, PERFIL_DATA);
-  renderProfileBox();
-  const aviso = document.getElementById('perfil-salvo-aviso');
-  if (aviso) {
-    aviso.style.display = 'inline';
-    setTimeout(() => { aviso.style.display = 'none'; }, 2500);
+  if (!perfilPodeEditar()) { avisarSemPermissaoNivel('os dados da empresa só podem ser alterados por um Diretor'); return Promise.resolve('sem-permissao'); }
+  const campos = {};
+  Object.keys(PERFIL_CAMPOS_FORM).forEach((campo) => {
+    const v = perfilLerCampo(campo);
+    if (v !== undefined && v !== PERFIL_FORM_BASE[campo]) campos[campo] = v;
+  });
+  // Nome fantasia em branco usa a razão social (como antes).
+  const fantasia = perfilLerCampo('nomeFantasia');
+  if (!fantasia && ('nomeFantasia' in campos || 'nomeEmpresa' in campos)) {
+    campos.nomeFantasia = perfilLerCampo('nomeEmpresa') || '';
+    const el = document.getElementById(PERFIL_CAMPOS_FORM.nomeFantasia);
+    if (el && campos.nomeFantasia) el.value = campos.nomeFantasia;
   }
+  if (!Object.keys(campos).length) { perfilMostrarAviso('Nenhuma alteração para salvar.', 'neutro'); return Promise.resolve('sem-mudanca'); }
+  return perfilGravar(campos);
 }
 
 function mostrarSecaoPerfil(secao, btn) {
@@ -14123,6 +14179,7 @@ function mostrarSecaoPerfil(secao, btn) {
 // senha — por isso pedimos a senha ATUAL aqui: ela é usada só pra
 // reautenticar a conta na hora, não fica guardada em lugar nenhum.
 
+let TROCAR_SENHA_AVISO_TIMER = null;
 async function trocarMinhaSenha() {
   const senhaAtual = document.getElementById('senha-atual').value;
   const senhaNova = document.getElementById('senha-nova').value;
@@ -14130,9 +14187,11 @@ async function trocarMinhaSenha() {
   const erroEl = document.getElementById('trocar-senha-erro');
   const sucessoEl = document.getElementById('trocar-senha-sucesso');
   const btn = document.getElementById('btn-trocar-senha');
+  const textoBotao = btn.dataset.texto || (btn.dataset.texto = btn.textContent);
 
   erroEl.style.display = 'none';
   sucessoEl.style.display = 'none';
+  clearTimeout(TROCAR_SENHA_AVISO_TIMER);
 
   if (senhaNova !== senhaNovaConfirmar) {
     erroEl.textContent = 'A nova senha e a confirmação não são iguais.';
@@ -14145,8 +14204,12 @@ async function trocarMinhaSenha() {
     return;
   }
 
-  const user = firebase.auth().currentUser;
-  if (!user) return;
+  const user = typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length ? firebase.auth().currentUser : null;
+  if (!user) {
+    erroEl.textContent = 'Entre com seu e-mail e senha para trocar a senha.';
+    erroEl.style.display = '';
+    return;
+  }
 
   btn.disabled = true;
   btn.textContent = 'Salvando...';
@@ -14156,8 +14219,11 @@ async function trocarMinhaSenha() {
     await user.reauthenticateWithCredential(credencial);
     await user.updatePassword(senhaNova);
 
-    document.getElementById('form-trocar-senha').reset();
+    // Limpa os campos pelo id: o formulário form-trocar-senha só existe no
+    // Meu Perfil (em Configurações os campos ficam soltos).
+    ['senha-atual', 'senha-nova', 'senha-nova-confirmar'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
     sucessoEl.style.display = '';
+    TROCAR_SENHA_AVISO_TIMER = setTimeout(() => { sucessoEl.style.display = 'none'; }, 6000);
   } catch (err) {
     console.error('Erro ao trocar senha:', err);
     if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
@@ -14172,7 +14238,7 @@ async function trocarMinhaSenha() {
     erroEl.style.display = '';
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Salvar nova senha';
+    btn.textContent = textoBotao;
   }
 }
 
@@ -14181,6 +14247,7 @@ async function trocarMinhaSenha() {
 function selecionarLogoEmpresa(input) {
   const file = input.files && input.files[0];
   if (!file) return;
+  if (!perfilPodeEditar()) { input.value = ''; avisarSemPermissaoNivel('o logotipo só pode ser trocado por um Diretor'); return; }
   if (!file.type.startsWith('image/')) { avisar('Selecione um arquivo de imagem (PNG ou JPG).'); return; }
   if (file.size > 8 * 1024 * 1024) { avisar('Imagem muito grande (máximo 8 MB).'); return; }
 
@@ -14199,10 +14266,8 @@ function selecionarLogoEmpresa(input) {
       ctx.drawImage(img, (tamanho - w) / 2, (tamanho - h) / 2, w, h);
       const dataUrl = canvas.toDataURL('image/png', 0.85);
 
-      PERFIL_DATA.logoUrl = dataUrl;
-      cloudSet(PERFIL_KEY, PERFIL_DATA);
-      renderProfileBox();
-      atualizarPreviewLogoPerfil();
+      perfilGravar({ logoUrl: dataUrl });
+      input.value = '';
     };
     img.onerror = () => avisar('Não foi possível ler essa imagem. Tente outro arquivo.');
     img.src = e.target.result;
@@ -14211,12 +14276,10 @@ function selecionarLogoEmpresa(input) {
 }
 
 function removerLogoEmpresa() {
-  PERFIL_DATA.logoUrl = '';
-  cloudSet(PERFIL_KEY, PERFIL_DATA);
-  renderProfileBox();
-  atualizarPreviewLogoPerfil();
+  if (!perfilPodeEditar()) { avisarSemPermissaoNivel('o logotipo só pode ser trocado por um Diretor'); return; }
   const input = document.getElementById('perfil-logo-input');
   if (input) input.value = '';
+  perfilGravar({ logoUrl: '' });
 }
 
 function atualizarPreviewLogoPerfil() {
@@ -23245,9 +23308,11 @@ const CHATBOT_KB = [
   { padroes: ['venda por vendedor', 'ranking de vendedor'], resposta: 'Em Meu Negócio → Venda por vendedor tem o ranking de vendas por vendedor, por produto, e a evolução das vendas mês a mês.' },
 
   // ---------- Conta, segurança e usuários ----------
-  { padroes: ['tema', 'cores do sistema', 'mudar a cor', 'trocar a cor', 'modo escuro', 'modo claro', 'modo noturno'], resposta: 'Clique na engrenagem no topo da tela (ou no seu perfil → Configurações) → aba Aparência → "Aparência do Sistema". Lá tem 14 temas, cores individuais e tamanho da fonte. Os botões Claro/Escuro do menu do perfil continuam funcionando como atalho.' },
+  { padroes: ['tema', 'cores do sistema', 'mudar a cor', 'trocar a cor', 'modo escuro', 'modo claro', 'modo noturno'], resposta: 'Clique na engrenagem no topo da tela (ou no seu perfil → Configurações) → aba Aparência → "Aparência do Sistema". Lá tem 14 temas, cores individuais e tamanho da fonte. Os botões Claro/Escuro do menu do perfil são um atalho: eles lembram o último tema que você usou em cada modo, então o seu tema personalizado não se perde. A escolha fica guardada no aparelho, mesmo depois de sair do sistema.' },
   { padroes: ['logo', 'logotipo', 'imagem da empresa'], resposta: 'Em Meu Perfil → Dados da empresa, no topo do formulário, tem "Enviar imagem" — ela substitui a letra do avatar no menu pela sua logo.' },
-  { padroes: ['trocar senha', 'mudar senha', 'alterar senha'], resposta: 'Vá no seu perfil (canto superior esquerdo) → Dados da empresa → aba Segurança. Lá você troca sua própria senha a qualquer momento, sem precisar de ajuda de ninguém.' },
+  { padroes: ['trocar senha', 'mudar senha', 'alterar senha'], resposta: 'Vá em Meu Perfil → aba Segurança, ou em Configurações → Perfil → Segurança. Digite a senha atual e a nova (mínimo 8 caracteres). Você troca sua própria senha a qualquer momento, sem precisar de ajuda de ninguém.' },
+  { padroes: ['dados da empresa', 'cnpj da empresa', 'razao social', 'endereco da empresa'], resposta: 'Os dados da empresa (razão social, nome fantasia, CNPJ ou CPF, contatos, endereço e logotipo) ficam em Meu Perfil → Dados da empresa. Só o Diretor altera; os outros níveis só consultam. Em Configurações → Perfil ficam apenas o seu nome e a sua senha.' },
+  { padroes: ['zoom', 'ampliar a tela', 'aumentar a tela', 'letra pequena no celular'], resposta: 'No celular, dá para ampliar a tela com dois dedos (movimento de pinça). Se as letras do sistema parecerem pequenas, você também pode ajustar o tamanho em Configurações → Aparência.' },
   { padroes: ['esqueci', 'esqueci a senha', 'recuperar senha'], resposta: 'Na tela de login, clique em "Esqueceu a senha?" — chega um link no seu e-mail pra você criar uma senha nova.' },
   { padroes: ['criar usuario', 'criar acesso', 'novo usuario', 'adicionar usuario', 'equipe', 'convidar'], resposta: 'Se você é Diretor da empresa, vá no seu perfil → Usuários e clique em "+ Novo usuário". Cada pessoa tem e-mail e senha próprios e um nível (Diretor, Administrativo ou Financeiro). Quantas pessoas cabem depende do seu plano — o contador fica no topo da tela.' },
   { padroes: ['remover acesso', 'tirar usuario', 'demitir'], resposta: 'Em Usuários, ao lado do nome da pessoa tem "Remover acesso" — ela deixa de conseguir entrar no sistema na hora.' },
@@ -23482,23 +23547,6 @@ function abrirSuporteWhatsApp() {
 // ---------- Inicialização comum de página ----------
 // =====================================================================
 
-// Trava o zoom por pinça/duplo-toque no celular. Só faz efeito em telas de
-// toque de verdade — no computador esses eventos de toque nunca disparam,
-// então isso nunca interfere no zoom do navegador (Ctrl +/-) de quem usa
-// mouse e teclado.
-function bloquearZoomMobile() {
-  document.addEventListener('touchmove', (e) => {
-    if (e.touches && e.touches.length > 1) e.preventDefault();
-  }, { passive: false });
-
-  let ultimoToque = 0;
-  document.addEventListener('touchend', (e) => {
-    const agora = Date.now();
-    if (agora - ultimoToque <= 300) e.preventDefault();
-    ultimoToque = agora;
-  }, { passive: false });
-}
-
 let PAGINA_ATIVA_KEY = '';
 function initPaginaComum(activeKey) {
   PAGINA_ATIVA_KEY = activeKey || '';
@@ -23508,7 +23556,6 @@ function initPaginaComum(activeKey) {
   montarChatbotWidget();
   try { erpanMontar(activeKey); } catch (e) { console.error(e); }
   try { erpMontarMobile(activeKey); } catch (e) { console.error(e); }
-  bloquearZoomMobile();
   // initPerfilWatch() e initBuscaGlobalWatch() NÃO entram aqui de propósito:
   // elas dependem de TENANT_ID, que só fica pronto depois que o login
   // termina de resolver (dentro de protegerPagina). Chamá-las aqui faria

@@ -6905,3 +6905,19 @@ body:has(main.pg-est) #modal-srv td[style*="color:var(--success)"], body:has(mai
   .topbar .topbar-profile-btn .chevron { display: none !important; }
   .pg-perfil .section-tabs { max-width: 100%; min-width: 0; }
 }
+
+/* ===== v154: zoom liberado no celular =====
+   O iPhone aproxima a tela sozinho ao tocar num campo com letra menor que
+   16px — era por isso que o zoom ficava travado. Com 16px nos campos, o zoom
+   com os dedos fica liberado sem esse efeito. Só em telas de celular; no
+   computador nada muda. calc() impede que a opção "Tamanho da fonte"
+   (reduzido/compacto) diminua esses campos. */
+@media (max-width: 860px) {
+  input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="hidden"])),
+  select,
+  textarea {
+    font-size: calc(16px) !important;
+  }
+  /* o total do pedido já era maior (20px): continua igual */
+  .pg-pv .pv-totais-grid + .pv-totais-grid .field:last-child input { font-size: 20px !important; }
+}

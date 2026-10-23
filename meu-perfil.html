@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meu Perfil · Eagles Labz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -95,6 +95,7 @@
   <div class="panel">
     <div class="panel-title"><h2>Dados da empresa</h2><span>essas informações identificam quem assina o sistema</span></div>
     <form id="form-perfil-empresa" onsubmit="event.preventDefault(); salvarPerfilEmpresa();">
+      <p class="cfg-aviso-info" id="perfil-somente-leitura" style="display:none;">Só um Diretor pode alterar os dados da empresa. Você pode consultar as informações abaixo.</p>
       <div class="field full" style="margin-bottom:18px;">
         <label>Logo da empresa</label>
         <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
@@ -152,7 +153,7 @@
       </div>
       <div class="modal-actions" style="justify-content:flex-start; border-top:none; padding-top:6px;">
         <button type="submit" class="btn btn-primary">Salvar dados da empresa</button>
-        <span id="perfil-salvo-aviso" style="display:none; color:var(--success); font-size:13px; align-self:center;">Salvo ✓</span>
+        <span id="perfil-salvo-aviso" role="status" aria-live="polite" style="display:none; color:var(--success); font-size:13px; align-self:center;">Salvo ✓</span>
       </div>
     </form>
   </div>
@@ -160,11 +161,9 @@
 
 <div id="secao-perfil-tema" style="display:none;">
   <div class="panel">
-    <div class="panel-title"><h2>Tema do sistema</h2><span>escolha entre claro ou escuro</span></div>
-    <div style="display:flex; gap:14px; flex-wrap:wrap;">
-      <button type="button" class="btn" style="flex:1; min-width:160px; justify-content:center; padding:22px;" onclick="definirTema('light')"><svg style="width:22px;height:22px;stroke:var(--blue-strong);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block;margin:0 auto 6px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>Tema Claro<br><span style="font-size:12px; color:var(--text-soft); font-weight:400;">Fundo branco, letras pretas</span></button>
-      <button type="button" class="btn" style="flex:1; min-width:160px; justify-content:center; padding:22px;" onclick="definirTema('dark')"><svg style="width:22px;height:22px;stroke:var(--blue-strong);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block;margin:0 auto 6px;" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>Tema Escuro<br><span style="font-size:12px; color:var(--text-soft); font-weight:400;">Fundo preto, letras brancas</span></button>
-    </div>
+    <div class="panel-title"><h2>Tema do sistema</h2><span>os temas e as cores ficam em Configurações → Aparência</span></div>
+    <p style="font-size:13px; color:var(--text-soft); margin-top:0;">Escolha entre os temas claros e escuros, crie o seu tema personalizado e ajuste o tamanho da letra em um só lugar. A escolha fica guardada neste aparelho, inclusive depois de sair do sistema.</p>
+    <a class="btn btn-primary" href="configuracoes.html#aparencia-sistema">Abrir Aparência</a>
   </div>
 
   <div class="panel">
@@ -181,8 +180,8 @@
     <form id="form-trocar-senha" onsubmit="event.preventDefault(); trocarMinhaSenha();" style="max-width:420px;">
       <div class="form-grid">
         <div class="field full"><label>Senha atual</label><input type="password" id="senha-atual" required autocomplete="current-password"></div>
-        <div class="field full"><label>Nova senha</label><input type="password" id="senha-nova" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
-        <div class="field full"><label>Confirmar nova senha</label><input type="password" id="senha-nova-confirmar" required minlength="6" autocomplete="new-password"></div>
+        <div class="field full"><label>Nova senha</label><input type="password" id="senha-nova" required minlength="8" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div>
+        <div class="field full"><label>Confirmar nova senha</label><input type="password" id="senha-nova-confirmar" required minlength="8" autocomplete="new-password"></div>
       </div>
       <p id="trocar-senha-erro" style="display:none; color:var(--danger); font-size:13px;"></p>
       <div class="modal-actions" style="justify-content:flex-start; border-top:none; padding-top:6px;">

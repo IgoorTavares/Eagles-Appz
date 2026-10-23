@@ -16,7 +16,11 @@ import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, 
 
 let env;
 const regras = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
-const db = (uid) => (uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore());
+// Todo login real é por e-mail e senha, então o login simulado também traz o
+// e-mail (a regra contaLivre lê request.auth.token.email). Cada login simulado
+// abre a conexão uma vez só: abrir de novo dá "Firestore has already been started".
+const conexoes = {};
+const db = (uid) => (uid ? (conexoes[uid] = conexoes[uid] || env.authenticatedContext(uid, { email: uid + '@teste.local' }).firestore()) : env.unauthenticatedContext().firestore());
 
 before(async () => {
   env = await initializeTestEnvironment({ projectId: 'demo-eagles', firestore: { rules: regras, host: '127.0.0.1', port: 8080 } });
@@ -169,7 +173,7 @@ test('senha errada: quem está fora do sistema só consegue SOMAR 1 no contador'
   await assertFails(getDocs(collection(anon, 'tentativas_login'))); // não lista
 });
 test('conta com 5 senhas erradas não lê nada, e só o Super Admin desbloqueia', async () => {
-  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'tentativas_login/bloq@x.com'), { falhas: 5 }); await setDoc(doc(ctx.firestore(), 'usuarios/ub'), { tenantId: 't1', role: 'Diretor', nome: 'Bloq' }); });
+  await env.withSecurityRulesDisabled(async (ctx) => { const f = ctx.firestore(); /* abre a conexão uma vez só */ await setDoc(doc(f, 'tentativas_login/bloq@x.com'), { falhas: 5 }); await setDoc(doc(f, 'usuarios/ub'), { tenantId: 't1', role: 'Diretor', nome: 'Bloq' }); });
   const ub = env.authenticatedContext('ub', { email: 'bloq@x.com' }).firestore();
   await assertFails(getDoc(doc(ub, 'tenants/t1/crm_clientes/x')));
   await assertFails(deleteDoc(doc(ub, 'tentativas_login/bloq@x.com'))); // o próprio não se desbloqueia

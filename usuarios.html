@@ -76,7 +76,7 @@
   </div>
 </header>
 <div class="app">
-<main class="main">
+<main class="main pg-usr">
 
 <div id="usuarios-sem-permissao" style="display:none;" class="panel">
   <p style="margin:0;">Só um Diretor da empresa pode gerenciar usuários. Fale com o Diretor da sua empresa.</p>
@@ -113,7 +113,7 @@
 
 <div class="modal-overlay" id="modal-novo-usuario">
   <div class="modal">
-    <div class="modal-header"><h2>Novo usuário</h2><button class="close-btn" onclick="closeModal('modal-novo-usuario')">&times;</button></div>
+    <div class="modal-header"><h2>Novo usuário</h2><button class="close-btn" aria-label="Fechar" onclick="closeModal('modal-novo-usuario')">&times;</button></div>
     <form id="form-novo-usuario" onsubmit="criarNovoUsuarioTenant(event)">
       <div class="form-grid">
         <div class="field full"><label>Nome completo</label><input type="text" id="novo-usuario-nome" required></div>

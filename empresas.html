@@ -76,7 +76,7 @@
   </div>
 </header>
 <div class="app">
-<main class="main">
+<main class="main pg-emp">
 
 <div id="empresas-sem-permissao" style="display:none;" class="panel">
   <p style="margin:0;">Só o Super Admin (dono do sistema) pode gerenciar empresas.</p>
@@ -114,7 +114,7 @@
 
 <div class="modal-overlay" id="modal-nova-empresa">
   <div class="modal">
-    <div class="modal-header"><h2>Nova empresa</h2><button class="close-btn" onclick="closeModal('modal-nova-empresa')">&times;</button></div>
+    <div class="modal-header"><h2>Nova empresa</h2><button class="close-btn" aria-label="Fechar" onclick="closeModal('modal-nova-empresa')">&times;</button></div>
     <form id="form-nova-empresa" onsubmit="criarNovaEmpresa(event)">
       <div class="form-grid">
         <div class="field full"><label>Nome da empresa</label><input type="text" id="nova-empresa-nome" required></div>
@@ -148,7 +148,7 @@
 
 <div class="modal-overlay" id="modal-novo-acesso-empresa">
   <div class="modal">
-    <div class="modal-header"><h2 id="novo-acesso-empresa-titulo">Criar acesso</h2><button class="close-btn" onclick="closeModal('modal-novo-acesso-empresa')">&times;</button></div>
+    <div class="modal-header"><h2 id="novo-acesso-empresa-titulo">Criar acesso</h2><button class="close-btn" aria-label="Fechar" onclick="closeModal('modal-novo-acesso-empresa')">&times;</button></div>
     <form id="form-novo-acesso-empresa" onsubmit="criarAcessoParaEmpresaExistente(event)">
       <input type="hidden" id="novo-acesso-tenant-id">
       <div class="form-grid">
@@ -174,7 +174,7 @@
 
 <div class="modal-overlay" id="modal-trocar-plano">
   <div class="modal">
-    <div class="modal-header"><h2>Trocar plano</h2><button class="close-btn" onclick="closeModal('modal-trocar-plano')">&times;</button></div>
+    <div class="modal-header"><h2>Trocar plano</h2><button class="close-btn" aria-label="Fechar" onclick="closeModal('modal-trocar-plano')">&times;</button></div>
     <p style="font-size:13px; color:var(--text-soft);">Empresa: <strong id="trocar-plano-empresa-nome"></strong></p>
     <div class="form-grid">
       <div class="field full">
@@ -195,7 +195,7 @@
 
 <div class="modal-overlay" id="modal-minha-empresa">
   <div class="modal">
-    <div class="modal-header"><h2>Criar minha empresa</h2><button class="close-btn" onclick="closeModal('modal-minha-empresa')">&times;</button></div>
+    <div class="modal-header"><h2>Criar minha empresa</h2><button class="close-btn" aria-label="Fechar" onclick="closeModal('modal-minha-empresa')">&times;</button></div>
     <form id="form-minha-empresa" onsubmit="criarMinhaEmpresa(event)">
       <p style="font-size:13px; color:var(--text-soft);">Isso cria uma empresa nova e já vincula ao SEU login de Super Admin — você continua entrando com o mesmo e-mail e senha de sempre, só que agora o que você lançar no Painel, Financeiro, Produtos etc. vai ficar salvo aqui, sincronizado na nuvem.</p>
       <div class="form-grid">

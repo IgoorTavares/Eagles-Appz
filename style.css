@@ -6671,3 +6671,237 @@ body:has(main.pg-est) #modal-srv td[style*="color:var(--success)"], body:has(mai
   .pg-inv td.inv-contado { flex-direction: column; align-items: stretch; }
   .pg-inv .inv-input { width: 100%; }
 }
+
+/* =====================================================================
+   Eagles Labz Premium Experience (v153): Login, Configurações, Usuários,
+   Meu Perfil, Empresas, Tarefas do dia, Kanban e barra superior
+   A mesma linguagem das v144–v150 (uma camada, fio fino, rótulos em letra
+   normal, cor de destaque só para ação, vermelho só para erro e atraso),
+   sempre dentro da classe de cada tela: .pg-login, .pg-cfg, .pg-usr,
+   .pg-perfil, .pg-emp, .pg-tt e .pg-kb. As telas das versões anteriores
+   não usam essas classes e não mudam. Nenhum dado, conta ou permissão muda.
+   ===================================================================== */
+
+/* V1 — base comum: os mesmos tokens da .pg-cad, num bloco só para as telas novas */
+:is(.pg-login, .pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt, .pg-kb) {
+  --mn-linha: var(--border);
+  --mn-sup: var(--bg-elevated);
+  --mn-muda: var(--text-soft);
+  --mn-muda-fundo: color-mix(in srgb, var(--text-soft) 78%, var(--text));
+  --mn-r: 10px;
+}
+[data-theme="dark"] :is(.pg-login, .pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt, .pg-kb) {
+  --mn-sup: color-mix(in srgb, var(--bg-elevated) 92%, #ffffff); --mn-luz: inset 0 1px 0 rgba(255, 255, 255, .045);
+  --mn-linha: color-mix(in srgb, var(--text) 13%, transparent);
+}
+
+/* cabeçalho da página: título firme, fio fino embaixo */
+:is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .page-header { align-items: flex-end; flex-wrap: wrap; gap: 12px; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--mn-linha); }
+:is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .page-header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+:is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .page-header p { font-size: 14px; color: var(--mn-muda-fundo); margin-top: 6px; }
+
+/* botões planos; o principal na cor de destaque com o texto que o tema escolhe */
+:is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt) .btn { box-shadow: none !important; transform: none !important; border-radius: 8px; }
+:is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .page-header .btn { min-height: 40px; }
+:is(.pg-login, .pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt) .btn-primary { background: var(--blue-strong); border-color: var(--blue-strong); color: var(--on-accent); }
+
+/* painéis de uma camada */
+:is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) :is(.panel, .cfg-painel) { background: var(--mn-sup); border: 1px solid var(--mn-linha); border-radius: var(--mn-r); box-shadow: var(--mn-luz, none); padding: 20px 22px; }
+:is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .panel::before, :is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .panel::after { display: none; }
+:is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .panel-title h2, .pg-cfg .cfg-painel-titulo h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.005em; }
+:is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .panel-title span, .pg-cfg .cfg-painel-titulo p { color: var(--mn-muda); font-size: 13px; }
+
+/* campos de 42px, rótulos em letra normal, foco visível */
+:is(.pg-login, .pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt) .field label { font-size: 13px; font-weight: 500; color: var(--mn-muda-fundo); text-transform: none; letter-spacing: 0; }
+:is(.pg-login, .pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt) :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]), select, textarea) { border-radius: 8px; border: 1px solid var(--mn-linha); box-shadow: none; background: var(--bg); }
+:is(.pg-login, .pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt) :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]), select) { min-height: 42px; }
+:is(.pg-login, .pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt) :is(input, select, textarea):focus { border-color: var(--blue-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue-strong) 22%, transparent); outline: none; }
+:is(.pg-login, .pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt, .pg-kb) :is(.btn, button, a, [role="button"]):focus-visible { outline: 2px solid var(--blue-strong); outline-offset: 2px; }
+
+/* abas com sublinhado (as mesmas das v148–v150) */
+.pg-perfil .section-tabs, .pg-cfg .cfg-abas { display: flex; gap: 2px; background: transparent; border: 0; border-bottom: 1px solid var(--mn-linha); border-radius: 0; padding: 0; box-shadow: none; overflow-x: auto; scrollbar-width: none; margin-bottom: 20px; }
+.pg-perfil .section-tabs button, .pg-cfg .cfg-aba { background: transparent !important; color: var(--mn-muda-fundo) !important; border-radius: 0 !important; border: 0 !important; border-bottom: 2px solid transparent !important; padding: 10px 12px !important; box-shadow: none !important; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+.pg-perfil .section-tabs button.active, .pg-cfg .cfg-aba.ativa { color: var(--text) !important; border-bottom-color: var(--blue-strong) !important; font-weight: 600; }
+
+/* situação com ponto: a cor só diz o significado; o texto fica em cor de texto */
+:is(.pg-usr, .pg-emp) .pm-sit { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; }
+:is(.pg-usr, .pg-emp) .pm-sit::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+:is(.pg-usr, .pg-emp) .pm-sit.alerta::before { background: var(--warning); }
+:is(.pg-usr, .pg-emp) .pm-sit.erro { color: var(--danger-texto); }
+:is(.pg-usr, .pg-emp) .pm-sit.erro::before { background: var(--danger); }
+
+/* V2 — Login: o mesmo desenho, mais limpo. O script do login, os IDs e as mensagens não mudam;
+   as mensagens continuam aparecendo e sumindo pelo código de sempre, aqui só a aparência delas. */
+.pg-login { background: var(--bg); }
+.pg-login .login-lado-ilustracao { background: color-mix(in srgb, var(--blue-strong) 6%, var(--bg-soft)) !important; border-right: 1px solid var(--mn-linha); }
+.pg-login .login-lado-ilustracao::before, .pg-login .login-lado-ilustracao::after { display: none !important; }
+.pg-login .login-ilustracao-wrap { max-width: 400px; }
+.pg-login .login-headline { font-size: clamp(28px, 3vw, 40px) !important; font-weight: 700; letter-spacing: -0.025em; line-height: 1.12; max-width: 520px; }
+.pg-login .login-headline .destaque { background: none !important; -webkit-text-fill-color: currentColor !important; color: var(--blue-text) !important; }
+.pg-login .login-sub { color: var(--mn-muda-fundo) !important; font-size: 15px; max-width: 460px; }
+.pg-login .login-lado-form .panel { background: var(--mn-sup) !important; border: 1px solid var(--mn-linha) !important; border-radius: 14px !important; box-shadow: var(--mn-luz, 0 1px 2px rgba(0, 0, 0, .04)) !important; padding: 32px 32px 24px !important; max-width: 400px !important; }
+.pg-login .login-lado-form .panel::before, .pg-login .login-lado-form .panel::after { display: none; }
+.pg-login .login-lado-form .panel img { max-width: 132px !important; }
+.pg-login .login-lado-form .panel > p:first-of-type { font-size: 20px !important; font-weight: 650; color: var(--text) !important; letter-spacing: -0.01em; margin: 8px 0 22px !important; }
+.pg-login #btn-login { min-height: 44px; font-size: 15px; font-weight: 600; box-shadow: none !important; transform: none !important; border-radius: 8px; }
+.pg-login #btn-esqueci-senha { text-decoration: none !important; color: var(--text) !important; font-weight: 500; width: auto !important; display: block; margin: 14px auto 0 !important; padding: 4px 6px !important; border-radius: 6px; }
+.pg-login #btn-esqueci-senha:hover { text-decoration: underline !important; }
+.pg-login #login-erro, .pg-login #login-info { padding: 10px 12px; border-radius: 8px; border-left: 3px solid; font-weight: 500; line-height: 1.45; }
+.pg-login #login-erro { background: color-mix(in srgb, var(--danger) 9%, transparent); color: var(--danger-texto) !important; }
+.pg-login #login-info { background: color-mix(in srgb, var(--success) 10%, transparent); color: var(--success-texto) !important; }
+.pg-login .login-links-legais { border-top: 1px solid var(--mn-linha); padding-top: 16px; color: var(--mn-muda-fundo) !important; }
+@media (max-width: 860px) {
+  .pg-login .login-lado-ilustracao { border-right: 0; border-bottom: 1px solid var(--mn-linha); padding: 28px 20px 24px !important; }
+  .pg-login .login-ilustracao-wrap { max-width: 230px; margin: 0 auto; }
+  .pg-login .login-headline { font-size: 24px !important; margin-top: 18px !important; }
+  .pg-login .login-sub { font-size: 14px; }
+  .pg-login .login-lado-form { padding: 20px 16px 32px !important; }
+  .pg-login .login-lado-form .panel { padding: 24px 20px 20px !important; }
+}
+
+/* V3 — Configurações: painel com o título separado por um fio e o ícone na cor do tema */
+.pg-cfg .cfg-painel { margin-bottom: 16px; }
+.pg-cfg .cfg-painel-titulo { padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--mn-linha); }
+.pg-cfg .cfg-painel-titulo-icone { background: color-mix(in srgb, var(--blue-strong) 12%, transparent) !important; color: var(--blue-text) !important; border: 0 !important; border-radius: 8px !important; }
+.pg-cfg .cfg-painel-titulo-icone svg { stroke: currentColor; }
+.pg-cfg .form-grid { gap: 14px 16px; }
+.pg-cfg .cfg-aba svg { opacity: .85; }
+
+/* V3 — Usuários e Empresas: tabela em letra normal, linhas de 52px, ações planas */
+:is(.pg-usr, .pg-emp) .panel:has(table) { padding: 4px 20px 8px; }
+:is(.pg-usr, .pg-emp) .table-scroll { margin: 0; }
+:is(.pg-usr, .pg-emp) th { font-size: 12.5px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--mn-muda); background: transparent; border-radius: 0 !important; padding: 14px 12px 10px; border-bottom: 1px solid var(--mn-linha); }
+:is(.pg-usr, .pg-emp) td { padding: 12px; height: 52px; border-bottom: 1px solid var(--mn-linha); font-size: 14px; }
+:is(.pg-usr, .pg-emp) tbody tr:last-child td { border-bottom: 0; }
+:is(.pg-usr, .pg-emp) tbody tr:hover { background: color-mix(in srgb, var(--bg-soft) 70%, transparent); }
+:is(.pg-usr, .pg-emp) .badge.pm-sit { background: transparent; padding: 0; border: 0; border-radius: 0; text-transform: none; letter-spacing: 0; }
+:is(.pg-usr, .pg-emp) .badge-neutral { color: var(--text) !important; }
+:is(.pg-usr, .pg-emp) .cad-acoes .btn-small { min-height: 32px; padding: 6px 10px; }
+:is(.pg-usr, .pg-emp) .cad-acoes .btn-ghost { background: transparent; border: 1px solid var(--mn-linha); color: var(--text); }
+:is(.pg-usr, .pg-emp) .cad-acoes .btn-ghost:hover { background: var(--bg-soft); }
+/* cores escritas direto nos botões: a versão de texto com contraste garantido em todos os temas */
+:is(.pg-usr, .pg-emp) .cad-acoes .btn[style*="--danger"] { color: var(--danger-texto) !important; }
+:is(.pg-usr, .pg-emp) .cad-acoes .btn[style*="--warning"] { color: var(--warning-texto) !important; }
+:is(.pg-usr, .pg-emp) .cad-acoes .btn[style*="--success"] { color: var(--success-texto) !important; }
+:is(.pg-usr, .pg-emp) .cad-acoes .btn[style*="--blue-text"] { color: var(--text) !important; }
+.pg-emp .cad-acoes .btn + .btn { margin-left: 4px; }
+/* Plano e Usuários são botões sem moldura (abrem as janelas de trocar plano e de usuários) */
+.pg-emp td[data-label] .btn-ghost { background: transparent !important; }
+.pg-emp .page-header > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
+.pg-usr #usuarios-contador { margin: 0 0 12px !important; color: var(--mn-muda); font-size: 13px; }
+.pg-usr .nivel-legenda > div { background: transparent; border: 0; border-left: 2px solid var(--mn-linha); border-radius: 0; padding: 4px 14px; }
+.pg-usr .nivel-legenda > div strong { font-size: 14px; }
+.pg-usr .nivel-legenda > div span { color: var(--mn-muda-fundo); font-size: 13px; }
+.pg-usr .person-cell .avatar { width: 32px; height: 32px; font-size: 12px; background: color-mix(in srgb, var(--blue-strong) 14%, var(--mn-sup)); color: var(--text); }
+.pg-usr .nivel-select { min-height: 34px; min-width: 150px; }
+
+/* V3 — Meu Perfil: logo em moldura fina e rodapé de ações com fio */
+.pg-perfil #perfil-logo-preview { border-radius: 10px !important; border: 1px solid var(--mn-linha) !important; background: var(--bg) !important; }
+.pg-perfil .modal-actions { border-top: 1px solid var(--mn-linha); padding-top: 16px; margin-top: 8px; }
+
+/* V4 — Tarefas do dia: título firme, abas com sublinhado e painel de uma camada */
+.pg-tt .tt-cab { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--mn-linha); }
+.pg-tt .tt-cab strong { font-size: 20px; font-weight: 700; letter-spacing: -0.015em; }
+.pg-tt .tt-abas { background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--mn-linha) !important; border-radius: 0 !important; padding: 0 !important; gap: 2px; margin-bottom: 16px; }
+.pg-tt .tt-abas button { background: transparent !important; color: var(--mn-muda-fundo) !important; border-radius: 0 !important; border: 0 !important; border-bottom: 2px solid transparent !important; box-shadow: none !important; font-weight: 500; flex: 0 0 auto !important; padding: 10px 14px !important; }
+.pg-tt .tt-abas button.ativo { color: var(--text) !important; border-bottom-color: var(--blue-strong) !important; font-weight: 600; }
+.pg-tt .fin-painel { background: var(--mn-sup) !important; border: 1px solid var(--mn-linha) !important; border-radius: var(--mn-r) !important; box-shadow: var(--mn-luz, none) !important; padding: 18px !important; }
+.pg-tt .tt-rot { font-size: 13px; font-weight: 500; color: var(--mn-muda-fundo); }
+.pg-tt textarea { min-height: 160px; font-size: 15px; line-height: 1.5; }
+.pg-tt .atd-chips button { border-radius: 999px; box-shadow: none !important; }
+
+/* V3 — celular: Usuários e Empresas viram cartões com todas as ações da linha (data-label
+   escrito pela função de desenho). Sobra espaço no fim para o assistente não cobrir a última ação,
+   e ele some enquanto uma janela está aberta. */
+@media (max-width: 768px) {
+  :is(.pg-usr, .pg-emp) .page-header { align-items: flex-start; }
+  :is(.pg-usr, .pg-emp) .page-header .btn { flex: 1 1 auto; }
+  :is(.pg-usr, .pg-emp) .panel:has(table) { padding: 4px 14px; }
+  :is(.pg-usr, .pg-emp) .table-scroll { overflow: visible; }
+  :is(.pg-usr, .pg-emp) :is(table, tbody) { display: block; min-width: 0 !important; width: 100%; }
+  :is(.pg-usr, .pg-emp) thead { display: none; }
+  :is(.pg-usr, .pg-emp) tbody tr { display: grid; row-gap: 6px; padding: 14px 0; border-bottom: 1px solid var(--mn-linha); }
+  :is(.pg-usr, .pg-emp) tbody tr:last-child { border-bottom: 0; }
+  :is(.pg-usr, .pg-emp) td { display: flex; justify-content: space-between; align-items: center; gap: 12px; height: auto; padding: 0; border: 0; text-align: right !important; min-width: 0; overflow-wrap: anywhere; }
+  :is(.pg-usr, .pg-emp) td::before { content: attr(data-label); color: var(--mn-muda); font-size: 13px; text-align: left; flex-shrink: 0; }
+  :is(.pg-usr, .pg-emp) td:first-child { display: block; text-align: left !important; font-weight: 600; }
+  :is(.pg-usr, .pg-emp) td:first-child::before, :is(.pg-usr, .pg-emp) td.cad-acoes::before { display: none; }
+  :is(.pg-usr, .pg-emp) td.cad-acoes { justify-content: flex-start; flex-wrap: wrap; gap: 6px; white-space: normal !important; padding-top: 4px; }
+  .pg-emp .cad-acoes .btn + .btn { margin-left: 0; }
+  .pg-usr .nivel-legenda { grid-template-columns: minmax(0, 1fr) !important; gap: 10px; }
+  .pg-cfg .cfg-painel, :is(.pg-usr, .pg-perfil, .pg-emp) .panel { padding: 16px; }
+  :is(.pg-usr, .pg-emp) .panel > .btn { max-width: 100%; white-space: normal; text-align: center; }
+  .main:is(.pg-usr, .pg-emp) { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)) !important; }
+  body:has(main:is(.pg-usr, .pg-emp, .pg-cfg, .pg-perfil)):has(.modal-overlay.open) :is(#chatbot-launcher, #erpan-launcher) { display: none !important; }
+}
+
+/* V5 — Kanban (só a seção do Kanban do CRM): coluna com fundo suave e fio fino, nome em cor de
+   texto com a cor escolhida pelo usuário num ponto ao lado (contraste garantido em qualquer cor),
+   cartão de uma camada, etiquetas neutras com ponto, "atrasada" e "hoje" escritos por extenso.
+   A estrutura do arrastar (data-kb-card, data-kb-drop) e os nomes das colunas não mudam. */
+.pg-kb .kb-coluna { background: color-mix(in srgb, var(--bg-soft) 55%, var(--bg)); border-color: var(--mn-linha); border-radius: 12px; box-shadow: none; }
+.pg-kb .kb-coluna.kb-drop-alvo { border-color: var(--blue-strong) !important; background: color-mix(in srgb, var(--blue-strong) 7%, var(--bg-elevated)) !important; }
+.pg-kb .kb-coluna-cab { padding-top: 12px; }
+.pg-kb .kb-coluna-nome { color: var(--text) !important; font-size: 14px; font-weight: 600; gap: 8px; }
+.pg-kb .kb-coluna-nome:not(:has(svg))::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--kb-col-cor, var(--mn-muda)); flex-shrink: 0; }
+.pg-kb .kb-coluna-n { color: var(--mn-muda-fundo); font-size: 12.5px; }
+.pg-kb .kb-card { background: var(--mn-sup); border-color: var(--mn-linha); border-radius: 10px; box-shadow: var(--mn-luz, 0 1px 2px rgba(0, 0, 0, .04)); }
+.pg-kb .kb-card:hover { border-color: color-mix(in srgb, var(--blue-strong) 45%, var(--mn-linha)); }
+.pg-kb .kb-card-titulo { font-size: 14px; font-weight: 600; line-height: 1.35; }
+.pg-kb .kb-card-datas { color: var(--mn-muda-fundo); font-size: 12.5px; }
+.pg-kb .kb-prazo.atrasado { color: var(--danger-texto) !important; font-weight: 600; }
+.pg-kb .kb-prazo.atrasado::after { content: " · atrasada"; font-weight: 500; }
+.pg-kb .kb-prazo.hoje { color: var(--text) !important; }
+.pg-kb .kb-prazo.hoje::after { content: " · hoje"; font-weight: 500; }
+.pg-kb .kb-etiqueta { display: inline-flex; align-items: center; gap: 5px; background: var(--bg-soft) !important; color: var(--text) !important; border: 1px solid var(--mn-linha); border-radius: 6px !important; padding: 2px 8px; font-size: 11.5px; font-weight: 500; text-transform: none; }
+.pg-kb .kb-etiqueta::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--kb-cor); flex-shrink: 0; }
+.pg-kb .kb-avatar:not(.kb-avatar-vazio) { background-image: linear-gradient(rgba(0, 0, 0, .14), rgba(0, 0, 0, .14)) !important; }
+.pg-kb .kb-checklist, .pg-kb .kb-card-rodape { border-top: 1px solid var(--mn-linha); padding-top: 8px; }
+.pg-kb .kb-card-btn-concluir { background: transparent !important; border: 1px solid var(--mn-linha) !important; color: var(--text) !important; box-shadow: none !important; border-radius: 8px !important; }
+.pg-kb .kb-card-btn-lixo { background: transparent !important; border-color: transparent !important; color: var(--mn-muda) !important; box-shadow: none !important; }
+.pg-kb .kb-card-btn-lixo:hover { color: var(--danger-texto) !important; }
+.pg-kb :is(.kb-btn, .kb-busca, .kb-segmento, .kb-btn-criar) { box-shadow: none !important; }
+
+/* V3/V4 — telas muito estreitas (até 360px e zoom de 200%): nada passa da largura da tela */
+@media (max-width: 768px) {
+  .pg-usr .nivel-select { min-width: 0; max-width: 100%; }
+  .pg-emp td[data-label] .btn { white-space: normal; min-width: 0; max-width: 100%; text-align: right; }
+  .pg-emp td[data-label] .btn span { overflow-wrap: anywhere; }
+}
+@media (max-width: 360px) {
+  :is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .page-header h1 { font-size: 22px; overflow-wrap: anywhere; }
+  :is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp) .page-header p { overflow-wrap: anywhere; }
+  :is(.pg-cfg, .pg-usr, .pg-perfil, .pg-emp, .pg-tt) .btn { white-space: normal; max-width: 100%; text-align: center; }
+  .pg-cfg div:has(> #cfg-perfil-avatar-preview), .pg-perfil div:has(> #perfil-logo-preview) { flex-wrap: wrap; }
+  .pg-tt .tt-cab { flex-wrap: wrap; row-gap: 8px; }
+}
+
+/* V6 — barra superior (todas as páginas internas): fio fino no lugar da sombra, setas dos menus
+   sem caixinha, itens do menu discretos com o ativo sublinhado, busca e botões de ícone planos.
+   Só a aparência: os menus, os itens por plano, a busca e os links não mudam. */
+.topbar { box-shadow: none; border-bottom-color: var(--border); }
+.topbar .chevron { width: auto; height: auto; margin-left: 4px; border: 0; border-radius: 0; background: none; box-shadow: none; color: inherit !important; font-size: 10px !important; font-weight: 400; opacity: .7 !important; }
+.topbar .topbar-menu-btn:hover .chevron, .topbar .topbar-profile-btn:hover .chevron { border: 0; background: none; color: inherit !important; transform: none; }
+.topbar :is(.topbar-link, .topbar-menu-btn) { font-weight: 500; color: color-mix(in srgb, var(--text-soft) 70%, var(--text)); border-radius: 8px; }
+.topbar :is(.topbar-link, .topbar-menu-btn):hover { background: var(--bg-soft); color: var(--text); }
+.topbar :is(.topbar-link, .topbar-menu-btn).active { color: var(--text); font-weight: 600; }
+.topbar :is(.topbar-link, .topbar-menu-btn).active::after { background: var(--blue-strong); box-shadow: none; }
+.topbar .topbar-profile-btn { border-radius: 10px; box-shadow: none; }
+.topbar .topbar-profile-btn:hover { box-shadow: none; }
+.topbar .topbar-profile-avatar { border-radius: 8px; }
+.topbar .topbar-search input { height: 40px; border-radius: 10px; border: 1px solid var(--border); box-shadow: none; }
+.topbar .topbar-help-btn { border-radius: 10px; box-shadow: none; color: color-mix(in srgb, var(--text-soft) 60%, var(--text)); }
+.topbar :is(button, a, input):focus-visible { outline: 2px solid var(--blue-strong); outline-offset: 2px; }
+.topbar .mega-menu { border-radius: 12px; box-shadow: 0 16px 40px rgba(10, 20, 10, .12), 0 1px 3px rgba(10, 20, 10, .06); }
+.topbar .mega-menu :is(a, button.mega-link) { border-radius: 8px; }
+.topbar .mega-menu :is(a, button.mega-link):hover { transform: none; }
+/* celular muito estreito (até 360px e zoom de 200%): a barra cabe na tela; some só a palavra LABZ e
+   o nome da empresa (a letra da empresa continua) */
+@media (max-width: 360px) {
+  .topbar .topbar-brand, .topbar .topbar-profile-name, .topbar .topbar-mobile-toggle-texto { display: none !important; }
+  .topbar { gap: 4px; padding: 0 6px; }
+  .topbar .topbar-help-btn { width: 32px; min-width: 32px; height: 32px; }
+  .topbar .topbar-profile-btn { padding: 4px 6px; gap: 4px; min-height: 40px; }
+  .topbar .topbar-profile-btn .chevron { display: none !important; }
+  .pg-perfil .section-tabs { max-width: 100%; min-width: 0; }
+}

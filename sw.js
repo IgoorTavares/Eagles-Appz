@@ -1,5 +1,5 @@
 // ---------- Service Worker · Eagles Labz ----------
-const CACHE_NAME = 'eagles-cache-v150';
+const CACHE_NAME = 'eagles-cache-v153';
 
 const APP_SHELL = [
   './',

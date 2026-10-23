@@ -6589,7 +6589,7 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
-  { data: 'Não publicada (v153) · Premium Experience', itens: [
+  { data: '23/10/2026 · Premium Experience', itens: [
     { titulo: 'Login, Configurações, Usuários, Meu Perfil, Empresas e Tarefas com visual novo', badges: ['melhoria'], texto: 'Essas telas ganharam o mesmo visual do ERP: cabeçalho limpo, painéis leves, abas com sublinhado e campos maiores. No Login, as mensagens de erro aparecem numa faixa fácil de ler. Em Empresas, a situação aparece com um ponto (verde para ativa, vermelho para suspensa).' },
     { titulo: 'Usuários e Empresas no celular', badges: ['melhoria'], texto: 'No celular, cada pessoa e cada empresa vira um cartão com todas as ações (mudar nível, remover acesso, suspender, reativar, trocar plano, restaurar backup e excluir), sem nada escondido à direita, e o assistente não cobre nenhum botão.' },
     { titulo: 'Kanban mais leve', badges: ['melhoria'], texto: 'Colunas e cartões mais leves. O nome da coluna fica sempre legível e a cor escolhida aparece num ponto ao lado. Etiquetas com um ponto colorido, e o prazo diz "atrasada" ou "hoje" por extenso. O arrastar, os nomes das colunas e a ligação com Conteúdos e Tarefas do dia não mudaram.' },

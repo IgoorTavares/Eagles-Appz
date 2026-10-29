@@ -48,6 +48,13 @@ before(async () => {
       await seed(`tenants/${t}/conteudos/c`, { titulo: 'Conteúdo ' + t });
     }
     await seed('tenants/t3/dados/eagles_perfil_empresa_v1', { valor: {} });
+    // Super Admin que também usa a própria empresa (Empresas → Minha empresa grava só o tenantId, sem "titular")
+    await seed('usuarios/sa1', { role: 'SuperAdmin', tenantId: 't1', nome: 'Super com empresa' });
+    await seed('usuarios/a1b', { tenantId: 't1', role: 'Administrativo', nome: 'Adm Dois' });
+    // LABZ AI: lista de Super Admins autorizados e um dado de exemplo
+    await seed('labz_config/acesso', { uids: ['sa'] });
+    await seed('labz_empresas/e1', { nome: 'Empresa LABZ', status: 'ativa' });
+    await seed('labz_memorias/m1', { escopo: 'cliente', empresaId: 'e1', status: 'aprovada' });
     await seed('conteudos_publicos/tok1', { tenantId: 't1', titulo: 'Post', resposta: '', comentario: '', rodada: 1 });
     await seed('portais_publicos/ptk1', { tenantId: 't1', cliente: 'Seven', cfg: {}, conteudos: [] });
   });
@@ -185,4 +192,56 @@ test('acertou a senha antes da 5ª: a própria pessoa zera o contador', async ()
   await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'tentativas_login/quase@x.com'), { falhas: 3 }); });
   await assertSucceeds(deleteDoc(doc(env.authenticatedContext('uq', { email: 'quase@x.com' }).firestore(), 'tentativas_login/quase@x.com')));
   await assertFails(deleteDoc(doc(env.authenticatedContext('outro', { email: 'outro@x.com' }).firestore(), 'tentativas_login/vitima@x.com')));
+});
+
+// ---------- proteção do Super Admin (LABZ AI, Fase 1) ----------
+test('Super Admin vinculado a uma empresa: o Diretor dela não muda o nível, os dados nem apaga a conta', async () => {
+  const d1 = db('d1');
+  await assertFails(updateDoc(doc(d1, 'usuarios/sa1'), { role: 'Diretor' }));
+  await assertFails(updateDoc(doc(d1, 'usuarios/sa1'), { role: 'Administrativo' }));
+  await assertFails(updateDoc(doc(d1, 'usuarios/sa1'), { nome: 'Trocado' }));
+  await assertFails(deleteDoc(doc(d1, 'usuarios/sa1')));
+  await assertFails(updateDoc(doc(db('a1'), 'usuarios/sa1'), { role: 'Diretor' }));
+});
+test('Diretor continua mudando o nível da equipe, mas nunca cria nem promove Super Admin', async () => {
+  const d1 = db('d1');
+  await assertSucceeds(updateDoc(doc(d1, 'usuarios/a1b'), { role: 'Financeiro' }));
+  await assertFails(updateDoc(doc(d1, 'usuarios/a1b'), { role: 'SuperAdmin' }));
+  await assertFails(setDoc(doc(d1, 'usuarios/novo_sa'), { tenantId: 't1', role: 'SuperAdmin', nome: 'X' }));
+});
+test('login de Cliente do portal não vira equipe, mas quem opera continua editando o login', async () => {
+  await assertFails(updateDoc(doc(db('d1'), 'usuarios/c1'), { role: 'Diretor' }));
+  await assertFails(updateDoc(doc(db('a1'), 'usuarios/c1'), { role: 'Diretor' }));
+  await assertSucceeds(updateDoc(doc(db('d1'), 'usuarios/c1'), { nome: 'Cliente renomeado' }));
+});
+test('ninguém se promove a Super Admin', async () => {
+  await assertFails(updateDoc(doc(db('a1'), 'usuarios/a1'), { role: 'SuperAdmin' }));
+  await assertFails(updateDoc(doc(db('c1'), 'usuarios/c1'), { role: 'SuperAdmin' }));
+  await assertFails(setDoc(doc(db('sozinho'), 'usuarios/sozinho'), { role: 'SuperAdmin', nome: 'X' }));
+  await assertFails(setDoc(doc(db(), 'usuarios/anonimo'), { role: 'SuperAdmin' }));
+});
+
+// ---------- LABZ AI: só o Super Admin autorizado lê; o navegador nunca grava ----------
+test('LABZ AI: só o Super Admin da lista de autorizados lê', async () => {
+  await assertSucceeds(getDoc(doc(db('sa'), 'labz_empresas/e1')));
+  await assertSucceeds(getDocs(collection(db('sa'), 'labz_empresas')));
+  await assertSucceeds(getDoc(doc(db('sa'), 'labz_memorias/m1')));
+  for (const u of ['sa1', 'd1', 'a1', 'f1', 'c1', 'd2', 'sozinho']) {
+    await assertFails(getDoc(doc(db(u), 'labz_empresas/e1')));
+    await assertFails(getDoc(doc(db(u), 'labz_memorias/m1')));
+  }
+  await assertFails(getDoc(doc(db(), 'labz_empresas/e1')));
+  await assertFails(getDocs(collection(db(), 'labz_memorias')));
+});
+test('LABZ AI: ninguém grava pelo navegador, nem o Super Admin (só o servidor grava)', async () => {
+  await assertFails(setDoc(doc(db('sa'), 'labz_empresas/e2'), { nome: 'Nova' }));
+  await assertFails(updateDoc(doc(db('sa'), 'labz_memorias/m1'), { status: 'arquivada' }));
+  await assertFails(setDoc(doc(db('sa'), 'labz_config/acesso'), { uids: ['sa', 'sa1'] }));
+  await assertFails(setDoc(doc(db('sa1'), 'labz_config/acesso'), { uids: ['sa1'] }));
+  await assertFails(setDoc(doc(db('d1'), 'labz_memorias/m2'), { escopo: 'global' }));
+  await assertFails(deleteDoc(doc(db('sa'), 'labz_empresas/e1')));
+});
+test('LABZ AI: sem a lista de autorizados, nem o Super Admin lê', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => { await deleteDoc(doc(ctx.firestore(), 'labz_config/acesso')); });
+  await assertFails(getDoc(doc(db('sa'), 'labz_empresas/e1')));
 });

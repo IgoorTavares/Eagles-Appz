@@ -1,0 +1,8 @@
+{
+  "name": "labz-ai-backend",
+  "description": "LABZ AI — backend (Fase 1: fundação). Contratos, agentes, memória, empresas e autorização. Ainda não publicado.",
+  "main": "index.js",
+  "engines": { "node": "20" },
+  "scripts": { "test": "node --test test/*.test.js" },
+  "private": true
+}

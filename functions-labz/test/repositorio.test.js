@@ -1,0 +1,37 @@
+// O repositório é público (e o GitHub Pages publica tudo): aqui não pode
+// haver chave, conteúdo de skill, prompt privado nem memória.
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const RAIZ = path.join(__dirname, '..');
+function arquivos(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.name === 'node_modules' ? [] : d.isDirectory() ? arquivos(path.join(dir, d.name)) : [path.join(dir, d.name)]));
+}
+
+test('nenhuma chave ou segredo no código da LABZ AI', () => {
+  const padroes = [/sk-[A-Za-z0-9_-]{16,}/, /sk-ant-[A-Za-z0-9_-]{10,}/, /AIza[0-9A-Za-z_-]{20,}/, /-----BEGIN [A-Z ]*PRIVATE KEY-----/, /ghp_[A-Za-z0-9]{20,}/, /xox[bp]-[A-Za-z0-9-]{10,}/];
+  arquivos(RAIZ).filter((f) => !f.endsWith('repositorio.test.js')).forEach((f) => {
+    const t = fs.readFileSync(f, 'utf8');
+    padroes.forEach((p) => assert.ok(!p.test(t), `${path.relative(RAIZ, f)} parece conter um segredo (${p})`));
+  });
+});
+
+test('nenhum arquivo de skill, memória ou prompt no repositório', () => {
+  const md = arquivos(RAIZ).filter((f) => /\.(md|txt)$/i.test(f)).map((f) => path.relative(RAIZ, f));
+  assert.deepEqual(md.filter((f) => f !== 'README.md'), [], 'conteúdo de skill/memória é privado: vai para o banco, não para o repositório');
+  const { AGENTES } = require('../src/agentes/catalogo');
+  const proibidos = ['prompt', 'conteudo', 'sistema', 'instrucoes'];
+  AGENTES.forEach((a) => {
+    proibidos.forEach((k) => assert.ok(!(k in a), `${a.id} tem o campo "${k}" no contrato público`));
+    a.skills.forEach((s) => assert.deepEqual(Object.keys(s).sort(), ['arquivo', 'gatilhos', 'obrigatoria']));
+  });
+});
+
+test('o backend da Fase 1 não depende de pacotes externos nem exporta funções publicáveis', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(RAIZ, 'package.json'), 'utf8'));
+  assert.equal(pkg.dependencies, undefined);
+  const idx = fs.readFileSync(path.join(RAIZ, 'index.js'), 'utf8');
+  assert.ok(!/firebase-functions|onCall|onRequest|onSchedule/.test(idx.replace(/\/\/.*$/gm, '')));
+});

@@ -48,6 +48,9 @@ before(async () => {
       await seed(`tenants/${t}/conteudos/c`, { titulo: 'Conteúdo ' + t });
     }
     await seed('tenants/t3/dados/eagles_perfil_empresa_v1', { valor: {} });
+    // Super Admin que também usa a própria empresa (Empresas → Minha empresa grava só o tenantId, sem "titular")
+    await seed('usuarios/sa1', { role: 'SuperAdmin', tenantId: 't1', nome: 'Super com empresa' });
+    await seed('usuarios/a1b', { tenantId: 't1', role: 'Administrativo', nome: 'Adm Dois' });
     await seed('conteudos_publicos/tok1', { tenantId: 't1', titulo: 'Post', resposta: '', comentario: '', rodada: 1 });
     await seed('portais_publicos/ptk1', { tenantId: 't1', cliente: 'Seven', cfg: {}, conteudos: [] });
   });
@@ -185,4 +188,31 @@ test('acertou a senha antes da 5ª: a própria pessoa zera o contador', async ()
   await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'tentativas_login/quase@x.com'), { falhas: 3 }); });
   await assertSucceeds(deleteDoc(doc(env.authenticatedContext('uq', { email: 'quase@x.com' }).firestore(), 'tentativas_login/quase@x.com')));
   await assertFails(deleteDoc(doc(env.authenticatedContext('outro', { email: 'outro@x.com' }).firestore(), 'tentativas_login/vitima@x.com')));
+});
+
+// ---------- proteção do Super Admin e dos níveis ----------
+test('Super Admin vinculado a uma empresa: o Diretor dela não muda o nível, os dados nem apaga a conta', async () => {
+  const d1 = db('d1');
+  await assertFails(updateDoc(doc(d1, 'usuarios/sa1'), { role: 'Diretor' }));
+  await assertFails(updateDoc(doc(d1, 'usuarios/sa1'), { role: 'Administrativo' }));
+  await assertFails(updateDoc(doc(d1, 'usuarios/sa1'), { nome: 'Trocado' }));
+  await assertFails(deleteDoc(doc(d1, 'usuarios/sa1')));
+  await assertFails(updateDoc(doc(db('a1'), 'usuarios/sa1'), { role: 'Diretor' }));
+});
+test('Diretor continua mudando o nível da equipe, mas nunca cria nem promove Super Admin', async () => {
+  const d1 = db('d1');
+  await assertSucceeds(updateDoc(doc(d1, 'usuarios/a1b'), { role: 'Financeiro' }));
+  await assertFails(updateDoc(doc(d1, 'usuarios/a1b'), { role: 'SuperAdmin' }));
+  await assertFails(setDoc(doc(d1, 'usuarios/novo_sa'), { tenantId: 't1', role: 'SuperAdmin', nome: 'X' }));
+});
+test('login de Cliente do portal não vira equipe, mas quem opera continua editando o login', async () => {
+  await assertFails(updateDoc(doc(db('d1'), 'usuarios/c1'), { role: 'Diretor' }));
+  await assertFails(updateDoc(doc(db('a1'), 'usuarios/c1'), { role: 'Diretor' }));
+  await assertSucceeds(updateDoc(doc(db('d1'), 'usuarios/c1'), { nome: 'Cliente renomeado' }));
+});
+test('ninguém se promove a Super Admin', async () => {
+  await assertFails(updateDoc(doc(db('a1'), 'usuarios/a1'), { role: 'SuperAdmin' }));
+  await assertFails(updateDoc(doc(db('c1'), 'usuarios/c1'), { role: 'SuperAdmin' }));
+  await assertFails(setDoc(doc(db('sozinho'), 'usuarios/sozinho'), { role: 'SuperAdmin', nome: 'X' }));
+  await assertFails(setDoc(doc(db(), 'usuarios/anonimo'), { role: 'SuperAdmin' }));
 });

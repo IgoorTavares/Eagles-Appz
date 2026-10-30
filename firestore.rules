@@ -196,8 +196,11 @@ service cloud.firestore {
           resource.data.tenantId == meuTenantId() && request.resource.data.tenantId == meuTenantId() &&
           request.resource.data.role == 'Cliente' && !('vaga' in request.resource.data)) ||
         // Diretor: só gente da própria empresa, que continua nela, num nível
-        // de empresa — e nunca mexe no titular
+        // de empresa — e nunca mexe no titular. A pessoa alterada também
+        // precisa já ser da equipe: o Super Admin (mesmo vinculado à empresa)
+        // e os logins de Cliente do portal ficam de fora.
         (souDiretor() &&
+          roleDeEmpresa(resource.data.get('role', 'TenantUser')) &&
           resource.data.tenantId == meuTenantId() &&
           request.resource.data.tenantId == meuTenantId() &&
           resource.data.get('titular', false) == false &&

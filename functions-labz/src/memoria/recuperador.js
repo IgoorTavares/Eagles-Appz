@@ -118,6 +118,13 @@ function criarRecuperador({ banco, relogio = relogioPadrao, auditoria }) {
   return {
     INDICES_NECESSARIOS,
 
+    // Busca SEM ator, só para a porta de memória do agente (memoria-agente.js),
+    // que já fixou o escopo e o alvo pela execução e pelo contrato. Nunca sai pela API.
+    // prioridades: as do agente (ranking); mesmas regras e limites da busca.
+    async buscarParaAgente(pedido, { prioridades } = {}) {
+      return executar(validarConsultaMemoria(pedido), { prioridades });
+    },
+
     // Busca pedida pelo Super Admin (API). pedido: ESQUEMA_CONSULTA_MEMORIA.
     async buscar(ator, pedido) {
       exigirAtor(ator);

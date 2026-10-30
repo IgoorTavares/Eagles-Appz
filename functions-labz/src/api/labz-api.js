@@ -91,6 +91,9 @@ const ACOES = {
   'contexto.previa': [obj({ agenteId: ID, empresaId: { tipo: 'texto', nulo: true, max: 80 }, tarefaId: { tipo: 'texto', nulo: true, max: 80 }, briefing: { tipo: 'texto', max: 20000 } }),
     (s, a, d) => s.contexto.montar({ agenteId: d.agenteId, empresaId: d.empresaId || null, tarefaId: d.tarefaId || null, briefing: d.briefing || '' }, a)],
 
+  // Fase 3D: contexto por etapa (sem executar agente nenhum) e o plano do Estrategista
+  'execucoes.prepararEtapa': [obj({ execucaoId: ID, etapa: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.preparacao.prepararEtapa(a, d.execucaoId, d.etapa)],
+  'execucoes.planejarContextos': [obj({ execucaoId: ID, passos: { tipo: 'lista', obrigatorio: true, max: 8 } }), (s, a, d) => s.preparacao.planejarContextos(a, d.execucaoId, d.passos)],
   'execucoes.criar': [obj({ execucao: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.execucoes.criar(a, d.execucao)],
   'execucoes.transicionar': [obj({ execucaoId: ID, para: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', max: 300 }, versaoEsperada: { tipo: 'inteiro', min: 1 } }),
     (s, a, d) => s.execucoes.transicionar(a, d.execucaoId, d.para, { motivo: d.motivo, versaoEsperada: d.versaoEsperada })],

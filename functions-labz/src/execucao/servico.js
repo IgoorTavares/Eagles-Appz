@@ -7,16 +7,14 @@
 // recuperarInterrompidas(): RUNNING sem sinal de vida volta para READY
 // (nova tentativa) ou vira FAILED quando acabam as tentativas.
 const { caminhos } = require('../armazenamento/caminhos');
-const { exigirAtor } = require('../auth/super-admin');
+const { exigirAtor, ATOR_SISTEMA, exigirAtorOuSistema } = require('../auth/super-admin');
 const { garantir } = require('../nucleo/validador');
 const { erro } = require('../nucleo/erros');
 const { novoId, relogioPadrao } = require('../nucleo/ids');
 const { podeTransicionar } = require('../contratos/execucao');
 const { obterAgente } = require('../agentes/catalogo');
 
-// Ator interno (trabalhador da fila). Nunca sai pela API.
-const ATOR_SISTEMA = Object.freeze({ tipo: 'sistema', uid: 'labz-sistema' });
-const exigirAtorOuSistema = (ator) => (ator === ATOR_SISTEMA ? ator : exigirAtor(ator));
+// ATOR_SISTEMA (trabalhador da fila) mora em auth/super-admin.js. Nunca sai pela API.
 
 const MAX_TENTATIVAS = 3;
 const MAX_HISTORICO = 100;

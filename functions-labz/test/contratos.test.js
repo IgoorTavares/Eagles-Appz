@@ -47,10 +47,13 @@ test('cada agente tem exatamente as skills pedidas, com SKILL.md obrigatória', 
   });
 });
 
-test('nenhum agente aprova memória; só o Estrategista delega; desempenho só para Tráfego e Estrategista', () => {
+test('nenhum agente aprova memória; só o Estrategista delega; desempenho: leem Tráfego, Estrategista e Carrosséis (D4); propõem só Tráfego e Estrategista', () => {
   AGENTES.forEach((a) => assert.equal(a.permissoes.aprovarMemoria, false));
   assert.deepEqual(AGENTES.filter((a) => a.permissoes.podeDelegar).map((a) => a.id), ['08-estrategista']);
-  assert.deepEqual(AGENTES.filter((a) => a.permissoes.memoriaLeitura.includes('desempenho')).map((a) => a.id), ['07-trafego', '08-estrategista']);
+  // D4 (aprovada pelo Igor em 30/10/2026): o Especialista em Carrosséis LÊ desempenho...
+  assert.deepEqual(AGENTES.filter((a) => a.permissoes.memoriaLeitura.includes('desempenho')).map((a) => a.id), ['03-carrosseis', '07-trafego', '08-estrategista']);
+  // ...mas não propõe: quem propõe desempenho continua sendo só Tráfego e Estrategista
+  assert.deepEqual(AGENTES.filter((a) => a.permissoes.memoriaPropor.includes('desempenho')).map((a) => a.id), ['07-trafego', '08-estrategista']);
   AGENTES.forEach((a) => assert.ok(!a.permissoes.memoriaPropor.includes('tarefa')));
   AGENTES.forEach((a) => assert.equal(a.modelo.provedor, null, 'modelo ainda não escolhido'));
 });

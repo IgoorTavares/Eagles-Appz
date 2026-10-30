@@ -328,3 +328,29 @@ test('Fase 3C no Firestore real: busca por palavras e metadados, paginação com
   const ev = await db.collection('labz_eventos').where('tipo', '==', 'memoria.contexto_montado').get();
   assert.ok(ev.size >= 1 && !JSON.stringify(ev.docs.map((d) => d.data())).includes('integbusca'));
 });
+
+test('Fase 3D no Firestore real: plano do Estrategista com um contexto por agente; proposta de agente nasce rascunho', async () => {
+  const exe = await ok(tokens.sa, 'execucoes.criar', { execucao: { empresaId: A.id, objetivo: 'INTEG-3D campanha completa', modo: 'orquestrado' } });
+  const ctxs = await ok(tokens.sa, 'execucoes.planejarContextos', { execucaoId: exe.id, passos: [{ agenteId: '02-designer', briefing: 'peças' }, { agenteId: '07-trafego', briefing: 'anúncios' }] });
+  assert.deepEqual(ctxs.map((x) => x.agenteId), ['02-designer', '07-trafego']);
+  ctxs.forEach(({ agenteId, contexto }) => {
+    assert.equal(contexto.agenteId, agenteId);
+    assert.equal(contexto.empresaId, A.id);
+    assert.ok(!JSON.stringify(contexto).includes('INTEG-BETA'), 'nada da empresa B');
+    assert.deepEqual(contexto.blocos.filter((b) => b.confiavel).map((b) => b.tipo), ['seguranca', 'especialidade', 'permissoes']);
+  });
+  const doc = (await db.doc(`labz_tarefas/${exe.id}`).get()).data();
+  assert.deepEqual(doc.plano.agentes, ['02-designer', '07-trafego']);
+  assert.equal(doc.preparacoes.length, 2);
+  // a porta do agente (uso interno, sem API) grava rascunho no Firestore pelo ator do sistema
+  const { criarLabz } = require('../src/servicos');
+  const s = criarLabz({ banco: criarBancoFirestore(db) });
+  const porta = await s.portaMemoria.abrir('07-trafego', exe.id);
+  const p = await porta.propor({ escopo: 'cliente', base: 'tarefa', categoria: 'aprendizado', titulo: 'Anúncios', conteudo: 'INTEG-3D anúncios com depoimento converteram mais' });
+  const base = `labz_empresas/${A.id}/memorias/${p.ref.memoriaId}`;
+  assert.equal((await db.doc(`${base}/versoes/1`).get()).data().status, 'rascunho');
+  assert.equal((await db.doc(base).get()).data().propostoPorAgente, '07-trafego');
+  assert.equal((await chamar(tokens.sa, 'memoria.aprovar', { ref: p.ref, versao: 1 })).erro.status, 'FAILED_PRECONDITION', 'rascunho precisa ser enviado antes');
+  await assert.rejects(s.memoria.aprovarVersao(require('../src/auth/super-admin').ATOR_SISTEMA, p.ref, 1), (e) => e.codigo === 'permissao-negada');
+  await assert.rejects(s.portaMemoria.abrir('01-guia-marca', exe.id), (e) => e.codigo === 'permissao-negada');
+});

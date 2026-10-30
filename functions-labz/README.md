@@ -130,9 +130,21 @@ functions-labz/
   - **Índices compostos:** `INDICES_NECESSARIOS` (25, formato do `firestore.indexes.json`), conferidos por teste e **não
     publicados** (o simulador não exige índices; o Firebase real exige).
   **Busca semântica: indisponível** (`BUSCA_SEMANTICA`); a busca por palavras-chave não é semântica.
-- **Agentes:** `perfilMemoria(agente)` deriva do catálogo o que cada um dos 8 lê e propõe; nenhum aprova. Integração operacional: 3D.
+- **Agentes (3D):** `perfilMemoria(agente)` deriva do catálogo o que cada um dos 8 lê e propõe (com `prioridadesMemoria`, que só
+  mudam a ORDEM do ranking); nenhum aprova. D4: o Especialista em Carrosséis lê desempenho, mas não propõe.
+  - **Porta de memória** (`src/agentes/memoria-agente.js`, uso interno, fora da API): `abrir(agenteId, execucaoId)` → `consultar`
+    e `propor`. Escopo e alvo vêm da execução e do contrato (empresa da execução; memória de agente só a própria). O agente
+    precisa fazer parte da execução. `propor` (base: tarefa, correção, feedback ou desempenho) grava SEMPRE rascunho, pelo
+    `ATOR_SISTEMA` (que não aprova, não envia, não confirma e não grava memória de tarefa).
+  - **Preparação por etapa** (`src/execucao/preparacao.js`): `prepararEtapa` monta o contexto de um agente para a execução;
+    `planejarContextos` (Estrategista, modo orquestrado) define os agentes do plano e monta um contexto POR agente. Na execução
+    fica só o resumo (ids e versões). API: `execucoes.prepararEtapa`, `execucoes.planejarContextos`. Nenhum agente é executado.
+  - **Contexto (10 blocos):** segurança, especialidade e limites/permissões (os únicos confiáveis); tarefa (identificação,
+    empresa e objetivo), memórias e briefing são DADOS, delimitados no texto (`dados_da_tarefa`, `dados_aprovados`,
+    `dados_do_usuario`), com a referência de cada memória; nenhum dado consegue abrir ou fechar um delimitador.
 
 ## O que falta (fases seguintes)
-- Fase 3D–3E: prioridades dos agentes (D4), segurança final e simulador; publicar os índices compostos (com autorização).
+- Fase 3E: segurança final e simulador; publicar os índices compostos e as isenções de indexação (com autorização).
+- Fase 4: o trabalhador que executa os agentes (usa a porta de memória e a preparação por etapa).
 - Fase 4: motor de orquestração (trabalhador da fila, planner, quality gate, custos).
 - Fases 5–8: conteúdo das skills, provedores de IA, interface e integrações.

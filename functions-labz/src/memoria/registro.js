@@ -15,7 +15,7 @@
 //  - memória arquivada não recebe nada novo;
 //  - cada operação e cada bloqueio geram um evento de auditoria (sem o conteúdo).
 const { caminhos } = require('../armazenamento/caminhos');
-const { exigirAtor } = require('../auth/super-admin');
+const { exigirAtor, ATOR_SISTEMA } = require('../auth/super-admin');
 const { garantir } = require('../nucleo/validador');
 const { erro } = require('../nucleo/erros');
 const { novoId, relogioPadrao } = require('../nucleo/ids');
@@ -190,6 +190,17 @@ function criarRegistroMemoria(deps) {
     throw e;
   }
 
+  // Quem pode CRIAR uma proposta: o Super Admin, ou o sistema em nome de um
+  // agente (Fase 3D), e aí só como rascunho, nunca em memória de tarefa (que
+  // vale na hora) e sem confirmações (que são decisões do Super Admin).
+  function exigirAutorDaProposta(ator, opcoes, escopo) {
+    if (ator !== ATOR_SISTEMA) return exigirAtor(ator);
+    if (!opcoes.agenteId) throw erro('permissao-negada', 'O sistema só registra propostas em nome de um agente');
+    if (!ESCOPO_INFO[escopo] || !ESCOPO_INFO[escopo].aprovacao) throw erro('permissao-negada', 'Agente não grava memória que vale na hora: só propõe rascunhos');
+    if (opcoes.confirmoSemDadosDeCliente) throw erro('permissao-negada', 'Só o Super Admin confirma que um texto não tem dados de cliente');
+    return ator;
+  }
+
   const semAgente = (opcoes) => {
     if (opcoes && opcoes.agenteId) throw erro('permissao-negada', 'Agente não aprova, rejeita nem decide sobre memória: só o Super Admin');
   };
@@ -201,7 +212,7 @@ function criarRegistroMemoria(deps) {
     // de agente (ou opcoes.rascunho) nasce em rascunho. Tarefa vale na hora.
     // opcoes: { agenteId, rascunho, confirmoSemDadosDeCliente }
     async criar(ator, dados, opcoes = {}) {
-      exigirAtor(ator);
+      exigirAutorDaProposta(ator, opcoes, dados && dados.escopo);
       garantir(ESQUEMA_NOVA_MEMORIA, dados, 'Memória');
       const alvo = alvoDoEscopo(dados.escopo, dados.alvo);
       const info = ESCOPO_INFO[dados.escopo];
@@ -241,7 +252,7 @@ function criarRegistroMemoria(deps) {
     // Nova versão do conteúdo de uma memória existente (a vigente continua
     // valendo até a nova ser aprovada). opcoes: { agenteId, rascunho, confirmoSemDadosDeCliente }
     async novaVersao(ator, ref, dados, opcoes = {}) {
-      exigirAtor(ator);
+      exigirAutorDaProposta(ator, opcoes, ref && ref.escopo);
       const atual = await lerAtiva(ref);
       const info = ESCOPO_INFO[ref.escopo];
       if (opcoes.rascunho && !info.aprovacao) throw erro('invalido', 'Memória de tarefa não tem rascunho: vale na hora');

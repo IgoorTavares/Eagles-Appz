@@ -163,11 +163,13 @@ function conferirContextoMontado(ctx, blocosEsperados) {
   const tipos = ctx.blocos.map((b) => b.tipo);
   if (tipos.join() !== blocosEsperados.map((b) => b.tipo).join()) erros.push(`ordem dos blocos: ${tipos.join(', ')}`);
   ctx.blocos.forEach((b) => {
-    const esperado = b.tipo !== 'briefing';
+    const esperado = ['seguranca', 'especialidade', 'permissoes'].includes(b.tipo); // Fase 3D: memória e tarefa são dados
     if (b.confiavel !== esperado) erros.push(`bloco ${b.tipo}: confiável deveria ser ${esperado}`);
     b.itens.forEach((i) => {
       if (b.tipo === 'seguranca' && i.origem !== 'sistema') erros.push('bloco de segurança com item que não é do sistema');
       if (b.tipo === 'briefing' && i.origem !== 'usuario') erros.push('briefing com item que não é do usuário');
+      if (b.tipo === 'permissoes' && i.origem !== 'contrato') erros.push('permissões que não vêm do contrato');
+      if (b.tipo === 'tarefa' && !['execucao', 'empresa'].includes(i.origem)) erros.push('bloco da tarefa com item de outra origem');
       if (i.origem === 'memoria' && !['metodologia', 'identidade', 'preferencias', 'aprendizados', 'historico'].includes(b.tipo)) erros.push(`memória no bloco ${b.tipo}`);
     });
   });

@@ -56,6 +56,7 @@ const ESQUEMA_AGENTE = {
         podeDelegar: { tipo: 'booleano', obrigatorio: true },
       },
     },
+    prioridadesMemoria: { tipo: 'objeto', obrigatorio: true }, // categoria → 0..1 (conferida por conferirPrioridades)
     criteriosQualidade: { tipo: 'lista', obrigatorio: true, min: 3, itens: { tipo: 'texto', min: 5, max: 200 } },
     modos: { tipo: 'lista', obrigatorio: true, min: 1, itens: { tipo: 'texto', valores: ['orquestrado', 'especialista'] } },
     modelo: ESQUEMA_MODELO,
@@ -87,8 +88,15 @@ const ESQUEMA_PERFIL_MEMORIA = {
     memoriaComo: { tipo: 'texto', obrigatorio: true, valores: ['dado'] },
     propostaComo: { tipo: 'texto', obrigatorio: true, valores: ['pendente'] },
     etapaOperacional: { tipo: 'texto', obrigatorio: true, valores: ['3D'] },
+    prioridades: { tipo: 'objeto', obrigatorio: true },
   },
 };
+
+// Prioridades só com categorias que existem e notas entre 0 e 1.
+function conferirPrioridades(prioridades) {
+  const validas = new Set(Object.values(ESCOPO_INFO).flatMap((i) => i.categorias));
+  return Object.entries(prioridades || {}).filter(([k, v]) => !validas.has(k) || typeof v !== 'number' || v < 0 || v > 1).map(([k]) => k);
+}
 
 function perfilMemoria(agente) {
   const p = agente.permissoes;
@@ -104,7 +112,8 @@ function perfilMemoria(agente) {
     memoriaComo: 'dado',
     propostaComo: 'pendente',
     etapaOperacional: '3D',
+    prioridades: Object.freeze(Object.assign({}, agente.prioridadesMemoria || {})),
   });
 }
 
-module.exports = { ESQUEMA_AGENTE, ESQUEMA_MODELO, RECURSOS_MODELO, modeloAConfigurar, ESQUEMA_PERFIL_MEMORIA, perfilMemoria };
+module.exports = { ESQUEMA_AGENTE, ESQUEMA_MODELO, RECURSOS_MODELO, modeloAConfigurar, ESQUEMA_PERFIL_MEMORIA, perfilMemoria, conferirPrioridades };

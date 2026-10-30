@@ -20,11 +20,14 @@ async function cenario() {
 }
 const textos = (ctx) => ctx.blocos.flatMap((b) => b.itens.map((i) => i.texto)).join('\n');
 
-test('ordem dos 8 blocos é a definida', async () => {
+test('ordem dos blocos é a definida (Fase 3D: + permissões e tarefa; os 8 antigos na mesma ordem)', async () => {
   const c = await cenario();
   const ctx = await c.contexto.montar({ agenteId: '04-roteirista', empresaId: c.A.id, tarefaId: 'tA', briefing: 'Legenda sobre o novo cardápio' });
-  assert.deepEqual(ctx.blocos.map((b) => b.tipo), ['seguranca', 'especialidade', 'metodologia', 'identidade', 'preferencias', 'aprendizados', 'historico', 'briefing']);
+  const tipos = ctx.blocos.map((b) => b.tipo);
+  assert.deepEqual(tipos, ['seguranca', 'especialidade', 'permissoes', 'tarefa', 'metodologia', 'identidade', 'preferencias', 'aprendizados', 'historico', 'briefing']);
+  assert.deepEqual(tipos.filter((t) => !['permissoes', 'tarefa'].includes(t)), ['seguranca', 'especialidade', 'metodologia', 'identidade', 'preferencias', 'aprendizados', 'historico', 'briefing']);
   assert.deepEqual(ctx.blocos.map((b) => b.ordem), BLOCOS.map((b) => b.ordem));
+  assert.deepEqual(ctx.blocos.filter((b) => b.confiavel).map((b) => b.tipo), ['seguranca', 'especialidade', 'permissoes'], 'memória, tarefa e briefing são dados');
 });
 
 test('isolamento: o contexto da empresa A nunca traz memória da B (e vice-versa)', async () => {

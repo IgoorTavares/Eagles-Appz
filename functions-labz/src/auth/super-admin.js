@@ -56,4 +56,10 @@ function exigirAtor(ator) {
   return ator;
 }
 
-module.exports = { exigirSuperAdmin, exigirAtor, lerListaUids, MENSAGEM_NEGADO };
+// Ator interno da LABZ AI (trabalhador da fila e agentes em execução). Nunca
+// sai pela API e não é Super Admin: não aprova nada. Só pode o que cada
+// serviço aceitar explicitamente (transições de execução; rascunho de agente).
+const ATOR_SISTEMA = Object.freeze({ tipo: 'sistema', uid: 'labz-sistema' });
+const exigirAtorOuSistema = (ator) => (ator === ATOR_SISTEMA ? ator : exigirAtor(ator));
+
+module.exports = { exigirSuperAdmin, exigirAtor, exigirAtorOuSistema, ATOR_SISTEMA, lerListaUids, MENSAGEM_NEGADO };

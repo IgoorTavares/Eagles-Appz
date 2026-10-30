@@ -199,8 +199,9 @@ test('oito agentes: perfil de memória válido, derivado só do catálogo, sem a
     p.leitura.push('x');
     assert.ok(!a.permissoes.memoriaLeitura.includes('x'), 'perfil é cópia: não altera o catálogo');
   });
-  // Estado atual (a D4, Carrosséis lendo desempenho, é da Fase 3D)
-  assert.deepStrictEqual(AGENTES.filter((a) => perfilMemoria(a).leitura.includes('desempenho')).map((a) => a.id), ['07-trafego', '08-estrategista']);
+  // Fase 3D: D4 aplicada (Carrosséis lê desempenho; não propõe)
+  assert.deepStrictEqual(AGENTES.filter((a) => perfilMemoria(a).leitura.includes('desempenho')).map((a) => a.id), ['03-carrosseis', '07-trafego', '08-estrategista']);
+  assert.ok(!perfilMemoria(AGENTES.find((a) => a.id === '03-carrosseis')).propor.includes('desempenho'));
 });
 
 test('contexto: pedido inválido é recusado antes de qualquer leitura', async () => {

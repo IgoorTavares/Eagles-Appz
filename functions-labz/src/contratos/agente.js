@@ -2,7 +2,7 @@
 // descreve O QUE o agente é e pode fazer. O CONTEÚDO das skills e os
 // prompts ficam privados no banco (labz_skills, versionados); a escolha de
 // provedor e modelo fica em labz_agentes/{id} (configurada pelo Super Admin).
-const { ESCOPOS } = require('./memoria');
+const { ESCOPOS, ESCOPO_INFO } = require('./memoria');
 
 const RECURSOS_MODELO = ['texto', 'saida-estruturada', 'ferramentas', 'imagem-entrada', 'imagem-saida'];
 
@@ -71,4 +71,40 @@ function modeloAConfigurar(recursosNecessarios) {
   };
 }
 
-module.exports = { ESQUEMA_AGENTE, ESQUEMA_MODELO, RECURSOS_MODELO, modeloAConfigurar };
+// ---------- Fase 3A: contrato de integração agente ↔ memória ----------
+// Derivado SÓ do catálogo (permissões do contrato): nada que venha de uma
+// memória, skill ou briefing muda o que o agente lê, propõe ou aprova.
+// A integração operacional (prioridades por agente, D4) fica para a Fase 3D.
+const ESQUEMA_PERFIL_MEMORIA = {
+  tipo: 'objeto', obrigatorio: true, extras: false,
+  campos: {
+    agenteId: { tipo: 'texto', obrigatorio: true, padrao: /^0[1-8]-[a-z-]+$/ },
+    leitura: { tipo: 'lista', obrigatorio: true, min: 1, itens: { tipo: 'texto', valores: ESCOPOS } },
+    propor: { tipo: 'lista', obrigatorio: true, itens: { tipo: 'texto', valores: ESCOPOS } },
+    aprovar: { tipo: 'booleano', obrigatorio: true, valores: [false] },
+    alvos: { tipo: 'objeto', obrigatorio: true },
+    exigeEmpresa: { tipo: 'lista', obrigatorio: true, itens: { tipo: 'texto', valores: ESCOPOS } },
+    memoriaComo: { tipo: 'texto', obrigatorio: true, valores: ['dado'] },
+    propostaComo: { tipo: 'texto', obrigatorio: true, valores: ['pendente'] },
+    etapaOperacional: { tipo: 'texto', obrigatorio: true, valores: ['3D'] },
+  },
+};
+
+function perfilMemoria(agente) {
+  const p = agente.permissoes;
+  const alvos = {};
+  p.memoriaLeitura.forEach((e) => { alvos[e] = ESCOPO_INFO[e].alvo.slice(); });
+  return Object.freeze({
+    agenteId: agente.id,
+    leitura: p.memoriaLeitura.slice(),
+    propor: p.memoriaPropor.slice(),
+    aprovar: false, // só o Super Admin aprova
+    alvos, // chaves obrigatórias do alvo em cada escopo lido
+    exigeEmpresa: p.memoriaLeitura.filter((e) => ESCOPO_INFO[e].alvo.includes('empresaId')), // só a empresa da tarefa
+    memoriaComo: 'dado',
+    propostaComo: 'pendente',
+    etapaOperacional: '3D',
+  });
+}
+
+module.exports = { ESQUEMA_AGENTE, ESQUEMA_MODELO, RECURSOS_MODELO, modeloAConfigurar, ESQUEMA_PERFIL_MEMORIA, perfilMemoria };

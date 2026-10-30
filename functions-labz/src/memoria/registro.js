@@ -11,24 +11,13 @@ const { garantir } = require('../nucleo/validador');
 const { erro } = require('../nucleo/erros');
 const { novoId, relogioPadrao } = require('../nucleo/ids');
 const { criarVersionamento } = require('../nucleo/versionamento');
-const { ESCOPO_INFO, ESQUEMA_NOVA_MEMORIA } = require('../contratos/memoria');
+const { ESCOPO_INFO, ESQUEMA_NOVA_MEMORIA, alvoDoEscopo, memoriaVigente } = require('../contratos/memoria');
 const { obterAgente } = require('../agentes/catalogo');
 
 const CAMPOS_CONTEUDO = ['titulo', 'conteudo', 'tags', 'evidencias'];
 const DIAS_TAREFA = 30;
 
-// Confere que o alvo tem exatamente as chaves do escopo (nem mais, nem menos).
-function alvoDoEscopo(escopo, alvo = {}) {
-  const info = ESCOPO_INFO[escopo];
-  if (!info) throw erro('invalido', `escopo de memória desconhecido: ${escopo}`);
-  const chaves = Object.keys(alvo).filter((k) => alvo[k] !== undefined && alvo[k] !== null);
-  const sobrando = chaves.filter((k) => !info.alvo.includes(k));
-  const faltando = info.alvo.filter((k) => !alvo[k]);
-  if (sobrando.length || faltando.length) throw erro('invalido', `alvo inválido para o escopo ${escopo}`, { faltando, sobrando });
-  const limpo = {};
-  info.alvo.forEach((k) => { limpo[k] = alvo[k]; });
-  return limpo;
-}
+// alvoDoEscopo (escopo e isolamento) mora no contrato (contratos/memoria.js).
 
 // deps: { banco, auditoria, empresas (serviço), relogio? }
 function criarRegistroMemoria(deps) {
@@ -171,7 +160,7 @@ function criarRegistroMemoria(deps) {
     async vigentes(escopo, alvo) {
       const agora = relogio();
       const lista = await banco.listar(caminhos.colecaoMemorias(escopo, alvoDoEscopo(escopo, alvo)));
-      return lista.filter((m) => m.status === 'ativa' && m.vigente && m.versaoVigente && (!m.expiraEm || m.expiraEm > agora));
+      return lista.filter((m) => memoriaVigente(m, agora));
     },
   };
 }

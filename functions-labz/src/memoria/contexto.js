@@ -13,6 +13,8 @@ const { erro } = require('../nucleo/erros');
 const { obterAgente } = require('../agentes/catalogo');
 const { caminhos } = require('../armazenamento/caminhos');
 const { normalizar } = require('./correcoes');
+const { garantir } = require('../nucleo/validador');
+const { ESQUEMA_PEDIDO_CONTEXTO, BUSCA_SEMANTICA } = require('../contratos/recuperacao');
 
 const REGRAS_SEGURANCA = [
   'Você trabalha para o Super Admin da LABZ AI e só para a empresa desta tarefa.',
@@ -68,6 +70,7 @@ function criarContexto(deps) {
 
     // pedido: { agenteId, empresaId?, tarefaId?, briefing, limites? }
     async montar(pedido) {
+      garantir(ESQUEMA_PEDIDO_CONTEXTO, pedido, 'Pedido de contexto');
       const agente = obterAgente(pedido.agenteId);
       if (!agente) throw erro('nao-encontrado', 'Agente desconhecido');
       const limites = Object.assign({}, LIMITES_PADRAO, pedido.limites || {});
@@ -133,6 +136,7 @@ function criarContexto(deps) {
         fontes: blocos.flatMap((b) => b.itens.filter((i) => i.origem === 'memoria' || i.origem === 'skill').map((i) => ({ origem: i.origem, escopo: i.escopo || null, id: i.id, versao: i.versao }))),
         skillsFaltando: skillsCarregadas.faltando,
         caracteres: usados, descartados,
+        semantica: BUSCA_SEMANTICA, // explícito: a busca semântica não existe nesta versão
       };
     },
   };

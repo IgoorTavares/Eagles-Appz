@@ -42,7 +42,8 @@ functions-labz/
 │   ├── servicos.js              criarLabz({ banco }) monta todos os serviços
 │   ├── api/labz-api.js          lista fechada de ações + tradução de erros
 │   ├── nucleo/                  validador de esquemas, erros, ids, versionamento
-│   ├── contratos/               agente, ferramenta, execução (9 estados), memória (5 escopos), empresa
+│   ├── contratos/               agente (+ perfil de memória), ferramenta, execução (9 estados), memória (5 escopos,
+│   │                            estados, modelo canônico), recuperação (busca e contexto), empresa
 │   ├── agentes/catalogo.js      os 8 agentes
 │   ├── ferramentas/             registro das ferramentas + verificação de permissão
 │   ├── auth/super-admin.js      autorização no servidor
@@ -84,7 +85,24 @@ functions-labz/
 4. Criar os segredos (`firebase functions:secrets:set ...`).
 5. Acrescentar ao `firebase.json` o codebase `{ "source": "functions-labz", "codebase": "labz" }` e publicar só ele.
 
+## Memory Engine — contratos (Fase 3A)
+- **Fonte oficial: Firestore.** Documento base em `caminhos.memoria(...)` e versões imutáveis em `{base}/versoes/{n}`.
+  `ESQUEMA_DOC_MEMORIA`/`ESQUEMA_DOC_VERSAO` + `conferirRegistroMemoria`/`conferirVersaoMemoria` (`src/contratos/memoria.js`).
+  O Markdown é só derivado (`CONTRATO_MARKDOWN`, indisponível até a 3B).
+- **Estados (D2):** versão `rascunho` (DRAFT), `pendente` (PENDING_REVIEW), `precisa-revisao` (NEEDS_REVISION), `aprovada` (APPROVED),
+  `rejeitada` (REJECTED), `substituida` (SUPERSEDED); memória `pendente`/`ativa`/`arquivada`. `rascunho` e `precisa-revisao`
+  são **reservados** (nenhum serviço grava ainda). Transições em `TRANSICOES_VERSAO`; o que vale no contexto: `memoriaVigente`.
+- **Escopo e isolamento:** `alvoDoEscopo` (uma só implementação, no contrato) exige o alvo exato; o caminho sai do alvo validado.
+- **Busca e recuperação** (`src/contratos/recuperacao.js`): `validarConsultaMemoria` (status fixo `ativa`, coleção pelo alvo),
+  `validarConsultaBanco` (sempre com limite; até 30 valores em `in`/`array-contains-any`), `CRITERIOS_RANKING`, `ESQUEMA_FONTE`
+  (proveniência por id e versão), `ESQUEMA_PEDIDO_CONTEXTO` (o Context Builder recusa pedidos fora dele) e
+  `conferirContextoMontado`. Busca por metadados e textual: implementação na 3C. **Busca semântica: indisponível** (`BUSCA_SEMANTICA`,
+  também informada em todo contexto montado).
+- **Agentes:** `perfilMemoria(agente)` (`src/contratos/agente.js`) deriva do catálogo o que cada um dos 8 lê e propõe; nenhum aprova;
+  memória recuperada é dado. Integração operacional: 3D.
+- **Auditoria:** `EVENTOS_MEMORIA` (ativos e reservados); os eventos guardam ids e versões, nunca o conteúdo.
+
 ## O que falta (fases seguintes)
-- Fase 3: classificação de correções sugerida por IA, índices e busca semântica.
+- Fase 3B–3E: estados novos em uso, Markdown, índices e busca textual, prioridades dos agentes (D4), segurança e simulador.
 - Fase 4: motor de orquestração (trabalhador da fila, planner, quality gate, custos).
 - Fases 5–8: conteúdo das skills, provedores de IA, interface e integrações.

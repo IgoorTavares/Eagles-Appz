@@ -427,3 +427,46 @@ test('Fase 4A no Firestore real: plano orquestrado, dois executores ao mesmo tem
   const fim = (await db.doc(`labz_tarefas/${e2.id}`).get()).data();
   assert.equal(fim.etapas[0].resultado.acoes[0].situacao, 'aprovada-simulada');
 });
+
+test('Fase 4B no Firestore real: modelos por agente pela API, pedido planejado pelo Estrategista, dois executores locais e reservas de consumo', async () => {
+  const { criarLabz } = require('../src/servicos');
+  const { transporteComModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
+  const { exigirSuperAdmin } = require('../src/auth/super-admin');
+  const banco = criarBancoFirestore(db);
+  const transporte = transporteComModeloSimulado();
+  const s = criarLabz({ banco, ia: { transporte } });
+  const ator = await exigirSuperAdmin({ uid: 'sa-teste', token: { email: 'sa@teste.local' } }, { banco, uidsAutorizados: ['sa-teste'] });
+  const recursos = ['texto', 'saida-estruturada', 'ferramentas', 'imagem-entrada', 'imagem-saida'];
+  // configuração por agente PELA API (função do simulador); "real" é recusado
+  await ok(tokens.sa, 'modelos.configurar', { agenteId: '04-roteirista', config: { provedor: 'openai', modelo: 'modelo-ficticio-1', uso: 'simulado', recursosDoModelo: recursos } });
+  await ok(tokens.sa, 'modelos.configurar', { agenteId: '08-estrategista', config: { provedor: 'anthropic', modelo: 'modelo-ficticio-2', uso: 'simulado', recursosDoModelo: recursos } });
+  const real = await chamar(tokens.sa, 'modelos.configurar', { agenteId: '02-designer', config: { provedor: 'google', modelo: 'x', uso: 'real', recursosDoModelo: recursos } });
+  assert.equal(real.erro.status, 'FAILED_PRECONDITION');
+  assert.equal((await chamar(tokens.diretor, 'modelos.listar', {})).erro.status, 'PERMISSION_DENIED');
+  const lista = await ok(tokens.sa, 'modelos.listar', {});
+  assert.deepEqual(lista.filter((x) => x.situacao === 'configurado').map((x) => x.agenteId).sort(), ['04-roteirista', '08-estrategista']);
+  // pedido → plano do Estrategista (validado) → dois executores locais ao mesmo tempo
+  const pedidos = [];
+  for (let i = 0; i < 2; i++) pedidos.push(await s.motor.pedido(ator, { empresaId: A.id, objetivo: `INTEG-4B ${i} produzir conteúdos para redes sociais: posts e legendas` }));
+  pedidos.forEach((p) => assert.equal(p.estado, 'READY'));
+  await Promise.all([s.executorLocal({ nome: 'X', concorrencia: 2 }).drenar(), s.executorLocal({ nome: 'Y', concorrencia: 2 }).drenar()]);
+  for (const p of pedidos) {
+    const d = await ok(tokens.sa, 'execucoes.diagnostico', { execucaoId: p.id });
+    assert.equal(d.estado, 'COMPLETED');
+    assert.ok(d.etapas.every((x) => x.status === 'concluida' && x.tentativas === 1));
+    assert.ok(d.custos.porProvedor.openai && d.custos.porProvedor.anthropic && d.custos.custoDesconhecido >= 1 && d.custos.cobrancaReal === false);
+  }
+  const execucoesDoModelo = transporte.chamadas.filter((x) => x.modo !== 'planejar');
+  assert.equal(execucoesDoModelo.length, pedidos.length * 3, 'cada etapa chamou o "modelo" uma vez só');
+  // consumo do dia pela API; reservas simultâneas no Firestore: só uma cabe no limite
+  const dia = await ok(tokens.sa, 'custos.consumo', {});
+  assert.ok(dia.global.chamadas >= 8 && dia.cobrancaReal === false);
+  await ok(tokens.sa, 'custos.definirLimites', { limites: { global: { tokensDia: dia.global.tokens + 7000, custoDia: null }, porAgente: { tokensDia: null, custoDia: null }, porEmpresa: { tokensDia: null, custoDia: null }, porProvedor: { tokensDia: null, custoDia: null }, excecoes: { agentes: {}, empresas: {}, provedores: {} } } });
+  const p = { execucaoId: 'integ-4b', etapaId: 'e1', agenteId: '04-roteirista', empresaId: A.id, provedor: 'simulado', modelo: 'simulado', tokensEntrada: 2000, tokensSaida: 2000 };
+  const rs = await Promise.all([s.consumo.reservar(p), s.consumo.reservar(p), s.consumo.reservar(p)]);
+  assert.equal(rs.filter((x) => x.permitido).length, 1);
+  await db.doc('labz_config/limites').delete(); // não deixa limite para os outros testes
+  // monitor: consultas da fila e das empresas funcionam no Firestore
+  const m = await s.monitor.verificar();
+  assert.ok(Array.isArray(m.descartados) && typeof m.reservasVencidas === 'number');
+});

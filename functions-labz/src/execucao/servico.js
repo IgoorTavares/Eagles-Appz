@@ -125,22 +125,31 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
       }
       const feitas = [];
       for (const e of presas) {
-        // F7: execução de empresa arquivada não volta para a fila: é encerrada
-        if (e.empresaId) {
-          const emp = await banco.obter(caminhos.empresa(e.empresaId));
-          if (!emp || emp.status !== 'ativa') {
-            await transicionar(ATOR_SISTEMA, e.id, 'CANCELLED', { motivo: 'empresa arquivada' });
-            feitas.push({ id: e.id, para: 'CANCELLED' });
-            continue;
+        // Fase 4B: versaoEsperada = a versão VISTA na varredura. Se outro monitor
+        // já retomou, ou um executor assumiu de novo (sinal de vida novo), a
+        // transição falha com conflito e esta varredura não mexe (sem retomada dupla).
+        const op = { versaoEsperada: e.versao };
+        try {
+          // F7: execução de empresa arquivada não volta para a fila: é encerrada
+          if (e.empresaId) {
+            const emp = await banco.obter(caminhos.empresa(e.empresaId));
+            if (!emp || emp.status !== 'ativa') {
+              await transicionar(ATOR_SISTEMA, e.id, 'CANCELLED', Object.assign({ motivo: 'empresa arquivada' }, op));
+              feitas.push({ id: e.id, para: 'CANCELLED' });
+              continue;
+            }
           }
-        }
-        const tentativas = (e.tentativas || 0) + 1;
-        if (tentativas >= MAX_TENTATIVAS) {
-          await transicionar(ATOR_SISTEMA, e.id, 'FAILED', { motivo: `interrompida ${tentativas} vezes`, tentativas, extras: { diagnostico: { motivo: 'interrompida-demais', tentativas, em: relogio() } } });
-          feitas.push({ id: e.id, para: 'FAILED' });
-        } else {
-          await transicionar(ATOR_SISTEMA, e.id, 'READY', { motivo: 'retomada após interrupção', tentativas });
-          feitas.push({ id: e.id, para: 'READY' });
+          const tentativas = (e.tentativas || 0) + 1;
+          if (tentativas >= MAX_TENTATIVAS) {
+            await transicionar(ATOR_SISTEMA, e.id, 'FAILED', Object.assign({ motivo: `interrompida ${tentativas} vezes`, tentativas, extras: { diagnostico: { motivo: 'interrompida-demais', tentativas, em: relogio() } } }, op));
+            feitas.push({ id: e.id, para: 'FAILED' });
+          } else {
+            await transicionar(ATOR_SISTEMA, e.id, 'READY', Object.assign({ motivo: 'retomada após interrupção', tentativas }, op));
+            feitas.push({ id: e.id, para: 'READY' });
+          }
+        } catch (er) {
+          if (!['conflito', 'transicao-invalida'].includes(er.codigo)) throw er;
+          feitas.push({ id: e.id, para: null, ignorada: 'mudou-durante-a-varredura' });
         }
       }
       return feitas;

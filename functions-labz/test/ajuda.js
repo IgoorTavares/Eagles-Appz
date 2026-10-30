@@ -11,6 +11,7 @@ function relogioDeTeste(inicio = '2026-11-01T12:00:00.000Z') {
 }
 
 // opcoes.adaptador (Fase 4A): adaptador SIMULADO do motor com um roteiro próprio
+// opcoes.ia / opcoes.opcoes (Fase 4B): adaptador de MODELOS com transporte simulado; monitor/executor
 async function montar(opcoes = {}) {
   const banco = criarBancoMemoria();
   const relogio = relogioDeTeste();
@@ -20,7 +21,7 @@ async function montar(opcoes = {}) {
   await banco.gravar('tenants/t1', { nomeEmpresa: 'Agência Fictícia', plano: 'ambos' });
   await banco.gravar('tenants/t1/crm_clientes/c1', { nome: 'Cliente Fictício Um' });
   await banco.gravar('tenants/t1/crm_clientes/c2', { nome: 'Cliente Fictício Dois' });
-  const labz = criarLabz({ banco, relogio, adaptador: opcoes.adaptador });
+  const labz = criarLabz({ banco, relogio, adaptador: opcoes.adaptador, ia: opcoes.ia, opcoes: opcoes.opcoes });
   const ator = await exigirSuperAdmin({ uid: 'sa', token: { email: 'sa@teste.local' } }, { banco, uidsAutorizados: ['sa'] });
   return Object.assign({ relogio, ator }, labz);
 }

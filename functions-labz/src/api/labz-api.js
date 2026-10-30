@@ -39,7 +39,8 @@ const ACOES = {
     provedores: statusProvedores(ctx.lerSegredo),
     agentes: AGENTES.map((a) => ({ id: a.id, nome: a.nome, modelo: a.modelo.provedor ? 'configurado' : 'a-configurar' })),
     ferramentas: FERRAMENTAS.map((f) => ({ id: f.id, disponibilidade: f.disponibilidade })),
-    fila: 'persistente (labz_fila); trabalhador automático na Fase 4',
+    fila: 'persistente (labz_fila); executor automático local (Fase 4B, só testes e emulador)',
+    modelosReais: 'desligados (Fase 4B: só simulação)',
   })],
 
   'empresas.criar': [obj({ empresa: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.empresas.criar(a, d.empresa)],
@@ -101,11 +102,23 @@ const ACOES = {
     (s, a, d) => s.motor.decidirAprovacao(a, d.execucaoId, d.aprovacaoId, { decisao: d.decisao, assinatura: d.assinatura, justificativa: d.justificativa })],
   'execucoes.retomar': [obj({ execucaoId: ID, limites: { tipo: 'objeto' } }), (s, a, d) => s.motor.retomar(a, d.execucaoId, { limites: d.limites })],
   'execucoes.diagnostico': [obj({ execucaoId: ID }), (s, a, d) => s.motor.diagnosticar(a, d.execucaoId)],
+  // Fase 4B: o pedido vira execução orquestrada e o Estrategista planeja (plano validado no backend).
+  'execucoes.pedido': [obj({ empresaId: { tipo: 'texto', nulo: true, padrao: /^[A-Za-z0-9_-]{1,80}$/ }, objetivo: { tipo: 'texto', obrigatorio: true, min: 5, max: 4000 }, limites: { tipo: 'objeto' } }),
+    (s, a, d) => s.motor.pedido(a, { empresaId: d.empresaId || null, objetivo: d.objetivo, limites: d.limites })],
   'execucoes.criar': [obj({ execucao: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.execucoes.criar(a, d.execucao)],
   'execucoes.transicionar': [obj({ execucaoId: ID, para: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', max: 300 }, versaoEsperada: { tipo: 'inteiro', min: 1 } }),
     (s, a, d) => s.execucoes.transicionar(a, d.execucaoId, d.para, { motivo: d.motivo, versaoEsperada: d.versaoEsperada })],
   'execucoes.obter': [obj({ execucaoId: ID }), (s, a, d) => s.execucoes.obter(a, d.execucaoId)],
   'execucoes.listar': [obj({ estado: { tipo: 'texto', max: 30 }, empresaId: { tipo: 'texto', max: 80 }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }), (s, a, d) => s.execucoes.listarPagina(a, d)],
+
+  // Fase 4B: modelo por agente (só simulado nesta fase; "real" é recusado) e consumo.
+  'modelos.listar': [obj({}), (s, a) => s.configModelos.listar(a)],
+  'modelos.configurar': [obj({ agenteId: ID, config: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.configModelos.definir(a, d.agenteId, d.config)],
+  'modelos.remover': [obj({ agenteId: ID }), (s, a, d) => s.configModelos.remover(a, d.agenteId)],
+  'custos.limites': [obj({}), (s, a) => s.consumo.limites(a)],
+  'custos.definirLimites': [obj({ limites: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.consumo.definirLimites(a, d.limites)],
+  'custos.definirPreco': [obj({ chave: { tipo: 'texto', obrigatorio: true, max: 160 }, preco: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.consumo.definirPreco(a, d.chave, d.preco)],
+  'custos.consumo': [obj({ dia: { tipo: 'texto', padrao: /^\d{4}-\d{2}-\d{2}$/ } }), (s, a, d) => s.consumo.doDia(a, d.dia)],
 
   'auditoria.listar': [obj({ tipo: { tipo: 'texto', max: 60 }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }),
     (s, a, d) => s.auditoria.listarPagina({ tipo: d.tipo, depoisDe: d.depoisDe, limite: d.limite })],

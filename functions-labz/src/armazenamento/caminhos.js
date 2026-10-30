@@ -26,6 +26,7 @@ const C = {
   vinculos: 'labz_vinculos',
   fila: 'labz_fila',
   nomes: 'labz_nomes', // reserva do nome normalizado de cada empresa da LABZ AI (F4)
+  consumo: 'labz_consumo', // Fase 4B: consumo por dia (UTC), com as reservas em aberto
 };
 
 // Subcoleções da LABZ AI (Fase 3E: com o prefixo labz_, para que índices e
@@ -51,6 +52,11 @@ const caminhos = {
   aprovacoesExecucao: (execucaoId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.aprovacoes}`,
   aprovacaoExecucao: (execucaoId, id) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.aprovacoes}/${seg(id, 'aprovacaoId')}`,
   resultadoEtapa: (execucaoId, etapaId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.resultados}/${seg(etapaId, 'etapaId')}`,
+  // Fase 4B: resultado preservado de uma tentativa revisada (n = número da revisão)
+  resultadoRevisao: (execucaoId, etapaId, n) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.resultados}/${seg(`${etapaId}_rev${n}`, 'etapaId')}`,
+  // Fase 4B: limites de consumo e preços (só o Super Admin define; preço nunca vem do código)
+  limitesConsumo: () => `${C.config}/limites`,
+  precosModelos: () => `${C.config}/precos`,
 
   // Coleção de memórias de cada escopo (os 5 escopos)
   colecaoMemorias(escopo, alvo = {}) {

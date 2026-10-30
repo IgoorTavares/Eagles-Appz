@@ -16,7 +16,15 @@ const ESQUEMA_LIMITES = {
 };
 const limitesDe = (exe) => Object.assign({}, PADRAO, exe.limites || {});
 const custoDe = (tokens) => Math.round((tokens / 1000) * TAXA_POR_MIL_TOKENS * 10000) / 10000;
-const vazio = () => ({ tokens: 0, custoSimulado: 0, porEtapa: {}, unidade: UNIDADE, simulado: true });
+// Fase 4B: separa tokens simulados, uso informado pelo provedor, estimativas,
+// custo estimado (só com preço cadastrado), custo desconhecido (nunca zero) e
+// custo confirmado (só da fatura; não existe nesta fase).
+const vazio = () => ({
+  tokens: 0, custoSimulado: 0, porEtapa: {}, unidade: UNIDADE, simulado: true,
+  usoInformado: { tokensEntrada: 0, tokensSaida: 0 }, tokensEstimados: 0, tokensSimulados: 0,
+  custoEstimado: null, custoDesconhecido: 0, custoConfirmado: null, cobrancaReal: false,
+  porAgente: {}, porProvedor: {},
+});
 
 // Cabe mais "estimativa" tokens? (antes de chamar o adaptador)
 function verificarAntes(exe, estimativaTokens) {
@@ -28,10 +36,22 @@ function verificarAntes(exe, estimativaTokens) {
   return { permitido: true };
 }
 
-// Soma o uso SIMULADO de uma etapa (devolve um objeto novo).
-function somar(custos, etapaId, uso) {
-  const c = JSON.parse(JSON.stringify(custos || vazio()));
+// Soma o uso de uma chamada (devolve um objeto novo).
+// uso.fonte: 'provedor' | 'provedor-simulado' | 'estimado' | (sem fonte = adaptador simulado da 4A)
+// info (Fase 4B, opcional): { agenteId, provedor, custo: { tipo: 'estimado'|'desconhecido'|'sem-cobranca', valor, moeda } }
+function somar(custos, etapaId, uso, info = {}) {
+  const c = Object.assign(vazio(), JSON.parse(JSON.stringify(custos || {})));
   const tokens = (uso.tokensEntrada || 0) + (uso.tokensSaida || 0);
+  const fonte = uso.fonte || 'simulado';
+  if (fonte === 'provedor' || fonte === 'provedor-simulado') { c.usoInformado.tokensEntrada += uso.tokensEntrada || 0; c.usoInformado.tokensSaida += uso.tokensSaida || 0; }
+  if (fonte === 'estimado') c.tokensEstimados += tokens;
+  if (fonte !== 'provedor') c.tokensSimulados += tokens; // nesta fase, todo uso é de simulação
+  const custo = info.custo || null;
+  if (custo && custo.tipo === 'desconhecido') c.custoDesconhecido += 1;
+  if (custo && custo.tipo === 'estimado') c.custoEstimado = { valor: Math.round(((c.custoEstimado ? c.custoEstimado.valor : 0) + custo.valor) * 1e6) / 1e6, moeda: custo.moeda };
+  const por = (mapa, k) => { if (!k) return; const x = mapa[k] || { tokens: 0, chamadas: 0 }; x.tokens += tokens; x.chamadas += 1; mapa[k] = x; };
+  por(c.porAgente, info.agenteId);
+  por(c.porProvedor, info.provedor);
   c.tokens += tokens;
   c.custoSimulado = Math.round((c.custoSimulado + custoDe(tokens)) * 10000) / 10000;
   const pe = c.porEtapa[etapaId] || { tokens: 0, custoSimulado: 0, chamadas: 0 };

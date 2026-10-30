@@ -5,7 +5,8 @@
 // o agente e dentro do limite, e nada de campos inesperados.
 const { avaliarAcao } = require('./ferramentas-simuladas');
 
-const CAMPOS = ['simulado', 'agenteId', 'etapaId', 'formato', 'texto', 'referencias', 'acoes', 'uso'];
+// Fase 4B: + origem (provedor/modelo/fonte do uso, sem conteúdo) e revisoes (só a consolidação pede)
+const CAMPOS = ['simulado', 'agenteId', 'etapaId', 'formato', 'texto', 'referencias', 'acoes', 'uso', 'origem', 'revisoes'];
 const MAX_TEXTO = 20000;
 const MAX_ACOES = 5;
 
@@ -26,6 +27,7 @@ function verificarResultado(saida, { agenteId, etapaId, fontes = [] }) {
     if (saida.acoes.length > MAX_ACOES) p.push('acoes-demais');
     saida.acoes.forEach((a) => { const v = avaliarAcao(agenteId, a); if (!v.permitida) p.push(`acao-nao-autorizada:${(a && a.ferramentaId) || '?'}:${v.motivo}`); });
   }
+  if (saida.revisoes !== undefined && (etapaId !== 'consolidacao' || !Array.isArray(saida.revisoes))) p.push('revisoes-fora-da-consolidacao');
   const u = saida.uso || {};
   if (!(Number.isInteger(u.tokensEntrada) && u.tokensEntrada >= 0 && Number.isInteger(u.tokensSaida) && u.tokensSaida >= 0)) p.push('uso-invalido');
   return { aprovado: p.length === 0, verificacao: 'estrutural', problemas: p };

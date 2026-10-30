@@ -15,10 +15,19 @@ const { criarPortaMemoria } = require('./agentes/memoria-agente');
 const { criarAprovacoes } = require('./motor/aprovacoes');
 const { criarMotor } = require('./motor/motor');
 const { criarAdaptadorSimulado } = require('./motor/adaptador-simulado');
+const { criarConfigModelos } = require('./ia/config-modelos');
+const { criarAdaptadorModelos } = require('./ia/adaptador-modelos');
+const { criarConsumo } = require('./motor/consumo');
+const { criarMonitorFila } = require('./motor/monitor-fila');
+const { criarExecutorLocal } = require('./motor/executor-local');
 
 // adaptador: o "agente" que o motor chama. Na Fase 4A é SEMPRE o simulado
 // (nenhum modelo real); os testes passam roteiros próprios.
-function criarLabz({ banco, relogio, adaptador }) {
+// ia (Fase 4B, opcional): { transporte, limitador?, timeoutMs? } liga o adaptador
+// de MODELOS (OpenAI/Anthropic/Google/simulado por agente). Só aceita o
+// transporte simulado ou o bloqueado: nenhuma chamada real nesta fase.
+// opcoes.monitor / opcoes.executor: configurações do monitor e do executor local.
+function criarLabz({ banco, relogio, adaptador, ia, opcoes = {} }) {
   const auditoria = criarAuditoria(banco, relogio);
   const empresas = criarServicoEmpresas({ banco, auditoria, relogio });
   const recuperador = criarRecuperador({ banco, relogio, auditoria });
@@ -33,8 +42,14 @@ function criarLabz({ banco, relogio, adaptador }) {
   // porta de memória dos agentes: uso interno (trabalhador da Fase 4); não sai pela API
   const portaMemoria = criarPortaMemoria({ banco, registro: memoria, recuperador, preparacao });
   const aprovacoes = criarAprovacoes({ banco, auditoria, relogio });
-  const motor = criarMotor({ banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador: adaptador || criarAdaptadorSimulado(), relogio });
-  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor };
+  const configModelos = criarConfigModelos({ banco, auditoria, relogio });
+  const consumo = criarConsumo({ banco, auditoria, relogio });
+  const agente = adaptador || (ia ? criarAdaptadorModelos({ configModelos, transporte: ia.transporte, limitador: ia.limitador, timeoutPadraoMs: ia.timeoutMs }) : criarAdaptadorSimulado());
+  const motor = criarMotor({ banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador: agente, consumo, relogio });
+  const monitor = criarMonitorFila({ banco, execucoes, fila, auditoria, relogio, opcoes: opcoes.monitor });
+  // executor automático LOCAL: uso interno (testes e emulador); não sai pela API e não é agendado
+  const executorLocal = (o) => criarExecutorLocal({ motor, monitor, auditoria, opcoes: Object.assign({}, opcoes.executor, o) });
+  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente };
 }
 
 module.exports = { criarLabz };

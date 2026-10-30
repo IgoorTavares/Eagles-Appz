@@ -21,9 +21,10 @@ function criarFila({ banco, relogio = relogioPadrao, opcoes = {} }) {
   const ms = (iso) => Date.parse(iso);
   const iso = (n) => new Date(n).toISOString();
 
+  // Fase 4B: reserva vencida só volta se ainda há tentativa (senão o monitor encerra o item)
   const elegivel = (it, agora) =>
     (it.estado === 'pendente' && ms(it.disponivelEm) <= agora) ||
-    (it.estado === 'em-andamento' && ms(it.travadoAte) < agora); // reserva vencida = trabalhador caiu
+    (it.estado === 'em-andamento' && ms(it.travadoAte) < agora && (it.tentativas || 0) < cfg.maxTentativas); // reserva vencida = trabalhador caiu
 
   return {
     // t (opcional): grava dentro de uma transação já aberta
@@ -89,6 +90,39 @@ function criarFila({ banco, relogio = relogioPadrao, opcoes = {} }) {
       });
       return final;
     },
+
+    // ---- Fase 4B: usados pelo monitor da fila (monitor-fila.js) ----
+    // Reservas vencidas (até LOTE_FILA, as mais antigas primeiro).
+    async reservasVencidas() {
+      const agora = ms(relogio());
+      const lote = await banco.consultar(caminhos.colecoes.fila, { onde: [{ campo: 'estado', op: '==', valor: 'em-andamento' }], ordenar: { campo: 'travadoAte', direcao: 'asc' }, limite: LOTE_FILA });
+      return lote.filter((it) => ms(it.travadoAte) < agora);
+    },
+    // Pendentes mais antigos (até LOTE_FILA), para descartar os de execuções encerradas.
+    pendentes: () => banco.consultar(caminhos.colecoes.fila, { onde: [{ campo: 'estado', op: '==', valor: 'pendente' }], ordenar: { campo: 'disponivelEm', direcao: 'asc' }, limite: LOTE_FILA }),
+    // Reserva vencida sem tentativa sobrando: encerra como "falhou" (não volta mais).
+    async encerrarVencido(id) {
+      let feito = false;
+      await banco.transacao(async (t) => {
+        const it = await t.obter(caminhos.filaItem(id));
+        if (!it || it.estado !== 'em-andamento' || ms(it.travadoAte) >= ms(relogio()) || (it.tentativas || 0) < cfg.maxTentativas) return;
+        await t.atualizar(caminhos.filaItem(id), { estado: 'falhou', travadoAte: null, ultimoErro: 'reservas vencidas demais (executor caiu)', falhouEm: relogio() });
+        feito = true;
+      });
+      return feito;
+    },
+    // Item pendente de execução já encerrada (cancelada, concluída ou falha): sai da fila.
+    async descartar(id, motivo) {
+      let feito = false;
+      await banco.transacao(async (t) => {
+        const it = await t.obter(caminhos.filaItem(id));
+        if (!it || it.estado !== 'pendente') return;
+        await t.atualizar(caminhos.filaItem(id), { estado: 'descartada', motivo: String(motivo || '').slice(0, 100), descartadoEm: relogio() });
+        feito = true;
+      });
+      return feito;
+    },
+    maxTentativas: cfg.maxTentativas,
 
     // Só para testes e diagnóstico (lê a fila inteira); fora da API e do trabalhador.
     listar: (filtro) => banco.listar(caminhos.colecoes.fila, filtro),

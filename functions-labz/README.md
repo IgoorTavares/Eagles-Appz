@@ -182,13 +182,48 @@ Nenhum modelo de IA, nenhuma API paga e nenhuma ferramenta real. Tudo o que o "a
   O executor (`motor.trabalhar`) **não** sai pela API e não está agendado (Fase 4B).
 - **Índices:** nenhum composto novo. Isenções adicionais propostas à parte (não aplicadas): `labz_resultados.texto` e `labz_tarefas.etapas`.
 
+## Fase 4B — adaptadores de IA, executor automático local e custos (tudo SIMULADO)
+Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado em produção; nada publicado.
+- **Provedores** (`src/ia/`): contrato comum (`contrato.js`: resposta normalizada, `ErroProvedor` com tipos transitório,
+  revisável ou definitivo) e um adaptador por provedor (`provedores/openai.js`, `anthropic.js`, `google.js`, `simulado.js`),
+  cada um no SEU formato (os provedores não são iguais). Os formatos vêm da documentação pública e **precisam ser
+  conferidos na documentação oficial antes de ligar um modelo real**.
+- **Transporte** (`ia/transporte.js`): só o **simulado** (`simulacao/modelo-simulado.js` responde no formato de cada provedor)
+  e o **bloqueado**. O transporte real **não existe**. Limitador local de requisições por provedor.
+- **Modelo por agente** (`ia/config-modelos.js`): `labz_agentes/{id}.configModelo` (provedor, modelo, uso, recursos, timeout,
+  saída máxima). Padrão = simulado. `uso: "real"` é **recusado** (`USO_REAL_AUTORIZADO = false`). Validada ao salvar e antes
+  de cada execução. Permissões continuam só no catálogo.
+- **Prompt seguro** (`ia/prompt.js`): instruções (1 segurança, 2 contrato, 3 permissões, 8 formato) separadas dos DADOS
+  (4 objetivo, 5 cliente, 6 memórias, 7 etapas anteriores/briefing), com marcadores com código e filtro de credenciais
+  (`ia/credenciais.js`). Isso reduz, mas não elimina, o risco de prompt injection: o backend confere tudo o que volta.
+- **Ponte** (`ia/adaptador-modelos.js`): mesma interface do adaptador da 4A; timeout, cancelamento, JSON conferido,
+  campos a mais descartados, uso informado ou ESTIMADO (marcado).
+- **Plano do Estrategista** (`motor/validar-plano.js`): o modelo propõe; o backend valida agentes, modo, ações previstas,
+  ids, dependências e ciclos, critérios, formato, campos proibidos (cliente, limites, permissões, tentativas, aprovações),
+  limite de etapas (projeto grande → "divida o projeto") e consumo estimado. Plano recusado não muda o estado (até 3 vezes).
+  `motor.pedido` (API `execucoes.pedido`) = criar + planejar. Estrategista simulado: `ia/simulacao/estrategista-simulado.js`.
+- **Revisões internas** (`motor.js`): a consolidação pode pedir `revisoes: [{ etapaId, motivo }]`; até 2 por execução;
+  resultados anteriores guardados em `labz_resultados/{etapa}_revN`; acima do limite → REVISION_REQUIRED.
+- **Executor automático local** (`motor/executor-local.js`) e **monitor da fila** (`motor/monitor-fila.js`): ciclos com
+  concorrência, parada que cancela a chamada em curso sem gastar tentativa, recuperação de interrompidas sem retomada
+  dupla (versão conferida), reservas vencidas sem tentativa encerradas, itens de execuções encerradas descartados.
+  Só local (testes e simulador); não sai pela API e não é agendado.
+- **Consumo** (`motor/consumo.js`): por dia, global, por agente, por empresa e por provedor, com reserva ANTES da chamada
+  (bloqueio preventivo) e liquidação depois. Tokens, uso informado, estimativas, custo estimado (só com preço cadastrado
+  pelo Super Admin em `labz_config/precos`), custo desconhecido (nunca zero) e custo confirmado (null) ficam separados.
+  Limite de custo + preço desconhecido = bloqueio. `cobrancaReal` é sempre `false`.
+- **API nova:** `execucoes.pedido`, `modelos.listar`, `modelos.configurar`, `modelos.remover`, `custos.limites`,
+  `custos.definirLimites`, `custos.definirPreco`, `custos.consumo`.
+- **Índices:** nenhum composto novo. Isenções adicionais propostas à parte (não aplicadas): `labz_consumo.reservas`,
+  `.agentes`, `.empresas`, `.provedores` e `labz_tarefas.custos`.
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.
 3. A reserva da aprovação de correção (F3) vale por **2 minutos**.
 4. O Firebase Emulator **não comprova** a disponibilidade dos índices no Firebase real.
 5. A proteção contra prompt injection (marcadores com código, limpeza, blocos `confiavel`) depende também do tratamento seguro dos dados pelo futuro executor de modelos (Fase 4/6).
-6. Os agentes **ainda não executam** tarefas reais: na Fase 4A o motor usa só o adaptador simulado e nada o agenda.
+6. Os agentes **ainda não executam** tarefas reais: na Fase 4B o motor usa só modelos simulados (transporte simulado) e o executor só roda localmente.
 7. Os **28 índices** compostos e as **27 isenções** propostos **ainda não foram publicados** (`firestore.indexes.json` não mudou).
 
 ## O que falta (fases seguintes)

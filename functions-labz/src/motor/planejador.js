@@ -17,6 +17,10 @@ const ESQUEMA_PASSO = {
     agenteId: { tipo: 'texto', obrigatorio: true, padrao: /^0[1-8]-[a-z-]+$/ },
     objetivo: { tipo: 'texto', obrigatorio: true, min: 3, max: 2000 },
     dependeDe: { tipo: 'lista', max: 8, itens: { tipo: 'texto', padrao: /^[a-z0-9-]{1,30}$/ } },
+    // Fase 4B (opcionais; vêm do plano validado do Estrategista)
+    criterios: { tipo: 'lista', max: 8, itens: { tipo: 'texto', min: 3, max: 300 } },
+    estimativaTokens: { tipo: 'inteiro', min: 1, max: 2000000 },
+    acoesPrevistas: { tipo: 'lista', max: 5, itens: { tipo: 'objeto', extras: false, campos: { ferramentaId: { tipo: 'texto', obrigatorio: true, max: 60 }, operacao: { tipo: 'texto', obrigatorio: true, max: 30 } } } },
   },
 };
 
@@ -49,13 +53,17 @@ function montarEtapas(exe, passos, { maxEtapas = 8 } = {}) {
   }
   // orquestrado: o Estrategista consolida no fim (etapa automática que depende de todas)
   if (exe.modo !== 'especialista') {
-    passos = [...passos, { id: CONSOLIDACAO, agenteId: '08-estrategista', objetivo: `Consolidar as entregas para: ${String(exe.objetivo).slice(0, 1800)}`, dependeDe: passos.map((p) => p.id) }];
+    passos = [...passos, { id: CONSOLIDACAO, agenteId: '08-estrategista', objetivo: `Consolidar as entregas para: ${String(exe.objetivo).slice(0, 1800)}`, dependeDe: passos.map((p) => p.id), criterios: ['Reúne todas as entregas das etapas', 'Confere cada entrega com os critérios de conclusão dela'] }];
   }
   const ordem = ordenar(passos);
   const porId = new Map(passos.map((p) => [p.id, p]));
   return ordem.map((id) => {
     const p = porId.get(id);
-    return { id: p.id, agenteId: p.agenteId, objetivo: p.objetivo, dependeDe: (p.dependeDe || []).slice().sort(), status: 'pendente', tentativas: 0, tentativasQualidade: 0, aprovacoes: [], resultado: null, ultimoErro: null };
+    const etapa = { id: p.id, agenteId: p.agenteId, objetivo: p.objetivo, dependeDe: (p.dependeDe || []).slice().sort(), status: 'pendente', tentativas: 0, tentativasQualidade: 0, aprovacoes: [], resultado: null, ultimoErro: null };
+    if (p.criterios) etapa.criterios = p.criterios.slice(); // Fase 4B: critérios de conclusão
+    if (p.estimativaTokens) etapa.estimativaTokens = p.estimativaTokens;
+    if (p.acoesPrevistas) etapa.acoesPrevistas = p.acoesPrevistas.map((a) => ({ ferramentaId: a.ferramentaId, operacao: a.operacao }));
+    return etapa;
   });
 }
 

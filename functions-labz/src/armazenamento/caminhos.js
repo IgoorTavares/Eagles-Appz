@@ -24,6 +24,7 @@ const C = {
   aprendizados: 'labz_aprendizados',
   eventos: 'labz_eventos',
   vinculos: 'labz_vinculos',
+  fila: 'labz_fila',
 };
 
 const caminhos = {
@@ -38,6 +39,7 @@ const caminhos = {
   correcao: (id) => `${C.correcoes}/${seg(id, 'correcaoId')}`,
   aprendizado: (id) => `${C.aprendizados}/${seg(id, 'aprendizadoId')}`,
   evento: (id) => `${C.eventos}/${seg(id, 'eventoId')}`,
+  filaItem: (id) => `${C.fila}/${seg(id, 'filaId')}`,
 
   // Coleção de memórias de cada escopo (os 5 escopos)
   colecaoMemorias(escopo, alvo = {}) {

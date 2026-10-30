@@ -12,6 +12,7 @@ async function cenario() {
   await banco.gravar('usuarios/d1', { role: 'Diretor', tenantId: 't1' });
   await banco.gravar('usuarios/semrole', { tenantId: 't1' }); // sem nível: no navegador viraria Diretor
   await banco.gravar('usuarios/minusculo', { role: 'superadmin' });
+  await banco.gravar('labz_config/acesso', { uids: ['sa', 'sa2'] });
   const auditoria = criarAuditoria(banco);
   return { banco, auditoria, deps: { banco, auditoria, uidsAutorizados: 'sa, outro' } };
 }
@@ -62,4 +63,17 @@ test('os serviços não aceitam um "ator" montado à mão', () => {
   assert.throws(() => exigirAtor({ tipo: 'superadmin', uid: 'sa' }), (e) => e.codigo === 'permissao-negada');
   assert.throws(() => exigirAtor(null), (e) => e.codigo === 'permissao-negada');
   assert.throws(() => exigirAtor(Object.freeze({ tipo: 'diretor', uid: 'd1' })), (e) => e.codigo === 'permissao-negada');
+});
+
+test('as duas listas precisam concordar: segredo do servidor E labz_config/acesso', async () => {
+  const { banco, deps } = await cenario();
+  // sa2 está no banco mas não no segredo
+  await rejeita(() => exigirSuperAdmin({ uid: 'sa2', token: {} }, deps), 'permissao-negada');
+  // sa está no segredo; sai do banco → negado
+  await banco.gravar('labz_config/acesso', { uids: ['outro'] });
+  await rejeita(() => exigirSuperAdmin({ uid: 'sa', token: {} }, deps), 'permissao-negada');
+  // sem o documento → negado (falha fechada)
+  const b2 = require('../src/armazenamento/banco-memoria').criarBancoMemoria();
+  await b2.gravar('usuarios/sa', { role: 'SuperAdmin' });
+  await rejeita(() => exigirSuperAdmin({ uid: 'sa', token: {} }, { banco: b2, uidsAutorizados: 'sa' }), 'permissao-negada');
 });

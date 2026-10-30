@@ -29,9 +29,15 @@ test('nenhum arquivo de skill, memória ou prompt no repositório', () => {
   });
 });
 
-test('o backend da Fase 1 não depende de pacotes externos nem exporta funções publicáveis', () => {
+test('só as bibliotecas oficiais do Firebase; nenhum segredo de verdade guardado em arquivo', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(RAIZ, 'package.json'), 'utf8'));
-  assert.equal(pkg.dependencies, undefined);
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['firebase-admin', 'firebase-functions']);
+  assert.ok(!fs.existsSync(path.join(RAIZ, '.secret.local')), '.secret.local não pode existir no repositório');
+  const gi = fs.readFileSync(path.join(RAIZ, '.gitignore'), 'utf8');
+  assert.ok(gi.includes('.secret.local') && gi.includes('node_modules'));
   const idx = fs.readFileSync(path.join(RAIZ, 'index.js'), 'utf8');
-  assert.ok(!/firebase-functions|onCall|onRequest|onSchedule/.test(idx.replace(/\/\/.*$/gm, '')));
+  assert.ok(/defineSecret\(SEGREDO_UIDS\)/.test(idx), 'a lista de UIDs vem do Secret Manager');
+  // só a API exportada; nada agendado nem HTTP aberto
+  assert.deepEqual((idx.match(/^exports\.(\w+)/gm) || []), ['exports.labzApi']);
+  assert.ok(!/onRequest|onSchedule|onDocument/.test(idx));
 });

@@ -1,7 +1,7 @@
 // Apoio dos testes: banco em memória com dados FICTÍCIOS e um relógio fixo.
 const { criarBancoMemoria } = require('../src/armazenamento/banco-memoria');
 const { exigirSuperAdmin } = require('../src/auth/super-admin');
-const { criarLabz } = require('../index');
+const { criarLabz } = require('../src/servicos');
 
 function relogioDeTeste(inicio = '2026-11-01T12:00:00.000Z') {
   let t = Date.parse(inicio);
@@ -14,6 +14,7 @@ async function montar() {
   const banco = criarBancoMemoria();
   const relogio = relogioDeTeste();
   await banco.gravar('usuarios/sa', { role: 'SuperAdmin', nome: 'Super' });
+  await banco.gravar('labz_config/acesso', { uids: ['sa'] });
   await banco.gravar('usuarios/d1', { role: 'Diretor', tenantId: 't1', nome: 'Diretor' });
   await banco.gravar('tenants/t1', { nomeEmpresa: 'Agência Fictícia', plano: 'ambos' });
   await banco.gravar('tenants/t1/crm_clientes/c1', { nome: 'Cliente Fictício Um' });

@@ -1,40 +1,61 @@
-// LABZ AI — backend (Fase 1: fundação).
-// Este arquivo ainda NÃO exporta funções publicáveis do Firebase: na Fase 2
-// cada operação vira uma função onCall que primeiro chama exigirSuperAdmin()
-// e depois usa os serviços abaixo com o adaptador do Firestore (Admin SDK).
-// Até lá, tudo roda só nos testes, com o banco em memória.
-const { criarAuditoria } = require('./src/auditoria/eventos');
-const { criarServicoEmpresas } = require('./src/empresas/servico');
-const { criarRegistroMemoria } = require('./src/memoria/registro');
-const { criarCorrecoes } = require('./src/memoria/correcoes');
-const { criarContexto } = require('./src/memoria/contexto');
-const { criarAuditorMemoria } = require('./src/memoria/auditor');
-const { criarRegistroSkills } = require('./src/skills/registro');
-const { exigirSuperAdmin } = require('./src/auth/super-admin');
+// LABZ AI — backend (Fase 2: servidor seguro).
+// Uma única função chamável, "labzApi", na região de São Paulo. Toda a
+// lógica está em src/ (sem dependência do Firebase) e é testada sem servidor;
+// aqui só ligamos o Firestore (Admin SDK) e os segredos do Secret Manager.
+//
+// NÃO PUBLICADO. Publicar exige o plano Blaze, os segredos criados no Google
+// Cloud e o codebase "labz" no firebase.json — tudo só com autorização do Igor.
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
+const { logger } = require('firebase-functions');
+const admin = require('firebase-admin');
 
-// Monta todos os serviços sobre um banco (em memória nos testes; Firestore na Fase 2).
-function criarLabz({ banco, relogio }) {
-  const auditoria = criarAuditoria(banco, relogio);
-  const empresas = criarServicoEmpresas({ banco, auditoria, relogio });
-  const memoria = criarRegistroMemoria({ banco, auditoria, empresas, relogio });
-  const correcoes = criarCorrecoes({ banco, auditoria, registro: memoria, relogio });
-  const skills = criarRegistroSkills({ banco, auditoria, relogio });
-  const contexto = criarContexto({ banco, registro: memoria, skills });
-  const auditor = criarAuditorMemoria({ registro: memoria, relogio });
-  return { banco, auditoria, empresas, memoria, correcoes, skills, contexto, auditor };
+const { criarBancoFirestore } = require('./src/armazenamento/banco-firestore');
+const { criarLabz } = require('./src/servicos');
+const { criarApi, traduzirErro } = require('./src/api/labz-api');
+const { SEGREDOS_PROVEDORES, SEGREDO_UIDS } = require('./src/segredos/provedores');
+const { erro } = require('./src/nucleo/erros');
+const { MENSAGEM_NEGADO } = require('./src/auth/super-admin');
+
+admin.initializeApp();
+const db = admin.firestore();
+
+// Segredos (Secret Manager). Os valores nunca ficam no repositório.
+const UIDS = defineSecret(SEGREDO_UIDS);
+const PROVEDORES = Object.fromEntries(Object.values(SEGREDOS_PROVEDORES).map((nome) => [nome, defineSecret(nome)]));
+const lerSegredo = (nome) => (PROVEDORES[nome] ? PROVEDORES[nome].value() : '');
+
+const banco = criarBancoFirestore(db);
+const servicos = criarLabz({ banco });
+
+// Confere de novo o token com checkRevoked: além da assinatura (que o
+// Firebase já confere), recusa conta desativada e sessões revogadas na hora.
+async function verificarToken(request) {
+  const cab = (request.rawRequest && request.rawRequest.headers && request.rawRequest.headers.authorization) || '';
+  const m = /^Bearer (.+)$/.exec(cab);
+  try {
+    if (!m) throw new Error('sem token');
+    const dec = await admin.auth().verifyIdToken(m[1], true);
+    if (dec.uid !== request.auth.uid) throw new Error('token de outra pessoa');
+  } catch (e) {
+    await servicos.auditoria.registrar('auth.token_recusado', { uid: request.auth.uid }, 'labz', { motivo: String((e && e.code) || (e && e.message) || 'token').slice(0, 80) });
+    throw erro('nao-autenticado', MENSAGEM_NEGADO);
+  }
 }
 
-module.exports = {
-  criarLabz,
-  exigirSuperAdmin,
-  agentes: require('./src/agentes/catalogo'),
-  ferramentas: require('./src/ferramentas/catalogo'),
-  permissoes: require('./src/ferramentas/permissoes'),
-  contratos: {
-    agente: require('./src/contratos/agente'),
-    ferramenta: require('./src/contratos/ferramenta'),
-    execucao: require('./src/contratos/execucao'),
-    memoria: require('./src/contratos/memoria'),
-    empresa: require('./src/contratos/empresa'),
-  },
-};
+const api = criarApi({ servicos, banco, uidsAutorizados: () => UIDS.value(), lerSegredo, verificarToken });
+
+exports.labzApi = onCall({
+  region: 'southamerica-east1',
+  maxInstances: 2,
+  timeoutSeconds: 60,
+  secrets: [UIDS, ...Object.values(PROVEDORES)],
+}, async (request) => {
+  try {
+    return await api(request);
+  } catch (e) {
+    const t = traduzirErro(e);
+    if (t.codigo === 'internal') logger.error('labzApi: erro interno', { mensagem: e && e.message, pilha: e && e.stack });
+    throw new HttpsError(t.codigo, t.mensagem, t.detalhes);
+  }
+});

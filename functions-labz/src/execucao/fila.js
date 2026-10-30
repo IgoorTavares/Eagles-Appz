@@ -13,6 +13,7 @@ const { caminhos } = require('../armazenamento/caminhos');
 const { erro } = require('../nucleo/erros');
 const { novoId, relogioPadrao } = require('../nucleo/ids');
 
+const LOTE_FILA = 20; // candidatos lidos por estado a cada reserva
 const PADRAO = { maxTentativas: 3, reservaMs: 5 * 60 * 1000, esperaBaseMs: 30 * 1000 };
 
 function criarFila({ banco, relogio = relogioPadrao, opcoes = {} }) {
@@ -36,10 +37,15 @@ function criarFila({ banco, relogio = relogioPadrao, opcoes = {} }) {
     },
 
     // Pega o próximo item disponível (o mais antigo), com reserva por tempo limitado.
+    // F6 (Fase 3E): duas consultas LIMITADAS (pendentes por disponivelEm e
+    // reservas vencidas por travadoAte), em vez de ler a fila inteira. Como
+    // vêm ordenadas, se o primeiro não está disponível, nenhum está.
     async reservar(trabalhador) {
       const agora = ms(relogio());
-      const candidatos = (await banco.listar(caminhos.colecoes.fila, (it) => elegivel(it, agora)))
-        .sort((a, b) => ms(a.disponivelEm) - ms(b.disponivelEm));
+      const lote = (estado, campo) => banco.consultar(caminhos.colecoes.fila, { onde: [{ campo: 'estado', op: '==', valor: estado }], ordenar: { campo, direcao: 'asc' }, limite: LOTE_FILA });
+      const candidatos = [...await lote('pendente', 'disponivelEm'), ...await lote('em-andamento', 'travadoAte')]
+        .filter((it) => elegivel(it, agora))
+        .sort((a, b) => ms(a.disponivelEm) - ms(b.disponivelEm) || a.id.localeCompare(b.id));
       for (const c of candidatos) {
         const pego = await banco.transacao(async (t) => {
           const it = await t.obter(caminhos.filaItem(c.id));
@@ -82,6 +88,7 @@ function criarFila({ banco, relogio = relogioPadrao, opcoes = {} }) {
       return final;
     },
 
+    // Só para testes e diagnóstico (lê a fila inteira); fora da API e do trabalhador.
     listar: (filtro) => banco.listar(caminhos.colecoes.fila, filtro),
   };
 }

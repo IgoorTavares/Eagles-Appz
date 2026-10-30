@@ -57,6 +57,13 @@ function criarPortaMemoria({ banco, registro, recuperador }) {
       if (!agenteNaExecucao(exe, agenteId)) throw erro('permissao-negada', `O agente ${agente.nome} não faz parte desta execução`);
       const perfil = perfilMemoria(agente);
       const empresaId = exe.empresaId || null;
+      // F7 (Fase 3E): conferido ao abrir e de novo a cada uso (a empresa pode ser arquivada no meio)
+      async function exigirEmpresaAtiva() {
+        if (!empresaId) return;
+        const emp = await banco.obter(caminhos.empresa(empresaId));
+        if (!emp || emp.status !== 'ativa') throw erro('precondicao', 'Empresa arquivada: o agente não lê nem propõe memória dela');
+      }
+      await exigirEmpresaAtiva();
       const prioridades = Object.assign({}, PRIORIDADE_CATEGORIA, agente.prioridadesMemoria || {});
 
       // alvo de cada escopo, sempre derivado da execução (null = não se aplica)
@@ -66,6 +73,7 @@ function criarPortaMemoria({ banco, registro, recuperador }) {
       }[escopo]);
 
       async function consultar(texto, { escopos, limite } = {}) {
+        await exigirEmpresaAtiva();
         const pedidos = escopos || perfil.leitura;
         pedidos.forEach((e) => { if (!perfil.leitura.includes(e)) throw erro('permissao-negada', `O agente ${agente.nome} não lê memória de ${e}`); });
         const porEscopo = {};
@@ -84,6 +92,7 @@ function criarPortaMemoria({ banco, registro, recuperador }) {
       // Proposta de aprendizado: nasce RASCUNHO; só o Super Admin envia e aprova.
       async function propor(proposta) {
         garantir(ESQUEMA_PROPOSTA, proposta, 'Proposta de aprendizado');
+        await exigirEmpresaAtiva();
         const p = proposta;
         if (!perfil.propor.includes(p.escopo)) throw erro('permissao-negada', `O agente ${agente.nome} não propõe memória de ${p.escopo}`);
         const alvo = alvoDe(p.escopo);

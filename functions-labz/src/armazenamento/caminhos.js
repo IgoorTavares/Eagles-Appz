@@ -25,16 +25,23 @@ const C = {
   eventos: 'labz_eventos',
   vinculos: 'labz_vinculos',
   fila: 'labz_fila',
+  nomes: 'labz_nomes', // reserva do nome normalizado de cada empresa da LABZ AI (F4)
 };
+
+// Subcoleções da LABZ AI (Fase 3E: com o prefixo labz_, para que índices e
+// isenções do Firestore, que valem por NOME de coleção, nunca alcancem o CRM/ERP).
+const SUB = Object.freeze({ memorias: 'labz_memorias', desempenho: 'labz_desempenho', versoes: 'labz_versoes' });
 
 const caminhos = {
   colecoes: C,
+  subcolecoes: SUB,
   acesso: () => `${C.config}/acesso`,
   empresa: (empresaId) => `${C.empresas}/${seg(empresaId, 'empresaId')}`,
   vinculo: (chave) => `${C.vinculos}/${seg(chave, 'vínculo')}`,
+  nomeEmpresa: (slug) => `${C.nomes}/${seg(slug, 'nome normalizado')}`,
   agente: (agenteId) => `${C.agentes}/${seg(agenteId, 'agenteId')}`,
   skill: (skillId) => `${C.skills}/${seg(skillId, 'skillId')}`,
-  skillVersao: (skillId, n) => `${C.skills}/${seg(skillId, 'skillId')}/versoes/${seg(String(n), 'versão')}`,
+  skillVersao: (skillId, n) => `${C.skills}/${seg(skillId, 'skillId')}/${SUB.versoes}/${seg(String(n), 'versão')}`,
   tarefa: (tarefaId) => `${C.tarefas}/${seg(tarefaId, 'tarefaId')}`,
   correcao: (id) => `${C.correcoes}/${seg(id, 'correcaoId')}`,
   aprendizado: (id) => `${C.aprendizados}/${seg(id, 'aprendizadoId')}`,
@@ -45,15 +52,15 @@ const caminhos = {
   colecaoMemorias(escopo, alvo = {}) {
     switch (escopo) {
       case 'global': return C.memoriaGlobal;
-      case 'agente': return `${C.agentes}/${seg(alvo.agenteId, 'agenteId')}/memorias`;
-      case 'cliente': return `${C.empresas}/${seg(alvo.empresaId, 'empresaId')}/memorias`;
-      case 'tarefa': return `${C.tarefas}/${seg(alvo.tarefaId, 'tarefaId')}/memorias`;
-      case 'desempenho': return `${C.empresas}/${seg(alvo.empresaId, 'empresaId')}/desempenho`;
+      case 'agente': return `${C.agentes}/${seg(alvo.agenteId, 'agenteId')}/${SUB.memorias}`;
+      case 'cliente': return `${C.empresas}/${seg(alvo.empresaId, 'empresaId')}/${SUB.memorias}`;
+      case 'tarefa': return `${C.tarefas}/${seg(alvo.tarefaId, 'tarefaId')}/${SUB.memorias}`;
+      case 'desempenho': return `${C.empresas}/${seg(alvo.empresaId, 'empresaId')}/${SUB.desempenho}`;
       default: throw erro('invalido', `escopo de memória desconhecido: ${escopo}`);
     }
   },
   memoria: (escopo, alvo, memoriaId) => `${caminhos.colecaoMemorias(escopo, alvo)}/${seg(memoriaId, 'memoriaId')}`,
-  memoriaVersao: (escopo, alvo, memoriaId, n) => `${caminhos.memoria(escopo, alvo, memoriaId)}/versoes/${seg(String(n), 'versão')}`,
+  memoriaVersao: (escopo, alvo, memoriaId, n) => `${caminhos.memoria(escopo, alvo, memoriaId)}/${SUB.versoes}/${seg(String(n), 'versão')}`,
 };
 
 module.exports = { caminhos };

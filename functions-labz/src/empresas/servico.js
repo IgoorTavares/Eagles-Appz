@@ -37,9 +37,31 @@ function criarServicoEmpresas(deps) {
     return Object.assign({ id: empresaId }, e);
   }
 
+  // Nome único (F4, Fase 3E). Normalização = slugDe: sem acento, minúsculas e
+  // qualquer sequência que não seja letra ou número vira "-" ("Marca Álfa",
+  // "MARCA  ALFA" e "marca-alfa!" são o mesmo nome; "Marca Alfa 2" não é).
+  // Domínio: as empresas da LABZ AI (ativas e arquivadas); não toca o CRM/ERP.
+  // A garantia é a RESERVA labz_nomes/{slug}, lida e gravada na transação: duas
+  // criações simultâneas com o mesmo nome não passam juntas.
+  async function reservarNome(t, slug, empresaId) {
+    const r = await t.obter(caminhos.nomeEmpresa(slug));
+    if (r && r.empresaId && r.empresaId !== empresaId) throw erro('conflito', 'Já existe uma empresa com esse nome');
+    await t.gravar(caminhos.nomeEmpresa(slug), { empresaId, slug, em: relogio() });
+  }
+  // Registros anteriores à reserva: confere pelo campo slug (consulta limitada).
   async function slugLivre(slug, exceto) {
-    const iguais = await banco.listar(caminhos.colecoes.empresas, (x) => x.slug === slug && x.id !== exceto);
-    return iguais.length === 0;
+    const iguais = await banco.consultar(caminhos.colecoes.empresas, { onde: [{ campo: 'slug', op: '==', valor: slug }], limite: 2 });
+    return iguais.every((x) => x.id === exceto);
+  }
+
+  // Uma página de empresas (por id, até 100), filtro de status no banco.
+  async function listarPagina(ator, { status, depoisDe, limite } = {}) {
+    exigirAtor(ator);
+    const lim = Math.min(Math.max(1, limite || 100), 100);
+    const opcoes = { onde: status ? [{ campo: 'status', op: '==', valor: status }] : [], ordenar: { campo: 'id', direcao: 'asc' }, limite: lim };
+    if (depoisDe) opcoes.depoisDe = depoisDe;
+    const itens = await banco.consultar(caminhos.colecoes.empresas, opcoes);
+    return { itens, proximo: itens.length === lim ? itens[itens.length - 1].id : null };
   }
 
   return {
@@ -56,8 +78,9 @@ function criarServicoEmpresas(deps) {
         vinculo: dados.vinculo || null,
         criadoEm: agora, criadoPor: ator.uid, atualizadoEm: agora, atualizadoPor: ator.uid,
       };
+      if (!(await slugLivre(slug))) throw erro('conflito', 'Já existe uma empresa com esse nome');
       await banco.transacao(async (t) => {
-        if (!(await slugLivre(slug))) throw erro('conflito', 'Já existe uma empresa com esse nome');
+        await reservarNome(t, slug, id);
         if (empresa.vinculo) {
           const cv = caminhos.vinculo(chaveVinculo(empresa.vinculo));
           const dono = await t.obter(cv);
@@ -78,10 +101,17 @@ function criarServicoEmpresas(deps) {
       if (campos.nome !== undefined) {
         mud.nome = campos.nome.trim();
         mud.slug = slugDe(campos.nome);
+        if (!mud.slug) throw erro('invalido', 'Nome da empresa inválido');
         if (!(await slugLivre(mud.slug, empresaId))) throw erro('conflito', 'Já existe uma empresa com esse nome');
       }
       if (campos.observacoes !== undefined) mud.observacoes = campos.observacoes;
-      await banco.atualizar(caminhos.empresa(empresaId), mud);
+      await banco.transacao(async (t) => {
+        if (mud.slug && mud.slug !== atual.slug) {
+          await reservarNome(t, mud.slug, empresaId);
+          if (atual.slug) await t.gravar(caminhos.nomeEmpresa(atual.slug), { empresaId: null, slug: atual.slug, liberadoEm: relogio() });
+        }
+        await t.atualizar(caminhos.empresa(empresaId), mud);
+      });
       await auditoria.registrar('empresa.alterada', ator, caminhos.empresa(empresaId), { campos: Object.keys(campos), nomeAntes: atual.nome });
       return obterOuFalhar(empresaId);
     },
@@ -127,10 +157,11 @@ function criarServicoEmpresas(deps) {
 
     async obter(ator, empresaId) { exigirAtor(ator); return obterOuFalhar(empresaId); },
 
+    // Primeira página (até 100); para mais, listarPagina com o cursor.
     async listar(ator, filtro = {}) {
-      exigirAtor(ator);
-      return banco.listar(caminhos.colecoes.empresas, (x) => !filtro.status || x.status === filtro.status);
+      return (await listarPagina(ator, { status: filtro.status })).itens;
     },
+    listarPagina,
 
     // Uso interno (memória): a empresa existe e está ativa?
     async garantirAtiva(empresaId) {

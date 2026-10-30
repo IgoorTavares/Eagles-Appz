@@ -65,8 +65,10 @@ test('briefing é dado não confiável, delimitado no texto final', async () => 
   const b = ctx.blocos.find((x) => x.tipo === 'briefing');
   assert.equal(b.confiavel, false);
   const txt = contextoParaTexto(ctx);
-  assert.ok(txt.indexOf('Regras de segurança') < txt.indexOf('<dados_do_usuario>'));
-  assert.equal((txt.match(/<\/dados_do_usuario>/g) || []).length, 1, 'o briefing não consegue fechar o delimitador');
+  assert.ok(txt.indexOf('Regras de segurança') < txt.indexOf('<dados_do_usuario codigo='));
+  // Fase 3E (F5): os delimitadores levam o código do contexto; o "</dados_do_usuario>" do briefing foi removido
+  assert.equal((txt.match(/<\/dados_do_usuario[^>]*>/g) || []).length, 1, 'o briefing não consegue fechar o delimitador');
+  assert.ok(!txt.includes('</dados_do_usuario>'), 'o fechamento sem código (escrito no briefing) não sobra');
 });
 
 test('não carrega tudo: respeita o orçamento e registra as fontes usadas', async () => {

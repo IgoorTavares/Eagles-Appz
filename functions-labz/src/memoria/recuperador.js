@@ -24,12 +24,12 @@ const ORDEM = { campo: 'aprovadaEm', direcao: 'desc' };
 
 // Índices compostos que as consultas acima precisam no Firestore real (D5:
 // declarados aqui, NÃO publicados; firestore.indexes.json não muda sem
-// autorização). Formato do firestore.indexes.json. "memorias" cobre as
+// autorização). Formato do firestore.indexes.json. "labz_memorias" cobre as
 // subcoleções de empresa, agente e tarefa (mesmo nome de coleção).
 const COMBINACOES = [
   [], ['categoria'], ['chave'], ['categoria', 'chave'],
 ];
-const GRUPOS = ['memorias', 'desempenho', 'labz_memoria_global'];
+const GRUPOS = ['labz_memorias', 'labz_desempenho', 'labz_memoria_global'];
 const INDICES_NECESSARIOS = Object.freeze([
   ...GRUPOS.flatMap((g) => COMBINACOES.flatMap((extras) => [false, true].map((comTermos) => ({
     collectionGroup: g, queryScope: 'COLLECTION',
@@ -77,8 +77,32 @@ function comoResultado(m, escopo) {
 }
 
 function criarRecuperador({ banco, relogio = relogioPadrao, auditoria }) {
-  // Monta e executa UMA consulta limitada. leitor: banco (padrão) ou transação.
+  // Termos "específicos" (F2, Fase 3E): quando a consulta por palavras lota o
+  // limite, os termos que aparecem em menos da metade dos candidatos são os que
+  // a palavra comum "abafou". Ordem: mais raros, depois mais longos, depois
+  // alfabética (determinístico). Até 10.
+  function termosEspecificos(termos, docs) {
+    const conta = (t) => docs.filter((m) => (m.termos || []).includes(t)).length;
+    return termos.map((t) => ({ t, n: conta(t) })).filter((x) => x.n < docs.length / 2)
+      .sort((a, b) => a.n - b.n || b.t.length - a.t.length || a.t.localeCompare(b.t)).slice(0, 10).map((x) => x.t);
+  }
+
+  // Monta e executa a consulta limitada (por palavras: no máximo 2 consultas,
+  // a principal e uma complementar só com os termos específicos).
   async function consultarEscopo(q, termos, metricas) {
+    const r = await consultarUma(q, termos, metricas);
+    if (!termos.length || r.brutos.length < r.limite) return r; // não lotou: já veio tudo o que casa
+    const especificos = termosEspecificos(termos, r.brutos);
+    if (!especificos.length || especificos.length === termos.length) return r;
+    const extra = await consultarUma(q, especificos, metricas);
+    metricas.consultaComplementar = true;
+    const vistos = new Map(r.docs.map((m) => [m.id, m]));
+    extra.docs.forEach((m) => { if (!vistos.has(m.id)) vistos.set(m.id, m); });
+    return { docs: [...vistos.values()], limite: r.limite, brutos: r.brutos };
+  }
+
+  // UMA consulta limitada (termos: os usados no banco nesta consulta).
+  async function consultarUma(q, termos, metricas) {
     const onde = [{ campo: 'status', op: '==', valor: 'ativa' }];
     if (q.filtros.categoria) onde.push({ campo: 'categoria', op: '==', valor: q.filtros.categoria });
     if (q.filtros.chave) onde.push({ campo: 'chave', op: '==', valor: q.filtros.chave });
@@ -94,7 +118,7 @@ function criarRecuperador({ banco, relogio = relogioPadrao, auditoria }) {
     if (docs.length === limite) metricas.limiteAtingido = true;
     const agora = relogio();
     // validade (tarefa expirada) e, na busca por palavras com tags, as tags
-    return { docs: docs.filter((m) => memoriaVigente(m, agora) && (!termos.length || !tags.length || tags.some((t) => (m.termos || []).includes(t)))), limite };
+    return { docs: docs.filter((m) => memoriaVigente(m, agora) && (!termos.length || !tags.length || tags.some((t) => (m.termos || []).includes(t)))), limite, brutos: docs };
   }
 
   const novaMetrica = () => ({ consultas: 0, documentosLidos: 0, limiteAtingido: false });
@@ -112,7 +136,10 @@ function criarRecuperador({ banco, relogio = relogioPadrao, auditoria }) {
     // paginação só por metadados: o cursor é o último documento lido
     const proximo = !termos.length && docs.length === limite && docs.length ? docs[docs.length - 1].id : null;
     metricas.retornados = itens.length;
-    return { itens, proximo, termos, metricas, semantica: BUSCA_SEMANTICA };
+    // completa = nenhuma consulta lotou o limite (veio tudo o que casa). Se lotou,
+    // é uma SELEÇÃO limitada de candidatos, e o resultado diz isso.
+    const completa = !metricas.limiteAtingido;
+    return { itens, proximo, termos, metricas, completa, semantica: BUSCA_SEMANTICA, ...(completa ? {} : { aviso: 'seleção limitada: há mais memórias que casam com estas palavras do que o limite de leitura' }) };
   }
 
   return {

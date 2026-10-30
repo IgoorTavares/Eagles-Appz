@@ -165,7 +165,7 @@ function memoriaVigente(m, agora) {
 }
 
 // Modelo canônico: o Firestore é a fonte oficial (D1). Documento base em
-// caminhos.memoria(...) e versões imutáveis em {base}/versoes/{n}.
+// caminhos.memoria(...) e versões imutáveis em {base}/labz_versoes/{n}.
 const ESQUEMA_DECISAO = (motivoObrigatorio) => ({
   tipo: 'objeto', extras: false,
   campos: { por: { tipo: 'texto', obrigatorio: true }, em: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', obrigatorio: motivoObrigatorio } },
@@ -199,6 +199,8 @@ const ESQUEMA_DOC_MEMORIA = {
     atualizadoEm: { tipo: 'texto', obrigatorio: true },
     atualizadoPor: { tipo: 'texto' },
     arquivadaEm: { tipo: 'texto' },
+    reativadaEm: { tipo: 'texto' },
+    reativacao: { tipo: 'objeto' }, // decisão do Super Admin sobre conflito ao reativar (F1)
     expiraEm: { tipo: 'texto' },
     // índice de busca (Fase 3C): sempre da versão vigente, gravado na mesma transação
     termos: { tipo: 'lista', max: 40, itens: { tipo: 'texto', min: 3, max: 60 } },
@@ -299,7 +301,7 @@ const EVENTOS_MEMORIA = Object.freeze({
     'memoria.rollback', 'memoria.arquivada', 'memoria.reativada',
     'memoria.enviada_para_revisao', 'memoria.revisao_pedida', 'memoria.exportada_markdown', 'memoria.trava_global',
     'memoria.conflito_bloqueado', 'memoria.contexto_montado', 'memoria.busca_realizada', 'memoria.reindexada',
-    'correcao.registrada', 'aprendizado.proposto', 'aprendizado.aprovado', 'aprendizado.rejeitado',
+    'correcao.registrada', 'aprendizado.proposto', 'aprendizado.aprovado', 'aprendizado.rejeitado', 'aprendizado.aprovacao_concorrente',
   ]),
   reservados: Object.freeze(['memoria.importada_markdown']),
 });

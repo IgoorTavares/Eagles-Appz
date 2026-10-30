@@ -33,6 +33,11 @@ function criarBancoFirestore(db) {
     if (opcoes.depoisDe) {
       const cursor = await leitor.get(ref(`${colecao}/${opcoes.depoisDe}`));
       if (!cursor.exists) throw erro('invalido', 'Cursor de paginação inválido');
+      // F6: cursor preso ao escopo (os campos pedidos casam com os filtros "==")
+      (opcoes.cursorMesmoFiltro || []).forEach((campo) => {
+        const f = (opcoes.onde || []).find((c) => c.campo === campo && c.op === '==');
+        if (f && JSON.stringify(cursor.get(campo)) !== JSON.stringify(f.valor)) throw erro('invalido', 'Cursor de paginação de outro escopo');
+      });
       q = q.startAfter(cursor);
     }
     const snap = await leitor.get(q.limit(opcoes.limite));

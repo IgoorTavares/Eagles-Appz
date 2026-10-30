@@ -28,7 +28,7 @@ test('conteúdo privado e versionado: só a versão aprovada é carregada', asyn
   assert.equal((await c.skills.carregarParaTarefa('04-roteirista', 'x')).carregadas[0].conteudo, TEXTO + ' v2');
   await c.skills.voltarVersao(c.ator, '04-roteirista', 'SKILL.md', 1);
   assert.equal((await c.skills.carregarParaTarefa('04-roteirista', 'x')).carregadas[0].conteudo, TEXTO + ' v1');
-  assert.ok(c.banco._caminhos().some((p) => p.startsWith('labz_skills/04-roteirista__SKILL/versoes/')));
+  assert.ok(c.banco._caminhos().some((p) => p.startsWith('labz_skills/04-roteirista__SKILL/labz_versoes/')));
 });
 
 test('a skill aprovada entra no bloco de especialidade do contexto', async () => {

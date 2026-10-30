@@ -1,5 +1,5 @@
 // Skills: o CONTEÚDO é privado e versionado no banco (labz_skills/{id} e
-// versoes/{n}). O repositório só sabe quais skills cada agente tem e quando
+// labz_versoes/{n}). O repositório só sabe quais skills cada agente tem e quando
 // carregá-las (contrato do agente). Só a versão aprovada é carregada.
 const { caminhos } = require('../armazenamento/caminhos');
 const { exigirAtor } = require('../auth/super-admin');

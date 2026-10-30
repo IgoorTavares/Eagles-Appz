@@ -15,10 +15,10 @@ test('os 5 escopos gravam cada um no seu lugar (isolamento pelo caminho)', async
   const d = await c.memoria.criar(c.ator, nova('desempenho', { empresaId: c.A.id }, { evidencias: EVID }));
   const p = c.banco._caminhos();
   assert.ok(p.includes(`labz_memoria_global/${g.ref.memoriaId}`));
-  assert.ok(p.includes(`labz_agentes/04-roteirista/memorias/${a.ref.memoriaId}`));
-  assert.ok(p.includes(`labz_empresas/${c.A.id}/memorias/${cl.ref.memoriaId}`));
-  assert.ok(p.includes(`labz_tarefas/tA/memorias/${t.ref.memoriaId}`));
-  assert.ok(p.includes(`labz_empresas/${c.A.id}/desempenho/${d.ref.memoriaId}`));
+  assert.ok(p.includes(`labz_agentes/04-roteirista/labz_memorias/${a.ref.memoriaId}`));
+  assert.ok(p.includes(`labz_empresas/${c.A.id}/labz_memorias/${cl.ref.memoriaId}`));
+  assert.ok(p.includes(`labz_tarefas/tA/labz_memorias/${t.ref.memoriaId}`));
+  assert.ok(p.includes(`labz_empresas/${c.A.id}/labz_desempenho/${d.ref.memoriaId}`));
   assert.ok(p.every((x) => !x.startsWith(`labz_empresas/${c.B.id}/`)), 'nada foi gravado na empresa B');
 });
 

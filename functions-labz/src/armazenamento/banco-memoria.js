@@ -27,6 +27,14 @@ function passa(doc, c) {
     default: return false;
   }
 }
+// Cursor preso ao escopo (F6): os campos pedidos têm de casar com os filtros "==".
+function cursorNoEscopo(doc, opcoes) {
+  (opcoes.cursorMesmoFiltro || []).forEach((campo) => {
+    const f = (opcoes.onde || []).find((c) => c.campo === campo && c.op === '==');
+    if (f && !igual(valorCampo(doc, campo), f.valor)) throw erro('invalido', 'Cursor de paginação de outro escopo');
+  });
+}
+
 // Ordem do Firestore: o campo pedido e, no empate, o id do documento na mesma direção.
 function comparador(ordenar) {
   if (!ordenar) return (a, b) => a.id.localeCompare(b.id);
@@ -87,6 +95,7 @@ function criarBancoMemoria() {
         const cursor = docs.get(`${colecao}/${opcoes.depoisDe}`);
         if (!cursor) throw erro('invalido', 'Cursor de paginação inválido');
         const ref = Object.assign({ id: opcoes.depoisDe }, cursor);
+        cursorNoEscopo(ref, opcoes);
         itens = itens.filter((d) => cmp(d, ref) > 0);
       }
       itens = itens.slice(0, opcoes.limite);

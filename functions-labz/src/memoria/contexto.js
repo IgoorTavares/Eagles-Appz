@@ -16,6 +16,7 @@
 //    determinístico (ranqueador.js) e orçamento de caracteres;
 //  - toda informação usada sai com a origem (id e versão), para auditoria; o
 //    evento "memoria.contexto_montado" guarda só ids, versões e métricas.
+const crypto = require('node:crypto');
 const { erro } = require('../nucleo/erros');
 const { obterAgente } = require('../agentes/catalogo');
 const { caminhos } = require('../armazenamento/caminhos');
@@ -122,6 +123,8 @@ function criarContexto(deps) {
       if (empresaId) {
         empresa = await banco.obter(caminhos.empresa(empresaId));
         if (!empresa) throw erro('nao-encontrado', 'Empresa da LABZ AI não encontrada');
+        // F7 (Fase 3E): empresa arquivada não recebe contexto (vale para API, preparação e uso interno)
+        if (empresa.status !== 'ativa') throw erro('precondicao', 'Empresa arquivada: não recebe contexto nem trabalho novo');
       }
 
       const briefing = String(pedido.briefing || '');
@@ -200,17 +203,35 @@ function criarContexto(deps) {
   };
 }
 
-// Texto final para o modelo. O que não é confiável vai delimitado como dado;
-// nenhum texto de dado consegue abrir ou fechar um delimitador. Cada memória
-// leva a referência (escopo, id e versão) para a resposta poder citar.
-const TAGS_DADOS = /<\/?\s*(dados_do_usuario|dados_aprovados|dados_da_tarefa)\s*>/gi;
+// Texto final para o modelo. O que não é confiável vai delimitado como dado,
+// em DUAS camadas (Fase 3E, F5):
+//  1. estrutura: os delimitadores levam um código deste contexto
+//     (codigo="…", sha256 dos próprios dados e ids), que nenhum texto de dado
+//     conhece de antemão — escrever "</dados_aprovados>" num dado não fecha nada;
+//  2. limpeza: qualquer coisa parecida com um delimitador dentro de um dado
+//     (maiúsculas, espaços, hífen, atributos, caracteres invisíveis, &lt; &#60;,
+//     ＜ 〈 ‹ e afins) vira "[marcador removido]". O resto do texto fica igual.
+// A separação principal continua sendo a do objeto (blocos com "confiavel");
+// o texto é só a forma de entregar ao modelo. Cada memória leva a referência.
+const INVISIVEIS = /[\u00ad\u200b-\u200f\u2060\ufeff]/g;
+const ABRE = '(?:<|\uff1c|\ufe64|\u3008|\u27e8|\u2039|&lt;|&#0*60;|&#x0*3c;)';
+const FECHA = '(?:>|\uff1e|\ufe65|\u3009|\u27e9|\u203a|&gt;|&#0*62;|&#x0*3e;)';
+const MARCADOR = new RegExp(`${ABRE}\\s*\\/?\\s*dados[\\s_.\\-]*[^<>\\n]{0,80}?${FECHA}`, 'gi');
+const limparDado = (texto) => String(texto).replace(INVISIVEIS, '').replace(MARCADOR, '[marcador removido]');
+
+function codigoDoContexto(ctx) {
+  const dados = ctx.blocos.filter((b) => !b.confiavel).map((b) => [b.tipo, b.itens.map((i) => [i.id, i.versao || null, i.texto])]);
+  return crypto.createHash('sha256').update(JSON.stringify([ctx.agenteId, ctx.empresaId, ctx.tarefaId, dados]), 'utf8').digest('hex').slice(0, 16);
+}
+
 function contextoParaTexto(ctx) {
+  const codigo = codigoDoContexto(ctx);
   return ctx.blocos.filter((b) => b.itens.length).map((b) => {
     if (b.confiavel) return `## ${b.titulo}\n${b.itens.map((i) => i.texto).join('\n\n')}`;
     const tag = DELIMITADORES[b.tipo] || 'dados_aprovados';
-    const corpo = b.itens.map((i) => `${i.referencia ? `[ref ${i.referencia}] ` : ''}${String(i.texto).replace(TAGS_DADOS, '')}`).join('\n\n');
-    return `## ${b.titulo}\n<${tag}>\n${corpo}\n</${tag}>`;
+    const corpo = b.itens.map((i) => `${i.referencia ? `[ref ${i.referencia}] ` : ''}${limparDado(i.texto)}`).join('\n\n');
+    return `## ${b.titulo}\n<${tag} codigo="${codigo}">\n${corpo}\n</${tag} codigo="${codigo}">`;
   }).join('\n\n');
 }
 
-module.exports = { criarContexto, contextoParaTexto, REGRAS_SEGURANCA, BLOCOS, CONFIAVEIS };
+module.exports = { criarContexto, contextoParaTexto, limparDado, codigoDoContexto, REGRAS_SEGURANCA, BLOCOS, CONFIAVEIS };

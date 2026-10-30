@@ -18,6 +18,7 @@ const { criarRecuperador } = require('./recuperador');
 const { LIMITES_BUSCA } = require('../contratos/recuperacao');
 
 // Texto, duplicidade, conflito e sinais de injeção: memoria/verificacoes.js (um lugar só).
+const RESERVA_MS = 2 * 60 * 1000; // reserva da proposta durante a aprovação (F3)
 const CATEGORIA_PADRAO = { global: 'preferencia', agente: 'aprendizado', cliente: 'preferencia', desempenho: 'aprendizado' };
 
 // Classificação por regras.
@@ -46,6 +47,50 @@ function criarCorrecoes(deps) {
     // aviso na proposta (consulta limitada); a aprovação confere tudo de novo
     const { memorias } = await recuperador.parecidas(escopo, alvo, texto, chave);
     return analisarNovoTexto(memorias, texto, chave);
+  }
+
+  // Corpo da aprovação, já com a proposta reservada (ver aprovar).
+  async function aprovarReservado(ator, aprendizadoId, p, ajustes) {
+    if (p.sinais.length && !ajustes.confirmoSinais) throw erro('precondicao', 'O texto tem sinais de instrução escondida: confirme que leu antes de aprovar');
+    if (p.duplicados.length && !ajustes.aceitarDuplicado) throw erro('conflito', 'Já existe memória equivalente aprovada');
+    const escopo = ajustes.escopo || p.escopo;
+    const alvo = ajustes.alvo || p.alvo;
+    const categoria = ajustes.categoria || p.categoria;
+    if (escopo === 'tarefa') throw erro('invalido', 'Aprendizado aprovado é permanente; correção da tarefa não passa por aqui');
+    const origem = { tipo: 'correcao', tarefaId: p.tarefaId, correcaoId: p.correcaoId, aprendizadoId };
+    const base = { titulo: ajustes.titulo || 'Aprendizado aprovado', conteudo: p.conteudo, origem };
+    if (ajustes.evidencias) base.evidencias = ajustes.evidencias;
+
+    let ref, versao;
+    const conflito = escopo === p.escopo && p.conflitos.length ? p.conflitos[0] : null;
+    if (p.memoriaGerada) {
+      // uma tentativa anterior já gerou a versão e a aprovação foi barrada (ex.: conflito a decidir):
+      // decide sobre ELA, sem criar outra memória repetida
+      ref = p.memoriaGerada.ref;
+      versao = p.memoriaGerada.versao;
+      if ((ajustes.escopo && ajustes.escopo !== ref.escopo) || (ajustes.alvo && JSON.stringify(ajustes.alvo) !== JSON.stringify(ref.alvo))) {
+        throw erro('precondicao', 'Esta proposta já gerou uma versão de memória: decida sobre ela (o escopo e o alvo não mudam mais)', { memoria: ref, versao });
+      }
+    } else if (conflito) {
+      if (!ajustes.substituirConflito) throw erro('conflito', 'Conflita com uma memória aprovada: confirme a substituição (vira uma nova versão dela)');
+      ref = { escopo, alvo, memoriaId: conflito };
+      versao = await registro.novaVersao(ator, ref, base, { confirmoSemDadosDeCliente: ajustes.confirmoSemDadosDeCliente });
+    } else {
+      const criada = await registro.criar(ator, Object.assign({ escopo, alvo, categoria, chave: p.chave || undefined }, base), { confirmoSemDadosDeCliente: ajustes.confirmoSemDadosDeCliente });
+      ref = criada.ref;
+      versao = criada.ultimaVersao;
+    }
+    if (!p.memoriaGerada) await banco.atualizar(caminhos.aprendizado(aprendizadoId), { memoriaGerada: { ref, versao } });
+    if (ESCOPO_INFO[ref.escopo].aprovacao) {
+      await registro.aprovarVersao(ator, ref, versao, {
+        justificativa: `Aprendizado ${aprendizadoId} aprovado`,
+        confirmoSinais: ajustes.confirmoSinais === true, confirmoSemDadosDeCliente: ajustes.confirmoSemDadosDeCliente === true,
+        confirmacaoConflitos: ajustes.confirmacaoConflitos,
+      });
+    }
+    await banco.atualizar(caminhos.aprendizado(aprendizadoId), { status: 'aprovado', aprovadoPor: ator.uid, aprovadoEm: relogio(), memoria: ref, versao, emAprovacao: null });
+    await auditoria.registrar('aprendizado.aprovado', ator, caminhos.aprendizado(aprendizadoId), { memoria: ref.memoriaId, versao });
+    return { ref, versao };
   }
 
   return {
@@ -95,53 +140,38 @@ function criarCorrecoes(deps) {
     // ajustes: { escopo, alvo, categoria, titulo, evidencias, confirmoSinais, substituirConflito,
     //           aceitarDuplicado, confirmoSemDadosDeCliente, confirmacaoConflitos }. A aprovação em
     // si é do registro, que reavalia duplicidade/conflito na hora (a lista da proposta é só um aviso).
+    // F3 (Fase 3E): a proposta é RESERVADA numa transação antes de qualquer
+    // gravação; uma segunda aprovação simultânea encontra a reserva e para. A
+    // reserva vence sozinha (RESERVA_MS) se o processo cair no meio, e é
+    // liberada quando a aprovação falha (a memória gerada é reaproveitada).
     async aprovar(ator, aprendizadoId, ajustes = {}) {
       exigirAtor(ator);
-      const p = await banco.obter(caminhos.aprendizado(aprendizadoId));
-      if (!p) throw erro('nao-encontrado', 'Proposta não encontrada');
-      if (p.status !== 'pendente') throw erro('precondicao', `Proposta já ${p.status}`);
-      if (p.sinais.length && !ajustes.confirmoSinais) throw erro('precondicao', 'O texto tem sinais de instrução escondida: confirme que leu antes de aprovar');
-      if (p.duplicados.length && !ajustes.aceitarDuplicado) throw erro('conflito', 'Já existe memória equivalente aprovada');
-      const escopo = ajustes.escopo || p.escopo;
-      const alvo = ajustes.alvo || p.alvo;
-      const categoria = ajustes.categoria || p.categoria;
-      if (escopo === 'tarefa') throw erro('invalido', 'Aprendizado aprovado é permanente; correção da tarefa não passa por aqui');
-      const origem = { tipo: 'correcao', tarefaId: p.tarefaId, correcaoId: p.correcaoId, aprendizadoId };
-      const base = { titulo: ajustes.titulo || 'Aprendizado aprovado', conteudo: p.conteudo, origem };
-      if (ajustes.evidencias) base.evidencias = ajustes.evidencias;
-
-      let ref, versao;
-      const conflito = escopo === p.escopo && p.conflitos.length ? p.conflitos[0] : null;
-      if (p.memoriaGerada) {
-        // uma tentativa anterior já gerou a versão e a aprovação foi barrada (ex.: conflito a decidir):
-        // decide sobre ELA, sem criar outra memória repetida
-        ref = p.memoriaGerada.ref;
-        versao = p.memoriaGerada.versao;
-        if ((ajustes.escopo && ajustes.escopo !== ref.escopo) || (ajustes.alvo && JSON.stringify(ajustes.alvo) !== JSON.stringify(ref.alvo))) {
-          throw erro('precondicao', 'Esta proposta já gerou uma versão de memória: decida sobre ela (o escopo e o alvo não mudam mais)', { memoria: ref, versao });
+      const caminho = caminhos.aprendizado(aprendizadoId);
+      const token = novoId('res');
+      let p;
+      await banco.transacao(async (t) => {
+        p = await t.obter(caminho);
+        if (!p) throw erro('nao-encontrado', 'Proposta não encontrada');
+        if (p.status !== 'pendente') throw erro('precondicao', `Proposta já ${p.status}`);
+        const agora = relogio();
+        if (p.emAprovacao && Date.parse(p.emAprovacao.ate) > Date.parse(agora)) {
+          throw erro('conflito', 'Esta proposta já está sendo aprovada em outra chamada', { motivo: 'aprovacao-em-andamento' });
         }
-      } else if (conflito) {
-        if (!ajustes.substituirConflito) throw erro('conflito', 'Conflita com uma memória aprovada: confirme a substituição (vira uma nova versão dela)');
-        ref = { escopo, alvo, memoriaId: conflito };
-        versao = await registro.novaVersao(ator, ref, base, { confirmoSemDadosDeCliente: ajustes.confirmoSemDadosDeCliente });
-      } else {
-        const criada = await registro.criar(ator, Object.assign({ escopo, alvo, categoria, chave: p.chave || undefined }, base), { confirmoSemDadosDeCliente: ajustes.confirmoSemDadosDeCliente });
-        ref = criada.ref;
-        versao = criada.ultimaVersao;
-      }
-      if (!p.memoriaGerada) await banco.atualizar(caminhos.aprendizado(aprendizadoId), { memoriaGerada: { ref, versao } });
-      if (ESCOPO_INFO[ref.escopo].aprovacao) {
-        await registro.aprovarVersao(ator, ref, versao, {
-          justificativa: `Aprendizado ${aprendizadoId} aprovado`,
-          confirmoSinais: ajustes.confirmoSinais === true, confirmoSemDadosDeCliente: ajustes.confirmoSemDadosDeCliente === true,
-          confirmacaoConflitos: ajustes.confirmacaoConflitos,
+        await t.atualizar(caminho, { emAprovacao: { token, por: ator.uid, ate: new Date(Date.parse(agora) + RESERVA_MS).toISOString() } });
+      }).catch(async (e) => {
+        if (e.detalhes && e.detalhes.motivo === 'aprovacao-em-andamento') await auditoria.registrar('aprendizado.aprovacao_concorrente', ator, caminho, {});
+        throw e;
+      });
+      try {
+        return await aprovarReservado(ator, aprendizadoId, p, ajustes);
+      } catch (e) {
+        await banco.transacao(async (t) => {
+          const atual = await t.obter(caminho);
+          if (atual && atual.emAprovacao && atual.emAprovacao.token === token) await t.atualizar(caminho, { emAprovacao: null });
         });
+        throw e;
       }
-      await banco.atualizar(caminhos.aprendizado(aprendizadoId), { status: 'aprovado', aprovadoPor: ator.uid, aprovadoEm: relogio(), memoria: ref, versao });
-      await auditoria.registrar('aprendizado.aprovado', ator, caminhos.aprendizado(aprendizadoId), { memoria: ref.memoriaId, versao });
-      return { ref, versao };
     },
-
     async rejeitar(ator, aprendizadoId, motivo) {
       exigirAtor(ator);
       const p = await banco.obter(caminhos.aprendizado(aprendizadoId));

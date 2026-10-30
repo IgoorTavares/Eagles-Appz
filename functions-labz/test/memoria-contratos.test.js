@@ -128,7 +128,7 @@ test('recuperação: consulta validada, status fixo em "ativa" e coleção monta
   const c = await montarComEmpresas();
   const q = R.validarConsultaMemoria({ escopo: 'cliente', alvo: { empresaId: c.A.id }, modo: 'textual', texto: 'cores da marca', filtros: { categoria: 'marca' }, limite: 10 });
   assert.strictEqual(q.status, 'ativa');
-  assert.strictEqual(q.colecao, `labz_empresas/${c.A.id}/memorias`);
+  assert.strictEqual(q.colecao, `labz_empresas/${c.A.id}/labz_memorias`);
   assert.ok(Object.isFrozen(q));
   const qb = R.validarConsultaMemoria({ escopo: 'cliente', alvo: { empresaId: c.B.id }, modo: 'metadados' });
   assert.notStrictEqual(qb.colecao, q.colecao, 'empresas em coleções separadas');
@@ -161,15 +161,15 @@ test('busca semântica: explicitamente indisponível (contrato, consulta e conte
 test('interface do banco: consultas sempre limitadas e dentro das restrições do Firestore', () => {
   const termos = (n) => Array.from({ length: n }, (_, i) => `t${i}`);
   const ok = { onde: [{ campo: 'status', op: '==', valor: 'ativa' }, { campo: 'termos', op: 'array-contains-any', valor: termos(30) }], ordenar: { campo: 'aprovadaEm', direcao: 'desc' }, limite: 50 };
-  assert.strictEqual(R.validarConsultaBanco('labz_empresas/e1/memorias', ok), ok);
+  assert.strictEqual(R.validarConsultaBanco('labz_empresas/e1/labz_memorias', ok), ok);
   R.validarConsultaBanco('labz_aprendizados', { onde: [{ campo: 'status', op: '==', valor: 'pendente' }], limite: 100 });
   const ruins = [
-    ['labz_empresas/e1/memorias', Object.assign({}, ok, { onde: [{ campo: 'termos', op: 'array-contains-any', valor: termos(31) }] })],
-    ['labz_empresas/e1/memorias', Object.assign({}, ok, { onde: [{ campo: 'termos', op: 'in', valor: [] }] })],
-    ['labz_empresas/e1/memorias', { onde: ok.onde }],
-    ['labz_empresas/e1/memorias', Object.assign({}, ok, { limite: 201 })],
-    ['labz_empresas/e1/memorias', Object.assign({}, ok, { onde: [{ campo: 'a', op: 'array-contains', valor: 'x' }, { campo: 'b', op: 'array-contains-any', valor: ['y'] }] })],
-    ['labz_empresas/e1/memorias', Object.assign({}, ok, { onde: [{ campo: 'n', op: '>', valor: 1 }] })],
+    ['labz_empresas/e1/labz_memorias', Object.assign({}, ok, { onde: [{ campo: 'termos', op: 'array-contains-any', valor: termos(31) }] })],
+    ['labz_empresas/e1/labz_memorias', Object.assign({}, ok, { onde: [{ campo: 'termos', op: 'in', valor: [] }] })],
+    ['labz_empresas/e1/labz_memorias', { onde: ok.onde }],
+    ['labz_empresas/e1/labz_memorias', Object.assign({}, ok, { limite: 201 })],
+    ['labz_empresas/e1/labz_memorias', Object.assign({}, ok, { onde: [{ campo: 'a', op: 'array-contains', valor: 'x' }, { campo: 'b', op: 'array-contains-any', valor: ['y'] }] })],
+    ['labz_empresas/e1/labz_memorias', Object.assign({}, ok, { onde: [{ campo: 'n', op: '>', valor: 1 }] })],
     ['usuarios', ok],
     ['tenants/t1/crm_clientes', ok],
     ['labz_empresas/../x', ok],
@@ -209,7 +209,7 @@ test('contexto: pedido inválido é recusado antes de qualquer leitura', async (
   const ruins = [
     { agenteId: 'xx', briefing: 'a' },
     { agenteId: '04-roteirista', briefing: 'a', permissoes: { aprovarMemoria: true } },
-    { agenteId: '04-roteirista', empresaId: `${c.A.id}/memorias`, briefing: 'a' },
+    { agenteId: '04-roteirista', empresaId: `${c.A.id}/labz_memorias`, briefing: 'a' },
     { agenteId: '04-roteirista', tarefaId: '../tB', briefing: 'a' },
     { agenteId: '04-roteirista', briefing: 'a', limites: { totalCaracteres: 10 } },
     { agenteId: '04-roteirista', briefing: 'a', limites: { semLimite: true } },

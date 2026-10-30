@@ -48,7 +48,7 @@ const ACOES = {
   'empresas.arquivar': [obj({ empresaId: ID, motivo: { tipo: 'texto', max: 300 } }), (s, a, d) => s.empresas.arquivar(a, d.empresaId, d.motivo)],
   'empresas.reativar': [obj({ empresaId: ID }), (s, a, d) => s.empresas.reativar(a, d.empresaId)],
   'empresas.obter': [obj({ empresaId: ID }), (s, a, d) => s.empresas.obter(a, d.empresaId)],
-  'empresas.listar': [obj({ status: { tipo: 'texto', valores: ['ativa', 'arquivada'] } }), (s, a, d) => s.empresas.listar(a, { status: d.status })],
+  'empresas.listar': [obj({ status: { tipo: 'texto', valores: ['ativa', 'arquivada'] }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }), (s, a, d) => s.empresas.listarPagina(a, { status: d.status, depoisDe: d.depoisDe, limite: d.limite })],
 
   // Opções aceitas: só confirmações explícitas do Super Admin. Nunca agenteId
   // (agente não aprova nem decide; propostas de agentes chegam pela Fase 4).
@@ -68,7 +68,7 @@ const ACOES = {
     (s, a, d) => s.memoria.voltarVersao(a, d.ref, d.versao, { motivo: d.motivo, confirmoSemDadosDeCliente: d.confirmoSemDadosDeCliente, confirmacaoConflitos: d.confirmacaoConflitos })],
   'memoria.exportarMarkdown': [obj({ ref: REF_MEMORIA, versao: { tipo: 'inteiro', min: 1 } }), (s, a, d) => s.memoria.exportarMarkdown(a, d.ref, d.versao)],
   'memoria.arquivar': [obj({ ref: REF_MEMORIA, motivo: { tipo: 'texto', max: 300 } }), (s, a, d) => s.memoria.arquivar(a, d.ref, d.motivo)],
-  'memoria.reativar': [obj({ ref: REF_MEMORIA }), (s, a, d) => s.memoria.reativar(a, d.ref)],
+  'memoria.reativar': [obj({ ref: REF_MEMORIA, confirmacaoConflitos: CONFIRMACAO_CONFLITOS }), (s, a, d) => s.memoria.reativar(a, d.ref, { confirmacaoConflitos: d.confirmacaoConflitos })],
   'memoria.obter': [obj({ ref: REF_MEMORIA }), (s, a, d) => s.memoria.obter(d.ref)],
   'memoria.versoes': [obj({ ref: REF_MEMORIA }), (s, a, d) => s.memoria.versoes(d.ref)],
   // Listagem e auditoria por páginas (até 100); "proximo" continua de onde parou.
@@ -98,10 +98,10 @@ const ACOES = {
   'execucoes.transicionar': [obj({ execucaoId: ID, para: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', max: 300 }, versaoEsperada: { tipo: 'inteiro', min: 1 } }),
     (s, a, d) => s.execucoes.transicionar(a, d.execucaoId, d.para, { motivo: d.motivo, versaoEsperada: d.versaoEsperada })],
   'execucoes.obter': [obj({ execucaoId: ID }), (s, a, d) => s.execucoes.obter(a, d.execucaoId)],
-  'execucoes.listar': [obj({ estado: { tipo: 'texto', max: 30 }, empresaId: { tipo: 'texto', max: 80 } }), (s, a, d) => s.execucoes.listar(a, d)],
+  'execucoes.listar': [obj({ estado: { tipo: 'texto', max: 30 }, empresaId: { tipo: 'texto', max: 80 }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }), (s, a, d) => s.execucoes.listarPagina(a, d)],
 
-  'auditoria.listar': [obj({ tipo: { tipo: 'texto', max: 60 }, limite: { tipo: 'inteiro', min: 1, max: 500 } }),
-    async (s, a, d) => (await s.auditoria.listar((e) => !d.tipo || e.tipo === d.tipo)).sort((x, y) => (x.em < y.em ? 1 : -1)).slice(0, d.limite || 100)],
+  'auditoria.listar': [obj({ tipo: { tipo: 'texto', max: 60 }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }),
+    (s, a, d) => s.auditoria.listarPagina({ tipo: d.tipo, depoisDe: d.depoisDe, limite: d.limite })],
 };
 
 // ctx: { servicos, banco, uidsAutorizados, lerSegredo }

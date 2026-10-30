@@ -24,7 +24,16 @@ function criarAuditoria(banco, relogio = relogioPadrao) {
       await banco.gravar(caminhos.evento(id), evento);
       return id;
     },
+    // Só para testes e diagnóstico (lê tudo); a API usa listarPagina.
     async listar(filtro) { return banco.listar(caminhos.colecoes.eventos, filtro); },
+    // F6 (Fase 3E): do mais novo para o mais antigo, até 100 por página, filtro de tipo no banco.
+    async listarPagina({ tipo, depoisDe, limite } = {}) {
+      const lim = Math.min(Math.max(1, limite || 100), 100);
+      const opcoes = { onde: tipo ? [{ campo: 'tipo', op: '==', valor: tipo }] : [], ordenar: { campo: 'em', direcao: 'desc' }, limite: lim };
+      if (depoisDe) opcoes.depoisDe = depoisDe;
+      const itens = await banco.consultar(caminhos.colecoes.eventos, opcoes);
+      return { itens, proximo: itens.length === lim ? itens[itens.length - 1].id : null };
+    },
   };
 }
 

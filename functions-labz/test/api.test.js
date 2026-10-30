@@ -68,7 +68,9 @@ test('fluxo completo pela API: empresa → memória pendente → aprovar → con
   ctx = (await c.chamar('sa', 'contexto.previa', { agenteId: '04-roteirista', empresaId: e.id, briefing: 'post' })).resultado;
   assert.ok(JSON.stringify(ctx).includes('FLUXO-VOZ'));
   const aud = (await c.chamar('sa', 'auditoria.listar', { tipo: 'memoria.versao_aprovada' })).resultado;
-  assert.equal(aud.length, 1);
+  // Fase 3E (F6): a auditoria vem em páginas ({ itens, proximo })
+  assert.equal(aud.itens.length, 1);
+  assert.equal(aud.proximo, null);
 });
 
 test('erros viram códigos do Firebase; erro desconhecido não vaza detalhes', () => {

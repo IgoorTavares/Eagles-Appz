@@ -126,9 +126,9 @@ test('compatibilidade: registros das Fases 1/2 (sem baseVersao nem motivo) conti
   const c = await montarComEmpresas();
   const base = caminhos.memoria('cliente', { empresaId: c.A.id }, 'mem_antiga');
   await c.banco.gravar(base, { escopo: 'cliente', alvo: { empresaId: c.A.id }, categoria: 'marca', chave: null, status: 'ativa', versaoVigente: 1, ultimaVersao: 3, vigente: { versao: 1, titulo: 'T', conteudo: 'antigo', tags: [] }, criadoEm: 't', criadoPor: 'sa', propostoPorAgente: null, atualizadoEm: 't' });
-  await c.banco.gravar(`${base}/versoes/1`, { n: 1, status: 'aprovada', titulo: 'T', conteudo: 'antigo', tags: [], origem: { tipo: 'manual' }, criadoEm: 't', criadoPor: 'sa', aprovacao: { por: 'sa', em: 't' } });
-  await c.banco.gravar(`${base}/versoes/2`, { n: 2, status: 'rejeitada', titulo: 'T', conteudo: 'x', tags: [], origem: { tipo: 'manual' }, criadoEm: 't', criadoPor: 'sa', aprovacao: null, rejeicao: { por: 'sa', em: 't', motivo: '' } });
-  await c.banco.gravar(`${base}/versoes/3`, { n: 3, status: 'pendente', titulo: 'T', conteudo: 'novo', tags: [], origem: { tipo: 'manual' }, criadoEm: 't', criadoPor: 'sa', aprovacao: null });
+  await c.banco.gravar(`${base}/labz_versoes/1`, { n: 1, status: 'aprovada', titulo: 'T', conteudo: 'antigo', tags: [], origem: { tipo: 'manual' }, criadoEm: 't', criadoPor: 'sa', aprovacao: { por: 'sa', em: 't' } });
+  await c.banco.gravar(`${base}/labz_versoes/2`, { n: 2, status: 'rejeitada', titulo: 'T', conteudo: 'x', tags: [], origem: { tipo: 'manual' }, criadoEm: 't', criadoPor: 'sa', aprovacao: null, rejeicao: { por: 'sa', em: 't', motivo: '' } });
+  await c.banco.gravar(`${base}/labz_versoes/3`, { n: 3, status: 'pendente', titulo: 'T', conteudo: 'novo', tags: [], origem: { tipo: 'manual' }, criadoEm: 't', criadoPor: 'sa', aprovacao: null });
   const ref = { escopo: 'cliente', alvo: { empresaId: c.A.id }, memoriaId: 'mem_antiga' };
   assert.deepStrictEqual(M.conferirRegistroMemoria(await c.banco.obter(base)), []);
   for (const v of await c.memoria.versoes(ref)) assert.deepStrictEqual(M.conferirVersaoMemoria(v), [], `v${v.n}`);

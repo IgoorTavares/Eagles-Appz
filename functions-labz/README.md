@@ -64,8 +64,9 @@ functions-labz/
 | Lista de Super Admins autorizados (lida pelas regras e pelo servidor) | `labz_config/acesso` → `{ uids: [...] }` |
 | Empresas da LABZ AI | `labz_empresas/{empresaId}` |
 | Vínculos únicos (tenant / cliente do CRM) | `labz_vinculos/{chave}` |
-| Memória global / do agente / da empresa / de desempenho / da tarefa | `labz_memoria_global/{id}`, `labz_agentes/{agenteId}/memorias/{id}`, `labz_empresas/{empresaId}/memorias/{id}`, `labz_empresas/{empresaId}/desempenho/{id}`, `labz_tarefas/{tarefaId}/memorias/{id}` |
-| Versões (memória e skill) | `.../{id}/versoes/{n}` |
+| Nomes reservados das empresas (nome normalizado único) | `labz_nomes/{slug}` |
+| Memória global / do agente / da empresa / de desempenho / da tarefa | `labz_memoria_global/{id}`, `labz_agentes/{agenteId}/labz_memorias/{id}`, `labz_empresas/{empresaId}/labz_memorias/{id}`, `labz_empresas/{empresaId}/labz_desempenho/{id}`, `labz_tarefas/{tarefaId}/labz_memorias/{id}` |
+| Versões (memória e skill) | `.../{id}/labz_versoes/{n}` |
 | Skills (conteúdo privado) | `labz_skills/{agenteId}__{ARQUIVO}` |
 | Execuções (produções) | `labz_tarefas/{id}` (estado, versão, histórico, tentativas, sinal de vida) |
 | Fila persistente | `labz_fila/{id}` |
@@ -86,7 +87,7 @@ functions-labz/
 5. Acrescentar ao `firebase.json` o codebase `{ "source": "functions-labz", "codebase": "labz" }` e publicar só ele.
 
 ## Memory Engine (Fases 3A e 3B)
-- **Fonte oficial: Firestore.** Documento base em `caminhos.memoria(...)` e versões imutáveis em `{base}/versoes/{n}`.
+- **Fonte oficial: Firestore.** Documento base em `caminhos.memoria(...)` e versões imutáveis em `{base}/labz_versoes/{n}`.
   `ESQUEMA_DOC_MEMORIA`/`ESQUEMA_DOC_VERSAO` + `conferirRegistroMemoria`/`conferirVersaoMemoria` (`src/contratos/memoria.js`).
 - **Ciclo da versão (3B):** `rascunho` (DRAFT) → `pendente` (PENDING_REVIEW) → `aprovada` (APPROVED) | `rejeitada` (REJECTED, com motivo)
   | `precisa-revisao` (NEEDS_REVISION, com motivo; a correção é uma versão nova); a aprovada vira `substituida` quando outra é aprovada.
@@ -143,8 +144,30 @@ functions-labz/
     empresa e objetivo), memórias e briefing são DADOS, delimitados no texto (`dados_da_tarefa`, `dados_aprovados`,
     `dados_do_usuario`), com a referência de cada memória; nenhum dado consegue abrir ou fechar um delimitador.
 
+## Correções da auditoria (Fase 3E)
+- **Nomes:** as subcoleções são `labz_memorias`, `labz_desempenho` e `labz_versoes` (`caminhos.subcolecoes`), para que índices e
+  isenções do Firestore (que valem por nome de coleção) nunca alcancem o CRM/ERP.
+- **F1** reativar passa pela mesma verificação de conflito da aprovação, na transação (`confirmacaoConflitos`).
+- **F2** busca por palavras: se a consulta lota o limite, uma 2ª consulta com os termos que a palavra comum "abafou";
+  o resultado diz `completa: false` quando é uma seleção limitada.
+- **F3** `correcoes.aprovar` reserva a proposta numa transação (`emAprovacao`, vence em 2 min).
+- **F4** nome normalizado único por reserva transacional `labz_nomes/{slug}` (só empresas da LABZ AI).
+- **F5** delimitadores com o código do contexto (`codigo="…"`) + limpeza ampla de marcadores dentro dos dados.
+- **F6** fila, auditoria, execuções e empresas em consultas limitadas e paginadas; cursor preso à empresa
+  (`cursorMesmoFiltro`); 3 índices de operação em `src/armazenamento/indices-operacao.js` (não publicados).
+- **F7** empresa arquivada: sem contexto, sem porta de memória, sem avançar execução (encerrar continua possível).
+
+## Limitações que continuam (não resolvidas)
+1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
+2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.
+3. A reserva da aprovação de correção (F3) vale por **2 minutos**.
+4. O Firebase Emulator **não comprova** a disponibilidade dos índices no Firebase real.
+5. A proteção contra prompt injection (marcadores com código, limpeza, blocos `confiavel`) depende também do tratamento seguro dos dados pelo futuro executor de modelos (Fase 4/6).
+6. Os agentes **ainda não executam** tarefas reais.
+7. Os **28 índices** compostos e as **27 isenções** propostos **ainda não foram publicados** (`firestore.indexes.json` não mudou).
+
 ## O que falta (fases seguintes)
-- Fase 3E: segurança final e simulador; publicar os índices compostos e as isenções de indexação (com autorização).
+- Fase 3E (feita): auditoria e correções F1–F7 (ver abaixo). Publicar os 28 índices e as 27 isenções só com autorização.
 - Fase 4: o trabalhador que executa os agentes (usa a porta de memória e a preparação por etapa).
 - Fase 4: motor de orquestração (trabalhador da fila, planner, quality gate, custos).
 - Fases 5–8: conteúdo das skills, provedores de IA, interface e integrações.

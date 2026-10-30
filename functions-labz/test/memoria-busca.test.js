@@ -235,7 +235,7 @@ test('isolamento: nenhuma busca, listagem ou contexto de uma empresa devolve dad
   assert.ok(!memoriasB.includes('segredoalfa') && memoriasB.includes('segredobeta'), 'só memórias da empresa B (o briefing é o texto pedido)');
   const pagB = JSON.stringify(await c.memoria.listarPagina('cliente', { empresaId: c.B.id }));
   assert.ok(!pagB.includes('segredoalfa'));
-  feitas.filter((f) => f.colecao.includes('/memorias')).forEach((f) => assert.ok(!f.colecao.includes(c.A.id), `consultou ${f.colecao}`));
+  feitas.filter((f) => f.colecao.includes('/labz_memorias')).forEach((f) => assert.ok(!f.colecao.includes(c.A.id), `consultou ${f.colecao}`));
 });
 
 test('consultas inválidas são recusadas antes de ler', async () => {
@@ -251,8 +251,8 @@ test('consultas inválidas são recusadas antes de ler', async () => {
   await rejeita(() => buscar(c, { escopo: 'cliente', alvo: {}, modo: 'metadados' }), 'invalido');
   await rejeita(() => c.recuperador.buscar({ tipo: 'superadmin', uid: 'sa' }, Object.assign({ modo: 'metadados' }, base)), 'permissao-negada');
   // o banco recusa consulta sem limite ou fora das regras do Firestore
-  await rejeita(() => c.banco.consultar(`labz_empresas/${c.A.id}/memorias`, { onde: [] }), 'invalido');
-  await rejeita(() => c.banco.consultar(`labz_empresas/${c.A.id}/memorias`, { limite: 500 }), 'invalido');
+  await rejeita(() => c.banco.consultar(`labz_empresas/${c.A.id}/labz_memorias`, { onde: [] }), 'invalido');
+  await rejeita(() => c.banco.consultar(`labz_empresas/${c.A.id}/labz_memorias`, { limite: 500 }), 'invalido');
   await rejeita(() => c.banco.consultar('usuarios', { limite: 1 }), 'invalido');
 });
 
@@ -284,18 +284,18 @@ test('nenhuma leitura de coleção inteira fora da aprovação; toda consulta te
   // a APROVAÇÃO continua lendo a coleção dentro da transação (garantia da Fase 3B)
   c.banco.zerarEstatisticas();
   await rejeita(() => c.memoria.aprovarVersao(c.ator, nova.ref, 1), 'conflito');
-  assert.ok(c.banco.estatisticas().porColecao[`labz_empresas/${c.A.id}/memorias`].listar >= 1);
+  assert.ok(c.banco.estatisticas().porColecao[`labz_empresas/${c.A.id}/labz_memorias`].listar >= 1);
 });
 
 test('índices: cada consulta tem índice declarado no formato do firestore.indexes.json (não publicado)', () => {
   assert.strictEqual(INDICES_NECESSARIOS.length, 25);
   INDICES_NECESSARIOS.forEach((i) => {
-    assert.ok(['memorias', 'desempenho', 'labz_memoria_global', 'labz_aprendizados'].includes(i.collectionGroup));
+    assert.ok(['labz_memorias', 'labz_desempenho', 'labz_memoria_global', 'labz_aprendizados'].includes(i.collectionGroup));
     assert.strictEqual(i.queryScope, 'COLLECTION', 'nunca collectionGroup: sem índice que misture clientes');
   });
-  assert.deepStrictEqual(indiceDaConsulta('labz_empresas/e1/memorias', { onde: [{ campo: 'status', op: '==', valor: 'ativa' }, { campo: 'termos', op: 'array-contains-any', valor: ['a'] }], ordenar: { campo: 'aprovadaEm', direcao: 'desc' }, limite: 50 }).fields.map((f) => f.fieldPath), ['status', 'termos', 'aprovadaEm']);
+  assert.deepStrictEqual(indiceDaConsulta('labz_empresas/e1/labz_memorias', { onde: [{ campo: 'status', op: '==', valor: 'ativa' }, { campo: 'termos', op: 'array-contains-any', valor: ['a'] }], ordenar: { campo: 'aprovadaEm', direcao: 'desc' }, limite: 50 }).fields.map((f) => f.fieldPath), ['status', 'termos', 'aprovadaEm']);
   assert.strictEqual(indiceDaConsulta('labz_empresas', { ordenar: { campo: 'id', direcao: 'asc' }, limite: 200 }), null, 'só id: automático');
-  assert.ok(!indiceDeclarado({ collectionGroup: 'memorias', queryScope: 'COLLECTION', fields: [{ fieldPath: 'x', order: 'ASCENDING' }, { fieldPath: 'y', order: 'ASCENDING' }] }));
+  assert.ok(!indiceDeclarado({ collectionGroup: 'labz_memorias', queryScope: 'COLLECTION', fields: [{ fieldPath: 'x', order: 'ASCENDING' }, { fieldPath: 'y', order: 'ASCENDING' }] }));
   const arquivo = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'firestore.indexes.json'), 'utf8'));
   assert.ok(!JSON.stringify(arquivo).includes('aprovadaEm'), 'firestore.indexes.json não foi alterado');
 });
@@ -349,7 +349,7 @@ test('reindexação: registro antigo sem índice volta à busca; só o Super Adm
   const c = await montarComEmpresas();
   const base = caminhos.memoria('cliente', { empresaId: c.A.id }, 'mem_antiga');
   await c.banco.gravar(base, { escopo: 'cliente', alvo: { empresaId: c.A.id }, categoria: 'marca', chave: null, status: 'ativa', versaoVigente: 1, ultimaVersao: 1, vigente: { versao: 1, titulo: 'Antiga', conteudo: 'palavraantiga', tags: [] }, criadoEm: '2026-10-01T00:00:00.000Z', criadoPor: 'sa', propostoPorAgente: null, atualizadoEm: '2026-10-01T00:00:00.000Z' });
-  await c.banco.gravar(`${base}/versoes/1`, { n: 1, status: 'aprovada', titulo: 'Antiga', conteudo: 'palavraantiga', tags: [], origem: { tipo: 'manual' }, criadoEm: '2026-10-01T00:00:00.000Z', criadoPor: 'sa', aprovacao: { por: 'sa', em: '2026-10-01T00:00:00.000Z' } });
+  await c.banco.gravar(`${base}/labz_versoes/1`, { n: 1, status: 'aprovada', titulo: 'Antiga', conteudo: 'palavraantiga', tags: [], origem: { tipo: 'manual' }, criadoEm: '2026-10-01T00:00:00.000Z', criadoPor: 'sa', aprovacao: { por: 'sa', em: '2026-10-01T00:00:00.000Z' } });
   const q = () => buscar(c, { escopo: 'cliente', alvo: { empresaId: c.A.id }, modo: 'textual', texto: 'palavraantiga' });
   assert.deepStrictEqual(titulos(await q()), [], 'sem índice não aparece (como no Firestore)');
   await rejeita(() => c.memoria.reindexar({ tipo: 'superadmin', uid: 'sa' }, 'cliente', { empresaId: c.A.id }), 'permissao-negada');

@@ -94,6 +94,9 @@ const ESQUEMA_CONSULTA_BANCO = {
     },
     limite: { tipo: 'inteiro', obrigatorio: true, min: 1, max: LIMITES_BUSCA.paginaAuditor },
     depoisDe: { tipo: 'texto', max: 120 },
+    // F6 (Fase 3E): o documento do cursor precisa ter estes campos IGUAIS aos
+    // filtros "==" da consulta (cursor de outro escopo é recusado)
+    cursorMesmoFiltro: { tipo: 'lista', max: 4, itens: { tipo: 'texto', padrao: /^[A-Za-z][A-Za-z0-9_.]{0,59}$/ } },
   },
 };
 function validarConsultaBanco(colecao, opcoes) {

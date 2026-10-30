@@ -1,6 +1,6 @@
 // Versionamento comum a memórias e skills.
 // Documento base: { status, versaoVigente, ultimaVersao, vigente: {...cópia da versão aprovada} }
-// Versões em {base}/versoes/{n}: { n, status, ...conteúdo, origem, criadoEm, criadoPor, aprovacao, baseVersao }
+// Versões em {base}/labz_versoes/{n}: { n, status, ...conteúdo, origem, criadoEm, criadoPor, aprovacao, baseVersao }
 //   rascunho → pendente (enviar)
 //   pendente → aprovada (vira a vigente; a anterior vira "substituida")
 //   pendente → rejeitada | precisa-revisao (com o motivo; a correção é uma versão NOVA)
@@ -13,7 +13,8 @@
 const { erro } = require('./erros');
 const { transicaoVersaoPermitida } = require('../contratos/memoria');
 
-const versaoPath = (base, n) => `${base}/versoes/${n}`;
+const SUB_VERSOES = 'labz_versoes'; // = caminhos.subcolecoes.versoes
+const versaoPath = (base, n) => `${base}/${SUB_VERSOES}/${n}`;
 const motivoCurto = (m) => String(m || '').slice(0, 500);
 
 // aoTornarVigente(base, versao) (opcional): campos extras gravados no documento
@@ -113,7 +114,7 @@ function criarVersionamento({ relogio, camposVigentes, aoTornarVigente }) {
     lerVersao,
 
     async listarVersoes(banco, base) {
-      return (await banco.listar(`${base}/versoes`)).sort((a, b) => a.n - b.n);
+      return (await banco.listar(`${base}/${SUB_VERSOES}`)).sort((a, b) => a.n - b.n);
     },
   };
 }

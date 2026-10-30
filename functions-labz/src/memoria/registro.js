@@ -19,7 +19,7 @@ const { exigirAtor, ATOR_SISTEMA } = require('../auth/super-admin');
 const { garantir } = require('../nucleo/validador');
 const { erro } = require('../nucleo/erros');
 const { novoId, relogioPadrao } = require('../nucleo/ids');
-const { criarVersionamento } = require('../nucleo/versionamento');
+const { criarVersionamento, versaoPath } = require('../nucleo/versionamento');
 const { ESCOPO_INFO, ESQUEMA_NOVA_MEMORIA, alvoDoEscopo, memoriaVigente } = require('../contratos/memoria');
 const { obterAgente } = require('../agentes/catalogo');
 const { sinaisDeInjecao, analisarNovoTexto, assinaturaConflitos } = require('./verificacoes');
@@ -365,11 +365,11 @@ function criarRegistroMemoria(deps) {
       let nova, decisao = null;
       await banco.transacao(async (t) => {
         if (ESCOPO_INFO[ref.escopo].aprovacao) {
-          const v = await t.obter(`${base(ref)}/versoes/${n}`);
+          const v = await t.obter(versaoPath(base(ref), n));
           if (v) decisao = exigirDecisaoConflitos(await avaliarConflitosCom(t, ref, n, v.conteudo), opcoes, ator);
         }
         nova = await ver.rollback(t, base(ref), n, ator, CAMPOS_CONTEUDO);
-        if (decisao) await t.atualizar(`${base(ref)}/versoes/${nova}`, { confirmacoes: { conflitos: decisao } });
+        if (decisao) await t.atualizar(versaoPath(base(ref), nova), { confirmacoes: { conflitos: decisao } });
       }).catch((e) => auditarBloqueio(e, ator, ref, n, 'voltarVersao'));
       await auditoria.registrar('memoria.rollback', ator, base(ref), {
         deVersao: n, novaVersao: nova, motivo: opcoes.motivo ? String(opcoes.motivo).slice(0, 300) : null,
@@ -386,11 +386,28 @@ function criarRegistroMemoria(deps) {
       return ler(ref);
     },
 
-    async reativar(ator, ref) {
+    // Reativar (Fase 3E, F1): a vigente volta a valer, então passa pela MESMA
+    // verificação de duplicidade/conflito da aprovação, dentro da transação.
+    // opcoes: { confirmacaoConflitos: { assinatura, justificativa } }
+    async reativar(ator, ref, opcoes = {}) {
       exigirAtor(ator);
-      const m = await ler(ref);
-      await banco.atualizar(base(ref), { status: m.versaoVigente ? 'ativa' : 'pendente', atualizadoEm: relogio() });
-      await auditoria.registrar('memoria.reativada', ator, base(ref));
+      semAgente(opcoes);
+      await ler(ref);
+      let decisao = null;
+      await banco.transacao(async (t) => {
+        const m = await t.obter(base(ref));
+        if (!m) throw erro('nao-encontrado', 'Memória não encontrada');
+        if (m.status !== 'arquivada') throw erro('precondicao', `Só uma memória arquivada pode ser reativada (está ${m.status})`);
+        if (m.versaoVigente && ESCOPO_INFO[ref.escopo].aprovacao) {
+          decisao = exigirDecisaoConflitos(await avaliarConflitosCom(t, ref, m.versaoVigente, m.vigente.conteudo), opcoes, ator);
+        }
+        const mud = { status: m.versaoVigente ? 'ativa' : 'pendente', atualizadoEm: relogio(), reativadaEm: relogio() };
+        if (decisao) mud.reativacao = { conflitos: decisao };
+        await t.atualizar(base(ref), mud);
+      }).catch((e) => auditarBloqueio(e, ator, ref, null, 'reativar'));
+      await auditoria.registrar('memoria.reativada', ator, base(ref), {
+        conflitosDecididos: decisao ? { assinatura: decisao.assinatura, itens: decisao.itens.map((i) => `${i.tipo}:${i.id}@${i.versaoVigente}`), justificativa: decisao.motivo.slice(0, 300) } : null,
+      });
       return ler(ref);
     },
 
@@ -443,7 +460,7 @@ function criarRegistroMemoria(deps) {
         await banco.transacao(async (t) => {
           const atual = await t.obter(base(ref));
           if (!atual || !atual.vigente || atual.indiceVersao === INDICE_VERSAO) return;
-          const v = await t.obter(`${base(ref)}/versoes/${atual.versaoVigente}`);
+          const v = await t.obter(versaoPath(base(ref), atual.versaoVigente));
           await t.atualizar(base(ref), camposDeIndice(atual, v || Object.assign({ n: atual.versaoVigente }, atual.vigente), atual.atualizadoEm));
           atualizadas++;
         });

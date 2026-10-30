@@ -17,6 +17,8 @@ const { obterAgente } = require('../agentes/catalogo');
 // ATOR_SISTEMA (trabalhador da fila) mora em auth/super-admin.js. Nunca sai pela API.
 
 const MAX_TENTATIVAS = 3;
+const AVANCAM = ['PLANNING', 'READY', 'RUNNING', 'REVISION_REQUIRED']; // estados que retomam trabalho
+const PAGINA = 100;
 const MAX_HISTORICO = 100;
 
 const ESQUEMA_NOVA_EXECUCAO = {
@@ -44,6 +46,11 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
       if (!e) throw erro('nao-encontrado', 'Execução não encontrada');
       if (opcoes.versaoEsperada !== undefined && e.versao !== opcoes.versaoEsperada) throw erro('conflito', 'A execução mudou enquanto você olhava: atualize e tente de novo');
       if (!podeTransicionar(e.estado, para)) throw erro('transicao-invalida', `transição não permitida: ${e.estado} → ${para}`);
+      // F7 (Fase 3E): empresa arquivada não recebe trabalho novo (encerrar continua possível)
+      if (e.empresaId && AVANCAM.includes(para)) {
+        const emp = await t.obter(caminhos.empresa(e.empresaId));
+        if (!emp || emp.status !== 'ativa') throw erro('precondicao', 'Empresa arquivada: a execução não pode avançar (só ser encerrada)');
+      }
       const agora = relogio();
       const historico = (e.historico || []).concat([{ de: e.estado, para, em: agora, por: ator.uid, motivo: String(opcoes.motivo || '').slice(0, 300) }]).slice(-MAX_HISTORICO);
       const mud = { estado: para, versao: (e.versao || 0) + 1, historico, atualizadoEm: agora };
@@ -87,11 +94,30 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
       await banco.atualizar(caminhos.tarefa(id), { ultimoBatimento: relogio() });
     },
 
+    // F6 (Fase 3E): lê só as RUNNING, por páginas (até 10 páginas de 100 por chamada).
     async recuperarInterrompidas(limiteMs) {
       const corte = Date.parse(relogio()) - limiteMs;
-      const presas = await banco.listar(caminhos.colecoes.tarefas, (e) => e.estado === 'RUNNING' && e.ultimoBatimento && Date.parse(e.ultimoBatimento) < corte);
+      const presas = [];
+      let depoisDe = null;
+      for (let p = 0; p < 10; p++) {
+        const opcoes = { onde: [{ campo: 'estado', op: '==', valor: 'RUNNING' }], ordenar: { campo: 'id', direcao: 'asc' }, limite: PAGINA };
+        if (depoisDe) opcoes.depoisDe = depoisDe;
+        const pagina = await banco.consultar(caminhos.colecoes.tarefas, opcoes);
+        presas.push(...pagina.filter((e) => e.ultimoBatimento && Date.parse(e.ultimoBatimento) < corte));
+        if (pagina.length < PAGINA) break;
+        depoisDe = pagina[pagina.length - 1].id;
+      }
       const feitas = [];
       for (const e of presas) {
+        // F7: execução de empresa arquivada não volta para a fila: é encerrada
+        if (e.empresaId) {
+          const emp = await banco.obter(caminhos.empresa(e.empresaId));
+          if (!emp || emp.status !== 'ativa') {
+            await transicionar(ATOR_SISTEMA, e.id, 'CANCELLED', { motivo: 'empresa arquivada' });
+            feitas.push({ id: e.id, para: 'CANCELLED' });
+            continue;
+          }
+        }
         const tentativas = (e.tentativas || 0) + 1;
         if (tentativas >= MAX_TENTATIVAS) {
           await transicionar(ATOR_SISTEMA, e.id, 'FAILED', { motivo: `interrompida ${tentativas} vezes`, tentativas });
@@ -105,10 +131,20 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
     },
 
     obter: async (ator, id) => { exigirAtor(ator); return ler(id); },
-    listar: async (ator, filtro = {}) => {
+    // F6 (Fase 3E): página por id (até 100), filtros no banco; o cursor tem de ser da mesma empresa.
+    async listarPagina(ator, { estado, empresaId, depoisDe, limite } = {}) {
       exigirAtor(ator);
-      return banco.listar(caminhos.colecoes.tarefas, (e) => (!filtro.estado || e.estado === filtro.estado) && (!filtro.empresaId || e.empresaId === filtro.empresaId));
+      const lim = Math.min(Math.max(1, limite || PAGINA), PAGINA);
+      const onde = [];
+      if (estado) onde.push({ campo: 'estado', op: '==', valor: estado });
+      if (empresaId) onde.push({ campo: 'empresaId', op: '==', valor: empresaId });
+      const opcoes = { onde, ordenar: { campo: 'id', direcao: 'asc' }, limite: lim, cursorMesmoFiltro: ['empresaId'] };
+      if (depoisDe) opcoes.depoisDe = depoisDe;
+      const itens = (await banco.consultar(caminhos.colecoes.tarefas, opcoes)).map((e) => Object.assign({}, e));
+      return { itens, proximo: itens.length === lim ? itens[itens.length - 1].id : null };
     },
+    // Primeira página (compatibilidade).
+    async listar(ator, filtro = {}) { return (await this.listarPagina(ator, filtro)).itens; },
   };
 }
 

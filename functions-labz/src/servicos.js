@@ -12,8 +12,13 @@ const { criarFila } = require('./execucao/fila');
 const { criarExecucoes } = require('./execucao/servico');
 const { criarPreparacao } = require('./execucao/preparacao');
 const { criarPortaMemoria } = require('./agentes/memoria-agente');
+const { criarAprovacoes } = require('./motor/aprovacoes');
+const { criarMotor } = require('./motor/motor');
+const { criarAdaptadorSimulado } = require('./motor/adaptador-simulado');
 
-function criarLabz({ banco, relogio }) {
+// adaptador: o "agente" que o motor chama. Na Fase 4A é SEMPRE o simulado
+// (nenhum modelo real); os testes passam roteiros próprios.
+function criarLabz({ banco, relogio, adaptador }) {
   const auditoria = criarAuditoria(banco, relogio);
   const empresas = criarServicoEmpresas({ banco, auditoria, relogio });
   const recuperador = criarRecuperador({ banco, relogio, auditoria });
@@ -26,8 +31,10 @@ function criarLabz({ banco, relogio }) {
   const execucoes = criarExecucoes({ banco, auditoria, empresas, fila, relogio });
   const preparacao = criarPreparacao({ banco, contexto, auditoria, relogio });
   // porta de memória dos agentes: uso interno (trabalhador da Fase 4); não sai pela API
-  const portaMemoria = criarPortaMemoria({ banco, registro: memoria, recuperador });
-  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria };
+  const portaMemoria = criarPortaMemoria({ banco, registro: memoria, recuperador, preparacao });
+  const aprovacoes = criarAprovacoes({ banco, auditoria, relogio });
+  const motor = criarMotor({ banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador: adaptador || criarAdaptadorSimulado(), relogio });
+  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor };
 }
 
 module.exports = { criarLabz };

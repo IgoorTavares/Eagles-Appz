@@ -44,8 +44,10 @@ const ESQUEMA_PROPOSTA = {
   },
 };
 
-// deps: { banco, registro, recuperador }
-function criarPortaMemoria({ banco, registro, recuperador }) {
+// deps: { banco, registro, recuperador, preparacao? }
+// montarContexto (Fase 4A): o executor monta o contexto da etapa PELA porta
+// (agente e execução fixos), sem acessar memória por outro caminho.
+function criarPortaMemoria({ banco, registro, recuperador, preparacao }) {
   return {
     // Abre a porta de UM agente para UMA execução.
     async abrir(agenteId, execucaoId) {
@@ -110,7 +112,13 @@ function criarPortaMemoria({ banco, registro, recuperador }) {
         return { ref: m.ref, versao: m.ultimaVersao, estado: 'rascunho', alertas: ((await registro.versoes(m.ref))[0] || {}).alertas || null };
       }
 
-      return Object.freeze({ agenteId, execucaoId, empresaId, perfil, consultar, propor });
+      async function montarContexto(briefing) {
+        await exigirEmpresaAtiva();
+        if (!preparacao) throw erro('precondicao', 'Porta sem preparação de contexto');
+        return preparacao.prepararEtapa(ATOR_SISTEMA, execucaoId, { agenteId, briefing: String(briefing || '').slice(0, 20000) });
+      }
+
+      return Object.freeze({ agenteId, execucaoId, empresaId, perfil, consultar, propor, montarContexto });
     },
   };
 }

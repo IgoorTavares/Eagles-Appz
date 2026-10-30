@@ -12,7 +12,9 @@ const TRANSICOES = {
   // RUNNING → READY: retomada de uma execução interrompida (volta para a fila)
   RUNNING: ['WAITING_APPROVAL', 'REVISION_REQUIRED', 'COMPLETED', 'FAILED', 'CANCELLED', 'READY'],
   WAITING_APPROVAL: ['READY', 'REVISION_REQUIRED', 'COMPLETED', 'CANCELLED'],
-  REVISION_REQUIRED: ['RUNNING', 'FAILED', 'CANCELLED'],
+  // Fase 4A (aditivo): REVISION_REQUIRED → READY = o Super Admin revisou e a
+  // execução volta para a FILA (antes só havia → RUNNING, sem quem executasse).
+  REVISION_REQUIRED: ['RUNNING', 'READY', 'FAILED', 'CANCELLED'],
   COMPLETED: [],
   FAILED: [],
   CANCELLED: [],

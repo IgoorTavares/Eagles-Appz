@@ -10,7 +10,8 @@ function relogioDeTeste(inicio = '2026-11-01T12:00:00.000Z') {
   return r;
 }
 
-async function montar() {
+// opcoes.adaptador (Fase 4A): adaptador SIMULADO do motor com um roteiro próprio
+async function montar(opcoes = {}) {
   const banco = criarBancoMemoria();
   const relogio = relogioDeTeste();
   await banco.gravar('usuarios/sa', { role: 'SuperAdmin', nome: 'Super' });
@@ -19,14 +20,14 @@ async function montar() {
   await banco.gravar('tenants/t1', { nomeEmpresa: 'Agência Fictícia', plano: 'ambos' });
   await banco.gravar('tenants/t1/crm_clientes/c1', { nome: 'Cliente Fictício Um' });
   await banco.gravar('tenants/t1/crm_clientes/c2', { nome: 'Cliente Fictício Dois' });
-  const labz = criarLabz({ banco, relogio });
+  const labz = criarLabz({ banco, relogio, adaptador: opcoes.adaptador });
   const ator = await exigirSuperAdmin({ uid: 'sa', token: { email: 'sa@teste.local' } }, { banco, uidsAutorizados: ['sa'] });
   return Object.assign({ relogio, ator }, labz);
 }
 
 // Duas empresas da LABZ AI e uma tarefa de cada.
-async function montarComEmpresas() {
-  const ctx = await montar();
+async function montarComEmpresas(opcoes) {
+  const ctx = await montar(opcoes);
   const A = await ctx.empresas.criar(ctx.ator, { nome: 'Marca Alfa' });
   const B = await ctx.empresas.criar(ctx.ator, { nome: 'Marca Beta' });
   await ctx.banco.gravar('labz_tarefas/tA', { empresaId: A.id, titulo: 'Tarefa da Alfa', estado: 'RUNNING' });

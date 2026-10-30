@@ -19,6 +19,7 @@ const { obterAgente } = require('../agentes/catalogo');
 const MAX_TENTATIVAS = 3;
 const AVANCAM = ['PLANNING', 'READY', 'RUNNING', 'REVISION_REQUIRED']; // estados que retomam trabalho
 const PAGINA = 100;
+const CAMPOS_EXTRAS = ['execucaoAtual', 'diagnostico', 'plano', 'etapas', 'custos', 'resultadoFinal', 'limites'];
 const MAX_HISTORICO = 100;
 
 const ESQUEMA_NOVA_EXECUCAO = {
@@ -28,6 +29,15 @@ const ESQUEMA_NOVA_EXECUCAO = {
     objetivo: { tipo: 'texto', obrigatorio: true, min: 5, max: 4000 },
     modo: { tipo: 'texto', obrigatorio: true, valores: ['orquestrado', 'especialista'] },
     agenteId: { tipo: 'texto', nulo: true, max: 40 },
+    // Fase 4A: limites de consumo SIMULADO desta execução (opcionais; padrão em motor/custos.js)
+    limites: {
+      tipo: 'objeto', extras: false,
+      campos: {
+        tokens: { tipo: 'inteiro', min: 100, max: 5000000 },
+        custoSimulado: { tipo: 'numero', min: 0, max: 100000 },
+        etapas: { tipo: 'inteiro', min: 1, max: 8 },
+      },
+    },
   },
 };
 
@@ -45,6 +55,8 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
       const e = await t.obter(caminhos.tarefa(id));
       if (!e) throw erro('nao-encontrado', 'Execução não encontrada');
       if (opcoes.versaoEsperada !== undefined && e.versao !== opcoes.versaoEsperada) throw erro('conflito', 'A execução mudou enquanto você olhava: atualize e tente de novo');
+      // Fase 4A: "crachá" do executor. Quem não é o executor atual não muda a execução
+      if (opcoes.token !== undefined && (!e.execucaoAtual || e.execucaoAtual.token !== opcoes.token)) throw erro('conflito', 'Outro executor assumiu esta execução', { motivo: 'executor-substituido' });
       if (!podeTransicionar(e.estado, para)) throw erro('transicao-invalida', `transição não permitida: ${e.estado} → ${para}`);
       // F7 (Fase 3E): empresa arquivada não recebe trabalho novo (encerrar continua possível)
       if (e.empresaId && AVANCAM.includes(para)) {
@@ -56,8 +68,11 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
       const mud = { estado: para, versao: (e.versao || 0) + 1, historico, atualizadoEm: agora };
       if (para === 'RUNNING') mud.ultimoBatimento = agora;
       if (opcoes.tentativas !== undefined) mud.tentativas = opcoes.tentativas;
+      // Fase 4A: campos gravados JUNTO com a transição (ex.: crachá do executor, diagnóstico)
+      if (opcoes.extras) Object.keys(opcoes.extras).forEach((k) => { if (CAMPOS_EXTRAS.includes(k)) mud[k] = opcoes.extras[k]; });
+      if (para !== 'RUNNING' && e.execucaoAtual && !(opcoes.extras && 'execucaoAtual' in opcoes.extras)) mud.execucaoAtual = null; // saiu de RUNNING: crachá some
       await t.atualizar(caminhos.tarefa(id), mud);
-      if (para === 'READY') await fila.enfileirar({ execucaoId: id, tipo: 'executar' }, t);
+      if (para === 'READY') await fila.enfileirar({ execucaoId: id, tipo: 'executar', atrasoMs: opcoes.atrasoMs }, t);
       resultado = Object.assign({ id }, e, mud);
     });
     await auditoria.registrar('execucao.transicao', ator, caminhos.tarefa(id), { para, motivo: String(opcoes.motivo || '').slice(0, 300) });
@@ -81,6 +96,7 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
         empresaId: d.empresaId, objetivo: d.objetivo, modo: d.modo, agenteId: d.modo === 'orquestrado' ? '08-estrategista' : d.agenteId,
         estado: 'CREATED', versao: 1, tentativas: 0, historico: [{ de: null, para: 'CREATED', em: agora, por: ator.uid, motivo: '' }],
         criadoEm: agora, criadoPor: ator.uid, atualizadoEm: agora, ultimoBatimento: null,
+        limites: d.limites || null, execucaoAtual: null, diagnostico: null,
       };
       await banco.gravar(caminhos.tarefa(id), doc);
       await auditoria.registrar('execucao.criada', ator, caminhos.tarefa(id), { modo: d.modo, empresaId: d.empresaId });
@@ -120,7 +136,7 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
         }
         const tentativas = (e.tentativas || 0) + 1;
         if (tentativas >= MAX_TENTATIVAS) {
-          await transicionar(ATOR_SISTEMA, e.id, 'FAILED', { motivo: `interrompida ${tentativas} vezes`, tentativas });
+          await transicionar(ATOR_SISTEMA, e.id, 'FAILED', { motivo: `interrompida ${tentativas} vezes`, tentativas, extras: { diagnostico: { motivo: 'interrompida-demais', tentativas, em: relogio() } } });
           feitas.push({ id: e.id, para: 'FAILED' });
         } else {
           await transicionar(ATOR_SISTEMA, e.id, 'READY', { motivo: 'retomada após interrupção', tentativas });

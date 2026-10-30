@@ -130,7 +130,8 @@ test('nenhum agente aprova: a porta não tem aprovação e o ator do sistema é 
   const c = await cenario();
   const exe = await especialista(c, '02-designer', c.A.id);
   const porta = await c.portaMemoria.abrir('02-designer', exe.id);
-  assert.deepStrictEqual(Object.keys(porta).sort(), ['agenteId', 'consultar', 'empresaId', 'execucaoId', 'perfil', 'propor']);
+  // Fase 4A: + montarContexto (o executor monta o contexto pela porta); continua sem aprovar/decidir
+  assert.deepStrictEqual(Object.keys(porta).sort(), ['agenteId', 'consultar', 'empresaId', 'execucaoId', 'montarContexto', 'perfil', 'propor']);
   const p = await porta.propor({ escopo: 'cliente', base: 'tarefa', categoria: 'preferencia', titulo: 'Fotos', conteudo: 'Fotos com luz natural ficaram melhores' });
   for (const fazer of [
     () => c.memoria.aprovarVersao(ATOR_SISTEMA, p.ref, 1),

@@ -30,7 +30,7 @@ const C = {
 
 // Subcoleções da LABZ AI (Fase 3E: com o prefixo labz_, para que índices e
 // isenções do Firestore, que valem por NOME de coleção, nunca alcancem o CRM/ERP).
-const SUB = Object.freeze({ memorias: 'labz_memorias', desempenho: 'labz_desempenho', versoes: 'labz_versoes' });
+const SUB = Object.freeze({ memorias: 'labz_memorias', desempenho: 'labz_desempenho', versoes: 'labz_versoes', aprovacoes: 'labz_aprovacoes', resultados: 'labz_resultados' });
 
 const caminhos = {
   colecoes: C,
@@ -47,6 +47,10 @@ const caminhos = {
   aprendizado: (id) => `${C.aprendizados}/${seg(id, 'aprendizadoId')}`,
   evento: (id) => `${C.eventos}/${seg(id, 'eventoId')}`,
   filaItem: (id) => `${C.fila}/${seg(id, 'filaId')}`,
+  // Fase 4A: pedidos de aprovação e resultados de cada etapa, DENTRO da execução
+  aprovacoesExecucao: (execucaoId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.aprovacoes}`,
+  aprovacaoExecucao: (execucaoId, id) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.aprovacoes}/${seg(id, 'aprovacaoId')}`,
+  resultadoEtapa: (execucaoId, etapaId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.resultados}/${seg(etapaId, 'etapaId')}`,
 
   // Coleção de memórias de cada escopo (os 5 escopos)
   colecaoMemorias(escopo, alvo = {}) {

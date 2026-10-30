@@ -94,6 +94,13 @@ const ACOES = {
   // Fase 3D: contexto por etapa (sem executar agente nenhum) e o plano do Estrategista
   'execucoes.prepararEtapa': [obj({ execucaoId: ID, etapa: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.preparacao.prepararEtapa(a, d.execucaoId, d.etapa)],
   'execucoes.planejarContextos': [obj({ execucaoId: ID, passos: { tipo: 'lista', obrigatorio: true, max: 8 } }), (s, a, d) => s.preparacao.planejarContextos(a, d.execucaoId, d.passos)],
+  // Fase 4A: motor de execução (agentes SIMULADOS). O executor da fila não sai pela API.
+  'execucoes.planejar': [obj({ execucaoId: ID, passos: { tipo: 'lista', max: 8 } }), (s, a, d) => s.motor.planejar(a, d.execucaoId, { passos: d.passos })],
+  'execucoes.aprovacoes': [obj({ execucaoId: ID }), (s, a, d) => s.aprovacoes.pendentes(a, d.execucaoId)],
+  'execucoes.decidirAprovacao': [obj({ execucaoId: ID, aprovacaoId: { tipo: 'texto', obrigatorio: true, padrao: /^[A-Za-z0-9_-]{1,80}$/ }, decisao: { tipo: 'texto', obrigatorio: true }, assinatura: { tipo: 'texto', obrigatorio: true }, justificativa: { tipo: 'texto', obrigatorio: true } }),
+    (s, a, d) => s.motor.decidirAprovacao(a, d.execucaoId, d.aprovacaoId, { decisao: d.decisao, assinatura: d.assinatura, justificativa: d.justificativa })],
+  'execucoes.retomar': [obj({ execucaoId: ID, limites: { tipo: 'objeto' } }), (s, a, d) => s.motor.retomar(a, d.execucaoId, { limites: d.limites })],
+  'execucoes.diagnostico': [obj({ execucaoId: ID }), (s, a, d) => s.motor.diagnosticar(a, d.execucaoId)],
   'execucoes.criar': [obj({ execucao: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.execucoes.criar(a, d.execucao)],
   'execucoes.transicionar': [obj({ execucaoId: ID, para: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', max: 300 }, versaoEsperada: { tipo: 'inteiro', min: 1 } }),
     (s, a, d) => s.execucoes.transicionar(a, d.execucaoId, d.para, { motivo: d.motivo, versaoEsperada: d.versaoEsperada })],

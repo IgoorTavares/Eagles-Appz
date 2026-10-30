@@ -396,3 +396,34 @@ test('Fase 3E no Firestore real: concorrência de F3 (correção), F4 (nome de e
   const pg = await s.execucoes.listarPagina(ator, { empresaId: E.id, limite: 1 });
   assert.ok(pg.itens.every((i) => i.empresaId === E.id));
 });
+
+test('Fase 4A no Firestore real: plano orquestrado, dois executores ao mesmo tempo, aprovação pela API e diagnóstico', async () => {
+  const { criarLabz } = require('../src/servicos');
+  const { criarAdaptadorSimulado } = require('../src/motor/adaptador-simulado');
+  const { exigirSuperAdmin } = require('../src/auth/super-admin');
+  const banco = criarBancoFirestore(db);
+  const acao = { tipo: 'ferramenta', ferramentaId: 'meta.publicar', operacao: 'publicar', parametros: { post: 'integ' } };
+  const s = criarLabz({ banco, adaptador: criarAdaptadorSimulado({ '07-trafego': 'acao' }, { acoes: { '07-trafego': acao } }) });
+  const ator = await exigirSuperAdmin({ uid: 'sa-teste', token: { email: 'sa@teste.local' } }, { banco, uidsAutorizados: ['sa-teste'] });
+  // orquestrado pela API (função do simulador), executado aqui por dois "executores" ao mesmo tempo
+  const exe = await ok(tokens.sa, 'execucoes.criar', { execucao: { empresaId: A.id, objetivo: 'INTEG-4A campanha', modo: 'orquestrado' } });
+  await ok(tokens.sa, 'execucoes.planejar', { execucaoId: exe.id, passos: [{ id: 'marca', agenteId: '01-guia-marca', objetivo: 'Diretrizes' }, { id: 'texto', agenteId: '04-roteirista', objetivo: 'Legendas', dependeDe: ['marca'] }] });
+  await s.fila.enfileirar({ execucaoId: exe.id, tipo: 'executar' }); // item duplicado
+  const r = await Promise.all([s.motor.trabalhar('exec-A'), s.motor.trabalhar('exec-B')]);
+  assert.equal(r.filter((x) => x && x.resultado === 'concluida').length, 1, JSON.stringify(r));
+  const d = await ok(tokens.sa, 'execucoes.diagnostico', { execucaoId: exe.id });
+  assert.equal(d.estado, 'COMPLETED');
+  assert.deepEqual(d.etapas.map((x) => x.status), ['concluida', 'concluida', 'concluida']);
+  const res = (await db.doc(`labz_tarefas/${exe.id}/labz_resultados/texto`).get()).data();
+  assert.ok(res.simulado === true && res.texto.startsWith('[SIMULADO]'));
+  // aprovação: só o Super Admin, pela API; Diretor recusado
+  const e2 = await s.execucoes.criar(ator, { empresaId: A.id, objetivo: 'Publicar post', modo: 'especialista', agenteId: '07-trafego' });
+  await s.motor.planejar(ator, e2.id);
+  assert.equal((await s.motor.trabalhar('exec-C')).resultado, 'aguardando-aprovacao');
+  const [p] = await ok(tokens.sa, 'execucoes.aprovacoes', { execucaoId: e2.id });
+  assert.equal((await chamar(tokens.diretor, 'execucoes.decidirAprovacao', { execucaoId: e2.id, aprovacaoId: p.id, decisao: 'aprovar', assinatura: p.assinatura, justificativa: 'ok ok' })).erro.status, 'PERMISSION_DENIED');
+  await ok(tokens.sa, 'execucoes.decidirAprovacao', { execucaoId: e2.id, aprovacaoId: p.id, decisao: 'aprovar', assinatura: p.assinatura, justificativa: 'post conferido' });
+  assert.equal((await s.motor.trabalhar('exec-D')).resultado, 'concluida');
+  const fim = (await db.doc(`labz_tarefas/${e2.id}`).get()).data();
+  assert.equal(fim.etapas[0].resultado.acoes[0].situacao, 'aprovada-simulada');
+});

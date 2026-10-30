@@ -27,11 +27,13 @@ function criarFila({ banco, relogio = relogioPadrao, opcoes = {} }) {
 
   return {
     // t (opcional): grava dentro de uma transação já aberta
+    // trabalho.atrasoMs (opcional, Fase 4A): só fica disponível depois desse tempo (nova tentativa com espera)
     async enfileirar(trabalho, t) {
       if (!trabalho || typeof trabalho.tipo !== 'string' || !trabalho.execucaoId) throw erro('invalido', 'Trabalho inválido para a fila');
       const id = novoId('fila');
       const agora = relogio();
-      const doc = { execucaoId: trabalho.execucaoId, tipo: trabalho.tipo, dados: trabalho.dados || {}, estado: 'pendente', tentativas: 0, disponivelEm: agora, criadoEm: agora, travadoAte: null, trabalhador: null };
+      const disponivelEm = trabalho.atrasoMs ? iso(ms(agora) + trabalho.atrasoMs) : agora;
+      const doc = { execucaoId: trabalho.execucaoId, tipo: trabalho.tipo, dados: trabalho.dados || {}, estado: 'pendente', tentativas: 0, disponivelEm, criadoEm: agora, travadoAte: null, trabalhador: null };
       await (t || banco).gravar(caminhos.filaItem(id), doc);
       return id;
     },

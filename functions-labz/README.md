@@ -157,13 +157,38 @@ functions-labz/
   (`cursorMesmoFiltro`); 3 índices de operação em `src/armazenamento/indices-operacao.js` (não publicados).
 - **F7** empresa arquivada: sem contexto, sem porta de memória, sem avançar execução (encerrar continua possível).
 
+## Motor de execução (Fase 4A) — agentes SIMULADOS
+Nenhum modelo de IA, nenhuma API paga e nenhuma ferramenta real. Tudo o que o "agente" devolve vem de
+`src/motor/adaptador-simulado.js`, marcado com `simulado: true` e texto começando com `[SIMULADO]`.
+- **Planejador** (`motor/planejador.js`): especialista = 1 etapa; orquestrado = etapas do plano (do Super Admin ou de um
+  adaptador simulado) com dependências validadas (agentes, ids únicos, sem ciclo, até 8) + etapa final `consolidacao` do Estrategista.
+- **Motor** (`motor/motor.js`): Workflow Engine + Agent Router + Execution Monitor. `planejar` (CREATED → PLANNING → READY),
+  `trabalhar` (fila.reservar → READY → RUNNING com o **crachá** `execucaoAtual.token` → etapas em ordem → COMPLETED |
+  WAITING_APPROVAL | REVISION_REQUIRED | READY com espera | FAILED), `decidirAprovacao`, `retomar`, `diagnosticar`, `varrer`.
+  Toda gravação confere o crachá e o estado RUNNING: cancelada ou assumida por outro, o executor para e descarta o resultado.
+- **Contexto só pela porta de memória** (`porta.montarContexto`); resultados de etapas anteriores entram como DADO no briefing.
+- **Quality Gate** (`motor/qualidade.js`): só estrutural (presença, simulado, agente/etapa, formato, referências do contexto,
+  ações autorizadas pelo catálogo, limites). Não avalia qualidade criativa.
+- **Aprovação de ações** (`motor/aprovacoes.js`): pedido em `labz_tarefas/{id}/labz_aprovacoes`, assinatura presa à ação exata
+  e à tentativa da etapa; só o Super Admin decide; recusa = ação não executada; aprovada = executada **só em simulação**.
+- **Custos** (`motor/custos.js`): consumo **simulado** em "unidade simulada" (não é preço de provedor); limites por execução
+  (`limites.tokens`, `custoSimulado`, `etapas`) bloqueiam ANTES de chamar o agente → REVISION_REQUIRED; `retomar` aceita limites novos.
+- **Tool Executor** (`motor/ferramentas-simuladas.js`): só contrato + simulação; autorização pelo catálogo de ferramentas.
+- **Estados:** os 9 de sempre; acréscimo **REVISION_REQUIRED → READY** (volta para a fila depois da revisão humana).
+- **Eventos** `execucao.*`: planejamento_iniciado, agente_selecionado, etapa_iniciada/concluida/falhou/descartada, nova_tentativa,
+  aprovacao_solicitada/decidida/desatualizada, acao_simulada/recusada, custo_bloqueado, qualidade_reprovada, retomada, concluida
+  (+ transicao). Só ids, contagens e motivos.
+- **API:** `execucoes.planejar`, `execucoes.aprovacoes`, `execucoes.decidirAprovacao`, `execucoes.retomar`, `execucoes.diagnostico`.
+  O executor (`motor.trabalhar`) **não** sai pela API e não está agendado (Fase 4B).
+- **Índices:** nenhum composto novo. Isenções adicionais propostas à parte (não aplicadas): `labz_resultados.texto` e `labz_tarefas.etapas`.
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.
 3. A reserva da aprovação de correção (F3) vale por **2 minutos**.
 4. O Firebase Emulator **não comprova** a disponibilidade dos índices no Firebase real.
 5. A proteção contra prompt injection (marcadores com código, limpeza, blocos `confiavel`) depende também do tratamento seguro dos dados pelo futuro executor de modelos (Fase 4/6).
-6. Os agentes **ainda não executam** tarefas reais.
+6. Os agentes **ainda não executam** tarefas reais: na Fase 4A o motor usa só o adaptador simulado e nada o agenda.
 7. Os **28 índices** compostos e as **27 isenções** propostos **ainda não foram publicados** (`firestore.indexes.json` não mudou).
 
 ## O que falta (fases seguintes)

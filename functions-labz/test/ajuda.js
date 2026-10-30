@@ -34,10 +34,18 @@ async function montarComEmpresas() {
   return Object.assign(ctx, { A, B });
 }
 
-// Cria e aprova uma memória (atalho dos testes)
-async function memoriaAprovada(ctx, dados) {
+// Cria e aprova uma memória (atalho dos testes). opcoes vão para a aprovação.
+// opcoes.decidirConflitos: "justificativa" → o Super Admin avalia a duplicidade/
+// conflito e aprova com a assinatura da situação atual (decisão explícita).
+async function memoriaAprovada(ctx, dados, opcoes) {
   const m = await ctx.memoria.criar(ctx.ator, Object.assign({ origem: { tipo: 'manual' } }, dados));
-  if (m.status === 'pendente') return ctx.memoria.aprovarVersao(ctx.ator, m.ref, 1).then((x) => Object.assign(x, { ref: m.ref }));
+  let op = opcoes;
+  if (opcoes && opcoes.decidirConflitos) {
+    const av = await ctx.memoria.avaliarConflitos(ctx.ator, m.ref, 1);
+    op = Object.assign({}, opcoes, { decidirConflitos: undefined });
+    if (av.assinatura) op.confirmacaoConflitos = { assinatura: av.assinatura, justificativa: opcoes.decidirConflitos };
+  }
+  if (m.status === 'pendente') return ctx.memoria.aprovarVersao(ctx.ator, m.ref, 1, op).then((x) => Object.assign(x, { ref: m.ref }));
   return m;
 }
 

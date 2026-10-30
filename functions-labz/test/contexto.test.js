@@ -68,7 +68,8 @@ test('briefing é dado não confiável, delimitado no texto final', async () => 
 
 test('não carrega tudo: respeita o orçamento e registra as fontes usadas', async () => {
   const c = await cenario();
-  for (let i = 0; i < 12; i++) await memoriaAprovada(c, { escopo: 'cliente', alvo: { empresaId: c.A.id }, categoria: 'referencia', titulo: `ref ${i}`, conteudo: `Referência ${i} `.repeat(60) });
+  // os 12 textos são parecidos de propósito: cada aprovação registra a decisão do Super Admin (Fase 3B)
+  for (let i = 0; i < 12; i++) await memoriaAprovada(c, { escopo: 'cliente', alvo: { empresaId: c.A.id }, categoria: 'referencia', titulo: `ref ${i}`, conteudo: `Referência ${i} `.repeat(60) }, { decidirConflitos: 'referências parecidas de propósito' });
   const ctx = await c.contexto.montar({ agenteId: '04-roteirista', empresaId: c.A.id, briefing: 'legenda', limites: { totalCaracteres: 6000 } });
   assert.ok(ctx.descartados > 0);
   assert.ok(ctx.caracteres <= 6000 + ctx.blocos.filter((b) => ['seguranca', 'especialidade', 'briefing'].includes(b.tipo)).reduce((a, b) => a + b.itens.reduce((s, i) => s + i.texto.length, 0), 0));

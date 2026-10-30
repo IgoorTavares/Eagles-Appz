@@ -50,7 +50,18 @@ function criarBancoFirestore(db) {
             if (!atual) throw erro('nao-encontrado', `documento não existe: ${caminho}`);
             camada.set(caminho, Object.assign(atual, copia(campos)));
           },
-          listar, // fora da transação (o Firestore não faz consulta transacional de coleção inteira aqui)
+          // Leitura da coleção DENTRO da transação (tx.get de uma consulta): o
+          // Firestore isola a transação, então se um documento lido mudar antes
+          // do fim, ela é repetida com o estado novo. Enxerga a camada.
+          async listar(colecao, filtro) {
+            const snap = await tx.get(db.collection(colecao));
+            const mapa = new Map(snap.docs.map((d) => [d.id, Object.assign({ id: d.id }, d.data())]));
+            camada.forEach((doc, caminho) => {
+              const resto = caminho.startsWith(colecao + '/') ? caminho.slice(colecao.length + 1) : null;
+              if (resto && !resto.includes('/')) mapa.set(resto, Object.assign({ id: resto }, copia(doc)));
+            });
+            return [...mapa.values()].filter((x) => !filtro || filtro(x)).sort((a, b) => a.id.localeCompare(b.id));
+          },
         };
         const resultado = await fn(t);
         camada.forEach((doc, caminho) => tx.set(ref(caminho), doc));

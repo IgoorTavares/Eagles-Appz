@@ -225,3 +225,78 @@ test('fila no Firestore real: dois trabalhadores ao mesmo tempo, só um pega o i
   const pegaram = [x, y].filter((r) => r && r.id === id);
   assert.equal(pegaram.length, 1, 'exatamente um trabalhador reservou o item');
 });
+
+test('Fase 3B no Firestore real: rascunho → revisão → aprovação, conflito de versão, Markdown e trava da Global', async () => {
+  const mem = { escopo: 'cliente', alvo: { empresaId: A.id }, categoria: 'marca', titulo: 'Paleta', conteudo: 'INTEG-3B: azul', origem: { tipo: 'manual' } };
+  const m = await ok(tokens.sa, 'memoria.criar', { memoria: mem, opcoes: { rascunho: true } });
+  const base = `labz_empresas/${A.id}/memorias/${m.ref.memoriaId}`;
+  assert.equal((await db.doc(`${base}/versoes/1`).get()).data().status, 'rascunho');
+  assert.equal((await chamar(tokens.sa, 'memoria.aprovar', { ref: m.ref, versao: 1 })).erro.status, 'FAILED_PRECONDITION');
+  await ok(tokens.sa, 'memoria.enviarParaAprovacao', { ref: m.ref, versao: 1 });
+  await ok(tokens.sa, 'memoria.pedirRevisao', { ref: m.ref, versao: 1, motivo: 'faltou o tom exato' });
+  const v1 = (await db.doc(`${base}/versoes/1`).get()).data();
+  assert.deepEqual([v1.status, v1.revisao.motivo, v1.revisao.por], ['precisa-revisao', 'faltou o tom exato', 'sa-teste']);
+  await ok(tokens.sa, 'memoria.novaVersao', { ref: m.ref, conteudo: { conteudo: 'INTEG-3B: azul #1E40AF', origem: { tipo: 'manual' } } });
+  await ok(tokens.sa, 'memoria.aprovar', { ref: m.ref, versao: 2, justificativa: 'tom confirmado' });
+  // duas propostas sobre a versão 2: aprovar a mais nova recusa a mais velha
+  await ok(tokens.sa, 'memoria.novaVersao', { ref: m.ref, conteudo: { conteudo: 'INTEG-3B: proposta A', origem: { tipo: 'manual' } } });
+  await ok(tokens.sa, 'memoria.novaVersao', { ref: m.ref, conteudo: { conteudo: 'INTEG-3B: proposta B', origem: { tipo: 'manual' } } });
+  await ok(tokens.sa, 'memoria.aprovar', { ref: m.ref, versao: 4 });
+  assert.equal((await chamar(tokens.sa, 'memoria.aprovar', { ref: m.ref, versao: 3 })).erro.status, 'ALREADY_EXISTS');
+  assert.equal((await db.doc(base).get()).data().vigente.conteudo, 'INTEG-3B: proposta B');
+  assert.equal((await db.doc(`${base}/versoes/3`).get()).data().status, 'pendente');
+  // Markdown derivado da versão 2 (histórico), igual nas duas gerações
+  const md1 = await ok(tokens.sa, 'memoria.exportarMarkdown', { ref: m.ref, versao: 2 });
+  const md2 = await ok(tokens.sa, 'memoria.exportarMarkdown', { ref: m.ref, versao: 2 });
+  assert.equal(md1.markdown, md2.markdown);
+  assert.ok(md1.markdown.includes('status: "substituida"') && md1.markdown.includes('INTEG-3B: azul #1E40AF'));
+  // Global citando o cliente do CRM vinculado: bloqueado e auditado
+  const g = await chamar(tokens.sa, 'memoria.criar', { memoria: { escopo: 'global', alvo: {}, categoria: 'metodologia', titulo: 'Método', conteudo: 'O cliente ficticio prefere legendas curtas', origem: { tipo: 'manual' } } });
+  assert.equal(g.erro.status, 'FAILED_PRECONDITION');
+  assert.equal((await db.collection('labz_memoria_global').get()).size, 0);
+  assert.ok((await db.collection('labz_eventos').where('tipo', '==', 'memoria.trava_global').get()).size >= 1);
+});
+
+test('Fase 3B no Firestore real: conflito exige decisão; duas aprovações simultâneas não passam juntas; decisão velha não vale', async () => {
+  const base = { escopo: 'cliente', alvo: { empresaId: A.id }, categoria: 'preferencia', chave: 'integ-fotos', titulo: 'Fotos', origem: { tipo: 'manual' } };
+  const x = await ok(tokens.sa, 'memoria.criar', { memoria: Object.assign({ conteudo: 'INTEG-CONF: luz natural' }, base) });
+  const y = await ok(tokens.sa, 'memoria.criar', { memoria: Object.assign({ conteudo: 'INTEG-CONF: estúdio' }, base) });
+  const r = await Promise.all([chamar(tokens.sa, 'memoria.aprovar', { ref: x.ref, versao: 1 }), chamar(tokens.sa, 'memoria.aprovar', { ref: y.ref, versao: 1 })]);
+  assert.equal(r.filter((z) => z.resultado && z.resultado.ok).length, 1, 'só uma das duas aprovações passou');
+  const barrada = r.find((z) => z.erro);
+  assert.equal(barrada.erro.status, 'ALREADY_EXISTS');
+  assert.equal(barrada.erro.details.motivo, 'decisao-necessaria');
+  const perdeu = r[0].erro ? x : y;
+  const venceu = r[0].erro ? y : x;
+  // decisão para o estado atual; antes de usá-la, a memória envolvida muda
+  const av = await ok(tokens.sa, 'memoria.avaliarConflitos', { ref: perdeu.ref, versao: 1 });
+  assert.equal(av.assinatura, barrada.erro.details.assinatura);
+  await ok(tokens.sa, 'memoria.novaVersao', { ref: venceu.ref, conteudo: { conteudo: 'INTEG-CONF: luz natural ou janela', origem: { tipo: 'manual' } } });
+  await ok(tokens.sa, 'memoria.aprovar', { ref: venceu.ref, versao: 2 });
+  const velha = await chamar(tokens.sa, 'memoria.aprovar', { ref: perdeu.ref, versao: 1, confirmacaoConflitos: { assinatura: av.assinatura, justificativa: 'exceção combinada' } });
+  assert.equal(velha.erro.details.motivo, 'confirmacao-desatualizada');
+  const nova = await ok(tokens.sa, 'memoria.avaliarConflitos', { ref: perdeu.ref, versao: 1 });
+  const ap = await ok(tokens.sa, 'memoria.aprovar', { ref: perdeu.ref, versao: 1, confirmacaoConflitos: { assinatura: nova.assinatura, justificativa: 'exceção combinada' } });
+  assert.equal(ap.status, 'ativa');
+  const v = (await db.doc(`labz_empresas/${A.id}/memorias/${perdeu.ref.memoriaId}/versoes/1`).get()).data();
+  assert.equal(v.confirmacoes.conflitos.assinatura, nova.assinatura);
+  assert.ok((await db.collection('labz_eventos').where('tipo', '==', 'memoria.conflito_bloqueado').get()).size >= 2);
+});
+
+test('Fase 3B, transações reais em paralelo no Firestore: o conflito é visto dentro da transação', async () => {
+  const { criarLabz } = require('../src/servicos');
+  const { exigirSuperAdmin } = require('../src/auth/super-admin');
+  const banco = criarBancoFirestore(db);
+  const s = criarLabz({ banco });
+  const ator = await exigirSuperAdmin({ uid: 'sa-teste', token: { email: 'sa@teste.local' } }, { banco, uidsAutorizados: ['sa-teste'] });
+  const base = { escopo: 'cliente', alvo: { empresaId: A.id }, categoria: 'preferencia', chave: 'integ-paralelo', titulo: 'Paralelo', origem: { tipo: 'manual' } };
+  for (let rodada = 0; rodada < 3; rodada++) {
+    const ms = [];
+    for (const t of ['um', 'dois', 'tres']) ms.push(await s.memoria.criar(ator, Object.assign({}, base, { chave: `integ-par-${rodada}`, conteudo: `INTEG-PAR ${rodada} opção ${t}` })));
+    const r = await Promise.allSettled(ms.map((m) => s.memoria.aprovarVersao(ator, m.ref, 1)));
+    assert.equal(r.filter((z) => z.status === 'fulfilled').length, 1, `rodada ${rodada}: só uma das três aprovações simultâneas passou`);
+    r.filter((z) => z.status === 'rejected').forEach((z) => assert.equal(z.reason.codigo, 'conflito'));
+    const vig = (await s.memoria.vigentes('cliente', { empresaId: A.id })).filter((m) => m.chave === `integ-par-${rodada}`);
+    assert.equal(vig.length, 1);
+  }
+});

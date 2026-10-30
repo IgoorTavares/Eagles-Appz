@@ -25,6 +25,12 @@ const REF_MEMORIA = {
 const ID = { tipo: 'texto', obrigatorio: true, padrao: /^[A-Za-z0-9_-]{1,80}$/ };
 const N = { tipo: 'inteiro', obrigatorio: true, min: 1 };
 const obj = (campos) => ({ tipo: 'objeto', obrigatorio: true, extras: false, campos });
+const MOTIVO = { tipo: 'texto', obrigatorio: true, min: 3, max: 500 };
+const CONFIRMACAO_CONFLITOS = {
+  tipo: 'objeto', extras: false,
+  campos: { assinatura: { tipo: 'texto', obrigatorio: true, padrao: /^[0-9a-f]{64}$/ }, justificativa: MOTIVO },
+};
+const OPCOES_CRIACAO = { tipo: 'objeto', extras: false, campos: { rascunho: { tipo: 'booleano' }, confirmoSemDadosDeCliente: { tipo: 'booleano' } } };
 
 // acao → [esquema dos dados, executor(servicos, ator, dados, ctx)]
 const ACOES = {
@@ -43,11 +49,23 @@ const ACOES = {
   'empresas.obter': [obj({ empresaId: ID }), (s, a, d) => s.empresas.obter(a, d.empresaId)],
   'empresas.listar': [obj({ status: { tipo: 'texto', valores: ['ativa', 'arquivada'] } }), (s, a, d) => s.empresas.listar(a, { status: d.status })],
 
-  'memoria.criar': [obj({ memoria: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.memoria.criar(a, d.memoria)],
-  'memoria.novaVersao': [obj({ ref: REF_MEMORIA, conteudo: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.memoria.novaVersao(a, d.ref, d.conteudo).then((n) => ({ versao: n }))],
-  'memoria.aprovar': [obj({ ref: REF_MEMORIA, versao: N }), (s, a, d) => s.memoria.aprovarVersao(a, d.ref, d.versao)],
-  'memoria.rejeitar': [obj({ ref: REF_MEMORIA, versao: N, motivo: { tipo: 'texto', max: 500 } }), (s, a, d) => s.memoria.rejeitarVersao(a, d.ref, d.versao, d.motivo)],
-  'memoria.voltarVersao': [obj({ ref: REF_MEMORIA, versao: N }), (s, a, d) => s.memoria.voltarVersao(a, d.ref, d.versao)],
+  // Opções aceitas: só confirmações explícitas do Super Admin. Nunca agenteId
+  // (agente não aprova nem decide; propostas de agentes chegam pela Fase 4).
+  'memoria.criar': [obj({ memoria: { tipo: 'objeto', obrigatorio: true }, opcoes: OPCOES_CRIACAO }), (s, a, d) => s.memoria.criar(a, d.memoria, d.opcoes || {})],
+  'memoria.novaVersao': [obj({ ref: REF_MEMORIA, conteudo: { tipo: 'objeto', obrigatorio: true }, opcoes: OPCOES_CRIACAO }), (s, a, d) => s.memoria.novaVersao(a, d.ref, d.conteudo, d.opcoes || {}).then((n) => ({ versao: n }))],
+  'memoria.enviarParaAprovacao': [obj({ ref: REF_MEMORIA, versao: N }), (s, a, d) => s.memoria.enviarParaAprovacao(a, d.ref, d.versao)],
+  'memoria.aprovar': [obj({
+    ref: REF_MEMORIA, versao: N, justificativa: { tipo: 'texto', max: 500 },
+    confirmoSinais: { tipo: 'booleano' }, confirmoSemDadosDeCliente: { tipo: 'booleano' }, confirmacaoConflitos: CONFIRMACAO_CONFLITOS,
+  }), (s, a, d) => s.memoria.aprovarVersao(a, d.ref, d.versao, {
+    justificativa: d.justificativa, confirmoSinais: d.confirmoSinais, confirmoSemDadosDeCliente: d.confirmoSemDadosDeCliente, confirmacaoConflitos: d.confirmacaoConflitos,
+  })],
+  'memoria.avaliarConflitos': [obj({ ref: REF_MEMORIA, versao: N }), (s, a, d) => s.memoria.avaliarConflitos(a, d.ref, d.versao)],
+  'memoria.rejeitar': [obj({ ref: REF_MEMORIA, versao: N, motivo: MOTIVO }), (s, a, d) => s.memoria.rejeitarVersao(a, d.ref, d.versao, d.motivo)],
+  'memoria.pedirRevisao': [obj({ ref: REF_MEMORIA, versao: N, motivo: MOTIVO }), (s, a, d) => s.memoria.pedirRevisao(a, d.ref, d.versao, d.motivo)],
+  'memoria.voltarVersao': [obj({ ref: REF_MEMORIA, versao: N, motivo: { tipo: 'texto', max: 300 }, confirmoSemDadosDeCliente: { tipo: 'booleano' }, confirmacaoConflitos: CONFIRMACAO_CONFLITOS }),
+    (s, a, d) => s.memoria.voltarVersao(a, d.ref, d.versao, { motivo: d.motivo, confirmoSemDadosDeCliente: d.confirmoSemDadosDeCliente, confirmacaoConflitos: d.confirmacaoConflitos })],
+  'memoria.exportarMarkdown': [obj({ ref: REF_MEMORIA, versao: { tipo: 'inteiro', min: 1 } }), (s, a, d) => s.memoria.exportarMarkdown(a, d.ref, d.versao)],
   'memoria.arquivar': [obj({ ref: REF_MEMORIA, motivo: { tipo: 'texto', max: 300 } }), (s, a, d) => s.memoria.arquivar(a, d.ref, d.motivo)],
   'memoria.reativar': [obj({ ref: REF_MEMORIA }), (s, a, d) => s.memoria.reativar(a, d.ref)],
   'memoria.obter': [obj({ ref: REF_MEMORIA }), (s, a, d) => s.memoria.obter(d.ref)],
@@ -105,7 +123,9 @@ const MAPA_CODIGOS = {
 };
 function traduzirErro(e) {
   if (e instanceof ErroLabz && MAPA_CODIGOS[e.codigo]) {
-    return { codigo: MAPA_CODIGOS[e.codigo], mensagem: e.message, detalhes: e.codigo === 'invalido' ? e.detalhes : undefined };
+    // detalhes só onde o Super Admin precisa deles para agir: o que está inválido, a duplicidade/conflito
+    // a decidir (com a assinatura) e o motivo de um bloqueio. Nunca em recusa de acesso.
+    return { codigo: MAPA_CODIGOS[e.codigo], mensagem: e.message, detalhes: ['invalido', 'conflito', 'precondicao'].includes(e.codigo) ? e.detalhes : undefined };
   }
   return { codigo: 'internal', mensagem: 'Erro interno da LABZ AI.' };
 }

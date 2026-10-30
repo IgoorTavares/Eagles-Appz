@@ -124,7 +124,12 @@ test('auditor aponta duplicadas, conflitos de chave e propostas pendentes antiga
   const c = await montarComEmpresas();
   const alvo = { empresaId: c.A.id };
   await memoriaAprovada(c, nova('cliente', alvo, { categoria: 'preferencia', chave: 'fotos', conteudo: 'Fotos sempre com luz natural e fundo claro' }));
-  await memoriaAprovada(c, nova('cliente', alvo, { categoria: 'preferencia', chave: 'fotos', conteudo: 'Fotos sempre com luz natural e fundo claro.' }));
+  const dup = nova('cliente', alvo, { categoria: 'preferencia', chave: 'fotos', conteudo: 'Fotos sempre com luz natural e fundo claro.' });
+  // Fase 3B: aprovar uma duplicata exige decisão explícita do Super Admin
+  const md = await c.memoria.criar(c.ator, dup);
+  await rejeita(() => c.memoria.aprovarVersao(c.ator, md.ref, 1), 'conflito');
+  const av = await c.memoria.avaliarConflitos(c.ator, md.ref, 1);
+  await c.memoria.aprovarVersao(c.ator, md.ref, 1, { confirmacaoConflitos: { assinatura: av.assinatura, justificativa: 'duplicata intencional para testar o auditor' } });
   await c.memoria.criar(c.ator, nova('cliente', alvo, { conteudo: 'Proposta esquecida na fila' }));
   c.relogio.avancarDias(15);
   const r = await c.auditor.auditar('cliente', alvo);

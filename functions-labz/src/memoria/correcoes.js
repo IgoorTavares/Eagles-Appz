@@ -13,33 +13,9 @@ const { garantir } = require('../nucleo/validador');
 const { erro } = require('../nucleo/erros');
 const { novoId, relogioPadrao } = require('../nucleo/ids');
 const { ESQUEMA_CORRECAO, ESCOPO_INFO } = require('../contratos/memoria');
+const { normalizar, similaridade, sinaisDeInjecao, analisarNovoTexto } = require('./verificacoes');
 
-// ---------- texto ----------
-const normalizar = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
-const palavras = (t) => new Set(normalizar(t).split(' ').filter((p) => p.length >= 3));
-function similaridade(a, b) {
-  const A = palavras(a), B = palavras(b);
-  if (!A.size || !B.size) return 0;
-  let comum = 0;
-  A.forEach((p) => { if (B.has(p)) comum++; });
-  return comum / (A.size + B.size - comum);
-}
-
-// Sinais de tentativa de "dar ordens" ao sistema dentro de um texto que vai
-// virar memória (prompt injection). Não bloqueia sozinho: obriga o Super
-// Admin a confirmar que leu antes de aprovar.
-const SINAIS_INJECAO = [
-  /ignore (as|todas as|the|all)? ?(instru|regra|previous|instructions)/i,
-  /desconsidere (as|todas)/i,
-  /(system|sistema) ?prompt/i,
-  /voc[eê] agora [eé]/i,
-  /(revele|mostre|envie).{0,30}(chave|senha|token|segredo|api key)/i,
-  /(aprove|aprovar) (automaticamente|sem)/i,
-  /<\/?(script|system|instructions?)>/i,
-];
-const sinaisDeInjecao = (texto) => SINAIS_INJECAO.filter((r) => r.test(String(texto || ''))).map((r) => r.source);
-
-const LIMIAR_DUPLICIDADE = 0.8;
+// Texto, duplicidade, conflito e sinais de injeção: memoria/verificacoes.js (um lugar só).
 const CATEGORIA_PADRAO = { global: 'preferencia', agente: 'aprendizado', cliente: 'preferencia', desempenho: 'aprendizado' };
 
 // Classificação por regras.
@@ -64,12 +40,7 @@ function criarCorrecoes(deps) {
   const relogio = deps.relogio || relogioPadrao;
 
   async function procurarDuplicidadeEConflito(escopo, alvo, texto, chave) {
-    const vigentes = await registro.vigentes(escopo, alvo);
-    const duplicados = vigentes
-      .map((m) => ({ id: m.id, similaridade: similaridade(texto, m.vigente.conteudo) }))
-      .filter((x) => x.similaridade >= LIMIAR_DUPLICIDADE);
-    const conflitos = chave ? vigentes.filter((m) => m.chave === chave && normalizar(m.vigente.conteudo) !== normalizar(texto)).map((m) => m.id) : [];
-    return { duplicados, conflitos };
+    return analisarNovoTexto(await registro.vigentes(escopo, alvo), texto, chave);
   }
 
   return {
@@ -116,7 +87,9 @@ function criarCorrecoes(deps) {
     },
 
     // Aprovar: cria a memória (ou a nova versão da memória em conflito) já aprovada.
-    // ajustes: { escopo, alvo, categoria, titulo, evidencias, confirmoSinais, substituirConflito, aceitarDuplicado }
+    // ajustes: { escopo, alvo, categoria, titulo, evidencias, confirmoSinais, substituirConflito,
+    //           aceitarDuplicado, confirmoSemDadosDeCliente, confirmacaoConflitos }. A aprovação em
+    // si é do registro, que reavalia duplicidade/conflito na hora (a lista da proposta é só um aviso).
     async aprovar(ator, aprendizadoId, ajustes = {}) {
       exigirAtor(ator);
       const p = await banco.obter(caminhos.aprendizado(aprendizadoId));
@@ -134,16 +107,31 @@ function criarCorrecoes(deps) {
 
       let ref, versao;
       const conflito = escopo === p.escopo && p.conflitos.length ? p.conflitos[0] : null;
-      if (conflito) {
+      if (p.memoriaGerada) {
+        // uma tentativa anterior já gerou a versão e a aprovação foi barrada (ex.: conflito a decidir):
+        // decide sobre ELA, sem criar outra memória repetida
+        ref = p.memoriaGerada.ref;
+        versao = p.memoriaGerada.versao;
+        if ((ajustes.escopo && ajustes.escopo !== ref.escopo) || (ajustes.alvo && JSON.stringify(ajustes.alvo) !== JSON.stringify(ref.alvo))) {
+          throw erro('precondicao', 'Esta proposta já gerou uma versão de memória: decida sobre ela (o escopo e o alvo não mudam mais)', { memoria: ref, versao });
+        }
+      } else if (conflito) {
         if (!ajustes.substituirConflito) throw erro('conflito', 'Conflita com uma memória aprovada: confirme a substituição (vira uma nova versão dela)');
         ref = { escopo, alvo, memoriaId: conflito };
-        versao = await registro.novaVersao(ator, ref, base);
+        versao = await registro.novaVersao(ator, ref, base, { confirmoSemDadosDeCliente: ajustes.confirmoSemDadosDeCliente });
       } else {
-        const criada = await registro.criar(ator, Object.assign({ escopo, alvo, categoria, chave: p.chave || undefined }, base));
+        const criada = await registro.criar(ator, Object.assign({ escopo, alvo, categoria, chave: p.chave || undefined }, base), { confirmoSemDadosDeCliente: ajustes.confirmoSemDadosDeCliente });
         ref = criada.ref;
         versao = criada.ultimaVersao;
       }
-      if (ESCOPO_INFO[escopo].aprovacao) await registro.aprovarVersao(ator, ref, versao);
+      if (!p.memoriaGerada) await banco.atualizar(caminhos.aprendizado(aprendizadoId), { memoriaGerada: { ref, versao } });
+      if (ESCOPO_INFO[ref.escopo].aprovacao) {
+        await registro.aprovarVersao(ator, ref, versao, {
+          justificativa: `Aprendizado ${aprendizadoId} aprovado`,
+          confirmoSinais: ajustes.confirmoSinais === true, confirmoSemDadosDeCliente: ajustes.confirmoSemDadosDeCliente === true,
+          confirmacaoConflitos: ajustes.confirmacaoConflitos,
+        });
+      }
       await banco.atualizar(caminhos.aprendizado(aprendizadoId), { status: 'aprovado', aprovadoPor: ator.uid, aprovadoEm: relogio(), memoria: ref, versao });
       await auditoria.registrar('aprendizado.aprovado', ator, caminhos.aprendizado(aprendizadoId), { memoria: ref.memoriaId, versao });
       return { ref, versao };

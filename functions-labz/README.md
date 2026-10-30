@@ -85,24 +85,40 @@ functions-labz/
 4. Criar os segredos (`firebase functions:secrets:set ...`).
 5. Acrescentar ao `firebase.json` o codebase `{ "source": "functions-labz", "codebase": "labz" }` e publicar só ele.
 
-## Memory Engine — contratos (Fase 3A)
+## Memory Engine (Fases 3A e 3B)
 - **Fonte oficial: Firestore.** Documento base em `caminhos.memoria(...)` e versões imutáveis em `{base}/versoes/{n}`.
   `ESQUEMA_DOC_MEMORIA`/`ESQUEMA_DOC_VERSAO` + `conferirRegistroMemoria`/`conferirVersaoMemoria` (`src/contratos/memoria.js`).
-  O Markdown é só derivado (`CONTRATO_MARKDOWN`, indisponível até a 3B).
-- **Estados (D2):** versão `rascunho` (DRAFT), `pendente` (PENDING_REVIEW), `precisa-revisao` (NEEDS_REVISION), `aprovada` (APPROVED),
-  `rejeitada` (REJECTED), `substituida` (SUPERSEDED); memória `pendente`/`ativa`/`arquivada`. `rascunho` e `precisa-revisao`
-  são **reservados** (nenhum serviço grava ainda). Transições em `TRANSICOES_VERSAO`; o que vale no contexto: `memoriaVigente`.
-- **Escopo e isolamento:** `alvoDoEscopo` (uma só implementação, no contrato) exige o alvo exato; o caminho sai do alvo validado.
-- **Busca e recuperação** (`src/contratos/recuperacao.js`): `validarConsultaMemoria` (status fixo `ativa`, coleção pelo alvo),
-  `validarConsultaBanco` (sempre com limite; até 30 valores em `in`/`array-contains-any`), `CRITERIOS_RANKING`, `ESQUEMA_FONTE`
-  (proveniência por id e versão), `ESQUEMA_PEDIDO_CONTEXTO` (o Context Builder recusa pedidos fora dele) e
-  `conferirContextoMontado`. Busca por metadados e textual: implementação na 3C. **Busca semântica: indisponível** (`BUSCA_SEMANTICA`,
-  também informada em todo contexto montado).
-- **Agentes:** `perfilMemoria(agente)` (`src/contratos/agente.js`) deriva do catálogo o que cada um dos 8 lê e propõe; nenhum aprova;
-  memória recuperada é dado. Integração operacional: 3D.
-- **Auditoria:** `EVENTOS_MEMORIA` (ativos e reservados); os eventos guardam ids e versões, nunca o conteúdo.
+- **Ciclo da versão (3B):** `rascunho` (DRAFT) → `pendente` (PENDING_REVIEW) → `aprovada` (APPROVED) | `rejeitada` (REJECTED, com motivo)
+  | `precisa-revisao` (NEEDS_REVISION, com motivo; a correção é uma versão nova); a aprovada vira `substituida` quando outra é aprovada.
+  Memória: `pendente` → `ativa` ⇄ `arquivada` (ARCHIVED). Proposta de agente nasce em rascunho. Só entra no contexto a versão
+  aprovada vigente de uma memória `ativa` (`memoriaVigente`).
+- **Aprovação:** um lugar só (`src/memoria/registro.js`; as correções usam ele). Exige o ator do Super Admin (`exigirSuperAdmin`
+  na API); agente nunca aprova, rejeita, pede revisão nem volta versão. Texto com sinal de instrução escondida só é aprovado com
+  `confirmoSinais`. Toda decisão vai para `labz_eventos` (sem o conteúdo).
+- **Versões:** cada versão guarda `baseVersao` (a vigente quando foi criada); aprovar uma versão criada sobre uma vigente antiga
+  recusa com "conflito". Rollback = versão nova já aprovada (`origem: rollback, versaoDe`), nada é apagado.
+- **Origem:** tarefa/correção/aprendizado citados precisam existir e ser da mesma empresa (e da mesma tarefa).
+- **Trava da memória Global (D3)** (`src/memoria/protecao-global.js`), na criação, nova versão, aprovação e rollback: recusa texto
+  com nome de empresa da LABZ AI ou do tenant/cliente do CRM vinculado, e-mail, telefone, CPF/CNPJ, endereço web ou valor em R$;
+  origem de empresa exige `confirmoSemDadosDeCliente`. Problema achado na aprovação devolve a versão para revisão. Filtros não
+  garantem sozinhos: a aprovação humana continua sendo a última barreira.
+- **Markdown** (`src/memoria/markdown.js`): gerado na hora a partir de UMA versão aprovada/substituída, determinístico, cabeçalho
+  YAML (valores em JSON) + `sha256` do conteúdo; o conteúdo vai num bloco literal. Não é gravado em lugar nenhum. Importação: não existe.
+- **Verificações** (`src/memoria/verificacoes.js`): similaridade, duplicidade, conflito por chave e sinais de injeção (usadas pelo
+  registro, pelas correções e pelo auditor).
+- **Duplicidade e conflito (decisão do Igor):** a proposta é registrada (com `alertas`), mas **aprovar** (ou voltar versão) com
+  memória vigente duplicada ou com a mesma chave fica **bloqueado** ("conflito", com `motivo: decisao-necessaria`, os itens e uma
+  `assinatura`). O Super Admin vê a situação com `memoria.avaliarConflitos` e aprova mandando
+  `confirmacaoConflitos: { assinatura, justificativa }`. A assinatura (sha256) prende a decisão à proposta (memória, versão,
+  conteúdo) e a cada memória envolvida com a versão vigente dela: se algo mudar, a decisão fica desatualizada e é preciso avaliar
+  de novo. A reavaliação acontece DENTRO da transação da aprovação (o adaptador do Firestore lê a coleção com `tx.get`; o banco de
+  teste faz uma transação de cada vez), então duas aprovações simultâneas não passam juntas. A decisão fica na versão
+  (`confirmacoes.conflitos`) e na auditoria; tentativas barradas geram `memoria.conflito_bloqueado`. Agente não decide.
+- **Busca e recuperação** (`src/contratos/recuperacao.js`): contratos prontos; busca por metadados e textual na 3C.
+  **Busca semântica: indisponível** (`BUSCA_SEMANTICA`, também informada em todo contexto montado).
+- **Agentes:** `perfilMemoria(agente)` deriva do catálogo o que cada um dos 8 lê e propõe; nenhum aprova. Integração operacional: 3D.
 
 ## O que falta (fases seguintes)
-- Fase 3B–3E: estados novos em uso, Markdown, índices e busca textual, prioridades dos agentes (D4), segurança e simulador.
+- Fase 3C–3E: índices e busca textual, prioridades dos agentes (D4), segurança final e simulador.
 - Fase 4: motor de orquestração (trabalhador da fila, planner, quality gate, custos).
 - Fases 5–8: conteúdo das skills, provedores de IA, interface e integrações.

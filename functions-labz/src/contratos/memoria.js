@@ -33,7 +33,7 @@ const DOCUMENTOS_CLIENTE = {
 };
 
 const STATUS_MEMORIA = ['pendente', 'ativa', 'arquivada'];
-const STATUS_VERSAO = ['pendente', 'aprovada', 'rejeitada', 'substituida'];
+const STATUS_VERSAO = ['rascunho', 'pendente', 'precisa-revisao', 'aprovada', 'rejeitada', 'substituida'];
 const ORIGENS = ['manual', 'correcao', 'importacao', 'tarefa', 'desempenho', 'rollback'];
 
 const ESQUEMA_ORIGEM = {
@@ -120,12 +120,12 @@ function alvoDoEscopo(escopo, alvo = {}) {
 }
 
 // Estados (D2). O valor gravado no banco é o nome em português; "nome" é a
-// referência em inglês mostrada na API. ativo: false = estado RESERVADO:
-// faz parte do contrato, mas nenhum serviço grava esse valor ainda (Fase 3B).
+// referência em inglês mostrada na API. ativo: false = estado RESERVADO
+// (nenhum serviço grava esse valor). Desde a Fase 3B todos estão em uso.
 const ESTADOS_VERSAO = Object.freeze({
-  rascunho: { nome: 'DRAFT', ativo: false, entraNoContexto: false },
+  rascunho: { nome: 'DRAFT', ativo: true, entraNoContexto: false },
   pendente: { nome: 'PENDING_REVIEW', ativo: true, entraNoContexto: false },
-  'precisa-revisao': { nome: 'NEEDS_REVISION', ativo: false, entraNoContexto: false },
+  'precisa-revisao': { nome: 'NEEDS_REVISION', ativo: true, entraNoContexto: false },
   aprovada: { nome: 'APPROVED', ativo: true, entraNoContexto: true }, // só a versão vigente
   rejeitada: { nome: 'REJECTED', ativo: true, entraNoContexto: false },
   substituida: { nome: 'SUPERSEDED', ativo: true, entraNoContexto: false },
@@ -166,10 +166,11 @@ function memoriaVigente(m, agora) {
 
 // Modelo canônico: o Firestore é a fonte oficial (D1). Documento base em
 // caminhos.memoria(...) e versões imutáveis em {base}/versoes/{n}.
-const ESQUEMA_APROVACAO = {
-  tipo: 'objeto', nulo: true, extras: false,
-  campos: { por: { tipo: 'texto', obrigatorio: true }, em: { tipo: 'texto', obrigatorio: true } },
-};
+const ESQUEMA_DECISAO = (motivoObrigatorio) => ({
+  tipo: 'objeto', extras: false,
+  campos: { por: { tipo: 'texto', obrigatorio: true }, em: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', obrigatorio: motivoObrigatorio } },
+});
+const ESQUEMA_APROVACAO = Object.assign(ESQUEMA_DECISAO(false), { nulo: true });
 const ESQUEMA_VIGENTE = {
   tipo: 'objeto', obrigatorio: true, nulo: true, extras: false,
   campos: {
@@ -215,7 +216,31 @@ const ESQUEMA_DOC_VERSAO = {
     criadoEm: { tipo: 'texto', obrigatorio: true },
     criadoPor: { tipo: 'texto', obrigatorio: true },
     aprovacao: Object.assign({}, ESQUEMA_APROVACAO, { obrigatorio: true }),
-    rejeicao: { tipo: 'objeto', extras: false, campos: { por: { tipo: 'texto', obrigatorio: true }, em: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto' } } },
+    rejeicao: ESQUEMA_DECISAO(false), // registros antigos podem não ter motivo
+    // Fase 3B (campos novos; registros antigos não têm)
+    baseVersao: { tipo: 'inteiro', nulo: true, min: 1 }, // versão vigente quando esta foi criada
+    envio: ESQUEMA_DECISAO(false), // rascunho → pendente
+    revisao: ESQUEMA_DECISAO(true), // pendente → precisa-revisao (com o motivo)
+    sinais: { tipo: 'lista', itens: { tipo: 'texto' } }, // sinais de instrução escondida no texto
+    alertas: {
+      tipo: 'objeto', extras: false,
+      campos: { duplicados: { tipo: 'lista', obrigatorio: true }, conflitos: { tipo: 'lista', obrigatorio: true } },
+    },
+    confirmacoes: {
+      tipo: 'objeto', extras: false,
+      campos: {
+        semDadosDeCliente: ESQUEMA_DECISAO(false), sinais: ESQUEMA_DECISAO(false),
+        // decisão do Super Admin sobre duplicidade/conflito, presa à assinatura da situação
+        conflitos: {
+          tipo: 'objeto', extras: false,
+          campos: {
+            por: { tipo: 'texto', obrigatorio: true }, em: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', obrigatorio: true, min: 3 },
+            assinatura: { tipo: 'texto', obrigatorio: true, padrao: /^[0-9a-f]{64}$/ },
+            itens: { tipo: 'lista', obrigatorio: true, min: 1 },
+          },
+        },
+      },
+    },
     substituidaEm: { tipo: 'texto' },
   },
 };
@@ -239,19 +264,26 @@ function conferirVersaoMemoria(v) {
   if (['aprovada', 'substituida'].includes(v.status) && !v.aprovacao) erros.push(`versão ${v.status} sem registro de aprovação`);
   if (['pendente', 'rascunho'].includes(v.status) && v.aprovacao) erros.push(`versão ${v.status} não pode ter aprovação`);
   if (v.status === 'rejeitada' && !v.rejeicao) erros.push('versão rejeitada sem registro de rejeição');
+  if (v.status === 'precisa-revisao' && !v.revisao) erros.push('versão em revisão sem o pedido de revisão');
+  if (v.baseVersao && v.baseVersao >= v.n) erros.push('baseVersao precisa ser anterior à própria versão');
+  if (v.origem && v.origem.tipo === 'rollback' && !v.origem.versaoDe) erros.push('rollback sem a versão de origem');
   return erros;
 }
 
-// Representação Markdown: DERIVADA de uma versão gravada (D1). A geração e a
-// importação ficam para a Fase 3B; aqui fica só o contrato.
+// Representação Markdown: DERIVADA de uma versão APROVADA gravada (D1).
+// Gerada sob demanda (memoria/markdown.js) e devolvida ao Super Admin; não é
+// gravada em lugar nenhum (nem no repositório público). A importação de
+// Markdown não está implementada.
 const CONTRATO_MARKDOWN = Object.freeze({
   fonteOficial: 'firestore',
   derivado: true,
-  disponivel: false,
+  disponivel: true,
   etapa: '3B',
-  geradoDe: 'uma versão gravada (nunca do rascunho em edição)',
-  importacao: 'cria uma versão pendente; nunca grava por cima de nada',
-  cabecalho: Object.freeze(['id', 'escopo', 'alvo', 'categoria', 'chave', 'versao', 'status', 'origem', 'aprovadoPor', 'aprovadoEm']),
+  formato: 'markdown com cabeçalho YAML (valores em JSON, que é YAML válido)',
+  geradoDe: 'uma versão aprovada ou substituída (nunca rascunho, pendente, em revisão ou rejeitada)',
+  persistencia: 'nenhuma: gerado na hora e devolvido',
+  importacao: 'não implementada (quando existir, cria uma versão pendente; nunca grava por cima)',
+  cabecalho: Object.freeze(['fonte', 'confianca', 'id', 'escopo', 'alvo', 'categoria', 'chave', 'titulo', 'tags', 'versao', 'status', 'estadoMemoria', 'origem', 'criadoPor', 'criadoEm', 'aprovadoPor', 'aprovadoEm', 'sha256']),
 });
 
 // Auditoria: eventos que os serviços gravam HOJE e os reservados (3B a 3D).
@@ -260,12 +292,11 @@ const EVENTOS_MEMORIA = Object.freeze({
   ativos: Object.freeze([
     'memoria.criada', 'memoria.versao_criada', 'memoria.versao_aprovada', 'memoria.versao_rejeitada',
     'memoria.rollback', 'memoria.arquivada', 'memoria.reativada',
+    'memoria.enviada_para_revisao', 'memoria.revisao_pedida', 'memoria.exportada_markdown', 'memoria.trava_global',
+    'memoria.conflito_bloqueado',
     'correcao.registrada', 'aprendizado.proposto', 'aprendizado.aprovado', 'aprendizado.rejeitado',
   ]),
-  reservados: Object.freeze([
-    'memoria.enviada_para_revisao', 'memoria.revisao_pedida',
-    'memoria.exportada_markdown', 'memoria.importada_markdown', 'memoria.contexto_montado',
-  ]),
+  reservados: Object.freeze(['memoria.importada_markdown', 'memoria.contexto_montado']),
 });
 
 module.exports = {

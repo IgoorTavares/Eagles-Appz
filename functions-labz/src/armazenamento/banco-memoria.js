@@ -13,6 +13,7 @@ const copia = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)
 
 function criarBancoMemoria() {
   let docs = new Map();
+  let fila = Promise.resolve(); // transações em fila
 
   const api = {
     async obter(caminho) { return docs.has(caminho) ? copia(docs.get(caminho)) : null; },
@@ -33,9 +34,16 @@ function criarBancoMemoria() {
       }
       return out.sort((a, b) => a.id.localeCompare(b.id));
     },
+    // Uma transação de cada vez (como o Firestore, que isola as transações):
+    // uma segunda espera a primeira terminar. Não chame transacao() de dentro
+    // de outra transação.
     async transacao(fn) {
-      const antes = new Map(docs);
-      try { return await fn(api); } catch (e) { docs = antes; throw e; }
+      const vez = fila.then(async () => {
+        const antes = new Map(docs);
+        try { return await fn(api); } catch (e) { docs = antes; throw e; }
+      });
+      fila = vez.catch(() => {});
+      return vez;
     },
     // só para testes e diagnóstico
     _caminhos: () => [...docs.keys()].sort(),

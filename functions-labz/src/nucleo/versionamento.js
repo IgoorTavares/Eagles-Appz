@@ -16,7 +16,9 @@ const { transicaoVersaoPermitida } = require('../contratos/memoria');
 const versaoPath = (base, n) => `${base}/versoes/${n}`;
 const motivoCurto = (m) => String(m || '').slice(0, 500);
 
-function criarVersionamento({ relogio, camposVigentes }) {
+// aoTornarVigente(base, versao) (opcional): campos extras gravados no documento
+// base JUNTO com a nova vigente, na mesma transação (ex.: o índice de busca).
+function criarVersionamento({ relogio, camposVigentes, aoTornarVigente }) {
   const copiaVigente = (v) => {
     const out = { versao: v.n };
     camposVigentes.forEach((k) => { if (v[k] !== undefined) out[k] = v[k]; });
@@ -41,7 +43,8 @@ function criarVersionamento({ relogio, camposVigentes }) {
 
   async function tornarVigente(t, base, b, v, ator) {
     if (b.versaoVigente) await t.atualizar(versaoPath(base, b.versaoVigente), { status: 'substituida', substituidaEm: relogio() });
-    await t.atualizar(base, { status: b.status === 'arquivada' ? 'arquivada' : 'ativa', versaoVigente: v.n, vigente: copiaVigente(v), atualizadoEm: relogio(), atualizadoPor: ator.uid });
+    const extras = aoTornarVigente ? aoTornarVigente(b, v) : {};
+    await t.atualizar(base, Object.assign({ status: b.status === 'arquivada' ? 'arquivada' : 'ativa', versaoVigente: v.n, vigente: copiaVigente(v), atualizadoEm: relogio(), atualizadoPor: ator.uid }, extras));
   }
 
   return {

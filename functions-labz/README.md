@@ -114,11 +114,25 @@ functions-labz/
   de novo. A reavaliação acontece DENTRO da transação da aprovação (o adaptador do Firestore lê a coleção com `tx.get`; o banco de
   teste faz uma transação de cada vez), então duas aprovações simultâneas não passam juntas. A decisão fica na versão
   (`confirmacoes.conflitos`) e na auditoria; tentativas barradas geram `memoria.conflito_bloqueado`. Agente não decide.
-- **Busca e recuperação** (`src/contratos/recuperacao.js`): contratos prontos; busca por metadados e textual na 3C.
-  **Busca semântica: indisponível** (`BUSCA_SEMANTICA`, também informada em todo contexto montado).
+- **Busca e recuperação (3C)** (`src/memoria/recuperador.js`, `indice.js`, `ranqueador.js`):
+  - **Índice:** na mesma transação que torna uma versão vigente (aprovação, rollback, tarefa), o documento da memória ganha
+    `termos` (até 40: sem acento, sem palavras vazias, plural simples), `aprovadaEm` e `indiceVersao`. Pendente/rascunho/revisão/
+    rejeitada nunca indexam; arquivar troca o status (a busca filtra). `memoria.reindexar` recalcula registros sem índice, por páginas.
+  - **Consultas** (`banco.consultar`, nos dois bancos, com as restrições do Firestore e limite obrigatório): sempre na coleção do
+    alvo (nada de collectionGroup), com `status == 'ativa'` NA consulta, `termos array-contains-any` (até 30), `categoria`/`chave` ==,
+    `orderBy aprovadaEm desc`, até 50 candidatos; metadados paginam com cursor (`depoisDe`). Ranking determinístico (cobertura 0,45,
+    categoria 0,25, evidência 0,10, atualidade 0,10, escopo 0,10; desempate versão desc → id), com as notas por critério.
+  - **Contexto:** por escopo, até 50 pelas palavras do briefing + até 20 recentes; evento `memoria.contexto_montado` com ids,
+    versões e métricas (sem conteúdo). Busca pela API: `memoria.buscar` (evento `memoria.busca_realizada` sem o texto).
+  - **Paginação:** `memoria.listar`, `memoria.auditar` e `correcoes.pendentes` (até 100 por página); a trava da Global lê as
+    empresas por páginas (acima de 2.000, bloqueia).
+  - **Aprovação (Fase 3B) não mudou:** a verificação de duplicidade/conflito continua lendo a coleção DENTRO da transação.
+  - **Índices compostos:** `INDICES_NECESSARIOS` (25, formato do `firestore.indexes.json`), conferidos por teste e **não
+    publicados** (o simulador não exige índices; o Firebase real exige).
+  **Busca semântica: indisponível** (`BUSCA_SEMANTICA`); a busca por palavras-chave não é semântica.
 - **Agentes:** `perfilMemoria(agente)` deriva do catálogo o que cada um dos 8 lê e propõe; nenhum aprova. Integração operacional: 3D.
 
 ## O que falta (fases seguintes)
-- Fase 3C–3E: índices e busca textual, prioridades dos agentes (D4), segurança final e simulador.
+- Fase 3D–3E: prioridades dos agentes (D4), segurança final e simulador; publicar os índices compostos (com autorização).
 - Fase 4: motor de orquestração (trabalhador da fila, planner, quality gate, custos).
 - Fases 5–8: conteúdo das skills, provedores de IA, interface e integrações.

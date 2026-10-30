@@ -8,6 +8,7 @@
 // numa "camada" e só são enviadas no fim; as leituras enxergam essa camada
 // (lê o que acabou de gravar). Se a função lançar erro, nada é enviado.
 const { erro } = require('../nucleo/erros');
+const { validarConsultaBanco } = require('../contratos/recuperacao');
 
 const copia = (v) => (v === undefined || v === null ? v : JSON.parse(JSON.stringify(v)));
 const naoEncontrado = (e) => e && (e.code === 5 || /NOT_FOUND|No document to update/i.test(String(e.message)));
@@ -20,6 +21,24 @@ function criarBancoFirestore(db) {
     const out = snap.docs.map((d) => Object.assign({ id: d.id }, d.data())).filter((x) => !filtro || filtro(x));
     return out.sort((a, b) => a.id.localeCompare(b.id));
   }
+
+  // Consulta LIMITADA (Fase 3C): where/orderBy/limit do Admin SDK, validada
+  // pelo mesmo contrato do banco de testes. "id" ordena pelo id do documento.
+  // leitor: o db (fora de transação) ou a transação (tx.get).
+  async function consultarCom(leitor, colecao, opcoes) {
+    validarConsultaBanco(colecao, opcoes);
+    let q = db.collection(colecao);
+    (opcoes.onde || []).forEach((c) => { q = q.where(c.campo, c.op, c.valor); });
+    if (opcoes.ordenar) q = q.orderBy(opcoes.ordenar.campo === 'id' ? '__name__' : opcoes.ordenar.campo, opcoes.ordenar.direcao);
+    if (opcoes.depoisDe) {
+      const cursor = await leitor.get(ref(`${colecao}/${opcoes.depoisDe}`));
+      if (!cursor.exists) throw erro('invalido', 'Cursor de paginação inválido');
+      q = q.startAfter(cursor);
+    }
+    const snap = await leitor.get(q.limit(opcoes.limite));
+    return snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+  }
+  const leitorDb = { get: (alvo) => alvo.get() };
 
   const api = {
     async obter(caminho) {
@@ -34,6 +53,7 @@ function criarBancoFirestore(db) {
       }
     },
     listar,
+    consultar: (colecao, opcoes) => consultarCom(leitorDb, colecao, opcoes),
 
     async transacao(fn) {
       return db.runTransaction(async (tx) => {
@@ -62,6 +82,8 @@ function criarBancoFirestore(db) {
             });
             return [...mapa.values()].filter((x) => !filtro || filtro(x)).sort((a, b) => a.id.localeCompare(b.id));
           },
+          // consulta limitada dentro da transação (sem a camada: usada antes de gravar)
+          consultar: (colecao, opcoes) => consultarCom(tx, colecao, opcoes),
         };
         const resultado = await fn(t);
         camada.forEach((doc, caminho) => tx.set(ref(caminho), doc));

@@ -20,11 +20,15 @@ const LIMITES_BUSCA = Object.freeze({
   filaRevisao: 100,
   paginaAuditor: 200,
   caracteresTexto: 2000,
+  caracteresPorResultado: 1000, // trecho do conteúdo devolvido por resultado da busca
+  paginaListagem: 100,
+  empresasPorPagina: 200,
+  paginasDeEmpresas: 10, // trava da Global: acima de 2.000 empresas, bloqueia (conservador)
 });
 
 const MODOS_BUSCA = Object.freeze({
-  metadados: Object.freeze({ disponivel: false, etapa: '3C', descricao: 'escopo + alvo + categoria/chave/tags' }),
-  textual: Object.freeze({ disponivel: false, etapa: '3C', descricao: 'termos gravados na aprovação + ranking determinístico' }),
+  metadados: Object.freeze({ disponivel: true, etapa: '3C', descricao: 'escopo + alvo + categoria/chave/tags, ordem por aprovação, paginada' }),
+  textual: Object.freeze({ disponivel: true, etapa: '3C', descricao: 'palavras-chave (termos gravados na aprovação) + ranking determinístico; NÃO é busca semântica' }),
   semantica: Object.freeze({ disponivel: false, etapa: null, descricao: 'indisponível: não há provedor de embeddings configurado' }),
 });
 const BUSCA_SEMANTICA = MODOS_BUSCA.semantica;
@@ -46,6 +50,7 @@ const ESQUEMA_CONSULTA_MEMORIA = {
       },
     },
     limite: { tipo: 'inteiro', min: 1, max: LIMITES_BUSCA.resultadosPorEscopo },
+    depoisDe: { tipo: 'texto', padrao: /^[A-Za-z0-9_-]{1,80}$/ }, // paginação (só por metadados)
   },
 };
 
@@ -55,10 +60,12 @@ function validarConsultaMemoria(pedido) {
   const alvo = alvoDoEscopo(pedido.escopo, pedido.alvo);
   if (pedido.modo === 'semantica') throw erro('precondicao', 'Busca semântica indisponível', { semantica: BUSCA_SEMANTICA });
   if (pedido.modo === 'textual' && !String(pedido.texto || '').trim()) throw erro('invalido', 'Busca textual precisa de texto');
+  if (pedido.modo === 'textual' && pedido.depoisDe) throw erro('invalido', 'A busca por palavras devolve os melhores resultados de uma vez; a paginação é só por metadados');
   return Object.freeze({
     escopo: pedido.escopo, alvo, modo: pedido.modo,
     texto: pedido.texto || '', filtros: Object.assign({}, pedido.filtros || {}),
     limite: pedido.limite || LIMITES_BUSCA.resultadosPorEscopo,
+    depoisDe: pedido.depoisDe || null,
     status: 'ativa', // fixo: pendentes, rascunhos e arquivadas nunca são encontradas
     colecao: caminhos.colecaoMemorias(pedido.escopo, alvo),
   });

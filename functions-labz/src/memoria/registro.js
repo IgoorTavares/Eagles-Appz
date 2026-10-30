@@ -25,6 +25,9 @@ const { obterAgente } = require('../agentes/catalogo');
 const { sinaisDeInjecao, analisarNovoTexto, assinaturaConflitos } = require('./verificacoes');
 const { criarProtecaoGlobal } = require('./protecao-global');
 const { gerarMarkdown } = require('./markdown');
+const { camposDeIndice, INDICE_VERSAO } = require('./indice');
+const { criarRecuperador } = require('./recuperador');
+const { LIMITES_BUSCA } = require('../contratos/recuperacao');
 
 const CAMPOS_CONTEUDO = ['titulo', 'conteudo', 'tags', 'evidencias'];
 const DIAS_TAREFA = 30;
@@ -35,8 +38,10 @@ const DIAS_TAREFA = 30;
 function criarRegistroMemoria(deps) {
   const { banco, auditoria, empresas } = deps;
   const relogio = deps.relogio || relogioPadrao;
-  const ver = criarVersionamento({ relogio, camposVigentes: CAMPOS_CONTEUDO });
+  // o índice de busca é gravado junto com a vigente (mesma transação)
+  const ver = criarVersionamento({ relogio, camposVigentes: CAMPOS_CONTEUDO, aoTornarVigente: (b, v) => camposDeIndice(b, v, relogio()) });
   const protecao = criarProtecaoGlobal({ banco });
+  const recuperador = deps.recuperador || criarRecuperador({ banco, relogio });
 
   async function conferirAlvo(escopo, alvo) {
     if (escopo === 'agente' && !obterAgente(alvo.agenteId)) throw erro('nao-encontrado', 'Agente desconhecido');
@@ -82,7 +87,9 @@ function criarRegistroMemoria(deps) {
     const sinais = sinaisDeInjecao([versao.titulo, versao.conteudo, ...versao.tags].join('\n'));
     if (sinais.length) versao.sinais = sinais;
     if (ESCOPO_INFO[escopo].aprovacao) {
-      const a = analisarNovoTexto(await vigentesDe(escopo, alvo), versao.conteudo, chave, { ignorarId });
+      // aviso (consulta limitada); a aprovação confere tudo de novo, dentro da transação
+      const { memorias } = await recuperador.parecidas(escopo, alvo, `${versao.titulo || ''} ${versao.conteudo}`, chave);
+      const a = analisarNovoTexto(memorias, versao.conteudo, chave, { ignorarId });
       versao.alertas = { duplicados: a.duplicados.map((d) => ({ id: d.id, similaridade: Math.round(d.similaridade * 100) / 100 })), conflitos: a.conflitos };
     }
     return versao;
@@ -96,10 +103,22 @@ function criarRegistroMemoria(deps) {
   }
   const recusaTrava = (r) => erro('precondicao', 'Memória Global bloqueada: ela precisa ser genérica e sem dados de cliente', { conteudo: r.conteudo, confirmacao: r.confirmacao });
 
+  // As mais recentes que valem como regra (consulta limitada: até 50).
   async function vigentesDe(escopo, alvo) {
     const agora = relogio();
-    const lista = await banco.listar(caminhos.colecaoMemorias(escopo, alvoDoEscopo(escopo, alvo)));
+    const lista = await banco.consultar(caminhos.colecaoMemorias(escopo, alvoDoEscopo(escopo, alvo)), {
+      onde: [{ campo: 'status', op: '==', valor: 'ativa' }], ordenar: { campo: 'aprovadaEm', direcao: 'desc' }, limite: LIMITES_BUSCA.resultadosPorEscopo,
+    });
     return lista.filter((m) => memoriaVigente(m, agora));
+  }
+
+  // Uma página da coleção, por id (até 100), com filtro opcional de status no banco.
+  async function listarPagina(escopo, alvo, { status, depoisDe, limite } = {}) {
+    const lim = Math.min(Math.max(1, limite || LIMITES_BUSCA.paginaListagem), LIMITES_BUSCA.paginaListagem);
+    const opcoes = { onde: status ? [{ campo: 'status', op: '==', valor: status }] : [], ordenar: { campo: 'id', direcao: 'asc' }, limite: lim };
+    if (depoisDe) opcoes.depoisDe = depoisDe;
+    const itens = await banco.consultar(caminhos.colecaoMemorias(escopo, alvoDoEscopo(escopo, alvo)), opcoes);
+    return { itens, proximo: itens.length === lim ? itens[itens.length - 1].id : null };
   }
 
   const base = (ref) => caminhos.memoria(ref.escopo, alvoDoEscopo(ref.escopo, ref.alvo), ref.memoriaId);
@@ -389,12 +408,38 @@ function criarRegistroMemoria(deps) {
     obter: ler,
     versoes: (ref) => ver.listarVersoes(banco, base(ref)),
 
+    // Primeira página (até 100, por id); filtro opcional aplicado nessa página.
     async listar(escopo, alvo, filtro) {
-      return banco.listar(caminhos.colecaoMemorias(escopo, alvoDoEscopo(escopo, alvo)), filtro);
+      const { itens } = await listarPagina(escopo, alvo);
+      return filtro ? itens.filter(filtro) : itens;
     },
+    listarPagina,
 
-    // Só o que vale como regra: ativa, com versão aprovada e (tarefa) não expirada.
+    // Só o que vale como regra: ativa, com versão aprovada e (tarefa) não
+    // expirada — as 50 aprovadas mais recentes (para tudo, use a busca).
     vigentes: vigentesDe,
+
+    // Manutenção do índice (uma página de até 100 por chamada): recalcula os
+    // termos de quem está sem índice ou com versão antiga dele, cada uma na
+    // própria transação, a partir da versão vigente gravada.
+    async reindexar(ator, escopo, alvo, { depoisDe } = {}) {
+      exigirAtor(ator);
+      const pagina = await listarPagina(escopo, alvo, { depoisDe });
+      let atualizadas = 0;
+      for (const m of pagina.itens) {
+        if (!m.vigente || m.indiceVersao === INDICE_VERSAO) continue;
+        const ref = { escopo, alvo: alvoDoEscopo(escopo, alvo), memoriaId: m.id };
+        await banco.transacao(async (t) => {
+          const atual = await t.obter(base(ref));
+          if (!atual || !atual.vigente || atual.indiceVersao === INDICE_VERSAO) return;
+          const v = await t.obter(`${base(ref)}/versoes/${atual.versaoVigente}`);
+          await t.atualizar(base(ref), camposDeIndice(atual, v || Object.assign({ n: atual.versaoVigente }, atual.vigente), atual.atualizadoEm));
+          atualizadas++;
+        });
+      }
+      await auditoria.registrar('memoria.reindexada', ator, caminhos.colecaoMemorias(escopo, alvoDoEscopo(escopo, alvo)), { lidas: pagina.itens.length, atualizadas });
+      return { lidas: pagina.itens.length, atualizadas, proximo: pagina.proximo };
+    },
   };
 }
 

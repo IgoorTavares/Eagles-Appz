@@ -14,6 +14,8 @@ const { erro } = require('../nucleo/erros');
 const { novoId, relogioPadrao } = require('../nucleo/ids');
 const { ESQUEMA_CORRECAO, ESCOPO_INFO } = require('../contratos/memoria');
 const { normalizar, similaridade, sinaisDeInjecao, analisarNovoTexto } = require('./verificacoes');
+const { criarRecuperador } = require('./recuperador');
+const { LIMITES_BUSCA } = require('../contratos/recuperacao');
 
 // Texto, duplicidade, conflito e sinais de injeção: memoria/verificacoes.js (um lugar só).
 const CATEGORIA_PADRAO = { global: 'preferencia', agente: 'aprendizado', cliente: 'preferencia', desempenho: 'aprendizado' };
@@ -37,10 +39,13 @@ function classificar(c) {
 // deps: { banco, auditoria, registro (memória), relogio? }
 function criarCorrecoes(deps) {
   const { banco, auditoria, registro } = deps;
+  const recuperador = deps.recuperador || criarRecuperador({ banco, relogio: deps.relogio || relogioPadrao });
   const relogio = deps.relogio || relogioPadrao;
 
   async function procurarDuplicidadeEConflito(escopo, alvo, texto, chave) {
-    return analisarNovoTexto(await registro.vigentes(escopo, alvo), texto, chave);
+    // aviso na proposta (consulta limitada); a aprovação confere tudo de novo
+    const { memorias } = await recuperador.parecidas(escopo, alvo, texto, chave);
+    return analisarNovoTexto(memorias, texto, chave);
   }
 
   return {
@@ -146,7 +151,14 @@ function criarCorrecoes(deps) {
       await auditoria.registrar('aprendizado.rejeitado', ator, caminhos.aprendizado(aprendizadoId));
     },
 
-    pendentes: () => banco.listar(caminhos.colecoes.aprendizados, (x) => x.status === 'pendente'),
+    // Fila de revisão das propostas, das mais antigas para as mais novas (até 100 por página).
+    async pendentesPagina({ depoisDe } = {}) {
+      const opcoes = { onde: [{ campo: 'status', op: '==', valor: 'pendente' }], ordenar: { campo: 'criadaEm', direcao: 'asc' }, limite: LIMITES_BUSCA.filaRevisao };
+      if (depoisDe) opcoes.depoisDe = depoisDe;
+      const itens = await banco.consultar(caminhos.colecoes.aprendizados, opcoes);
+      return { itens, proximo: itens.length === LIMITES_BUSCA.filaRevisao ? itens[itens.length - 1].id : null };
+    },
+    async pendentes() { return (await this.pendentesPagina()).itens; },
   };
 }
 

@@ -7,12 +7,18 @@
 //  - só memórias ATIVAS com versão APROVADA (pendentes nunca viram regra);
 //  - só os escopos que o contrato do agente pode ler;
 //  - só a empresa da tarefa (isolamento pelo caminho + conferência do alvo);
-//  - não carrega tudo: escolhe por relevância e respeita um orçamento de caracteres;
-//  - toda informação usada sai com a origem (id e versão), para auditoria.
+//  - não carrega tudo (Fase 3C): por escopo, uma consulta limitada pelas palavras
+//    do briefing (até 50) e uma pelas mais recentes (até 20), ranking
+//    determinístico (ranqueador.js) e orçamento de caracteres;
+//  - toda informação usada sai com a origem (id e versão), para auditoria; o
+//    evento "memoria.contexto_montado" guarda só ids, versões e métricas.
 const { erro } = require('../nucleo/erros');
 const { obterAgente } = require('../agentes/catalogo');
 const { caminhos } = require('../armazenamento/caminhos');
-const { normalizar } = require('./correcoes');
+const { ranquear } = require('./ranqueador');
+const { termosDaConsulta } = require('./indice');
+const { criarRecuperador } = require('./recuperador');
+const { relogioPadrao } = require('../nucleo/ids');
 const { garantir } = require('../nucleo/validador');
 const { ESQUEMA_PEDIDO_CONTEXTO, BUSCA_SEMANTICA } = require('../contratos/recuperacao');
 
@@ -38,27 +44,25 @@ const BLOCOS = [
 
 const LIMITES_PADRAO = { totalCaracteres: 24000, porItem: 4000, briefing: 6000 };
 
-function relevancia(item, termos) {
-  if (!termos.size) return 0;
-  const texto = normalizar(`${item.titulo || ''} ${(item.tags || []).join(' ')} ${item.texto}`);
-  let n = 0;
-  termos.forEach((t) => { if (texto.includes(t)) n++; });
-  return n / termos.size;
-}
-
-// deps: { banco, registro (memória), skills (registro de skills) }
+// deps: { banco, registro (memória), skills (registro de skills), recuperador?, auditoria?, relogio? }
 function criarContexto(deps) {
-  const { banco, registro, skills } = deps;
+  const { banco, skills, auditoria } = deps;
+  const relogio = deps.relogio || relogioPadrao;
+  const recuperador = deps.recuperador || criarRecuperador({ banco, relogio });
 
   const comoItem = (m, escopo) => ({
     origem: 'memoria', escopo, id: m.id, versao: m.versaoVigente, categoria: m.categoria,
     titulo: m.vigente.titulo, tags: m.vigente.tags || [], texto: m.vigente.conteudo,
+    termos: m.termos || [], aprovadaEm: m.aprovadaEm || null, evidencias: m.vigente.evidencias,
   });
 
-  async function vigentesSePermitido(agente, escopo, alvo) {
+  async function vigentesSePermitido(agente, escopo, alvo, briefing, metricas) {
     if (!agente.permissoes.memoriaLeitura.includes(escopo)) return [];
-    const lista = await registro.vigentes(escopo, alvo);
-    return lista.map((m) => {
+    const r = await recuperador.paraContexto(escopo, alvo, briefing);
+    metricas.consultas += r.metricas.consultas;
+    metricas.documentosLidos += r.metricas.documentosLidos;
+    if (r.metricas.limiteAtingido) metricas.limiteAtingido = true;
+    return r.memorias.map((m) => {
       // isolamento: o alvo gravado na memória tem que ser o pedido
       Object.keys(alvo).forEach((k) => { if (!m.alvo || m.alvo[k] !== alvo[k]) throw erro('isolamento', 'Memória fora do alvo pedido'); });
       return comoItem(m, escopo);
@@ -69,7 +73,8 @@ function criarContexto(deps) {
     REGRAS_SEGURANCA,
 
     // pedido: { agenteId, empresaId?, tarefaId?, briefing, limites? }
-    async montar(pedido) {
+    // ator (opcional): quem pediu, para a auditoria
+    async montar(pedido, ator) {
       garantir(ESQUEMA_PEDIDO_CONTEXTO, pedido, 'Pedido de contexto');
       const agente = obterAgente(pedido.agenteId);
       if (!agente) throw erro('nao-encontrado', 'Agente desconhecido');
@@ -88,13 +93,14 @@ function criarContexto(deps) {
       }
 
       const briefing = String(pedido.briefing || '');
-      const termos = new Set(normalizar(briefing).split(' ').filter((p) => p.length >= 4));
+      const termos = termosDaConsulta(briefing);
+      const metricas = { consultas: 0, documentosLidos: 0, limiteAtingido: false };
 
-      const global = await vigentesSePermitido(agente, 'global', {});
-      const doAgente = await vigentesSePermitido(agente, 'agente', { agenteId: agente.id });
-      const cliente = empresaId ? await vigentesSePermitido(agente, 'cliente', { empresaId }) : [];
-      const desempenho = empresaId ? await vigentesSePermitido(agente, 'desempenho', { empresaId }) : [];
-      const historico = pedido.tarefaId ? await vigentesSePermitido(agente, 'tarefa', { tarefaId: pedido.tarefaId }) : [];
+      const global = await vigentesSePermitido(agente, 'global', {}, briefing, metricas);
+      const doAgente = await vigentesSePermitido(agente, 'agente', { agenteId: agente.id }, briefing, metricas);
+      const cliente = empresaId ? await vigentesSePermitido(agente, 'cliente', { empresaId }, briefing, metricas) : [];
+      const desempenho = empresaId ? await vigentesSePermitido(agente, 'desempenho', { empresaId }, briefing, metricas) : [];
+      const historico = pedido.tarefaId ? await vigentesSePermitido(agente, 'tarefa', { tarefaId: pedido.tarefaId }, briefing, metricas) : [];
 
       const skillsCarregadas = skills ? await skills.carregarParaTarefa(agente.id, briefing) : { carregadas: [], faltando: agente.skills.filter((s) => s.obrigatoria).map((s) => s.arquivo) };
 
@@ -118,7 +124,7 @@ function criarContexto(deps) {
       const blocos = BLOCOS.map((b) => {
         let itens = conteudos[b.tipo].map((it) => Object.assign({}, it, { texto: String(it.texto).slice(0, b.tipo === 'briefing' ? limites.briefing : limites.porItem) }));
         if (!['seguranca', 'especialidade', 'briefing'].includes(b.tipo)) {
-          itens = itens.map((it) => Object.assign(it, { relevancia: relevancia(it, termos) })).sort((x, y) => y.relevancia - x.relevancia);
+          itens = ranquear(itens, { termos, agora: relogio() }).map((it) => Object.assign(it, { relevancia: it.pontuacao }));
           const cabem = [];
           itens.forEach((it) => {
             if (usados + it.texto.length <= limites.totalCaracteres) { cabem.push(it); usados += it.texto.length; } else descartados++;
@@ -127,17 +133,30 @@ function criarContexto(deps) {
         } else {
           itens.forEach((it) => { usados += it.texto.length; });
         }
+        // campos internos do ranking/índice não saem no contexto
+        itens = itens.map(({ termos: _t, evidencias: _e, aprovadaEm: _a, acertos: _c, ...resto }) => resto);
         return Object.assign({}, b, { confiavel: b.tipo !== 'briefing', itens });
       });
 
-      return {
+      const ctx = {
         agenteId: agente.id, empresaId, tarefaId: pedido.tarefaId || null,
         blocos,
         fontes: blocos.flatMap((b) => b.itens.filter((i) => i.origem === 'memoria' || i.origem === 'skill').map((i) => ({ origem: i.origem, escopo: i.escopo || null, id: i.id, versao: i.versao }))),
         skillsFaltando: skillsCarregadas.faltando,
         caracteres: usados, descartados,
         semantica: BUSCA_SEMANTICA, // explícito: a busca semântica não existe nesta versão
+        metricas,
       };
+      // auditoria de custo e de proveniência: ids, versões e números; nunca o conteúdo nem o briefing
+      if (auditoria) {
+        await auditoria.registrar('memoria.contexto_montado', ator || null, empresaId ? caminhos.empresa(empresaId) : 'labz', {
+          agente: agente.id, tarefa: pedido.tarefaId || null, termos: termos.length,
+          fontes: ctx.fontes.map((f) => `${f.origem}:${f.escopo || '-'}:${f.id}@${f.versao}`),
+          consultas: metricas.consultas, documentosLidos: metricas.documentosLidos, limiteAtingido: metricas.limiteAtingido,
+          caracteres: usados, descartados,
+        });
+      }
+      return ctx;
     },
   };
 }

@@ -300,3 +300,31 @@ test('Fase 3B, transações reais em paralelo no Firestore: o conflito é visto 
     assert.equal(vig.length, 1);
   }
 });
+
+test('Fase 3C no Firestore real: busca por palavras e metadados, paginação com cursor, isolamento e contexto limitado', async () => {
+  const mk = (alvo, titulo, conteudo) => ok(tokens.sa, 'memoria.criar', { memoria: { escopo: 'cliente', alvo, categoria: 'referencia', titulo, conteudo, origem: { tipo: 'manual' } } })
+    .then((m) => ok(tokens.sa, 'memoria.aprovar', { ref: m.ref, versao: 1 }).then(() => m));
+  for (let i = 0; i < 7; i++) await mk({ empresaId: A.id }, `Busca ${i}`, `integbusca modelo${i}k variante${i * 7}j`);
+  await mk({ empresaId: B.id }, 'Busca Beta', 'integbusca segredobeta');
+  const r = await ok(tokens.sa, 'memoria.buscar', { consulta: { escopo: 'cliente', alvo: { empresaId: A.id }, modo: 'textual', texto: 'integbusca modelo3k', limite: 3 } });
+  assert.equal(r.itens.length, 3);
+  assert.equal(r.itens[0].titulo, 'Busca 3', 'quem cobre mais termos vem primeiro');
+  assert.ok(r.itens.every((i) => i.alvo.empresaId === A.id) && !JSON.stringify(r).includes('segredobeta'));
+  assert.equal(r.semantica.disponivel, false);
+  // paginação com cursor (startAfter) no Firestore
+  const vistos = [];
+  let depoisDe = null;
+  for (let p = 0; p < 10; p++) {
+    const pg = await ok(tokens.sa, 'memoria.buscar', { consulta: Object.assign({ escopo: 'cliente', alvo: { empresaId: A.id }, modo: 'metadados', filtros: { categoria: 'referencia' }, limite: 3 }, depoisDe ? { depoisDe } : {}) });
+    vistos.push(...pg.itens.map((i) => i.titulo));
+    depoisDe = pg.proximo;
+    if (!depoisDe) break;
+  }
+  assert.equal(new Set(vistos).size, 7);
+  assert.ok(vistos.every((t) => t.startsWith('Busca ') && t !== 'Busca Beta'));
+  // contexto: métricas de leitura limitadas e evento sem conteúdo
+  const ctx = await ok(tokens.sa, 'contexto.previa', { agenteId: '04-roteirista', empresaId: A.id, briefing: 'integbusca' });
+  assert.ok(ctx.metricas.consultas <= 8 && ctx.metricas.documentosLidos <= 280);
+  const ev = await db.collection('labz_eventos').where('tipo', '==', 'memoria.contexto_montado').get();
+  assert.ok(ev.size >= 1 && !JSON.stringify(ev.docs.map((d) => d.data())).includes('integbusca'));
+});

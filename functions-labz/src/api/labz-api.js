@@ -25,6 +25,7 @@ const REF_MEMORIA = {
 const ID = { tipo: 'texto', obrigatorio: true, padrao: /^[A-Za-z0-9_-]{1,80}$/ };
 const N = { tipo: 'inteiro', obrigatorio: true, min: 1 };
 const obj = (campos) => ({ tipo: 'objeto', obrigatorio: true, extras: false, campos });
+const CURSOR = { tipo: 'texto', padrao: /^[A-Za-z0-9_-]{1,80}$/ };
 const MOTIVO = { tipo: 'texto', obrigatorio: true, min: 3, max: 500 };
 const CONFIRMACAO_CONFLITOS = {
   tipo: 'objeto', extras: false,
@@ -70,20 +71,25 @@ const ACOES = {
   'memoria.reativar': [obj({ ref: REF_MEMORIA }), (s, a, d) => s.memoria.reativar(a, d.ref)],
   'memoria.obter': [obj({ ref: REF_MEMORIA }), (s, a, d) => s.memoria.obter(d.ref)],
   'memoria.versoes': [obj({ ref: REF_MEMORIA }), (s, a, d) => s.memoria.versoes(d.ref)],
-  'memoria.listar': [obj({ escopo: { tipo: 'texto', obrigatorio: true }, alvo: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.memoria.listar(d.escopo, d.alvo)],
-  'memoria.auditar': [obj({ escopo: { tipo: 'texto', obrigatorio: true }, alvo: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.auditor.auditar(d.escopo, d.alvo)],
+  // Listagem e auditoria por páginas (até 100); "proximo" continua de onde parou.
+  'memoria.listar': [obj({ escopo: { tipo: 'texto', obrigatorio: true }, alvo: { tipo: 'objeto', obrigatorio: true }, status: { tipo: 'texto', valores: ['pendente', 'ativa', 'arquivada'] }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }),
+    (s, a, d) => s.memoria.listarPagina(d.escopo, d.alvo, { status: d.status, depoisDe: d.depoisDe, limite: d.limite })],
+  'memoria.auditar': [obj({ escopo: { tipo: 'texto', obrigatorio: true }, alvo: { tipo: 'objeto', obrigatorio: true }, depoisDe: CURSOR }), (s, a, d) => s.auditor.auditar(d.escopo, d.alvo, { depoisDe: d.depoisDe })],
+  // Busca por metadados ou palavras-chave (NÃO semântica), limitada e com ranking determinístico.
+  'memoria.buscar': [obj({ consulta: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.recuperador.buscar(a, d.consulta)],
+  'memoria.reindexar': [obj({ escopo: { tipo: 'texto', obrigatorio: true }, alvo: { tipo: 'objeto', obrigatorio: true }, depoisDe: CURSOR }), (s, a, d) => s.memoria.reindexar(a, d.escopo, d.alvo, { depoisDe: d.depoisDe })],
 
   'correcoes.registrar': [obj({ correcao: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.correcoes.registrar(a, d.correcao)],
   'correcoes.aprovar': [obj({ aprendizadoId: ID, ajustes: { tipo: 'objeto' } }), (s, a, d) => s.correcoes.aprovar(a, d.aprendizadoId, d.ajustes || {})],
   'correcoes.rejeitar': [obj({ aprendizadoId: ID, motivo: { tipo: 'texto', max: 500 } }), (s, a, d) => s.correcoes.rejeitar(a, d.aprendizadoId, d.motivo).then(() => ({ ok: true }))],
-  'correcoes.pendentes': [obj({}), (s) => s.correcoes.pendentes()],
+  'correcoes.pendentes': [obj({ depoisDe: CURSOR }), (s, a, d) => s.correcoes.pendentesPagina({ depoisDe: d.depoisDe })],
 
   'skills.salvar': [obj({ agenteId: ID, arquivo: { tipo: 'texto', obrigatorio: true, max: 60 }, conteudo: { tipo: 'texto', obrigatorio: true } }), (s, a, d) => s.skills.salvarVersao(a, d.agenteId, d.arquivo, d.conteudo)],
   'skills.aprovar': [obj({ agenteId: ID, arquivo: { tipo: 'texto', obrigatorio: true, max: 60 }, versao: N }), (s, a, d) => s.skills.aprovarVersao(a, d.agenteId, d.arquivo, d.versao).then(() => ({ ok: true }))],
   'skills.voltarVersao': [obj({ agenteId: ID, arquivo: { tipo: 'texto', obrigatorio: true, max: 60 }, versao: N }), (s, a, d) => s.skills.voltarVersao(a, d.agenteId, d.arquivo, d.versao).then((n) => ({ versao: n }))],
 
   'contexto.previa': [obj({ agenteId: ID, empresaId: { tipo: 'texto', nulo: true, max: 80 }, tarefaId: { tipo: 'texto', nulo: true, max: 80 }, briefing: { tipo: 'texto', max: 20000 } }),
-    (s, a, d) => s.contexto.montar({ agenteId: d.agenteId, empresaId: d.empresaId || null, tarefaId: d.tarefaId || null, briefing: d.briefing || '' })],
+    (s, a, d) => s.contexto.montar({ agenteId: d.agenteId, empresaId: d.empresaId || null, tarefaId: d.tarefaId || null, briefing: d.briefing || '' }, a)],
 
   'execucoes.criar': [obj({ execucao: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.execucoes.criar(a, d.execucao)],
   'execucoes.transicionar': [obj({ execucaoId: ID, para: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', max: 300 }, versaoEsperada: { tipo: 'inteiro', min: 1 } }),

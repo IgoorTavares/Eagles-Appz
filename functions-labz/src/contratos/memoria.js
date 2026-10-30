@@ -200,6 +200,10 @@ const ESQUEMA_DOC_MEMORIA = {
     atualizadoPor: { tipo: 'texto' },
     arquivadaEm: { tipo: 'texto' },
     expiraEm: { tipo: 'texto' },
+    // índice de busca (Fase 3C): sempre da versão vigente, gravado na mesma transação
+    termos: { tipo: 'lista', max: 40, itens: { tipo: 'texto', min: 3, max: 60 } },
+    aprovadaEm: { tipo: 'texto' },
+    indiceVersao: { tipo: 'inteiro', min: 1 },
   },
 };
 const ESQUEMA_DOC_VERSAO = {
@@ -256,6 +260,7 @@ function conferirRegistroMemoria(doc) {
   if (doc.vigente && doc.vigente.versao !== doc.versaoVigente) erros.push('vigente não é a versão vigente');
   if (doc.status === 'ativa' && !doc.versaoVigente) erros.push('memória ativa sem versão aprovada');
   if (doc.escopo === 'tarefa' && !doc.expiraEm) erros.push('memória de tarefa sem expiração');
+  if (doc.termos && !doc.vigente) erros.push('índice de busca sem versão vigente');
   return erros;
 }
 function conferirVersaoMemoria(v) {
@@ -293,10 +298,10 @@ const EVENTOS_MEMORIA = Object.freeze({
     'memoria.criada', 'memoria.versao_criada', 'memoria.versao_aprovada', 'memoria.versao_rejeitada',
     'memoria.rollback', 'memoria.arquivada', 'memoria.reativada',
     'memoria.enviada_para_revisao', 'memoria.revisao_pedida', 'memoria.exportada_markdown', 'memoria.trava_global',
-    'memoria.conflito_bloqueado',
+    'memoria.conflito_bloqueado', 'memoria.contexto_montado', 'memoria.busca_realizada', 'memoria.reindexada',
     'correcao.registrada', 'aprendizado.proposto', 'aprendizado.aprovado', 'aprendizado.rejeitado',
   ]),
-  reservados: Object.freeze(['memoria.importada_markdown', 'memoria.contexto_montado']),
+  reservados: Object.freeze(['memoria.importada_markdown']),
 });
 
 module.exports = {

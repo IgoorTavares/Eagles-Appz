@@ -15,6 +15,8 @@
 // de outro jeito; a aprovação humana continua sendo a última barreira.
 const { caminhos } = require('../armazenamento/caminhos');
 const { normalizar } = require('./verificacoes');
+const { erro } = require('../nucleo/erros');
+const { LIMITES_BUSCA } = require('../contratos/recuperacao');
 
 const PADROES_SENSIVEIS = [
   { motivo: 'e-mail', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z0-9.-]+/ },
@@ -35,7 +37,18 @@ function criarProtecaoGlobal({ banco }) {
   // estiver vinculado a elas (empresa do sistema ou cliente do CRM).
   async function nomesProtegidos() {
     const nomes = new Set();
-    const empresas = await banco.listar(caminhos.colecoes.empresas);
+    // por páginas (Fase 3C); se passar do teto, bloqueia (não dá para conferir tudo)
+    const empresas = [];
+    let depoisDe = null;
+    for (let p = 0; ; p++) {
+      if (p >= LIMITES_BUSCA.paginasDeEmpresas) throw erro('precondicao', 'Empresas demais para conferir a trava da memória Global: revisão humana necessária');
+      const opcoes = { ordenar: { campo: 'id', direcao: 'asc' }, limite: LIMITES_BUSCA.empresasPorPagina };
+      if (depoisDe) opcoes.depoisDe = depoisDe;
+      const pagina = await banco.consultar(caminhos.colecoes.empresas, opcoes);
+      empresas.push(...pagina);
+      if (pagina.length < LIMITES_BUSCA.empresasPorPagina) break;
+      depoisDe = pagina[pagina.length - 1].id;
+    }
     for (const e of empresas) {
       if (e.nome) nomes.add(e.nome);
       const v = e.vinculo;

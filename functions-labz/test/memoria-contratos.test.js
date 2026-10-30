@@ -149,7 +149,9 @@ test('recuperação: consulta validada, status fixo em "ativa" e coleção monta
 test('busca semântica: explicitamente indisponível (contrato, consulta e contexto)', async () => {
   assert.strictEqual(R.BUSCA_SEMANTICA.disponivel, false);
   assert.ok(Object.isFrozen(R.BUSCA_SEMANTICA) && Object.isFrozen(R.MODOS_BUSCA));
-  Object.values(R.MODOS_BUSCA).forEach((m) => assert.strictEqual(m.disponivel, false));
+  // Fase 3C: metadados e palavras-chave em uso; a semântica continua indisponível
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(R.MODOS_BUSCA).map(([k, m]) => [k, m.disponivel])), { metadados: true, textual: true, semantica: false });
+  assert.match(R.MODOS_BUSCA.textual.descricao, /NÃO é busca semântica/);
   assert.throws(() => R.validarConsultaMemoria({ escopo: 'global', alvo: {}, modo: 'semantica', texto: 'x' }), (x) => x.codigo === 'precondicao');
   const c = await montarComEmpresas();
   const ctx = await c.contexto.montar({ agenteId: '04-roteirista', empresaId: c.A.id, briefing: 'post' });

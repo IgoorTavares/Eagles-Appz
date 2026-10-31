@@ -154,12 +154,12 @@ const ACOES = {
     (s, a, d) => s.auditoria.listarPagina({ tipo: d.tipo, depoisDe: d.depoisDe, limite: d.limite })],
 };
 
-// ctx: { servicos, banco, uidsAutorizados, lerSegredo }
+// ctx: { servicos, banco, uidsAutorizados, lerSegredo, lerPerfil?, verificarBloqueio? } (os dois últimos: Fase S2/Supabase)
 function criarApi(ctx) {
   return async function labzApi(request) {
     // 0. (servidor) confere de novo o token: assinatura, conta desativada e sessões revogadas
     if (request && request.auth && ctx.verificarToken) await ctx.verificarToken(request);
-    const ator = await exigirSuperAdmin(request && request.auth, { banco: ctx.banco, uidsAutorizados: ctx.uidsAutorizados(), auditoria: ctx.servicos.auditoria });
+    const ator = await exigirSuperAdmin(request && request.auth, { banco: ctx.banco, uidsAutorizados: ctx.uidsAutorizados(), auditoria: ctx.servicos.auditoria, lerPerfil: ctx.lerPerfil, verificarBloqueio: ctx.verificarBloqueio });
     const pedido = (request && request.data) || {};
     if (typeof pedido !== 'object' || Array.isArray(pedido)) throw erro('invalido', 'Pedido inválido');
     if (JSON.stringify(pedido).length > MAX_PEDIDO) throw erro('invalido', 'Pedido grande demais');

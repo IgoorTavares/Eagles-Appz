@@ -36,7 +36,10 @@ test('processa sozinho as tarefas pendentes, sem chamada manual por etapa (espec
 });
 
 test('concorrência: dois executores no mesmo banco não duplicam execução nem etapa', async () => {
-  const c = await montar();
+  // dois executores SAUDÁVEIS: o prazo do batimento fica folgado porque o relógio de teste avança 1 s
+  // por consulta (no PostgreSQL, as transações repetidas por conflito consultam mais o relógio e o
+  // "tempo" do teste passaria de 5 min). A recuperação de executor caído tem teste próprio abaixo.
+  const c = await montar(undefined, { opcoes: { monitor: { limiteBatimentoMs: 24 * 60 * 60 * 1000 } } });
   const ids = [];
   for (let i = 0; i < 4; i++) ids.push((await c.motor.pedido(c.ator, { empresaId: c.A.id, objetivo: 'Produzir conteúdos para redes sociais: posts e legendas.' })).id);
   // itens duplicados na fila para a mesma execução (prevenção de duplicidade)

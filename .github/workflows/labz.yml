@@ -39,3 +39,9 @@ jobs:
         with: { node-version: 20 }
       - run: cd functions-labz && npm ci && npm run test:postgres
         env: { LABZ_PG_URL: 'postgresql://postgres:teste-local-ficticio@localhost:5432/postgres' }
+      # Fase S3: o PACOTE das Edge Functions no Deno da mesma versão do Supabase Edge Runtime
+      # (v1.77.8 = Deno 2.1.4), contra o mesmo PostgreSQL temporário.
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.1.4 }
+      - run: cd functions-labz && npm run test:deno
+        env: { LABZ_PG_URL: 'postgresql://postgres:teste-local-ficticio@localhost:5432/postgres' }

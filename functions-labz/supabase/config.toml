@@ -1,0 +1,60 @@
+# LABZ AI — Supabase LOCAL (Fase S3). Só para desenvolvimento e testes na máquina:
+# nenhum projeto real, nenhuma chave real. Referência: https://supabase.com/docs/guides/local-development/cli/config
+project_id = "labz-local"
+
+[api]
+enabled = true
+port = 54321
+# O schema "labz" NUNCA é exposto pela API REST do Supabase (o navegador não lê as tabelas).
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 100
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = false
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[storage]
+enabled = false
+
+[auth]
+# O login da LABZ AI é o do Firebase (verificado dentro da função). O Auth do Supabase não é usado.
+enabled = false
+
+[edge_runtime]
+enabled = true
+# per_worker: o trabalho ao fundo (EdgeRuntime.waitUntil) continua depois da resposta 202.
+# Achado no teste: com "oneshot" o runtime local encerra o worker logo após a resposta.
+policy = "per_worker"
+deno_version = 2
+
+[analytics]
+enabled = false
+
+# As duas funções verificam a autenticação no próprio código (token do Firebase na API;
+# assinatura + acionamento registrado no banco no worker). O JWT do Supabase não serve de proteção
+# (a chave "anon" é pública), por isso a verificação do gateway fica desligada.
+[functions.labz-api]
+verify_jwt = false
+
+[functions.labz-worker]
+verify_jwt = false

@@ -9,7 +9,10 @@
     "test": "node --test test/*.test.js",
     "test:emulador": "node integracao/rodar.js",
     "demo": "node demo/servidor-local.js",
-    "test:postgres": "node test/postgres/rodar.js"
+    "test:postgres": "node test/postgres/rodar.js",
+    "empacotar": "node supabase/empacotar.js",
+    "test:deno": "deno test -A --no-check test/deno/",
+    "test:supabase-local": "node supabase/testar-local.mjs"
   },
   "private": true,
   "dependencies": {

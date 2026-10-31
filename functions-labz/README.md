@@ -341,6 +341,34 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   se as sessões foram revogadas depois da emissão do token (que vale até 1 hora). Compensação: tirar o UID de
   `labz_config/acesso` (ou da lista do servidor) corta o acesso na hora.
 
+## Supabase — Fase S3: Edge Functions (só local; nada publicado, nenhum projeto real)
+- **Duas funções** em `supabase/functions/`:
+  - `labz-api` (a tela do Super Admin chama): CORS só para as origens da lista (outra origem → 403 no servidor), só
+    `POST` + JSON, até 200 KB, token do Firebase (S2), limite de pedidos por UID no banco (`src/borda/limitador.js`:
+    60/min e 20 tarefas novas/hora) e a mesma `criarApi()` de sempre (Super Admin, validação, auditoria, aprovações).
+  - `labz-worker` (chamada SÓ pelo banco): cada chamada precisa de um **acionamento** criado e assinado pelo banco
+    (HMAC-SHA256), dentro da janela de 120 s, e que é **consumido uma única vez** (`src/borda/acionamento.js`).
+    Nem o segredo nem a URL bastam. Responde 202 e trabalha ao fundo (`EdgeRuntime.waitUntil`).
+- **Montagem:** `src/borda/montagem.js` (recebe `sql`, a rede e a configuração de fora; agentes sempre simulados);
+  portas HTTP em `src/borda/http.js` (Request/Response padrão, iguais no Node e no Deno).
+- **Pacote para o Deno:** `npm run empacotar` gera `supabase/functions/_labz/labz.mjs` (empacotador próprio, sem
+  dependências, determinístico; recusa `require` calculado e qualquer pacote além do `postgres`). Um teste confere que o
+  pacote gravado está atualizado e não contém Firebase Admin. O pacote fornece `setImmediate`/`clearImmediate`
+  (o Edge Runtime não tem; achado no teste local).
+- **Migrações:** 2 (`…_labz_acionamentos.sql`, portável: tabela `labz.acionamentos`, assinatura no banco, permissões
+  mínimas) e 3 (`…_labz_gatilhos.sql`, só Supabase: gatilho na fila → `pg_net`; `pg_cron` a cada 1 minuto; URL e segredo
+  no **Vault**; sem eles, nada é chamado).
+- **Orçamento do worker** (`src/borda/worker.js`): parada SUAVE (padrão 60 s) só ENTRE etapas, sem cortar chamada;
+  parada DURA (120 s ou aviso de desligamento) devolve a etapa sem gastar tentativa; queda sem aviso → reserva vence e o
+  monitor recupera. Toda chamada avança pelo menos uma etapa. Chamada do gatilho que acha a fila vazia olha mais uma vez.
+- **Testes:** `npm test` (unidade da borda), `npm run test:postgres`, `LABZ_PG_URL=… npm run test:deno` (o pacote no
+  Deno, com SIGKILL de verdade) e, com `supabase start`, `SUPABASE_CLI=supabase npm run test:supabase-local` (Edge Runtime,
+  gatilhos, pg_net, pg_cron, Vault e a API REST fechada; segredos fictícios gerados e apagados na hora).
+- **Limitações:** o token de teste nunca é aceito pela função real (só chaves do Google; sem rede no contêiner, falha
+  fechada); `process.cpuUsage()` devolve 0 no Edge Runtime, então o orçamento de CPU só vale onde há medida (o limite de
+  CPU do próprio runtime continua); a queda sem aviso refaz a chamada cortada (1 a mais por queda); o gateway local
+  (Kong) responde ao pré-voo com `Access-Control-Allow-Origin: *` (a origem é conferida na função).
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

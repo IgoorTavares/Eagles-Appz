@@ -13,7 +13,7 @@
     "empacotar": "node supabase/empacotar.js",
     "test:deno": "deno test -A --no-check test/deno/",
     "test:supabase-local": "node supabase/testar-local.mjs",
-    "test:ui": "node --test --test-concurrency=1 test/ui/"
+    "test:ui": "node --test --test-concurrency=1 test/ui/*.test.js"
   },
   "private": true,
   "dependencies": {

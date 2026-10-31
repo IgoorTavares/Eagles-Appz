@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // LABZ AI — Fase S3: EMPACOTADOR das Edge Functions (sem dependências; determinístico).
 // O backend é CommonJS (Node). O Supabase Edge Runtime é Deno e carrega módulos ES (ESM).
-// Este script junta, num único arquivo ESM (supabase/functions/_labz/labz.mjs):
+// Este script junta, num único arquivo ESM (uma cópia idêntica em cada função:
+// supabase/functions/labz-api/labz.mjs e supabase/functions/labz-worker/labz.mjs — a publicação pela
+// conexão Claude/Supabase só envia os arquivos da PRÓPRIA pasta da função):
 //   - todos os arquivos alcançados por require() a partir de supabase/entrada-borda.js;
 //   - os módulos nativos do Node pedidos (node:crypto, node:net...) viram "import" estáticos
 //     (o Deno fornece todos eles);
@@ -16,7 +18,8 @@ const { builtinModules } = require('node:module');
 
 const RAIZ = path.join(__dirname, '..');
 const ENTRADA = path.join(__dirname, 'entrada-borda.js');
-const SAIDA = path.join(__dirname, 'functions', '_labz', 'labz.mjs');
+const SAIDAS = ['labz-api', 'labz-worker'].map((f) => path.join(__dirname, 'functions', f, 'labz.mjs'));
+const SAIDA = SAIDAS[0];
 const PACOTES_PERMITIDOS = ['postgres'];
 const NATIVOS = new Set(builtinModules);
 const RE_REQUIRE = /\brequire\(\s*(['"])([^'"\n]+)\1\s*\)/g;
@@ -156,14 +159,18 @@ function gerar() {
 if (require.main === module) {
   const g = gerar();
   if (process.argv.includes('--conferir')) {
-    const atual = fs.existsSync(SAIDA) ? fs.readFileSync(SAIDA, 'utf8') : '';
-    if (atual !== g.texto) { console.error('O pacote supabase/functions/_labz/labz.mjs está DESATUALIZADO: rode "npm run empacotar".'); process.exit(1); }
+    for (const saida of SAIDAS) {
+      const atual = fs.existsSync(saida) ? fs.readFileSync(saida, 'utf8') : '';
+      if (atual !== g.texto) { console.error(`O pacote ${rel(saida)} está DESATUALIZADO: rode "npm run empacotar".`); process.exit(1); }
+    }
     console.log(`pacote atualizado (${g.nomes.length} módulos, ${Buffer.byteLength(g.texto)} bytes)`);
   } else {
-    fs.mkdirSync(path.dirname(SAIDA), { recursive: true });
-    fs.writeFileSync(SAIDA, g.texto);
-    console.log(`gravado ${rel(SAIDA)}: ${g.nomes.length} módulos, ${Buffer.byteLength(g.texto)} bytes, sha256 ${g.sha256.slice(0, 16)}…`);
+    for (const saida of SAIDAS) {
+      fs.mkdirSync(path.dirname(saida), { recursive: true });
+      fs.writeFileSync(saida, g.texto);
+    }
+    console.log(`gravado em ${SAIDAS.map(rel).join(' e ')}: ${g.nomes.length} módulos, ${Buffer.byteLength(g.texto)} bytes, sha256 ${g.sha256.slice(0, 16)}…`);
   }
 }
 
-module.exports = { gerar, SAIDA, PACOTES_PERMITIDOS };
+module.exports = { gerar, SAIDA, SAIDAS, PACOTES_PERMITIDOS };

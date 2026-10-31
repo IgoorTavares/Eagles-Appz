@@ -76,7 +76,10 @@ function criarWorker({ servicos, orcamento = {}, agoraMs = () => Date.now(), cpu
     }
     resumo.ms = Math.round(agoraMs() - inicio);
     if (cpuMs) resumo.cpuMs = Math.round(cpuMs() - cpu0);
-    await servicos.auditoria.registrar('worker.rodada', ATOR_SISTEMA, 'labz_fila', {
+    // rodada VAZIA (o cron de 1 min sem nada para fazer) não vira evento: sem isso, a auditoria
+    // cresceria ~43 mil eventos por mês só de "nada aconteceu" (limite de 500 MB do plano Free)
+    const vazia = !resumo.processados && !resumo.recuperadas && !resumo.retomadas && !resumo.erros;
+    if (!vazia) await servicos.auditoria.registrar('worker.rodada', ATOR_SISTEMA, 'labz_fila', {
       trabalhador: nome, motivo: resumo.acionamento, processados: resumo.processados, recuperadas: resumo.recuperadas,
       retomadas: resumo.retomadas, erros: resumo.erros, parouPor: resumo.parouPor, ms: resumo.ms, cpuMs: resumo.cpuMs === undefined ? null : resumo.cpuMs,
     }).catch(() => {});

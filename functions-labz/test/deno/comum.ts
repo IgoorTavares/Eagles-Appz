@@ -3,7 +3,7 @@
 // teste e um banco PostgreSQL temporário criado e apagado pelo próprio teste.
 import crypto from 'node:crypto';
 import { Buffer } from 'node:buffer';
-import * as L from '../../supabase/functions/_labz/labz.mjs';
+import * as L from '../../supabase/functions/labz-api/labz.mjs';
 
 export { L };
 export const PROJETO = 'labz-18246';

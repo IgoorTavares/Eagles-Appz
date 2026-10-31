@@ -6,7 +6,7 @@
 //   LABZ_DB_URL          conexão com o papel de LOGIN da LABZ AI (membro de labz_app)
 //   LABZ_WORKER_SEGREDO  o mesmo valor do segredo "labz_worker_segredo" do Vault (32+ caracteres)
 import process from 'node:process';
-import { montarWorker, postgres } from '../_labz/labz.mjs';
+import { montarWorker, postgres } from './labz.mjs';
 
 const env = (k: string) => Deno.env.get(k) ?? '';
 const numero = (k: string, padrao: number) => { const n = Number(env(k)); return Number.isFinite(n) && n > 0 ? n : padrao; };

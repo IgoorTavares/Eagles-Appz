@@ -53,22 +53,41 @@ create trigger labz_fila_acionar
   for each row when (new.colecao = 'labz_fila')
   execute function labz.ao_entrar_na_fila();
 
--- O "tique" de 1 minuto: limpa acionamentos velhos e chama o worker.
+-- Retenção: só os eventos OPERACIONAIS do worker e do monitor com mais de 30 dias (os eventos de
+-- decisão — aprovações, memórias, entregas, acessos — nunca são apagados aqui). Até 500 por vez.
+create or replace function labz.limpar_eventos_operacionais()
+returns integer language plpgsql volatile security definer set search_path = '' as $$
+declare n integer;
+begin
+  delete from labz.docs where caminho in (
+    select caminho from labz.docs
+    where colecao = 'labz_eventos' and (dados->>'tipo') in ('worker.rodada', 'fila.monitor')
+      and atualizado_em < now() - interval '30 days'
+    limit 500);
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+-- O "tique" de 1 minuto: limpa acionamentos velhos (1 dia) e eventos operacionais velhos (30 dias)
+-- e chama o worker.
 create or replace function labz.tique()
 returns bigint language plpgsql volatile security definer set search_path = '' as $$
 begin
   perform labz.limpar_acionamentos();
+  perform labz.limpar_eventos_operacionais();
   return labz.acionar_worker('cron');
 end $$;
 
 revoke all on function labz.acionar_worker(text) from public;
 revoke all on function labz.ao_entrar_na_fila() from public;
 revoke all on function labz.tique() from public;
+revoke all on function labz.limpar_eventos_operacionais() from public;
 do $$ declare papel text; begin
   foreach papel in array array['anon', 'authenticated', 'labz_app'] loop
     if exists (select 1 from pg_roles where rolname = papel) then
       execute format('revoke all on function labz.acionar_worker(text) from %I', papel);
       execute format('revoke all on function labz.tique() from %I', papel);
+      execute format('revoke all on function labz.limpar_eventos_operacionais() from %I', papel);
     end if;
   end loop;
 end $$;

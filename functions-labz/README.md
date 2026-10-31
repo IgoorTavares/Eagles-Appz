@@ -389,6 +389,51 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   escondida, Diretor/equipe sem chamada, tela "enganada" recusada pelo servidor, token vencido, servidor desligado, XSS,
   isolamento por cliente, 1280/768/375/320 px, demonstração; regressão de todas as páginas do CRM/ERP e do menu).
 
+## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
+
+- **Projeto:** exclusivo da LABZ AI, na organização do Igor, no plano Free.
+- **Regra de ouro:** cada etapa só começa com a autorização do Igor para **aquela** etapa. Toda alteração é seguida de uma conferência **só de leitura**.
+- **Ferramentas:** tudo pela conexão Claude/Supabase, porque o ambiente do Claude não alcança o `supabase.com`.
+- **Segredos:** os valores secretos **nunca passam pelo Claude**. O Igor digita cada um direto no painel.
+- **Legenda:** 🤖 = o Claude faz pela conexão · 👤 = o Igor faz no painel · 🔒 = precisa de autorização própria.
+
+| Etapa | O que acontece | Quem | Alteração no Supabase? | Como desfazer |
+|---|---|---|---|---|
+| **0** | O Igor cria o projeto `labz-ai` (São Paulo, Free; Data API sem exposição automática de tabelas; nenhum add-on) e avisa o Claude | 👤 | sim (pelo Igor) | apagar o projeto (vazio) |
+| **1** | Identidade e limpeza do projeto: id, nome, região, plano Free, sem dados de outros sistemas (`supabase/s5b/00-verificar-projeto.sql` + `list_tables` + `list_extensions` + `get_advisors`) | 🤖 | **não** (só leitura) | — |
+| **2** 🔒 | Migração 1 (`…_labz_inicial.sql`): schema `labz`, tabela `docs`, RLS forçado, papel `labz_app` sem login → conferir com `supabase/s5b/10-conferir-permissoes.sql` + `get_advisors` | 🤖 | sim (só o schema `labz`) | `drop schema labz cascade; drop role labz_app;` (ainda sem dados) |
+| **3** 🔒 | Migração 2 (`…_labz_acionamentos.sql`): tabela de acionamentos e funções de assinatura → conferir de novo | 🤖 | sim | ver o relatório da S5A, seção 3 |
+| **4** 🔒 | Papel de login das funções. O Claude cria `create role labz_borda login in role labz_app;` **sem senha**. O Igor, no SQL Editor, define a senha (`alter role labz_borda with password '…'`), que o Claude nunca vê | 🤖 + 👤 | sim | `drop role labz_borda;` |
+| **5** 🔒 | Segredos das funções (o Claude cria o pedido; o Igor digita os valores no painel): `LABZ_DB_URL` (pooler, modo transação, porta 6543, usuário `labz_borda.<id>`), `LABZ_SUPERADMIN_UIDS`, `LABZ_FIREBASE_PROJETO`, `LABZ_WORKER_SEGREDO` (32+ caracteres; `openssl rand -hex 32` no computador do Igor) | 🤖 + 👤 | sim (só segredos) | apagar ou trocar no painel |
+| **6** 🔒 | Publicar `labz-api` e `labz-worker` (`index.ts` + `labz.mjs` de cada pasta, `verify_jwt = false`; as duas conferem a autenticação no próprio código). Conferir com `list_edge_functions` | 🤖 | sim (2 funções) | apagar as funções no painel |
+| **7** | Testes de recusa, só de leitura: sem token → 401; token inválido → 401; outra origem → 403; worker sem acionamento → 401; logs sem dados sensíveis (`get_logs`) | 🤖 + 👤 | **não** | — |
+| **8** 🔒 | Cadastrar o Super Admin no banco da LABZ AI: `labz_usuarios/{uid}` (role `SuperAdmin`) e `labz_config/acesso` (`uids`). O UID não é segredo; o Igor informa | 🤖 | sim (2 linhas) | apagar as 2 linhas |
+| **9** | Teste com o login real do Igor, numa cópia **local** da tela apontando para a API, sem publicar nada no site: catálogo dos 8 agentes; um Diretor de teste é recusado | 👤 + 🤖 | só leitura | — |
+| **10** 🔒🔒 | **Autorização separada (decisão do Igor):** migração 3 (gatilho da fila + pg_cron de 1 min + limpezas). Depois o Igor cadastra no Vault (`select vault.create_secret('<valor>', 'labz_worker_segredo')` no SQL Editor) o **mesmo** segredo da etapa 5; o Claude cadastra `labz_worker_url` (não é segredo) | 🤖 + 👤 | sim (**liga o agendamento**) | `select cron.unschedule('labz-worker-tique');` e o restante na seção 3 da S5A |
+| **11** | Tarefa simulada de ponta a ponta (fila → gatilho → worker → concluída); conferir invocações, tamanho do banco e logs depois de 24 h | 🤖 + 👤 | só leitura | — |
+| **12** | Primeiro backup (exportação), feito pelo Igor no computador ou pelo painel, e guardado fora do Supabase. A conexão Claude/Supabase volta ao modo **somente leitura** | 👤 | não | — |
+
+**Fora da S5B** (cada uma com autorização própria, mais tarde):
+- publicar a tela no site (`LABZ_API_URL`, lista do Site seguro);
+- ligar o menu LABZ AI;
+- modelos de IA reais;
+- qualquer deploy automático.
+
+### O que o Igor precisa fazer em cada etapa
+
+- **Etapa 0:**
+  - criar o projeto;
+  - guardar a senha do banco no gerenciador de senhas;
+  - avisar "projeto criado".
+- **Etapa 4:** rodar **uma** linha no SQL Editor (a senha do `labz_borda`).
+- **Etapa 5:**
+  - digitar os 4 segredos no painel, quando a conexão pedir;
+  - montar a `LABZ_DB_URL` com a string do pooler (Connect → Transaction pooler), trocando o usuário por `labz_borda.<id>` e a senha pela da etapa 4.
+- **Etapa 8:** informar o seu UID do Firebase (Authentication → Users), que não é segredo.
+- **Etapa 9:** abrir a cópia local da tela e entrar com o seu login.
+- **Etapa 10:** autorizar à parte e rodar **uma** linha no SQL Editor (o segredo no Vault).
+- **Etapa 12:** fazer a exportação de backup.
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

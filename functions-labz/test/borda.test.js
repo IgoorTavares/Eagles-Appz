@@ -282,9 +282,12 @@ test('worker: parada DURA (aviso de desligamento) devolve a etapa sem gastar ten
 });
 
 test('pacote do Deno: atualizado, determinístico, sem Firebase Admin, e as funções só leem os segredos certos', () => {
-  const { gerar, SAIDA, PACOTES_PERMITIDOS } = require('../supabase/empacotar');
+  const { gerar, SAIDAS, PACOTES_PERMITIDOS } = require('../supabase/empacotar');
   const g = gerar();
-  assert.equal(fs.readFileSync(SAIDA, 'utf8'), g.texto, 'rode "npm run empacotar" (o pacote gravado está desatualizado)');
+  assert.equal(SAIDAS.length, 2);
+  for (const saida of SAIDAS) assert.equal(fs.readFileSync(saida, 'utf8'), g.texto, `rode "npm run empacotar" (${saida} desatualizado)`);
+  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'supabase', 'functions', '_labz')), 'nada fora da pasta de cada função (a publicação pela conexão só leva a pasta)');
+  for (const f of ['labz-api', 'labz-worker']) assert.match(fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', f, 'index.ts'), 'utf8'), /from '\.\/labz\.mjs'/);
   assert.equal(gerar().sha256, g.sha256, 'determinístico');
   assert.deepEqual(PACOTES_PERMITIDOS, ['postgres']);
   assert.ok(!g.nomes.some((n) => /node_modules\/(firebase|@google-cloud|@grpc|google-auth)/.test(n)), 'nada do Firebase Admin/Google Cloud');
@@ -301,4 +304,27 @@ test('pacote do Deno: atualizado, determinístico, sem Firebase Admin, e as fun�
   assert.ok(!/obterChaves|criarTransporte|SERVICE_ROLE|service_role/.test(api + wk), 'nenhuma chave de teste nem chave de administrador do Supabase');
   const cfg = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'config.toml'), 'utf8');
   assert.match(cfg, /schemas = \["public", "graphql_public"\]/, 'o schema labz não é exposto pela API REST');
+});
+
+test('worker: rodada VAZIA (cron sem nada para fazer) não grava auditoria; rodada com trabalho grava', async () => {
+  const c = await montarBorda();
+  const w = criarWorker({ servicos: c });
+  const contar = async () => (await c.auditoria.listarPagina({ tipo: 'worker.rodada', limite: 100 })).itens.length;
+  for (let i = 0; i < 5; i++) await w.rodar({ acionamento: { id: `acn_${String(i).repeat(32)}`, motivo: 'cron' } });
+  assert.equal(await contar(), 0, '5 rodadas vazias, nenhum evento');
+  await c.pedir({ acao: 'execucoes.pedido', dados: { empresaId: c.A.id, objetivo: 'Escrever as legendas da semana.' } });
+  await w.rodar({ acionamento: { id: `acn_${'9'.repeat(32)}`, motivo: 'fila' } });
+  assert.equal(await contar(), 1, 'a rodada que trabalhou fica registrada');
+});
+
+test('S5B: as conferências SQL do roteiro são SOMENTE LEITURA (nada de gravar, criar, alterar ou apagar)', () => {
+  const dir = path.join(__dirname, '..', 'supabase', 's5b');
+  const sqls = fs.readdirSync(dir).filter((f) => f.endsWith('.sql'));
+  assert.deepEqual(sqls.sort(), ['00-verificar-projeto.sql', '10-conferir-permissoes.sql']);
+  for (const f of sqls) {
+    const codigo = fs.readFileSync(path.join(dir, f), 'utf8').replace(/--.*$/gm, '').replace(/'[^']*'/g, "''"); // textos entre aspas não são comandos
+    assert.doesNotMatch(codigo, /\b(insert|update|delete|create|alter|drop|grant|revoke|truncate|copy|do|call|perform|set|vacuum|cluster|reindex|comment|lock|pg_read_file|lo_import|dblink)\b/i, f);
+    const comandos = codigo.split(';').map((x) => x.trim()).filter(Boolean);
+    assert.ok(comandos.length >= 4 && comandos.every((x) => /^select\b/i.test(x)), `${f}: só SELECT`);
+  }
 });

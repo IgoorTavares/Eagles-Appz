@@ -116,7 +116,7 @@ test('ponta a ponta no PostgreSQL (login com permissão mínima): API → aciona
   assert.ok(!itens(eA).some((e) => itens(eB).some((f) => f.id === e.id)));
   // auditoria da rodada do worker (só números)
   const ev = await chamar('auditoria.listar', { tipo: 'worker.rodada', limite: 10 });
-  assert.ok(itens(ev).length >= 2);
+  assert.ok(itens(ev).length >= 1, 'a rodada que trabalhou fica registrada (a vazia, não)');
 });
 
 test.after(async () => {

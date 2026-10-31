@@ -176,11 +176,15 @@ async function esperarFuncao() {
     // ---------- 4. pg_cron ----------
     const jobs = await admin`select jobname, schedule from cron.job where jobname = 'labz-worker-tique'`;
     conferir(jobs.length === 1 && jobs[0].schedule === '* * * * *', 'pg_cron: labz-worker-tique a cada 1 minuto');
+    // retenção: evento operacional de 40 dias some no tique; evento de decisão antigo fica
+    await admin`insert into labz.docs (caminho, colecao, id, dados, atualizado_em) values ('labz_eventos/ev_velho_op', 'labz_eventos', 'ev_velho_op', '{"tipo":"worker.rodada"}'::json, now() - interval '40 days'), ('labz_eventos/ev_velho_dec', 'labz_eventos', 'ev_velho_dec', '{"tipo":"entrega.decidida"}'::json, now() - interval '40 days')`;
     const antes = (await admin`select count(*)::int as n from labz.acionamentos where motivo = 'cron'`)[0].n;
     await admin`select labz.tique()`;
     let depois = antes;
     for (let i = 0; i < 20 && depois === antes; i++) { await espera(500); depois = (await admin`select count(*)::int as n from labz.acionamentos where motivo = 'cron' and consumido_em is not null`)[0].n; }
     conferir(depois > antes || depois >= 1, 'pg_cron: labz.tique() chama o worker (acionamento "cron" consumido)');
+    const restam = await admin`select id from labz.docs where id in ('ev_velho_op', 'ev_velho_dec') order by id`;
+    conferir(restam.length === 1 && restam[0].id === 'ev_velho_dec', 'retenção: evento operacional de 40 dias apagado; evento de decisão mantido', restam.map((x) => x.id).join(','));
 
     // ---------- 5. API REST do Supabase não alcança o schema labz ----------
     const rest = await http(`${status.API_URL}/rest/v1/docs?select=*`, { headers: { apikey: ANON, authorization: `Bearer ${ANON}`, 'accept-profile': 'labz' } });

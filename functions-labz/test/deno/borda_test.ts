@@ -1,5 +1,5 @@
 // LABZ AI — Fase S3: testes NO DENO (o mesmo runtime das Edge Functions), com o PACOTE gerado
-// (supabase/functions/_labz/labz.mjs) e o driver postgres.js rodando no Deno contra um
+// (supabase/functions/labz-api/labz.mjs) e o driver postgres.js rodando no Deno contra um
 // PostgreSQL de teste. Rodar:  LABZ_PG_URL=postgresql://... deno test -A test/deno/
 import { assert, assertEquals } from './afirmar.ts';
 import { L, PROJETO, ORIGEM, SEGREDO, obterChaves, emitir, bancoTemporario, criarAcionamento, chamarWorker, transporteContado } from './comum.ts';

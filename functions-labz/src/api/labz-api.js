@@ -43,6 +43,14 @@ const ACOES = {
     modelosReais: 'desligados (Fase 4B: só simulação)',
   })],
 
+  // Fase 5A: o que a interface mostra de cada agente (só campos públicos do catálogo;
+  // nada de skills, prompts, configuração de modelo ou credencial). Mesmas travas de toda ação.
+  'catalogo.agentes': [obj({}), async () => AGENTES.map((a) => ({
+    id: a.id, numero: a.numero, nome: a.nome, missao: a.missao,
+    responsabilidades: a.responsabilidades.slice(), entregaveis: a.entregaveis.slice(),
+    ferramentas: a.ferramentas.slice(), criteriosQualidade: a.criteriosQualidade.slice(), modos: a.modos.slice(),
+    podeDelegar: !!a.permissoes.podeDelegar, modelo: 'simulado',
+  }))],
   'empresas.criar': [obj({ empresa: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.empresas.criar(a, d.empresa)],
   'empresas.alterar': [obj({ empresaId: ID, campos: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.empresas.alterar(a, d.empresaId, d.campos)],
   'empresas.vincular': [obj({ empresaId: ID, vinculo: { tipo: 'objeto', obrigatorio: true, nulo: true } }), (s, a, d) => s.empresas.vincular(a, d.empresaId, d.vinculo)],

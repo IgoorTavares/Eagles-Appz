@@ -7,7 +7,8 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "test:emulador": "node integracao/rodar.js"
+    "test:emulador": "node integracao/rodar.js",
+    "demo": "node demo/servidor-local.js"
   },
   "private": true,
   "dependencies": {

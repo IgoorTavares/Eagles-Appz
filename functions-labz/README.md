@@ -248,6 +248,21 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   detecta divergência; o descritor é da MESMA entrega e versão (sem entrega nem aprovação próprias). Ainda não é gravado.
 - A execução continua produzindo texto livre (gerar, guardar e compartilhar os documentos são os próximos passos).
 
+## Fase 4C.2 — passo 2: produção simulada e registro dos documentos estruturados
+- **Fluxo (mesmo motor):** a etapa com `documento` (do plano validado) manda o tipo ao adaptador; a solicitação descreve os
+  campos do documento (pelo código, a partir do esquema); o modelo simulado devolve `{ documento, referencias, acoes }`;
+  o controle de qualidade valida pelo catálogo (tipo do PLANO, agente, estrutura, limites, campos proibidos); na
+  consolidação, as referências às entregas são preenchidas pelo SISTEMA; o Markdown é gerado pelo sistema e é ele que
+  segue como resultado da etapa; documento e Markdown são gravados JUNTOS, na transação do crachá.
+- **Registro (4C.1, mesma entrega):** o conteúdo da versão é o JSON canônico `{ documento, contrato, dados }` (o hash da
+  versão = hash do documento); `versao.representacoes.markdown` guarda a referência, o hash e o `hashOrigem` do Markdown.
+  `lerDocumento` confere os dois juntos (e regera o Markdown); aprovar e restaurar também conferem. Versão de documento só
+  por `novaVersaoDocumento` (validada); texto solto numa entrega de documento é recusado.
+- **Simulador** (`ia/simulacao/documentos-simulados.js`): um documento válido por tipo, marcado `[SIMULADO]`, sem métricas
+  nem fatos (orçamento 0, hipóteses sem evidência).
+- **Compatibilidade:** sem `documento` no plano, tudo continua em texto livre (inclusive a consolidação).
+- **API:** `entregas.documento`, `entregas.novaVersaoDocumento`.
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

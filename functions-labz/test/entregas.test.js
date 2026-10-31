@@ -196,7 +196,11 @@ test('integração com o motor: cada etapa válida vira entrega; consolidação 
   assert.deepStrictEqual([etapaTextos.resultado.entrega.id, etapaTextos.resultado.entrega.versao], [textos.id, 2]);
   const v = await c.entregas.lerConteudo(c.ator, textos.id, 2);
   const res = await c.banco.obter(caminhos.resultadoEtapa(o.id, 'textos'));
-  assert.strictEqual(v.texto, res.texto, 'a entrega é o resultado efetivamente gravado');
+  // Fase 4C.2: a etapa tem documento → o conteúdo da versão é o JSON e o resultado da etapa é o Markdown derivado DELE
+  const doc = await c.entregas.lerDocumento(c.ator, textos.id, 2);
+  assert.strictEqual(doc.markdown, res.texto, 'o Markdown da versão é o resultado efetivamente gravado');
+  assert.strictEqual(v.texto, JSON.stringify(JSON.parse(v.texto)) === v.texto ? v.texto : null, 'o conteúdo é o JSON canônico');
+  assert.deepStrictEqual([doc.documento, doc.integridade, doc.representacao], ['roteiro-reels', 'conferida', 'confere']);
   const aguardando = (await c.entregas.listar(c.ator, { estado: 'em-revisao' })).itens;
   assert.deepStrictEqual(aguardando.map((e) => e.id), [cons.id]);
   // a aprovação final continua só do Super Admin

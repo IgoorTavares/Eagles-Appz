@@ -42,7 +42,8 @@ test('seleção automática: o Estrategista escolhe só os especialistas necess�
     const d = await c.motor.diagnosticar(c.ator, exe.id);
     assert.strictEqual(d.estado, 'COMPLETED', nome);
     const consolidado = await c.banco.obter(caminhos.resultadoEtapa(exe.id, 'consolidacao'));
-    assert.ok(consolidado.texto.startsWith('[SIMULADO] Consolidação'), `${nome}: entrega consolidada`);
+    // Fase 4C.2: a consolidação dos planos com documentos é o documento "consolidacao-final" (Markdown gerado pelo sistema, dados escapados)
+    assert.ok(consolidado.documento === 'consolidacao-final' && consolidado.texto.includes('# Consolidação final') && consolidado.texto.includes('\\[SIMULADO\\]'), `${nome}: entrega consolidada`);
   }
 });
 

@@ -126,6 +126,9 @@ const ACOES = {
   'entregas.obter': [obj({ entregaId: ID }), (s, a, d) => s.entregas.obter(a, d.entregaId)],
   'entregas.versoes': [obj({ entregaId: ID, depoisDe: { tipo: 'texto', padrao: /^[0-9]{1,6}$/ }, limite: { tipo: 'inteiro', min: 1, max: 100 } }), (s, a, d) => s.entregas.versoes(a, d.entregaId, { depoisDe: d.depoisDe, limite: d.limite })],
   'entregas.conteudo': [obj({ entregaId: ID, versao: N }), (s, a, d) => s.entregas.lerConteudo(a, d.entregaId, d.versao)],
+  // Fase 4C.2: documento estruturado + Markdown da versão (conferidos juntos) e correção validada pelo Super Admin
+  'entregas.documento': [obj({ entregaId: ID, versao: N }), (s, a, d) => s.entregas.lerDocumento(a, d.entregaId, d.versao)],
+  'entregas.novaVersaoDocumento': [obj({ entregaId: ID, dados: { tipo: 'objeto', obrigatorio: true }, versaoBase: { tipo: 'inteiro', min: 0 } }), (s, a, d) => s.entregas.novaVersaoDocumento(a, d.entregaId, d.dados, { versaoBase: d.versaoBase })],
   'entregas.criar': [obj({ entrega: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.entregas.criar(a, d.entrega)],
   'entregas.novaVersao': [obj({ entregaId: ID, conteudo: { tipo: 'objeto', obrigatorio: true }, versaoBase: { tipo: 'inteiro', min: 0 } }), (s, a, d) => s.entregas.novaVersao(a, d.entregaId, d.conteudo, { versaoBase: d.versaoBase })],
   'entregas.enviarParaRevisao': [obj({ entregaId: ID, versao: N }), (s, a, d) => s.entregas.enviarParaRevisao(a, d.entregaId, d.versao)],

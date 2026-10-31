@@ -38,11 +38,15 @@ const idDaReferencia = (r) => { const m = String(r).match(REF_MEMORIA); return m
 // Só os campos conhecidos passam; o resto é descartado e contado (o modelo não
 // muda cliente, permissões, limites nem aprovações escrevendo campos a mais).
 function saidaDeExecucao(obj, pedido, provedor, uso) {
-  if (typeof obj.texto !== 'string' || !obj.texto.trim()) throw new ErroProvedor('resposta-malformada', `${provedor}: JSON sem "texto"`, { provedor, uso });
-  const conhecidos = ['texto', 'referencias', 'acoes', ...(pedido.modo === 'consolidar' ? ['revisoes'] : [])];
+  // Fase 4C.2: etapa com documento → o documento vem em "documento" (validado depois, no motor)
+  if (pedido.documento) {
+    if (!obj.documento || typeof obj.documento !== 'object' || Array.isArray(obj.documento)) throw new ErroProvedor('resposta-malformada', `${provedor}: JSON sem o objeto "documento"`, { provedor, uso });
+  } else if (typeof obj.texto !== 'string' || !obj.texto.trim()) throw new ErroProvedor('resposta-malformada', `${provedor}: JSON sem "texto"`, { provedor, uso });
+  const conhecidos = [pedido.documento ? 'documento' : 'texto', 'referencias', 'acoes', ...(pedido.modo === 'consolidar' ? ['revisoes'] : [])];
   const ignorados = Object.keys(obj).filter((k) => !conhecidos.includes(k));
   const saida = {
-    texto: obj.texto.slice(0, MAX_TEXTO + 1),
+    texto: pedido.documento ? undefined : obj.texto.slice(0, MAX_TEXTO + 1),
+    documento: pedido.documento ? obj.documento : undefined,
     referencias: Array.isArray(obj.referencias) ? obj.referencias.slice(0, 50).map(idDaReferencia) : [],
     acoes: Array.isArray(obj.acoes) ? obj.acoes.slice(0, 20) : obj.acoes === undefined ? [] : obj.acoes,
     ignorados,
@@ -59,7 +63,7 @@ function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPa
   if (!transporte || !['simulado', 'bloqueado'].includes(transporte.tipo)) throw new Error('Fase 4B: só o transporte simulado ou o bloqueado são aceitos');
 
   async function solicitacao(pedido, cfg) {
-    return montarSolicitacao({ ctx: pedido.contexto, modo: pedido.modo, maxEtapas: pedido.maxEtapas || 8 });
+    return montarSolicitacao({ ctx: pedido.contexto, modo: pedido.modo, maxEtapas: pedido.maxEtapas || 8, documento: pedido.documento });
   }
 
   // Chamada com timeout e cancelamento (o sinal do executor e o do relógio).
@@ -72,7 +76,7 @@ function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPa
     const ms = timeoutPadraoMs || cfg.timeoutMs;
     const relogio = setTimeout(() => { motivo = 'timeout'; controle.abort(); }, ms);
     try {
-      return await transporte.enviar(cfg.provedor, req, { sinal: controle.signal, meta: { agenteId: pedido.agenteId, etapaId: pedido.etapaId, modo: pedido.modo, tentativa: pedido.tentativa, objetivo: pedido.objetivo } });
+      return await transporte.enviar(cfg.provedor, req, { sinal: controle.signal, meta: { agenteId: pedido.agenteId, etapaId: pedido.etapaId, modo: pedido.modo, tentativa: pedido.tentativa, objetivo: pedido.objetivo, documento: pedido.documento || null } });
     } catch (e) {
       if (motivo === 'timeout') throw new ErroProvedor('timeout', `${cfg.provedor}: sem resposta em ${ms} ms`, { provedor: cfg.provedor });
       if (motivo === 'cancelado') throw new ErroProvedor('cancelado', 'Chamada cancelada pelo executor', { provedor: cfg.provedor });
@@ -121,7 +125,8 @@ function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPa
       }
       const sx = saidaDeExecucao(obj, pedido, cfg.provedor, uso);
       origem.camposIgnorados = sx.ignorados.length;
-      const saida = Object.assign(base, { formato: 'texto', texto: sx.texto, referencias: sx.referencias, acoes: sx.acoes, uso: { tokensEntrada: usoFinal.tokensEntrada, tokensSaida: usoFinal.tokensSaida, fonte: usoFinal.fonte }, origem });
+      const saida = Object.assign(base, { formato: pedido.documento ? 'documento' : 'texto', referencias: sx.referencias, acoes: sx.acoes, uso: { tokensEntrada: usoFinal.tokensEntrada, tokensSaida: usoFinal.tokensSaida, fonte: usoFinal.fonte }, origem });
+      if (pedido.documento) saida.documento = sx.documento; else saida.texto = sx.texto;
       if (sx.revisoes) saida.revisoes = sx.revisoes;
       return saida;
     },

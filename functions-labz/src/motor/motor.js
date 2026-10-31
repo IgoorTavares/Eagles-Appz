@@ -46,6 +46,8 @@ const { tokensDe } = require('./adaptador-simulado');
 const { validarPlano } = require('./validar-plano');
 const { CONSOLIDACAO } = require('./planejador');
 const { mensagemSegura } = require('../ia/credenciais');
+const { gerarMarkdown } = require('../entregas/representacao');
+const { DOCUMENTO_DA_CONSOLIDACAO } = require('../contratos/documentos');
 
 const MAX_TENTATIVAS_ETAPA = 3; // falhas transitórias por etapa
 const MAX_TENTATIVAS_QUALIDADE = 2; // reprovações estruturais por etapa antes de pedir revisão
@@ -256,6 +258,7 @@ function criarMotor(deps) {
     const ctx = await porta.montarContexto(briefing);
     const texto = contextoParaTexto(ctx);
     const pedido = { agenteId: etapa.agenteId, etapaId: etapa.id, modo: etapa.id === CONSOLIDACAO ? 'consolidar' : 'executar', tentativa, contexto: ctx, textoContexto: texto, fontes: ctx.fontes, objetivo: etapa.objetivo, sinal };
+    if (etapa.documento) pedido.documento = etapa.documento; // Fase 4C.2: o tipo vem do PLANO validado
 
     // falha definitiva (ou tentativas esgotadas) da etapa: FAILED com o tipo do erro, sem conteúdo
     const falhar = async (e, motivo) => {
@@ -316,17 +319,27 @@ function criarMotor(deps) {
       liq = await liquidarConsumo(res, uso);
     }
 
-    // Quality Gate (estrutural); resposta inválida do provedor conta como reprovação
-    const q = qProblemas ? { aprovado: false, problemas: qProblemas } : verificarResultado(saida, { agenteId: etapa.agenteId, etapaId: etapa.id, fontes: ctx.fontes });
+    // Fase 4C.2: na consolidação, as referências às entregas são do SISTEMA (as do modelo são descartadas)
+    if (!qProblemas && etapa.documento === DOCUMENTO_DA_CONSOLIDACAO && saida && saida.documento && typeof saida.documento === 'object' && !Array.isArray(saida.documento)) {
+      saida.documento = Object.assign({}, saida.documento, {
+        entregas: (exe.etapas || []).filter((x) => x.id !== CONSOLIDACAO && x.resultado && x.resultado.entrega).slice(0, 20)
+          .map((x) => ({ etapaId: x.id, entregaId: x.resultado.entrega.id, versao: x.resultado.entrega.versao, hash: x.resultado.entrega.hash })),
+      });
+    }
+    // Quality Gate (estrutural; com documento, o contrato do catálogo); resposta inválida do provedor conta como reprovação
+    const q = qProblemas ? { aprovado: false, problemas: qProblemas } : verificarResultado(saida, { agenteId: etapa.agenteId, etapaId: etapa.id, fontes: ctx.fontes, documento: etapa.documento });
     if (!q.aprovado) {
       const tq = (etapa.tentativasQualidade || 0) + 1;
       await comCracha(id, token, (x) => Object.assign(comEtapa(x, etapa.id, { status: 'pendente', tentativasQualidade: tq, ultimoErro: `reprovada no controle estrutural (${q.problemas.length})` }), uso ? { custos: custos.somar(x.custos, etapa.id, uso, infoCusto(etapa.agenteId, prep, liq)) } : {}));
-      await registrarRevisao(id, token, etapa, { motivo: 'controle-estrutural', problemas: q.problemas, texto: saida && typeof saida.texto === 'string' ? saida.texto : null });
+      await registrarRevisao(id, token, etapa, { motivo: 'controle-estrutural', problemas: q.problemas, texto: saida && typeof saida.texto === 'string' ? saida.texto : saida && saida.documento ? JSON.stringify(saida.documento).slice(0, 20000) : null });
       await ev('qualidade_reprovada', id, { etapa: etapa.id, tentativa: tq, problemas: q.problemas.slice(0, 10) });
       if (tq < MAX_TENTATIVAS_QUALIDADE) return null; // tenta a etapa de novo nesta rodada
       await execucoes.transicionar(ATOR_SISTEMA, id, 'REVISION_REQUIRED', { token, motivo: 'controle estrutural', extras: { diagnostico: { motivo: 'qualidade-reprovada', etapa: etapa.id, problemas: q.problemas.slice(0, 10), em: relogio() } } });
       return { resultado: 'revisao' };
     }
+
+    // Fase 4C.2: documento válido → Markdown derivado pelo SISTEMA (é ele que segue como resultado da etapa)
+    const textoFinal = etapa.documento ? gerarMarkdown(etapa.documento, saida.documento).markdown : saida.texto;
 
     // Resultado + ações (aprovação humana quando exigida), tudo com o crachá
     const pedidos = [];
@@ -334,18 +347,18 @@ function criarMotor(deps) {
     let entrega = null;
     await comCracha(id, token, async (x, t) => {
       const etapaAtual = x.etapas.find((y) => y.id === etapa.id);
-      if (entregas) entrega = await entregas.registrarDaEtapa(t, { exe: x, etapa: etapaAtual, tentativa, texto: saida.texto, final: etapa.id === CONSOLIDACAO });
+      if (entregas) entrega = await entregas.registrarDaEtapa(t, { exe: x, etapa: etapaAtual, tentativa, texto: textoFinal, final: etapa.id === CONSOLIDACAO, documento: etapa.documento ? { dados: saida.documento } : undefined });
       for (const acao of saida.acoes) {
         const a = avaliarAcao(etapa.agenteId, acao);
         if (a.exigeAprovacao) pedidos.push(await aprovacoes.solicitar(t, id, etapaAtual, acao));
         else imediatas.push(acao);
       }
       await t.gravar(caminhos.resultadoEtapa(id, etapa.id), {
-        simulado: true, agenteId: etapa.agenteId, etapaId: etapa.id, tentativa, texto: saida.texto, referencias: saida.referencias, criadoEm: relogio(),
+        simulado: true, agenteId: etapa.agenteId, etapaId: etapa.id, tentativa, texto: textoFinal, referencias: saida.referencias, criadoEm: relogio(), documento: etapa.documento || null,
         origem: saida.origem ? { provedor: saida.origem.provedor, modelo: saida.origem.modelo, fonteUso: saida.origem.fonteUso } : null,
       });
       const resultado = {
-        referencias: saida.referencias, fontes: ctx.fontes.map((f) => `${f.origem}:${f.escopo || '-'}:${f.id}@${f.versao}`), caracteres: saida.texto.length, simulado: true,
+        referencias: saida.referencias, fontes: ctx.fontes.map((f) => `${f.origem}:${f.escopo || '-'}:${f.id}@${f.versao}`), caracteres: textoFinal.length, simulado: true, documento: etapa.documento || null,
         entrega: entrega ? { id: entrega.entregaId, versao: entrega.versao, hash: entrega.hash } : null,
         acoes: [...imediatas.map((a) => ({ ferramentaId: a.ferramentaId, operacao: a.operacao, situacao: 'simulada' })), ...pedidos.map((p) => ({ ferramentaId: p.ferramentaId, operacao: p.operacao, situacao: 'aguardando-aprovacao', aprovacao: p.id }))],
       };

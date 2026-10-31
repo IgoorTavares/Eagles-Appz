@@ -229,6 +229,10 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
   - Plano: `documento` na etapa (o Estrategista propõe; o backend confere catálogo e permissão; consolidação = `consolidacao-final`); planos antigos continuam iguais.
   - Proposta de indexação consolidada (aprovada pelo Igor): **28 índices e 41 isenções**. Nada publicado.
   - Testes: `npm test` (242), `test:emulador` (23), regras (26); 14 mutações detectadas.
+- **LABZ AI — Fase 4C.2, passo 2 (produção simulada e registro dos documentos)**, na mesma branch, gravado em commit local "feat(labz-ai): integra documentos estruturados ao motor - fase 4C2 passo 2" (autorizado pelo Igor em 31/10/2026; passo 3 **não** autorizado). Commit do passo 1: `430e8a1`.
+  - Etapa com `documento`: o adaptador pede o documento; a qualidade valida pelo catálogo (tipo do plano, agente, estrutura); a consolidação recebe as referências do sistema; o Markdown é gerado pelo sistema; JSON canônico (conteúdo da versão) + Markdown (`representacoes.markdown`, com `hashOrigem`) gravados juntos na transação do crachá. `lerDocumento`, aprovar e restaurar conferem os dois. `novaVersaoDocumento` (validada); texto solto em entrega de documento recusado.
+  - Planos sem documento continuam em texto livre (a consolidação só vira documento em planos com documentos).
+  - Testes: `npm test` (259), `test:emulador` (24), regras (26); 13 mutações detectadas.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.
 - Pendências funcionais registradas na análise da v150 (não corrigidas; dependem de uma etapa funcional aprovada pelo Igor):

@@ -27,6 +27,8 @@ const { agenteNaExecucao } = require('../agentes/memoria-agente');
 const { FINAIS } = require('../contratos/execucao');
 const C = require('../contratos/entrega');
 const arm = require('./armazenamento');
+const { obterDocumento, validarDocumento } = require('../contratos/documentos');
+const rep = require('./representacao');
 
 const PAGINA = 100;
 const SEG = /^[A-Za-z0-9_-]{1,80}$/;
@@ -74,7 +76,8 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
   }
 
   // Cria a versão n+1 (nunca sobrescreve). conteudo já validado; ref opcional (restauração).
-  async function gravarVersao(t, entrega, { conteudo, preparado, ref, origem, ator, estado }) {
+  // extra (Fase 4C.2): campos do documento estruturado gravados JUNTO na mesma versão (documento, representacoes)
+  async function gravarVersao(t, entrega, { conteudo, preparado, ref, origem, ator, estado, extra }) {
     const n = (entrega.ultimaVersao || 0) + 1;
     if (await t.obter(caminhos.versaoEntrega(entrega.id, n))) throw erro('conflito', 'Esta versão já existe: outra gravação chegou antes', { motivo: 'versao-concorrente' });
     const agora = relogio();
@@ -85,6 +88,7 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
       arquivoReal: preparado ? preparado.arquivoReal : conteudo.arquivoReal, metadados: preparado ? preparado.metadados : conteudo.metadados,
       origem, criadoEm: agora, criadoPor: ator.uid, decisao: null, enviadaEm: estado === 'em-revisao' ? agora : null,
     };
+    if (extra) Object.assign(versao, extra);
     await t.gravar(caminhos.versaoEntrega(entrega.id, n), versao);
     const base = { versaoAtual: n, ultimaVersao: n, estadoAtual: estado, hashAtual: referencia.hash, nome: conteudo.nome, atualizadoEm: agora, atualizadoPor: ator.uid };
     return { n, versao, base };
@@ -95,6 +99,43 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
     C.exigirTipoFormato(tipo, conteudo.formato);
     const nome = C.validarNome(conteudo.nome, conteudo.formato);
     return Object.assign({}, conteudo, { nome });
+  }
+
+  // ---------- Fase 4C.2: documento estruturado + Markdown derivado NA MESMA versão ----------
+  // O JSON canônico do envelope { documento, contrato, dados } é o CONTEÚDO da versão (o hash
+  // da versão = hash do documento). O Markdown é gerado pelo sistema a partir dele e fica em
+  // versao.representacoes.markdown, com o próprio hash e o hash da origem. Sem segunda entrega,
+  // sem aprovação própria.
+  function prepararDocumento(documentoId, dados, agenteId, nomeBase) {
+    const doc = obterDocumento(documentoId);
+    if (!doc) throw erro('invalido', 'Documento inexistente');
+    const v = validarDocumento(documentoId, dados, { agenteId });
+    if (!v.valido) throw erro('invalido', 'Documento inválido: não pode ser registrado', v.problemas);
+    const texto = rep.canonico(rep.envelope(documentoId, dados));
+    const conteudo = { formato: 'json', nome: `${nomeBase}.json`, descricao: doc.nome, texto };
+    const preparado = arm.prepararConteudo(conteudo);
+    const md = rep.gerarMarkdown(documentoId, dados);
+    if (md.hashOrigem !== preparado.hash) throw erro('integridade', 'Representação gerada de outro conteúdo');
+    const prepMd = arm.prepararConteudo({ formato: 'markdown', nome: `${nomeBase}.md`, texto: md.markdown });
+    return { documentoId, doc, conteudo, preparado, md, prepMd };
+  }
+  // Campos da versão: o id do documento e a representação Markdown (gravada na mesma transação).
+  async function gravarRepresentacao(t, execucaoId, pd) {
+    const ref = await arm.gravarConteudo(t, execucaoId, pd.prepMd, relogio());
+    return { documento: pd.documentoId, representacoes: { markdown: { conteudoRef: ref, hash: ref.hash, hashOrigem: pd.md.hashOrigem, gerador: pd.md.gerador, tamanho: ref.tamanho } } };
+  }
+  // Confere JUNTOS o documento e o Markdown de uma versão (leitor: banco ou transação).
+  async function conferirDocumentoDaVersao(leitor, e, v) {
+    const json = await arm.lerConteudo(leitor, v.conteudoRef, e.execucaoId);
+    let env;
+    try { env = JSON.parse(json.texto); } catch (er) { throw erro('integridade', 'Documento guardado não é JSON'); }
+    if (!env || env.documento !== e.documento || rep.canonico(env) !== json.texto) throw erro('integridade', 'Documento guardado fora do formato canônico ou de outro tipo');
+    const r = v.representacoes && v.representacoes.markdown;
+    if (!r || r.hashOrigem !== v.hash) throw erro('integridade', 'Representação Markdown ausente ou de outra versão');
+    const md = await arm.lerConteudo(leitor, r.conteudoRef, e.execucaoId);
+    const c = rep.conferirRepresentacao(env.documento, env.dados, md.texto);
+    if (!c.confere) throw erro('integridade', 'O Markdown não corresponde ao documento desta versão', { motivo: c.motivo });
+    return { documento: env.documento, contrato: env.contrato, dados: env.dados, markdown: md.texto, hash: v.hash, hashMarkdown: r.hash };
   }
 
   // ---------- Super Admin: criar e versionar manualmente ----------
@@ -135,6 +176,7 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
     await banco.transacao(async (t) => {
       const e = await lerEntrega(t, entregaId);
       if (versaoBase !== undefined && versaoBase !== e.ultimaVersao) throw erro('conflito', 'A entrega mudou: há uma versão mais nova', { motivo: 'versao-desatualizada', ultimaVersao: e.ultimaVersao });
+      if (e.documento) throw erro('invalido', 'Esta entrega é um documento estruturado: use a nova versão de documento (validada)');
       const conteudo = validarConteudo(e.tipo, conteudoBruto);
       const preparado = arm.prepararConteudo(conteudo);
       const g = await gravarVersao(t, e, { conteudo, preparado, origem: { tipo: 'super-admin', versaoBase: e.ultimaVersao }, ator, estado: 'rascunho' });
@@ -145,15 +187,38 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
     return r;
   }
 
+  // Fase 4C.2: Super Admin corrige um documento estruturado = versão NOVA validada (com o Markdown).
+  async function novaVersaoDocumento(ator, entregaId, dados, { versaoBase } = {}) {
+    exigirAtor(ator);
+    let r;
+    await banco.transacao(async (t) => {
+      const e = await lerEntrega(t, entregaId);
+      if (!e.documento) throw erro('invalido', 'Esta entrega não é um documento estruturado');
+      if (versaoBase !== undefined && versaoBase !== e.ultimaVersao) throw erro('conflito', 'A entrega mudou: há uma versão mais nova', { motivo: 'versao-desatualizada', ultimaVersao: e.ultimaVersao });
+      const pd = prepararDocumento(e.documento, dados, e.agenteId, e.etapaId || 'documento');
+      const extra = await gravarRepresentacao(t, e.execucaoId, pd);
+      const g = await gravarVersao(t, e, { conteudo: pd.conteudo, preparado: pd.preparado, origem: { tipo: 'super-admin', versaoBase: e.ultimaVersao }, ator, estado: 'rascunho', extra });
+      await t.atualizar(caminhos.entrega(entregaId), g.base);
+      r = { entregaId, versao: g.n, hash: g.versao.hash, hashMarkdown: extra.representacoes.markdown.hash, estado: 'rascunho', versaoAprovada: e.versaoAprovada };
+    });
+    await ev('versao_criada', ator, entregaId, { versao: r.versao, hash: curto(r.hash), origem: 'super-admin', documento: true });
+    return r;
+  }
+
   // ---------- Motor: entrega da etapa, NA transação do executor (crachá já conferido) ----------
   // exe: a execução lida na transação (RUNNING, crachá certo). Nada vem do modelo além do texto.
   // Idempotente: a mesma etapa/tentativa (ou o mesmo conteúdo) não gera versão duplicada.
-  async function registrarDaEtapa(t, { exe, etapa, tentativa, texto, final }) {
+  // documento (Fase 4C.2, opcional): { dados } — o tipo é o do PLANO (etapa.documento), nunca o do modelo.
+  async function registrarDaEtapa(t, { exe, etapa, tentativa, texto, final, documento }) {
     if (exe.estado !== 'RUNNING' || FINAIS.includes(exe.estado)) throw erro('conflito', 'A execução não está em andamento', { motivo: 'execucao-parou' });
     if (!obterAgente(etapa.agenteId) || !agenteNaExecucao(exe, etapa.agenteId)) throw erro('permissao-negada', 'O agente não faz parte desta execução');
-    const tipo = TIPO_DO_AGENTE[etapa.agenteId];
-    const conteudo = { formato: 'texto', nome: `${etapa.id}.txt`, descricao: final ? 'Entrega consolidada da execução' : `Resultado da etapa ${etapa.id}`, texto };
-    const preparado = arm.prepararConteudo(conteudo);
+    if (documento && !etapa.documento) throw erro('invalido', 'A etapa não pede documento estruturado');
+    if (etapa.documento && !documento) throw erro('invalido', 'A etapa pede um documento estruturado');
+    let pd = null;
+    if (etapa.documento) pd = prepararDocumento(etapa.documento, documento.dados, etapa.agenteId, etapa.id);
+    const tipo = pd ? pd.doc.tipoEntrega : TIPO_DO_AGENTE[etapa.agenteId];
+    const conteudo = pd ? pd.conteudo : { formato: 'texto', nome: `${etapa.id}.txt`, descricao: final ? 'Entrega consolidada da execução' : `Resultado da etapa ${etapa.id}`, texto };
+    const preparado = pd ? pd.preparado : arm.prepararConteudo(conteudo);
     const chave = `${etapa.id}:${tentativa}:${(etapa.revisoes || []).length}`;
     const id = idDaEtapa(exe.id, etapa.id);
     const atual = await t.obter(caminhos.entrega(id));
@@ -161,9 +226,11 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
     const origem = { tipo: 'etapa', etapaId: etapa.id, tentativa, chave };
     if (atual) {
       if (atual.execucaoId !== exe.id || atual.etapaId !== etapa.id || atual.agenteId !== etapa.agenteId) throw erro('isolamento', 'Entrega de outra execução, etapa ou agente');
+      if ((atual.documento || null) !== (etapa.documento || null)) throw erro('isolamento', 'A entrega é de outro tipo de documento');
       const ultima = await t.obter(caminhos.versaoEntrega(id, atual.ultimaVersao));
       if (ultima && (ultima.origem.chave === chave || ultima.hash === preparado.hash)) return { entregaId: id, versao: atual.ultimaVersao, hash: ultima.hash, nova: false, duplicada: true };
-      const g = await gravarVersao(t, Object.assign({ id }, atual), { conteudo, preparado, origem, ator: ATOR_SISTEMA, estado });
+      const extra = pd ? await gravarRepresentacao(t, exe.id, pd) : undefined;
+      const g = await gravarVersao(t, Object.assign({ id }, atual), { conteudo, preparado, origem, ator: ATOR_SISTEMA, estado, extra });
       await t.atualizar(caminhos.entrega(id), g.base);
       return { entregaId: id, versao: g.n, hash: g.versao.hash, nova: true, tipo, tamanho: preparado.tamanho };
     }
@@ -172,11 +239,13 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
       id, empresaId: exe.empresaId || null, execucaoId: exe.id, tarefaId: exe.id, etapaId: etapa.id, agenteId: etapa.agenteId, tipo,
       exigeAprovacao: true, versaoAprovada: null, aprovacao: null, criadoEm: agora, criadoPor: ATOR_SISTEMA.uid, origem: 'etapa', ultimaVersao: 0,
     };
-    const g = await gravarVersao(t, entrega, { conteudo, preparado, origem, ator: ATOR_SISTEMA, estado });
+    if (pd) entrega.documento = etapa.documento;
+    const extra = pd ? await gravarRepresentacao(t, exe.id, pd) : undefined;
+    const g = await gravarVersao(t, entrega, { conteudo, preparado, origem, ator: ATOR_SISTEMA, estado, extra });
     const doc = Object.assign({}, entrega, g.base);
     delete doc.id;
     await t.gravar(caminhos.entrega(id), doc);
-    return { entregaId: id, versao: 1, hash: g.versao.hash, nova: true, tipo, tamanho: preparado.tamanho };
+    return { entregaId: id, versao: 1, hash: g.versao.hash, nova: true, tipo, tamanho: preparado.tamanho, documento: etapa.documento || null };
   }
 
   // ---------- Estados ----------
@@ -211,6 +280,7 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
       if (v.hash !== dados.hash) throw erro('conflito', 'O hash não confere com esta versão', { motivo: 'hash-diferente' });
       if (!C.transicaoPermitida(v.estado, para)) throw erro('precondicao', `Uma versão ${v.estado} não pode ser ${para}`);
       await arm.lerConteudo(t, v.conteudoRef, e.execucaoId); // integridade conferida ANTES de decidir
+      if (e.documento) await conferirDocumentoDaVersao(t, e, v); // documento e Markdown conferidos JUNTOS
       const decisao = { tipo: para, por: ator.uid, em: relogio(), hash: v.hash, motivo: dados.motivo ? dados.motivo.trim() : null };
       await t.atualizar(caminhos.versaoEntrega(entregaId, dados.versao), { estado: para, decisao });
       const base = { estadoAtual: para, atualizadoEm: decisao.em, atualizadoPor: ator.uid };
@@ -234,8 +304,10 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
       const e = await lerEntrega(t, entregaId);
       const v = await lerVersao(t, entregaId, n);
       await arm.lerConteudo(t, v.conteudoRef, e.execucaoId); // só restaura conteúdo íntegro
+      if (e.documento) await conferirDocumentoDaVersao(t, e, v);
       const conteudo = { formato: v.formato, nome: v.nome, descricao: v.descricao, arquivoReal: v.arquivoReal, metadados: v.metadados };
-      const g = await gravarVersao(t, e, { conteudo, ref: v.conteudoRef, origem: { tipo: 'restauracao', deVersao: n, motivo: motivo.trim().slice(0, 300) }, ator, estado: 'rascunho' });
+      const extra = e.documento ? { documento: v.documento, representacoes: v.representacoes } : undefined;
+      const g = await gravarVersao(t, e, { conteudo, ref: v.conteudoRef, origem: { tipo: 'restauracao', deVersao: n, motivo: motivo.trim().slice(0, 300) }, ator, estado: 'rascunho', extra });
       await t.atualizar(caminhos.entrega(entregaId), g.base);
       r = { entregaId, versao: g.n, deVersao: n, hash: v.hash, estado: 'rascunho' };
     });
@@ -265,6 +337,20 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
       return Object.assign({ entregaId, versao: n, formato: v.formato, arquivoReal: v.arquivoReal }, c);
     } catch (er) {
       if (er.codigo === 'integridade') await ev('integridade_falhou', ator, entregaId, { versao: n });
+      throw er;
+    }
+  }
+
+  // Fase 4C.2: documento estruturado + Markdown de uma versão, conferidos juntos.
+  async function lerDocumento(ator, entregaId, n) {
+    exigirAtor(ator);
+    const e = await lerEntrega(banco, entregaId);
+    if (!e.documento) throw erro('invalido', 'Esta entrega não é um documento estruturado');
+    const v = await lerVersao(banco, entregaId, n);
+    try {
+      return Object.assign({ entregaId, versao: n, integridade: 'conferida', representacao: 'confere' }, await conferirDocumentoDaVersao(banco, e, v));
+    } catch (er) {
+      if (er.codigo === 'integridade') await ev('integridade_falhou', ator, entregaId, { versao: n, documento: true });
       throw er;
     }
   }
@@ -326,7 +412,7 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
     });
   }
 
-  return { criar, novaVersao, registrarDaEtapa, enviarParaRevisao, decidir, restaurar, obter, versoes, lerConteudo: lerConteudoVersao, listar, abrirParaAgente, idDaEtapa };
+  return { criar, novaVersao, novaVersaoDocumento, lerDocumento, registrarDaEtapa, enviarParaRevisao, decidir, restaurar, obter, versoes, lerConteudo: lerConteudoVersao, listar, abrirParaAgente, idDaEtapa };
 }
 
 module.exports = { criarEntregas, idDaEtapa, TIPO_DO_AGENTE };

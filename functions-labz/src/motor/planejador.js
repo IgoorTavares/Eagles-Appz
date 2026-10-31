@@ -57,7 +57,8 @@ function montarEtapas(exe, passos, { maxEtapas = 8 } = {}) {
   }
   // orquestrado: o Estrategista consolida no fim (etapa automática que depende de todas)
   if (exe.modo !== 'especialista') {
-    passos = [...passos, { id: CONSOLIDACAO, agenteId: '08-estrategista', objetivo: `Consolidar as entregas para: ${String(exe.objetivo).slice(0, 1800)}`, dependeDe: passos.map((p) => p.id), criterios: ['Reúne todas as entregas das etapas', 'Confere cada entrega com os critérios de conclusão dela'], documento: DOCUMENTO_DA_CONSOLIDACAO }];
+    passos = [...passos, { id: CONSOLIDACAO, agenteId: '08-estrategista', objetivo: `Consolidar as entregas para: ${String(exe.objetivo).slice(0, 1800)}`, dependeDe: passos.map((p) => p.id), criterios: ['Reúne todas as entregas das etapas', 'Confere cada entrega com os critérios de conclusão dela'], ...(passos.some((p) => p.documento) ? { documento: DOCUMENTO_DA_CONSOLIDACAO } : {}) }];
+    // (Fase 4C.2) a consolidação só vira documento estruturado em planos COM documentos: planos antigos continuam em texto livre
   }
   const ordem = ordenar(passos);
   const porId = new Map(passos.map((p) => [p.id, p]));

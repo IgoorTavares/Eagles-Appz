@@ -194,7 +194,7 @@ test('acertou a senha antes da 5ª: a própria pessoa zera o contador', async ()
   await assertFails(deleteDoc(doc(env.authenticatedContext('outro', { email: 'outro@x.com' }).firestore(), 'tentativas_login/vitima@x.com')));
 });
 
-// ---------- proteção do Super Admin (LABZ AI, Fase 1) ----------
+// ---------- proteção do Super Admin e dos níveis ----------
 test('Super Admin vinculado a uma empresa: o Diretor dela não muda o nível, os dados nem apaga a conta', async () => {
   const d1 = db('d1');
   await assertFails(updateDoc(doc(d1, 'usuarios/sa1'), { role: 'Diretor' }));

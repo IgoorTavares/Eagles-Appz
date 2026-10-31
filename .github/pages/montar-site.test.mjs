@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { montar, conferir, PERMITIDOS, PAGINAS, DOMINIO } from './montar-site.mjs';
+import { spawnSync } from 'node:child_process';
+import { montar, conferir, conferirJekyll, PERMITIDOS, PAGINAS, DOMINIO } from './montar-site.mjs';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'site-'));
@@ -154,7 +155,6 @@ test('o workflow não publica sozinho: só com disparo manual, PUBLICAR digitado
 });
 
 test('montagem com problema termina com erro (o passo falha e o workflow não chega a publicar)', async () => {
-  const { spawnSync } = await import('node:child_process');
   const script = path.join(RAIZ, '.github/pages/montar-site.mjs');
   const ok = spawnSync(process.execPath, [script, '--raiz', RAIZ, '--saida', path.join(tmp(), '_site')], { encoding: 'utf8' });
   assert.equal(ok.status, 0, ok.stderr);
@@ -177,4 +177,144 @@ test('o workflow não roda código da LABZ AI, do servidor nem mexe no Firebase'
   assert.doesNotMatch(wf, /functions-labz|functions\/|firebase-tools|firebase deploy|npm (ci|install)|secrets\./);
   const usos = [...wf.matchAll(/uses:\s*([^\s]+)/g)].map((m) => m[1]).sort();
   assert.deepEqual([...new Set(usos)], ['actions/checkout@v4', 'actions/deploy-pages@v4', 'actions/setup-node@v4', 'actions/upload-artifact@v4', 'actions/upload-pages-artifact@v3']);
+});
+
+// ---------- 2ª e 3ª camadas: se a fonte do Pages voltar para "Deploy from a branch" ----------
+function entradasDaRaiz() {
+  // o que está no Git (no GitHub o checkout é igual); sem Git, a pasta
+  const g = spawnSync('git', ['ls-tree', '--name-only', 'HEAD'], { cwd: RAIZ, encoding: 'utf8' });
+  if (g.status === 0 && g.stdout.trim()) return g.stdout.trim().split('\n');
+  return fs.readdirSync(RAIZ);
+}
+
+test('_config.yml (Jekyll) exclui todo arquivo ou pasta interna da raiz', () => {
+  const cfg = fs.readFileSync(path.join(RAIZ, '_config.yml'), 'utf8');
+  const excluidos = [...cfg.matchAll(/^\s*-\s*"?([^"\n#]+?)"?\s*$/gm)].map((m) => m[1].trim());
+  const publicosNaRaiz = new Set(PERMITIDOS.map((f) => f.split('/')[0]));
+  const internos = entradasDaRaiz().filter((f) => !f.startsWith('.') && !f.startsWith('_') && !publicosNaRaiz.has(f));
+  assert.ok(internos.includes('functions-labz') && internos.includes('functions') && internos.includes('CLAUDE.md'));
+  const faltando = internos.filter((f) => !excluidos.includes(f) && !(f.endsWith('.md') && excluidos.includes('*.md')));
+  assert.deepEqual(faltando, [], `faltam no exclude do _config.yml: ${faltando.join(', ')}`);
+  // e nada público foi excluído por engano
+  for (const p of PERMITIDOS) assert.ok(!excluidos.includes(p) && !excluidos.includes(p.split('/')[0]), p);
+  assert.doesNotMatch(cfg, /^\s*(include|plugins|theme|baseurl|url)\s*:/m, 'a trava não muda mais nada do Jekyll');
+});
+
+test('sem .nojekyll na raiz (ele desligaria a trava do _config.yml no modo antigo)', () => {
+  assert.ok(!entradasDaRaiz().includes('.nojekyll'));
+});
+
+test('conferência do modo antigo (Jekyll): só a lista de permitidos, sem nada interno e sem alteração', () => {
+  const ok = path.join(tmp(), 'jk');
+  assert.equal(montar({ raiz: RAIZ, saida: ok }).ok, true);
+  assert.equal(conferirJekyll({ raiz: RAIZ, saida: ok }).ok, true);
+  for (const [nome, estraga] of [
+    ['interno', (d) => { fs.mkdirSync(path.join(d, 'functions-labz'), { recursive: true }); fs.writeFileSync(path.join(d, 'functions-labz/index.js'), 'x'); }],
+    ['md', (d) => fs.writeFileSync(path.join(d, 'CLAUDE.md'), 'x')],
+    ['regras', (d) => fs.writeFileSync(path.join(d, 'firestore.rules'), 'x')],
+    ['extra', (d) => fs.writeFileSync(path.join(d, 'sitemap.xml'), 'x')],
+    ['faltando', (d) => fs.rmSync(path.join(d, 'script.js'))],
+    ['alterado', (d) => fs.appendFileSync(path.join(d, 'index.html'), '<!-- x -->')],
+  ]) {
+    const d = path.join(tmp(), 'jk');
+    montar({ raiz: RAIZ, saida: d });
+    estraga(d);
+    const r = conferirJekyll({ raiz: RAIZ, saida: d });
+    assert.equal(r.ok, false, nome);
+  }
+});
+
+// ---------- guarda: workflow e script (com um "gh" falso; nada sai para a rede) ----------
+test('workflow da guarda: gatilhos, permissões mínimas por tarefa, nunca publica, nada de Firebase', () => {
+  const wf = fs.readFileSync(path.join(RAIZ, '.github/workflows/pages-guarda.yml'), 'utf8');
+  assert.match(wf, /pull_request:/);
+  assert.match(wf, /push:\n\s+branches: \[main\]/);
+  assert.match(wf, /schedule:/);
+  assert.match(wf, /workflow_dispatch:/);
+  const [cabeca, jobs] = wf.split(/^jobs:/m);
+  assert.match(cabeca, /^permissions:\n\s+contents: read\n/m);
+  assert.doesNotMatch(cabeca, /write/);
+  const [fonte, jekyll] = jobs.split(/^\s{2}jekyll:/m);
+  assert.match(fonte, /pages: read/);
+  assert.match(fonte, /actions: write/);
+  assert.match(fonte, /run: bash \.github\/pages\/guarda\.sh/);
+  assert.match(fonte, /github\.event_name == 'push' && '18'/);
+  assert.match(fonte, /github\.event_name == 'pull_request' && '0'/);
+  assert.doesNotMatch(jekyll, /write/);
+  assert.match(jekyll, /actions\/jekyll-build-pages@v1/);
+  assert.match(jekyll, /--conferir-jekyll _site_jekyll/);
+  assert.doesNotMatch(wf, /pages: write|id-token|contents: write|deploy-pages|upload-pages-artifact|firebase|functions-labz|secrets\./);
+  assert.doesNotMatch(wf, /continue-on-error/);
+});
+
+function gharFalso({ tipo = 'workflow', pages403 = false, runs = '', cancelaFalha = false, listaFalha = false } = {}) {
+  const d = tmp();
+  const log = path.join(d, 'log');
+  fs.mkdirSync(path.join(d, 'bin'));
+  fs.writeFileSync(path.join(d, 'bin/gh'), `#!/bin/bash
+echo "gh $*" >> "${log}"
+case "$*" in
+  *"/pages --jq"*) ${pages403 ? 'echo "HTTP 403: Resource not accessible by integration" >&2; exit 1' : `echo "${tipo}"`};;
+  *"actions/runs?per_page"*) ${listaFalha ? 'echo "rede caiu" >&2; exit 1' : `[ -f "${log}.cancelado" ] || printf '%s\\n' ${runs || '""'} | grep -v '^$'; true`};;
+  *"/cancel"*) ${cancelaFalha ? 'echo "HTTP 403" >&2; exit 1' : `touch "${log}.cancelado"`};;
+esac
+`, { mode: 0o755 });
+  fs.writeFileSync(path.join(d, 'bin/sleep'), '#!/bin/bash\ntrue\n', { mode: 0o755 });
+  return { d, log };
+}
+function rodarGuarda(opcoes, voltas) {
+  const { d, log } = gharFalso(opcoes);
+  const r = spawnSync('bash', [path.join(RAIZ, '.github/pages/guarda.sh')], { encoding: 'utf8', env: { ...process.env, PATH: `${d}/bin:${process.env.PATH}`, REPO: 'dono/repo', VOLTAS: String(voltas), PAUSA: '0' } });
+  const chamadas = fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '';
+  return { status: r.status, saida: r.stdout + r.stderr, chamadas };
+}
+
+test('guarda: fonte certa e nada da publicação antiga → passa (verde)', () => {
+  const r = rodarGuarda({ tipo: 'workflow' }, 3);
+  assert.equal(r.status, 0, r.saida);
+  assert.match(r.saida, /OK: fonte do Pages = GitHub Actions/);
+  assert.doesNotMatch(r.chamadas, /cancel/);
+});
+
+test('guarda: fonte errada (Deploy from a branch) → cancela a publicação antiga e fica vermelha', () => {
+  const r = rodarGuarda({ tipo: 'legacy', runs: '111' }, 3);
+  assert.equal(r.status, 1);
+  assert.match(r.saida, /está em 'legacy'/);
+  assert.match(r.chamadas, /actions\/runs\/111\/cancel/);
+  assert.match(r.saida, /CANCELADA/);
+  // fonte errada e nada rodando: ainda vermelha
+  assert.equal(rodarGuarda({ tipo: 'legacy' }, 1).status, 1);
+});
+
+test('guarda: fonte certa, mas apareceu publicação antiga → cancela e avisa', () => {
+  const r = rodarGuarda({ tipo: 'workflow', runs: '222' }, 2);
+  assert.equal(r.status, 1);
+  assert.match(r.chamadas, /runs\/222\/cancel/);
+});
+
+test('guarda: erro 403 ao ler a configuração → vermelha, com a conferência manual explicada (e ainda vigia)', () => {
+  const r = rodarGuarda({ pages403: true, runs: '333' }, 1);
+  assert.equal(r.status, 1);
+  assert.match(r.saida, /Não consegui ler a configuração do Pages \(HTTP 403/);
+  assert.match(r.saida, /Confira à mão/);
+  assert.match(r.chamadas, /runs\/333\/cancel/);
+});
+
+test('guarda: falha ao cancelar → vermelha, pedindo o cancelamento à mão', () => {
+  const r = rodarGuarda({ tipo: 'legacy', runs: '444', cancelaFalha: true }, 1);
+  assert.equal(r.status, 1);
+  assert.match(r.saida, /NÃO consegui cancelar/);
+});
+
+test('guarda: rede caiu ao listar → avisa e continua tentando; resultado segue a fonte', () => {
+  const r = rodarGuarda({ tipo: 'workflow', listaFalha: true }, 3);
+  assert.equal(r.status, 0);
+  assert.equal((r.saida.match(/Não consegui listar/g) || []).length, 3);
+  assert.equal(rodarGuarda({ tipo: 'legacy', listaFalha: true }, 2).status, 1);
+});
+
+test('guarda em PR (VOLTAS=0): só confere a fonte; não lista nem cancela nada', () => {
+  const r = rodarGuarda({ tipo: 'workflow', runs: '555' }, 0);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.chamadas, /actions\/runs/);
 });

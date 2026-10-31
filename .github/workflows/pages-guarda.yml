@@ -1,0 +1,49 @@
+# GUARDA do GitHub Pages (NÃO publica nada). Regra: só o workflow "Site seguro" publica.
+# - fonte:  confere que Settings -> Pages -> Source é "GitHub Actions" e, depois de mudanças
+#           na main, vigia por 3 minutos e cancela a publicação antiga, se aparecer. Fica
+#           vermelho para avisar. NÃO é barreira garantida (reage depois que a outra começa).
+# - jekyll: monta o repositório com o MESMO motor da publicação antiga (actions/jekyll-build-pages)
+#           e confere que, mesmo nesse modo, só os arquivos públicos sairiam (trava do _config.yml).
+name: Guarda do Pages (so o Site seguro publica)
+on:
+  pull_request:
+    paths: ['_config.yml', '.nojekyll', '.github/pages/**', '.github/workflows/pages-*.yml']
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fonte:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir a fonte do Pages (e vigiar a publicação antiga depois de mudanças na main)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VOLTAS: ${{ github.event_name == 'push' && '18' || (github.event_name == 'pull_request' && '0' || '1') }}
+          PAUSA: '10'
+        run: bash .github/pages/guarda.sh
+
+  jekyll:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Montar como a publicação antiga montaria (sem publicar)
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site_jekyll
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Conferir que só os arquivos públicos sairiam
+        run: node .github/pages/montar-site.mjs --conferir-jekyll _site_jekyll

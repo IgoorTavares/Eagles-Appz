@@ -234,6 +234,20 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   `.criar`, `.novaVersao`, `.enviarParaRevisao`, `.decidir`, `.restaurar`. Erro de integridade = `data-loss`.
 - **Índices:** nenhum composto novo (só igualdades + ordem por id; versões por `n`). Isenções propostas à parte, pendentes.
 
+## Fase 4C.2 — passo 1: contratos dos documentos estruturados (só contratos)
+- **Catálogo** (`src/contratos/documentos.js`): 10 documentos com esquema fechado, regras estruturais, limite em bytes,
+  agentes permitidos e o tipo de entrega da 4C.1: plano estratégico e consolidação final (08), diretrizes de marca (01),
+  briefing de design (02), estrutura de carrossel (03), roteiro de Reels e legenda (04), documentação de projeto/técnica
+  (05 e 06, o MESMO contrato), relatório técnico (06) e plano de tráfego (07). `validarDocumento(id, dados, { agenteId, opcoes })`.
+  Validação estrutural (códigos de cor, soma das cenas, número de slides, limite de caracteres por plataforma
+  configurável para baixo, orçamento sempre "somente sugestão", teste só "proposto"); não avalia qualidade nem veracidade.
+- **Plano:** a etapa pode ter `documento` (proposto pelo Estrategista; conferido no catálogo e contra o agente em
+  `validar-plano.js` e em `montarEtapas`); a consolidação recebe `consolidacao-final`. Sem `documento` = como antes.
+- **Markdown derivado** (`src/entregas/representacao.js`): gerado pelo sistema, determinístico, com o sha256 do documento
+  de origem no cabeçalho; todo dado é escapado (nada vira HTML, link, imagem, título ou comentário); `conferirRepresentacao`
+  detecta divergência; o descritor é da MESMA entrega e versão (sem entrega nem aprovação próprias). Ainda não é gravado.
+- A execução continua produzindo texto livre (gerar, guardar e compartilhar os documentos são os próximos passos).
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

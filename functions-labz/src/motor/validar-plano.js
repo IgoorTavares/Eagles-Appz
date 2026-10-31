@@ -15,6 +15,7 @@ const { obterAgente } = require('../agentes/catalogo');
 const { avaliarAcao } = require('./ferramentas-simuladas');
 const { ordenar, CONSOLIDACAO } = require('./planejador');
 const custos = require('./custos');
+const { documentoPermitido } = require('../contratos/documentos');
 
 const ID = /^[a-z0-9-]{1,30}$/;
 const PROIBIDOS = ['empresaId', 'clienteId', 'tenantId', 'limites', 'maxEtapas', 'permissoes', 'tentativas', 'maxTentativas', 'aprovado', 'aprovacao', 'aprovacoes', 'ferramentas', 'custos', 'modelo', 'provedor'];
@@ -29,6 +30,8 @@ const ESQUEMA_ETAPA = {
     estimativaTokens: { tipo: 'inteiro', obrigatorio: true, min: 1, max: 2000000 },
     formato: { tipo: 'texto' },
     acoesPrevistas: { tipo: 'lista', max: 5, itens: { tipo: 'objeto', extras: false, campos: { ferramentaId: { tipo: 'texto', obrigatorio: true, max: 60 }, operacao: { tipo: 'texto', obrigatorio: true, max: 30 } } } },
+    // Fase 4C.2: o Estrategista PROPÕE o documento; aqui se confere catálogo e permissão do agente
+    documento: { tipo: 'texto', max: 40 },
   },
 };
 const ESQUEMA_PLANO = {
@@ -76,6 +79,7 @@ function validarPlano(plano, { exe, outrasEmpresas = [] }) {
       else if (!ids.includes(d)) add('dependencia-inexistente', d, e.id);
     });
     if (e.formato !== undefined && !FORMATOS.includes(e.formato)) add('formato-de-resultado-invalido', e.formato, e.id);
+    if (e.documento !== undefined && ag) { const dp = documentoPermitido(e.agenteId, e.documento); if (!dp.permitido) add(dp.motivo, e.documento, e.id); }
     if (!e.criterios.every((c) => c.trim().length >= 3)) add('criterio-vazio', 'critério de conclusão vazio', e.id);
     if (ag) (e.acoesPrevistas || []).forEach((a) => {
       const v = avaliarAcao(e.agenteId, { tipo: 'ferramenta', ferramentaId: a.ferramentaId, operacao: a.operacao });
@@ -101,6 +105,7 @@ function validarPlano(plano, { exe, outrasEmpresas = [] }) {
   const passos = valido ? etapas.map((e) => {
     const p = { id: e.id, agenteId: e.agenteId, objetivo: e.objetivo, dependeDe: (e.dependeDe || []).slice(), criterios: e.criterios.slice(), estimativaTokens: e.estimativaTokens };
     if (e.acoesPrevistas) p.acoesPrevistas = e.acoesPrevistas.map((a) => ({ ferramentaId: a.ferramentaId, operacao: a.operacao }));
+    if (e.documento) p.documento = e.documento;
     return p;
   }) : null;
   const sugestao = valido ? null : problemas.some((p) => p.codigo === 'limite-de-custo') ? 'Reduza o escopo, divida o projeto ou peça ao Super Admin limites maiores para esta execução.' : 'Peça um novo plano ao Estrategista ou ajuste o pedido.';

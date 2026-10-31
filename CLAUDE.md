@@ -224,6 +224,11 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
   - Proposta de indexação consolidada: **28 índices e 34 isenções** (as 5 da 4B aprovadas pelo Igor). Nova proposta separada (pendente de aprovação, fora do consolidado): 7 isenções da 4C.1. Nada publicado.
   - O banco de testes passou a dar à transação um objeto próprio (`emTransacao`), como o Firestore.
   - Testes: `npm test` (232), `test:emulador` (23), regras (26); 16 mutações (15 detectadas, 1 equivalente).
+- **LABZ AI — Fase 4C.2, passo 1 (contratos dos documentos estruturados)**, na mesma branch, gravado em commit local "feat(labz-ai): implementa contratos de documentos estruturados - fase 4C2 passo 1" (autorizado pelo Igor em 31/10/2026; passos seguintes da 4C.2 **não** autorizados). Commit da 4C.1: `3dcbddb`.
+  - `src/contratos/documentos.js`: 10 documentos (esquema fechado, regras estruturais, limite em bytes, agentes permitidos, tipo de entrega da 4C.1; documentação de projeto e técnica = mesmo contrato). `src/entregas/representacao.js`: Markdown derivado determinístico, escapado, com o sha256 da origem; da mesma entrega e versão; ainda não gravado.
+  - Plano: `documento` na etapa (o Estrategista propõe; o backend confere catálogo e permissão; consolidação = `consolidacao-final`); planos antigos continuam iguais.
+  - Proposta de indexação consolidada (aprovada pelo Igor): **28 índices e 41 isenções**. Nada publicado.
+  - Testes: `npm test` (242), `test:emulador` (23), regras (26); 14 mutações detectadas.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.
 - Pendências funcionais registradas na análise da v150 (não corrigidas; dependem de uma etapa funcional aprovada pelo Igor):

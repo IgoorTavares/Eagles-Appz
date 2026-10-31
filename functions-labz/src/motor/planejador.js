@@ -8,6 +8,7 @@
 const { erro } = require('../nucleo/erros');
 const { garantir } = require('../nucleo/validador');
 const { obterAgente } = require('../agentes/catalogo');
+const { documentoPermitido, DOCUMENTO_DA_CONSOLIDACAO } = require('../contratos/documentos');
 
 const CONSOLIDACAO = 'consolidacao';
 const ESQUEMA_PASSO = {
@@ -21,6 +22,8 @@ const ESQUEMA_PASSO = {
     criterios: { tipo: 'lista', max: 8, itens: { tipo: 'texto', min: 3, max: 300 } },
     estimativaTokens: { tipo: 'inteiro', min: 1, max: 2000000 },
     acoesPrevistas: { tipo: 'lista', max: 5, itens: { tipo: 'objeto', extras: false, campos: { ferramentaId: { tipo: 'texto', obrigatorio: true, max: 60 }, operacao: { tipo: 'texto', obrigatorio: true, max: 30 } } } },
+    // Fase 4C.2 (opcional): o documento estruturado da etapa (catálogo contratos/documentos.js)
+    documento: { tipo: 'texto', padrao: /^[a-z-]{3,40}$/ },
   },
 };
 
@@ -48,12 +51,13 @@ function montarEtapas(exe, passos, { maxEtapas = 8 } = {}) {
     if (ids.includes(CONSOLIDACAO)) throw erro('invalido', `"${CONSOLIDACAO}" é reservado para a etapa final do Estrategista`);
     passos.forEach((p) => {
       if (!obterAgente(p.agenteId)) throw erro('invalido', `Agente desconhecido: ${p.agenteId}`);
+      if (p.documento !== undefined) { const d = documentoPermitido(p.agenteId, p.documento); if (!d.permitido) throw erro('invalido', `Documento da etapa ${p.id}: ${d.motivo}`); }
       (p.dependeDe || []).forEach((d) => { if (!ids.includes(d)) throw erro('invalido', `A etapa ${p.id} depende de uma etapa que não existe: ${d}`); if (d === p.id) throw erro('invalido', 'Uma etapa não depende dela mesma'); });
     });
   }
   // orquestrado: o Estrategista consolida no fim (etapa automática que depende de todas)
   if (exe.modo !== 'especialista') {
-    passos = [...passos, { id: CONSOLIDACAO, agenteId: '08-estrategista', objetivo: `Consolidar as entregas para: ${String(exe.objetivo).slice(0, 1800)}`, dependeDe: passos.map((p) => p.id), criterios: ['Reúne todas as entregas das etapas', 'Confere cada entrega com os critérios de conclusão dela'] }];
+    passos = [...passos, { id: CONSOLIDACAO, agenteId: '08-estrategista', objetivo: `Consolidar as entregas para: ${String(exe.objetivo).slice(0, 1800)}`, dependeDe: passos.map((p) => p.id), criterios: ['Reúne todas as entregas das etapas', 'Confere cada entrega com os critérios de conclusão dela'], documento: DOCUMENTO_DA_CONSOLIDACAO }];
   }
   const ordem = ordenar(passos);
   const porId = new Map(passos.map((p) => [p.id, p]));
@@ -63,6 +67,7 @@ function montarEtapas(exe, passos, { maxEtapas = 8 } = {}) {
     if (p.criterios) etapa.criterios = p.criterios.slice(); // Fase 4B: critérios de conclusão
     if (p.estimativaTokens) etapa.estimativaTokens = p.estimativaTokens;
     if (p.acoesPrevistas) etapa.acoesPrevistas = p.acoesPrevistas.map((a) => ({ ferramentaId: a.ferramentaId, operacao: a.operacao }));
+    if (p.documento) etapa.documento = p.documento; // Fase 4C.2: tipo validado (sem documento = texto livre, como antes)
     return etapa;
   });
 }

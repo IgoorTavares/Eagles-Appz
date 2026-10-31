@@ -20,6 +20,7 @@ const { criarAdaptadorModelos } = require('./ia/adaptador-modelos');
 const { criarConsumo } = require('./motor/consumo');
 const { criarMonitorFila } = require('./motor/monitor-fila');
 const { criarExecutorLocal } = require('./motor/executor-local');
+const { criarEntregas } = require('./entregas/registro');
 
 // adaptador: o "agente" que o motor chama. Na Fase 4A é SEMPRE o simulado
 // (nenhum modelo real); os testes passam roteiros próprios.
@@ -45,11 +46,12 @@ function criarLabz({ banco, relogio, adaptador, ia, opcoes = {} }) {
   const configModelos = criarConfigModelos({ banco, auditoria, relogio });
   const consumo = criarConsumo({ banco, auditoria, relogio });
   const agente = adaptador || (ia ? criarAdaptadorModelos({ configModelos, transporte: ia.transporte, limitador: ia.limitador, timeoutPadraoMs: ia.timeoutMs }) : criarAdaptadorSimulado());
-  const motor = criarMotor({ banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador: agente, consumo, relogio });
+  const entregas = criarEntregas({ banco, auditoria, relogio }); // Fase 4C.1
+  const motor = criarMotor({ banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador: agente, consumo, entregas, relogio });
   const monitor = criarMonitorFila({ banco, execucoes, fila, auditoria, relogio, opcoes: opcoes.monitor });
   // executor automático LOCAL: uso interno (testes e emulador); não sai pela API e não é agendado
   const executorLocal = (o) => criarExecutorLocal({ motor, monitor, auditoria, opcoes: Object.assign({}, opcoes.executor, o) });
-  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente };
+  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente, entregas };
 }
 
 module.exports = { criarLabz };

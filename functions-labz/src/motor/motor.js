@@ -57,9 +57,11 @@ const MAX_REVISOES_INTERNAS = 2; // Fase 4B: revisões pedidas pela consolidaç�
 const MAX_TENTATIVAS_PLANEJAMENTO = 3; // Fase 4B: planos recusados antes de encerrar
 const ESQUEMA_REVISAO = { tipo: 'objeto', obrigatorio: true, extras: false, campos: { etapaId: { tipo: 'texto', obrigatorio: true, padrao: /^[a-z0-9-]{1,30}$/ }, motivo: { tipo: 'texto', obrigatorio: true, min: 3, max: 500 } } };
 
-// deps: { banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador, consumo?, executorFerramentas?, relogio? }
+// deps: { banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador, consumo?, entregas?, executorFerramentas?, relogio? }
+// entregas (Fase 4C.1): o resultado válido de cada etapa vira uma ENTREGA versionada,
+// gravada na MESMA transação do crachá (executor substituído ou execução cancelada não grava).
 function criarMotor(deps) {
-  const { banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador, consumo } = deps;
+  const { banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador, consumo, entregas } = deps;
   const relogio = deps.relogio || relogioPadrao;
   const executor = deps.executorFerramentas || criarExecutorSimulado();
   const ev = (tipo, id, detalhes, ator = ATOR_SISTEMA) => auditoria.registrar(`execucao.${tipo}`, ator, caminhos.tarefa(id), detalhes);
@@ -329,8 +331,10 @@ function criarMotor(deps) {
     // Resultado + ações (aprovação humana quando exigida), tudo com o crachá
     const pedidos = [];
     const imediatas = [];
+    let entrega = null;
     await comCracha(id, token, async (x, t) => {
       const etapaAtual = x.etapas.find((y) => y.id === etapa.id);
+      if (entregas) entrega = await entregas.registrarDaEtapa(t, { exe: x, etapa: etapaAtual, tentativa, texto: saida.texto, final: etapa.id === CONSOLIDACAO });
       for (const acao of saida.acoes) {
         const a = avaliarAcao(etapa.agenteId, acao);
         if (a.exigeAprovacao) pedidos.push(await aprovacoes.solicitar(t, id, etapaAtual, acao));
@@ -342,10 +346,12 @@ function criarMotor(deps) {
       });
       const resultado = {
         referencias: saida.referencias, fontes: ctx.fontes.map((f) => `${f.origem}:${f.escopo || '-'}:${f.id}@${f.versao}`), caracteres: saida.texto.length, simulado: true,
+        entrega: entrega ? { id: entrega.entregaId, versao: entrega.versao, hash: entrega.hash } : null,
         acoes: [...imediatas.map((a) => ({ ferramentaId: a.ferramentaId, operacao: a.operacao, situacao: 'simulada' })), ...pedidos.map((p) => ({ ferramentaId: p.ferramentaId, operacao: p.operacao, situacao: 'aguardando-aprovacao', aprovacao: p.id }))],
       };
       return Object.assign(comEtapa(x, etapa.id, { status: pedidos.length ? 'aguardando_aprovacao' : 'concluida', aprovacoes: pedidos.map((p) => p.id), resultado, ultimoErro: null, motivoRevisao: null }), { custos: custos.somar(x.custos, etapa.id, uso, infoCusto(etapa.agenteId, prep, liq)) });
     });
+    if (entrega) await auditoria.registrar(entrega.nova ? 'entrega.registrada_da_etapa' : 'entrega.duplicada_ignorada', ATOR_SISTEMA, caminhos.entrega(entrega.entregaId), { execucao: id, etapa: etapa.id, agente: etapa.agenteId, versao: entrega.versao, hash: String(entrega.hash).slice(0, 12) });
     for (const a of imediatas) {
       await executor.executar(etapa.agenteId, a);
       await ev('acao_simulada', id, { etapa: etapa.id, ferramenta: a.ferramentaId, aprovacao: null });

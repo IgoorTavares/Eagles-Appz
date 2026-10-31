@@ -120,6 +120,18 @@ const ACOES = {
   'custos.definirPreco': [obj({ chave: { tipo: 'texto', obrigatorio: true, max: 160 }, preco: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.consumo.definirPreco(a, d.chave, d.preco)],
   'custos.consumo': [obj({ dia: { tipo: 'texto', padrao: /^\d{4}-\d{2}-\d{2}$/ } }), (s, a, d) => s.consumo.doDia(a, d.dia)],
 
+  // Fase 4C.1: entregas (consultas limitadas; decisões só do Super Admin, presas a versão + hash). Não existe "apagar".
+  'entregas.listar': [obj({ empresaId: CURSOR, execucaoId: CURSOR, agenteId: { tipo: 'texto', padrao: /^0[1-8]-[a-z-]+$/ }, estado: { tipo: 'texto', max: 20 }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }), (s, a, d) => s.entregas.listar(a, d)],
+  'entregas.aguardandoAprovacao': [obj({ empresaId: CURSOR, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }), (s, a, d) => s.entregas.listar(a, Object.assign({}, d, { estado: 'em-revisao' }))],
+  'entregas.obter': [obj({ entregaId: ID }), (s, a, d) => s.entregas.obter(a, d.entregaId)],
+  'entregas.versoes': [obj({ entregaId: ID, depoisDe: { tipo: 'texto', padrao: /^[0-9]{1,6}$/ }, limite: { tipo: 'inteiro', min: 1, max: 100 } }), (s, a, d) => s.entregas.versoes(a, d.entregaId, { depoisDe: d.depoisDe, limite: d.limite })],
+  'entregas.conteudo': [obj({ entregaId: ID, versao: N }), (s, a, d) => s.entregas.lerConteudo(a, d.entregaId, d.versao)],
+  'entregas.criar': [obj({ entrega: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.entregas.criar(a, d.entrega)],
+  'entregas.novaVersao': [obj({ entregaId: ID, conteudo: { tipo: 'objeto', obrigatorio: true }, versaoBase: { tipo: 'inteiro', min: 0 } }), (s, a, d) => s.entregas.novaVersao(a, d.entregaId, d.conteudo, { versaoBase: d.versaoBase })],
+  'entregas.enviarParaRevisao': [obj({ entregaId: ID, versao: N }), (s, a, d) => s.entregas.enviarParaRevisao(a, d.entregaId, d.versao)],
+  'entregas.decidir': [obj({ entregaId: ID, decisao: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.entregas.decidir(a, d.entregaId, d.decisao)],
+  'entregas.restaurar': [obj({ entregaId: ID, versao: N, motivo: MOTIVO }), (s, a, d) => s.entregas.restaurar(a, d.entregaId, d.versao, d.motivo)],
+
   'auditoria.listar': [obj({ tipo: { tipo: 'texto', max: 60 }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }),
     (s, a, d) => s.auditoria.listarPagina({ tipo: d.tipo, depoisDe: d.depoisDe, limite: d.limite })],
 };
@@ -148,7 +160,7 @@ function criarApi(ctx) {
 const MAPA_CODIGOS = {
   'nao-autenticado': 'unauthenticated', 'permissao-negada': 'permission-denied', isolamento: 'permission-denied',
   invalido: 'invalid-argument', 'nao-encontrado': 'not-found', conflito: 'already-exists',
-  precondicao: 'failed-precondition', 'transicao-invalida': 'failed-precondition',
+  precondicao: 'failed-precondition', 'transicao-invalida': 'failed-precondition', integridade: 'data-loss',
 };
 function traduzirErro(e) {
   if (e instanceof ErroLabz && MAPA_CODIGOS[e.codigo]) {

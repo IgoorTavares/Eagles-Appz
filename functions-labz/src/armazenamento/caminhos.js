@@ -27,11 +27,13 @@ const C = {
   fila: 'labz_fila',
   nomes: 'labz_nomes', // reserva do nome normalizado de cada empresa da LABZ AI (F4)
   consumo: 'labz_consumo', // Fase 4B: consumo por dia (UTC), com as reservas em aberto
+  entregas: 'labz_entregas', // Fase 4C.1: registro central das entregas (metadados)
 };
 
 // Subcoleções da LABZ AI (Fase 3E: com o prefixo labz_, para que índices e
 // isenções do Firestore, que valem por NOME de coleção, nunca alcancem o CRM/ERP).
-const SUB = Object.freeze({ memorias: 'labz_memorias', desempenho: 'labz_desempenho', versoes: 'labz_versoes', aprovacoes: 'labz_aprovacoes', resultados: 'labz_resultados' });
+// Fase 4C.1: versoes de entrega têm nome próprio (as isenções de labz_versoes foram pensadas para memórias)
+const SUB = Object.freeze({ memorias: 'labz_memorias', desempenho: 'labz_desempenho', versoes: 'labz_versoes', aprovacoes: 'labz_aprovacoes', resultados: 'labz_resultados', versoesEntrega: 'labz_versoes_entrega', conteudos: 'labz_conteudos' });
 
 const caminhos = {
   colecoes: C,
@@ -54,6 +56,14 @@ const caminhos = {
   resultadoEtapa: (execucaoId, etapaId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.resultados}/${seg(etapaId, 'etapaId')}`,
   // Fase 4B: resultado preservado de uma tentativa revisada (n = número da revisão)
   resultadoRevisao: (execucaoId, etapaId, n) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.resultados}/${seg(`${etapaId}_rev${n}`, 'etapaId')}`,
+  // Fase 4C.1: entregas (metadados), versões imutáveis e conteúdo endereçado pelo hash, DENTRO da execução
+  entrega: (entregaId) => `${C.entregas}/${seg(entregaId, 'entregaId')}`,
+  versoesEntrega: (entregaId) => `${C.entregas}/${seg(entregaId, 'entregaId')}/${SUB.versoesEntrega}`,
+  versaoEntrega: (entregaId, n) => `${C.entregas}/${seg(entregaId, 'entregaId')}/${SUB.versoesEntrega}/${seg(String(n), 'versão')}`,
+  conteudoExecucao: (execucaoId, hash) => {
+    if (!/^[0-9a-f]{64}$/.test(String(hash))) throw erro('invalido', 'hash inválido');
+    return `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.conteudos}/${hash}`;
+  },
   // Fase 4B: limites de consumo e preços (só o Super Admin define; preço nunca vem do código)
   limitesConsumo: () => `${C.config}/limites`,
   precosModelos: () => `${C.config}/precos`,

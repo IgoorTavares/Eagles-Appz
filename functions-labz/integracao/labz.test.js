@@ -470,3 +470,36 @@ test('Fase 4B no Firestore real: modelos por agente pela API, pedido planejado p
   const m = await s.monitor.verificar();
   assert.ok(Array.isArray(m.descartados) && typeof m.reservasVencidas === 'number');
 });
+
+test('Fase 4C.1 no Firestore real: entregas pelo motor, versões concorrentes, aprovação por versão e consultas paginadas', async () => {
+  const { criarLabz } = require('../src/servicos');
+  const { transporteComModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
+  const { exigirSuperAdmin } = require('../src/auth/super-admin');
+  const banco = criarBancoFirestore(db);
+  const s = criarLabz({ banco, ia: { transporte: transporteComModeloSimulado() } });
+  const ator = await exigirSuperAdmin({ uid: 'sa-teste', token: { email: 'sa@teste.local' } }, { banco, uidsAutorizados: ['sa-teste'] });
+  const p = await s.motor.pedido(ator, { empresaId: A.id, objetivo: 'INTEG-4C1 produzir conteúdos para redes sociais: posts e legendas' });
+  await s.executorLocal({ concorrencia: 2 }).drenar();
+  const lista = await ok(tokens.sa, 'entregas.listar', { execucaoId: p.id });
+  assert.deepEqual(lista.itens.map((e) => e.etapaId).sort(), ['consolidacao', 'pecas', 'textos']);
+  assert.ok(lista.itens.every((e) => e.empresaId === A.id));
+  const cons = lista.itens.find((e) => e.etapaId === 'consolidacao');
+  const aguardando = await ok(tokens.sa, 'entregas.aguardandoAprovacao', { empresaId: A.id });
+  assert.ok(aguardando.itens.some((e) => e.id === cons.id));
+  assert.equal((await chamar(tokens.diretor, 'entregas.obter', { entregaId: cons.id })).erro.status, 'PERMISSION_DENIED');
+  const c1 = await ok(tokens.sa, 'entregas.conteudo', { entregaId: cons.id, versao: 1 });
+  assert.equal(c1.integridade, 'conferida');
+  // versões concorrentes no Firestore: nenhuma sobrescrita
+  const texto = lista.itens.find((e) => e.etapaId === 'textos');
+  const rs = await Promise.allSettled([1, 2, 3].map((i) => s.entregas.novaVersao(ator, texto.id, { formato: 'markdown', nome: 'textos.md', texto: `INTEG ${i}` })));
+  const okv = rs.filter((r) => r.status === 'fulfilled').map((r) => r.value.versao).sort();
+  assert.equal(new Set(okv).size, okv.length);
+  const hist = await ok(tokens.sa, 'entregas.versoes', { entregaId: texto.id, limite: 2 });
+  assert.equal(hist.itens.length, 2);
+  assert.ok(hist.proximo);
+  // aprovação pela API, presa à versão + hash
+  const errada = await chamar(tokens.sa, 'entregas.decidir', { entregaId: cons.id, decisao: { decisao: 'aprovar', versao: 1, hash: 'a'.repeat(64) } });
+  assert.equal(errada.erro.status, 'ALREADY_EXISTS'); // conflito
+  const ap = await ok(tokens.sa, 'entregas.decidir', { entregaId: cons.id, decisao: { decisao: 'aprovar', versao: 1, hash: cons.hashAtual } });
+  assert.equal(ap.estado, 'aprovada');
+});

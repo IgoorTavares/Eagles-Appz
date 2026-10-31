@@ -219,6 +219,11 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
   - API nova: `execucoes.pedido`, `modelos.listar/configurar/remover`, `custos.limites/definirLimites/definirPreco/consumo`.
   - Índices: nenhum novo. Proposta separada de **5 isenções** (`labz_consumo.reservas/agentes/empresas/provedores`, `labz_tarefas.custos`), não publicada.
   - Testes: `npm test` (215), `test:emulador` (22), regras (26); 16 mutações detectadas.
+- **LABZ AI — Fase 4C.1 (registro de entregas)**, na mesma branch, gravada em commit local "feat(labz-ai): implementa registro de entregas e versionamento - fase 4C.1" (autorizada pelo Igor em 30/10/2026; 4C.2 em diante **não** autorizadas). Commit da 4B: `f61f6e3`.
+  - `src/contratos/entrega.js` (8 tipos; texto real para documento/roteiro/planejamento/relatório/código; imagem/carrossel/pacote só representação simulada), `src/entregas/armazenamento.js` (conteúdo por sha256 dentro da execução, até 200 KB, hash conferido) e `src/entregas/registro.js` (versões imutáveis, aprovação só do Super Admin presa a versão + hash, restaurar = versão nova, sem apagar, porta do agente). O motor registra a entrega na transação do crachá. API `entregas.*`.
+  - Proposta de indexação consolidada: **28 índices e 34 isenções** (as 5 da 4B aprovadas pelo Igor). Nova proposta separada (pendente de aprovação, fora do consolidado): 7 isenções da 4C.1. Nada publicado.
+  - O banco de testes passou a dar à transação um objeto próprio (`emTransacao`), como o Firestore.
+  - Testes: `npm test` (232), `test:emulador` (23), regras (26); 16 mutações (15 detectadas, 1 equivalente).
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.
 - Pendências funcionais registradas na análise da v150 (não corrigidas; dependem de uma etapa funcional aprovada pelo Igor):

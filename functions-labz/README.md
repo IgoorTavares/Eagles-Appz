@@ -217,6 +217,23 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - **Índices:** nenhum composto novo. Isenções adicionais propostas à parte (não aplicadas): `labz_consumo.reservas`,
   `.agentes`, `.empresas`, `.provedores` e `labz_tarefas.custos`.
 
+## Fase 4C.1 — registro de entregas (texto local; formatos futuros só simulados)
+- **Contrato** (`src/contratos/entrega.js`): 8 tipos (documento, roteiro, planejamento, relatório e código com armazenamento
+  real de TEXTO; imagem, carrossel e pacote só com **representação simulada**, `arquivoReal: false`), formatos por tipo, nome
+  validado (nunca caminho), estados por versão `rascunho → em-revisao → aprovada | rejeitada | precisa-revisao`.
+- **Onde fica:** metadados em `labz_entregas/{id}`; versões **imutáveis** em `labz_entregas/{id}/labz_versoes_entrega/{n}`;
+  conteúdo à parte, endereçado pelo sha256, DENTRO da execução: `labz_tarefas/{execucao}/labz_conteudos/{hash}`
+  (`src/entregas/armazenamento.js`; até 200 KB; o hash é conferido ao ler, aprovar e restaurar).
+- **Registro** (`src/entregas/registro.js`): empresa, execução, etapa e agente vêm da execução (nunca do pedido nem do
+  modelo); ids do backend; mudar = versão nova (com `versaoBase` opcional); restaurar = versão nova com o mesmo conteúdo;
+  aprovar/rejeitar/pedir revisão **só o Super Admin**, na versão atual e com o hash dela; versão nova não herda aprovação;
+  não existe apagar. Porta do agente (`abrirParaAgente`): só a própria execução; propor revisão só das entregas dele.
+- **Motor:** a etapa válida vira entrega na MESMA transação do crachá (executor substituído ou execução cancelada não grava);
+  idempotente por etapa/tentativa e por conteúdo; a consolidação nasce `em-revisao` (aguarda o Super Admin).
+- **API:** `entregas.listar` (empresa, execução, agente ou estado), `.aguardandoAprovacao`, `.obter`, `.versoes`, `.conteudo`,
+  `.criar`, `.novaVersao`, `.enviarParaRevisao`, `.decidir`, `.restaurar`. Erro de integridade = `data-loss`.
+- **Índices:** nenhum composto novo (só igualdades + ordem por id; versões por `n`). Isenções propostas à parte, pendentes.
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

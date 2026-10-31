@@ -108,7 +108,10 @@ function criarBancoMemoria() {
     async transacao(fn) {
       const vez = fila.then(async () => {
         const antes = new Map(docs);
-        try { return await fn(api); } catch (e) { docs = antes; throw e; }
+        // Fase 4C.1: a transação recebe um objeto PRÓPRIO (como no Firestore), para os
+        // testes distinguirem uma gravação feita na transação de uma feita direto no banco.
+        const tx = Object.freeze(Object.assign({}, api, { emTransacao: true }));
+        try { return await fn(tx); } catch (e) { docs = antes; throw e; }
       });
       fila = vez.catch(() => {});
       return vez;

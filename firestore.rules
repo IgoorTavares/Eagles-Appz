@@ -219,6 +219,19 @@ service cloud.firestore {
       );
     }
 
+    // ---------- LABZ AI (coleções labz_*) ----------
+    // Ferramenta exclusiva do Super Admin. Lê só quem é Super Admin E está
+    // na lista labz_config/acesso (uids), que só o servidor ou o console
+    // gravam. O navegador nunca grava: quem grava é o servidor da LABZ AI.
+    function labzAutorizado() {
+      return souSuperAdmin() && contaLivre() &&
+        request.auth.uid in get(/databases/$(database)/documents/labz_config/acesso).data.get('uids', []);
+    }
+    match /{colecaoLabz}/{docLabz=**} {
+      allow read: if colecaoLabz.matches('labz_.*') && labzAutorizado();
+      allow write: if false;
+    }
+
     // ---------- tenants/{tenantId} ----------
     // Dados gerais da empresa (nome, plano, ativo). Membros LEEM (o app
     // precisa saber o plano); só o Super Admin GRAVA.

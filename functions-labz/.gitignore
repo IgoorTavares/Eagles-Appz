@@ -1,0 +1,4 @@
+node_modules/
+.secret.local
+*.log
+.regras-emulador.rules

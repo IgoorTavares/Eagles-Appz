@@ -5,6 +5,7 @@ do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'labz_app') then
     create role labz_app nologin;
   end if;
+exception when duplicate_object or unique_violation then null; -- outra migração criou ao mesmo tempo
 end $$;
 
 create table if not exists labz.docs (

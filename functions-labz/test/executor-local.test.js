@@ -118,11 +118,12 @@ test('cancelamento: execução cancelada não roda (item descartado); parar() ca
   assert.ok((await c.fila.listar()).every((x) => ['descartada', 'feita'].includes(x.estado)));
 
   let n = 0;
-  const c2 = await montar(() => (++n === 1 ? 'timeout' : 'ok'), { timeoutMs: 60000 });
+  let chegou; const primeiraChamada = new Promise((ok) => { chegou = ok; });
+  const c2 = await montar(() => { if (++n === 1) { chegou(); return 'timeout'; } return 'ok'; }, { timeoutMs: 60000 });
   const e2 = await especialista(c2);
   const ex2 = c2.executorLocal({ intervaloMs: 5 });
   ex2.iniciar();
-  await new Promise((ok) => setTimeout(ok, 60));
+  await primeiraChamada; // para com a chamada JÁ pendurada (não depende da velocidade da máquina nem do banco)
   const h = await ex2.parar();
   assert.ok(h.ciclos >= 1);
   const depois = await c2.execucoes.obter(c2.ator, e2.id);

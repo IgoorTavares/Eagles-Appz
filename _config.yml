@@ -1,0 +1,20 @@
+# TRAVA DE SEGURANÇA (2ª camada) — NÃO é a forma de publicar o site.
+# O site é publicado só pelo workflow "Site seguro" (.github/workflows/pages-seguro.yml),
+# com Settings → Pages → Source em "GitHub Actions".
+# Se a fonte voltar por engano para "Deploy from a branch", o GitHub monta o site com
+# o Jekyll a partir do repositório inteiro; esta lista impede que os arquivos internos
+# entrem nessa montagem. Toda pasta ou arquivo interno novo na raiz precisa entrar aqui
+# (o teste .github/pages/montar-site.test.mjs confere).
+exclude:
+  - CLAUDE.md
+  - README.md
+  - "*.md"
+  - firebase.json
+  - firestore.rules
+  - firestore.indexes.json
+  - functions
+  - functions-labz
+  - testes-regras
+  - package.json
+  - package-lock.json
+  - node_modules

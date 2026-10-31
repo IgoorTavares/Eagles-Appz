@@ -153,9 +153,46 @@ export function conferir({ raiz = '.', saida = '_site' } = {}) {
   return { ok: erros.length === 0, erros, avisos, arquivos: arquivos.sort(), referencias: referenciasConferidas };
 }
 
+
+// Arquivos que o próprio GitHub Pages gera no modo antigo (tema padrão jekyll-theme-primer),
+// visto na montagem real com actions/jekyll-build-pages. Não são arquivos do repositório.
+export const GERADOS_PELO_JEKYLL = Object.freeze(['assets/css/style.css']);
+
+// Confere a saída do Jekyll (o modo antigo do Pages) com a trava do _config.yml: o conjunto de
+// arquivos tem que ser EXATAMENTE a lista de permitidos, e cada arquivo igual ao do repositório.
+export function conferirJekyll({ raiz = '.', saida = '_site_jekyll' } = {}) {
+  const erros = [];
+  const arquivos = [];
+  (function andar(d, rel = '') {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) andar(path.join(d, e.name), r); else arquivos.push(r);
+    }
+  })(saida);
+  const conjunto = new Set(arquivos);
+  for (const f of arquivos) {
+    if (PROIBIDOS.some((p) => p.test(f))) erros.push(`o modo antigo publicaria um arquivo interno: ${f}`);
+    else if (GERADOS_PELO_JEKYLL.includes(f)) {
+      if (fs.existsSync(path.join(raiz, f))) erros.push(`o tema do Jekyll sobrescreveria um arquivo do repositório: ${f}`);
+    } else if (!PERMITIDOS.includes(f)) erros.push(`o modo antigo publicaria um arquivo fora da lista: ${f}`);
+  }
+  for (const f of PERMITIDOS) if (!conjunto.has(f)) erros.push(`o modo antigo não publicaria: ${f}`);
+  for (const f of arquivos) {
+    const orig = path.join(raiz, f);
+    if (PERMITIDOS.includes(f) && fs.existsSync(orig) && sha(fs.readFileSync(orig)) !== sha(fs.readFileSync(path.join(saida, f)))) erros.push(`o modo antigo alteraria o conteúdo de: ${f}`);
+  }
+  return { ok: erros.length === 0, erros, arquivos: arquivos.sort() };
+}
+
 // execução direta
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (n, p) => { const i = process.argv.indexOf(n); return i > -1 ? process.argv[i + 1] : p; };
+  if (process.argv.includes('--conferir-jekyll')) {
+    const j = conferirJekyll({ raiz: arg('--raiz', '.'), saida: arg('--conferir-jekyll', '_site_jekyll') });
+    for (const e of j.erros) console.error(`ERRO: ${e}`);
+    console.log(`${j.ok ? 'OK' : 'FALHOU'}: no modo antigo sairiam ${j.arquivos.length} arquivo(s).`);
+    process.exit(j.ok ? 0 : 1);
+  }
   const r = montar({ raiz: arg('--raiz', '.'), saida: arg('--saida', '_site') });
   for (const a of r.avisos) console.log(`aviso: ${a}`);
   for (const e of r.erros) console.error(`ERRO: ${e}`);

@@ -369,6 +369,26 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   CPU do próprio runtime continua); a queda sem aviso refaz a chamada cortada (1 a mais por queda); o gateway local
   (Kong) responde ao pré-voo com `Access-Control-Allow-Origin: *` (a origem é conferida na função).
 
+## Fase S4 — interface integrada à labz-api (só desenvolvimento; NADA publicado)
+- **Tela** (`demo/ui/labz-ai.{html,css,js}` + `labz-config.js`): modos `demo` (servidor local), `https` (Super Admin
+  logado + `LABZ_API_URL` preenchido: `fetch` para a Edge Function com `Authorization: Bearer <ID token do Firebase>`,
+  `credentials: 'omit'`, renova o token UMA vez em 401) e `desligado` (URL vazia: avisa e não chama nada). O SDK de
+  funções do Firebase saiu (precisaria do Blaze). Nenhuma credencial no navegador; o token nunca é guardado.
+- **Painéis:** resumo (esperando você / em andamento / concluídas), "Esperando você" (documento sensível, ação de risco e
+  entrega final), progresso da tarefa, histórico com filtros por cliente e situação, "Ver mais" e entregas por tarefa.
+  Organograma dos 8 agentes preservado. Tudo por `textContent`; CSS só em `.pg-labz`.
+- **Atualização eficiente:** um pedido por vez; o relatório só quando o diagnóstico muda; 3 s com a tarefa ativa, 6 s
+  parada, painéis a cada 30 s (cabe no limite de 60/min); pausa com a aba escondida; espera crescente em erro; 60 s em 429.
+- **Backend:** ação nova só de leitura `execucoes.historico` (do mais novo para o mais antigo, só resumo, filtros e cursor
+  presos à empresa).
+- **Menu do CRM/ERP:** `labzMenuAplicar()` no `script.js` (atalho abaixo de "Empresas (Super Admin)"), **desligado**
+  (`LABZ_AI_MENU_ATIVO = false`); ligado, só para o Super Admin. O menu não é a proteção: o servidor confere tudo.
+- **Site seguro:** `LABZ_AI_PREPARADOS` em `.github/pages/montar-site.mjs` (4 arquivos e o nome publicado). Não entram no
+  site nem no workflow; só um teste faz o ensaio (`montar({ ensaioLabz: true })`).
+- **Testes:** `test/interface-s4.test.js` (unidade) e `npm run test:ui` (navegador: Super Admin de ponta a ponta, aba
+  escondida, Diretor/equipe sem chamada, tela "enganada" recusada pelo servidor, token vencido, servidor desligado, XSS,
+  isolamento por cliente, 1280/768/375/320 px, demonstração; regressão de todas as páginas do CRM/ERP e do menu).
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

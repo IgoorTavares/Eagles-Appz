@@ -6,7 +6,8 @@
 .pg-labz [hidden] { display: none !important; }
 
 .pg-labz .lz-cabeca { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.pg-labz .lz-modo { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--bg-soft); color: var(--text-soft); white-space: nowrap; }
+.pg-labz .lz-cabeca > * { min-width: 0; max-width: 100%; }
+.pg-labz .lz-modo { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--bg-soft); color: var(--text-soft); max-width: 100%; overflow-wrap: anywhere; }
 .pg-labz .lz-modo[data-tom="alerta"] { background: var(--warning-tint); color: var(--warning); }
 .pg-labz .lz-modo[data-tom="ok"] { background: var(--success-tint); color: var(--success); }
 
@@ -127,4 +128,43 @@
   .pg-labz .lz-linha-2 > .lz-card:first-child::before { top: -12px; height: 12px; }
   .pg-labz .lz-etapa { grid-template-columns: 24px minmax(0, 1fr); }
   .pg-labz .lz-etapa > .lz-status { grid-column: 2; }
+}
+
+/* ---------- Fase S4: resumo, "Esperando você", progresso e histórico ---------- */
+.pg-labz .lz-aviso[data-tom="alerta"] { background: var(--warning-tint); color: var(--warning); border-color: color-mix(in srgb, var(--warning) 25%, transparent); }
+.pg-labz .lz-resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
+.pg-labz .lz-resumo:empty { display: none; }
+.pg-labz .lz-resumo-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 12px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: var(--radius); }
+.pg-labz .lz-resumo-item[data-tom="alerta"] { border-left-color: var(--warning); }
+.pg-labz .lz-resumo-item[data-tom="ativo"] { border-left-color: var(--blue-strong); }
+.pg-labz .lz-resumo-item[data-tom="ok"] { border-left-color: var(--success); }
+.pg-labz .lz-resumo-valor { font-size: 22px; font-weight: 700; line-height: 1.1; color: var(--text); }
+.pg-labz .lz-resumo-rotulo { font-size: 12px; color: var(--text-soft); overflow-wrap: anywhere; }
+
+.pg-labz .lz-pendencias-painel { border-left: 4px solid var(--warning); }
+.pg-labz .lz-itens { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.pg-labz .lz-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elevated); min-width: 0; }
+.pg-labz .lz-item-aberto { border-color: var(--blue-strong); }
+.pg-labz .lz-item-corpo { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; }
+.pg-labz .lz-item-corpo strong { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.pg-labz .lz-item-meta { font-size: 12px; color: var(--text-soft); overflow-wrap: anywhere; }
+.pg-labz .lz-item-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.pg-labz .lz-execucao-id { font-size: 11px; font-weight: 500; color: var(--text-soft); overflow-wrap: anywhere; }
+.pg-labz .lz-progresso { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 10px; }
+.pg-labz .lz-progresso progress { flex: 1 1 160px; min-width: 0; height: 8px; border: 0; border-radius: 999px; overflow: hidden; background: var(--bg-soft); accent-color: var(--blue-strong); appearance: none; }
+.pg-labz .lz-progresso progress::-webkit-progress-bar { background: var(--bg-soft); border-radius: 999px; }
+.pg-labz .lz-progresso progress::-webkit-progress-value { background: var(--blue-strong); border-radius: 999px; }
+.pg-labz .lz-progresso progress::-moz-progress-bar { background: var(--blue-strong); border-radius: 999px; }
+.pg-labz .lz-progresso .lz-nota { margin: 0; }
+
+.pg-labz .lz-filtros { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 12px; margin-bottom: 12px; }
+.pg-labz .lz-filtros select { width: 100%; }
+.pg-labz .lz-hist-entregas { margin-top: 12px; padding: 12px 14px; border-radius: var(--radius); background: var(--bg-soft); }
+.pg-labz .lz-hist-entregas h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text-soft); }
+
+@media (max-width: 600px) {
+  .pg-labz .lz-resumo { grid-template-columns: minmax(0, 1fr); }
+  .pg-labz .lz-filtros { grid-template-columns: minmax(0, 1fr); }
+  .pg-labz .lz-item-acoes { width: 100%; }
 }

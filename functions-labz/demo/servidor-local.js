@@ -30,7 +30,7 @@ const RAIZ = path.resolve(__dirname, '..', '..');
 // functions-labz/demo/ui/ (pasta interna, fora do site pelas duas travas da publicação segura)
 // e só este servidor local os mostra, em /labz-ai.html, /labz-ai.css e /labz-ai.js.
 const PASTA_UI = path.join(__dirname, 'ui');
-const UI_LABZ = ['labz-ai.html', 'labz-ai.css', 'labz-ai.js'];
+const UI_LABZ = ['labz-ai.html', 'labz-ai.css', 'labz-ai.js', 'labz-config.js'];
 const UID_DEMO = 'superadmin-demo';
 const EMAIL_DEMO = 'superadmin@demo.local';
 const ROTA_API = '/__labz_local/api';

@@ -45,3 +45,15 @@ jobs:
         with: { deno-version: v2.1.4 }
       - run: cd functions-labz && npm run test:deno
         env: { LABZ_PG_URL: 'postgresql://postgres:teste-local-ficticio@localhost:5432/postgres' }
+  interface:
+    # Fase S4: a tela da LABZ AI num navegador de verdade (Chromium) contra a API real em memória,
+    # com um Firebase FALSO só no navegador de teste e tokens fictícios; mais a regressão do CRM/ERP
+    # (todas as páginas, script.js antes × depois). O Playwright é instalado só aqui (não é dependência).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: cd functions-labz && npm ci && npm i --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - run: cd functions-labz && npm run test:ui

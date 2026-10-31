@@ -28,6 +28,17 @@ export const IMAGENS = [
   'assets/logo-full.png', 'assets/logo-icon.png',
 ];
 export const PERMITIDOS = Object.freeze([...PAGINAS, ...RECURSOS, ...IMAGENS]);
+
+// LABZ AI (Fase S4): arquivos PREPARADOS para quando a publicação da tela for AUTORIZADA.
+// NÃO entram no site: não fazem parte de PERMITIDOS, o workflow não muda e não há opção de linha de
+// comando para incluí-los. Só os testes fazem um ENSAIO (montar({ ensaioLabz: true })) numa pasta
+// temporária, para provar que a inclusão funcionaria (referências, cópia idêntica, nada interno).
+export const LABZ_AI_PREPARADOS = Object.freeze([
+  { origem: 'functions-labz/demo/ui/labz-ai.html', publicado: 'labz-ai.html' },
+  { origem: 'functions-labz/demo/ui/labz-ai.css', publicado: 'labz-ai.css' },
+  { origem: 'functions-labz/demo/ui/labz-ai.js', publicado: 'labz-ai.js' },
+  { origem: 'functions-labz/demo/ui/labz-config.js', publicado: 'labz-config.js' },
+].map(Object.freeze));
 export const DOMINIO = 'eagleslabz.com.br';
 
 // nunca podem aparecer no artefato (segunda trava, além da lista de permitidos)
@@ -83,9 +94,11 @@ export function referencias(arquivo, texto) {
   return refs;
 }
 
-export function montar({ raiz = '.', saida = '_site' } = {}) {
+export function montar({ raiz = '.', saida = '_site', ensaioLabz = false } = {}) {
   const erros = [];
   const avisos = [];
+  const extras = ensaioLabz ? LABZ_AI_PREPARADOS : [];
+  for (const x of extras) if (!fs.existsSync(path.join(raiz, x.origem))) erros.push(`preparado que não existe: ${x.origem}`);
   // 1) todos os permitidos existem no repositório
   for (const f of PERMITIDOS) if (!fs.existsSync(path.join(raiz, f))) erros.push(`permitido que não existe no repositório: ${f}`);
   // 2) página ou imagem pública nova sem decisão (fora da lista) → falha
@@ -101,12 +114,15 @@ export function montar({ raiz = '.', saida = '_site' } = {}) {
     fs.mkdirSync(path.dirname(destino), { recursive: true });
     fs.copyFileSync(path.join(raiz, f), destino);
   }
-  const r = conferir({ raiz, saida });
+  for (const x of extras) fs.copyFileSync(path.join(raiz, x.origem), path.join(saida, x.publicado));
+  const r = conferir({ raiz, saida, extras });
   return { ...r, erros: [...erros, ...r.erros], avisos: [...avisos, ...r.avisos] };
 }
 
 // Confere uma pasta já montada (usado também pelos testes contra artefatos adulterados).
-export function conferir({ raiz = '.', saida = '_site' } = {}) {
+export function conferir({ raiz = '.', saida = '_site', extras = [] } = {}) {
+  const permitidos = [...PERMITIDOS, ...extras.map((x) => x.publicado)];
+  const origemDe = (f) => { const x = extras.find((y) => y.publicado === f); return x ? x.origem : f; };
   const erros = [];
   const avisos = [];
   const arquivos = [];
@@ -119,13 +135,13 @@ export function conferir({ raiz = '.', saida = '_site' } = {}) {
   const conjunto = new Set(arquivos);
   // 4) nada fora da lista e nada proibido
   for (const f of arquivos) {
-    if (!PERMITIDOS.includes(f)) erros.push(`arquivo não permitido no artefato: ${f}`);
+    if (!permitidos.includes(f)) erros.push(`arquivo não permitido no artefato: ${f}`);
     if (PROIBIDOS.some((p) => p.test(f))) erros.push(`arquivo interno no artefato: ${f}`);
   }
-  for (const f of PERMITIDOS) if (!conjunto.has(f)) erros.push(`faltando no artefato: ${f}`);
+  for (const f of permitidos) if (!conjunto.has(f)) erros.push(`faltando no artefato: ${f}`);
   // 5) cópia idêntica ao repositório
   for (const f of arquivos) {
-    const orig = path.join(raiz, f);
+    const orig = path.join(raiz, origemDe(f));
     if (fs.existsSync(orig) && sha(fs.readFileSync(orig)) !== sha(fs.readFileSync(path.join(saida, f)))) erros.push(`conteúdo diferente do repositório: ${f}`);
   }
   // 6) CNAME com o domínio personalizado

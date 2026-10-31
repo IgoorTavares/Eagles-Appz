@@ -3119,7 +3119,7 @@ function criarPortaMemoria({ banco, registro, recuperador, preparacao }) {
 module.exports = { criarPortaMemoria, agenteNaExecucao, ESQUEMA_PROPOSTA };
 
 } };
-__defs["src/api/labz-api.js"] = { deps: {"../agentes/catalogo":"src/agentes/catalogo.js","../auth/super-admin":"src/auth/super-admin.js","../ferramentas/catalogo":"src/ferramentas/catalogo.js","../nucleo/erros":"src/nucleo/erros.js","../nucleo/validador":"src/nucleo/validador.js","../segredos/provedores":"src/segredos/provedores.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+__defs["src/api/labz-api.js"] = { deps: {"../agentes/catalogo":"src/agentes/catalogo.js","../auth/super-admin":"src/auth/super-admin.js","../contratos/execucao":"src/contratos/execucao.js","../ferramentas/catalogo":"src/ferramentas/catalogo.js","../nucleo/erros":"src/nucleo/erros.js","../nucleo/validador":"src/nucleo/validador.js","../segredos/provedores":"src/segredos/provedores.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
 // API interna da LABZ AI: uma única função chamável ("labzApi") recebe
 // { acao, dados }. Para TODA ação, nesta ordem:
 //   1. exigirSuperAdmin (token verificado + role + as duas listas + conta livre);
@@ -3134,6 +3134,7 @@ const { garantir } = require('../nucleo/validador');
 const { statusProvedores } = require('../segredos/provedores');
 const { AGENTES } = require('../agentes/catalogo');
 const { FERRAMENTAS } = require('../ferramentas/catalogo');
+const { ESTADOS: ESTADOS_EXECUCAO } = require('../contratos/execucao');
 
 const MAX_PEDIDO = 200 * 1024; // 200 KB
 const REF_MEMORIA = {
@@ -3241,6 +3242,8 @@ const ACOES = {
   'execucoes.transicionar': [obj({ execucaoId: ID, para: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', max: 300 }, versaoEsperada: { tipo: 'inteiro', min: 1 } }),
     (s, a, d) => s.execucoes.transicionar(a, d.execucaoId, d.para, { motivo: d.motivo, versaoEsperada: d.versaoEsperada })],
   'execucoes.obter': [obj({ execucaoId: ID }), (s, a, d) => s.execucoes.obter(a, d.execucaoId)],
+  // Fase S4: histórico para a interface (resumo, do mais novo para o mais antigo; só leitura)
+  'execucoes.historico': [obj({ estado: { tipo: 'texto', valores: ESTADOS_EXECUCAO }, empresaId: CURSOR, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 50 } }), (s, a, d) => s.execucoes.historico(a, d)],
   'execucoes.listar': [obj({ estado: { tipo: 'texto', max: 30 }, empresaId: { tipo: 'texto', max: 80 }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }), (s, a, d) => s.execucoes.listarPagina(a, d)],
 
   // Fase 4B: modelo por agente (só simulado nesta fase; "real" é recusado) e consumo.
@@ -6745,6 +6748,30 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
       const opcoes = { onde, ordenar: { campo: 'id', direcao: 'asc' }, limite: lim, cursorMesmoFiltro: ['empresaId'] };
       if (depoisDe) opcoes.depoisDe = depoisDe;
       const itens = (await banco.consultar(caminhos.colecoes.tarefas, opcoes)).map((e) => Object.assign({}, e));
+      return { itens, proximo: itens.length === lim ? itens[itens.length - 1].id : null };
+    },
+    // Fase S4: HISTÓRICO para a interface — do mais novo para o mais antigo, só um RESUMO (sem
+    // conteúdo, sem prompts, sem resultados), paginado (até 50). Mesmos filtros de listarPagina.
+    async historico(ator, { estado, empresaId, depoisDe, limite } = {}) {
+      exigirAtor(ator);
+      const lim = Math.min(Math.max(1, limite || 20), 50);
+      const onde = [];
+      if (estado) onde.push({ campo: 'estado', op: '==', valor: estado });
+      if (empresaId) onde.push({ campo: 'empresaId', op: '==', valor: empresaId });
+      const opcoes = { onde, ordenar: { campo: 'criadoEm', direcao: 'desc' }, limite: lim, cursorMesmoFiltro: ['empresaId'] };
+      if (depoisDe) opcoes.depoisDe = depoisDe;
+      const docs = await banco.consultar(caminhos.colecoes.tarefas, opcoes);
+      const itens = docs.map((e) => {
+        const etapas = Array.isArray(e.etapas) ? e.etapas : [];
+        const diag = e.diagnostico || null;
+        return {
+          id: e.id, objetivo: String(e.objetivo || '').slice(0, 160), empresaId: e.empresaId || null, estado: e.estado, modo: e.modo || null,
+          criadoEm: e.criadoEm || null, atualizadoEm: e.atualizadoEm || null,
+          etapas: { total: etapas.length, concluidas: etapas.filter((x) => x.status === 'concluida').length, falharam: etapas.filter((x) => x.status === 'falhou').length },
+          esperaSuperAdmin: e.estado === 'WAITING_APPROVAL' || (e.estado === 'REVISION_REQUIRED' && !!diag && diag.motivo === 'dependencia-aguarda-aprovacao'),
+          motivo: diag && typeof diag.motivo === 'string' ? diag.motivo.slice(0, 60) : null,
+        };
+      });
       return { itens, proximo: itens.length === lim ? itens[itens.length - 1].id : null };
     },
     // Primeira página (compatibilidade).

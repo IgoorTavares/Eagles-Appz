@@ -12,6 +12,7 @@ const { garantir } = require('../nucleo/validador');
 const { statusProvedores } = require('../segredos/provedores');
 const { AGENTES } = require('../agentes/catalogo');
 const { FERRAMENTAS } = require('../ferramentas/catalogo');
+const { ESTADOS: ESTADOS_EXECUCAO } = require('../contratos/execucao');
 
 const MAX_PEDIDO = 200 * 1024; // 200 KB
 const REF_MEMORIA = {
@@ -119,6 +120,8 @@ const ACOES = {
   'execucoes.transicionar': [obj({ execucaoId: ID, para: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', max: 300 }, versaoEsperada: { tipo: 'inteiro', min: 1 } }),
     (s, a, d) => s.execucoes.transicionar(a, d.execucaoId, d.para, { motivo: d.motivo, versaoEsperada: d.versaoEsperada })],
   'execucoes.obter': [obj({ execucaoId: ID }), (s, a, d) => s.execucoes.obter(a, d.execucaoId)],
+  // Fase S4: histórico para a interface (resumo, do mais novo para o mais antigo; só leitura)
+  'execucoes.historico': [obj({ estado: { tipo: 'texto', valores: ESTADOS_EXECUCAO }, empresaId: CURSOR, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 50 } }), (s, a, d) => s.execucoes.historico(a, d)],
   'execucoes.listar': [obj({ estado: { tipo: 'texto', max: 30 }, empresaId: { tipo: 'texto', max: 80 }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }), (s, a, d) => s.execucoes.listarPagina(a, d)],
 
   // Fase 4B: modelo por agente (só simulado nesta fase; "real" é recusado) e consumo.

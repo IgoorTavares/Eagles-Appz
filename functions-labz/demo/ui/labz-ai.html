@@ -94,6 +94,13 @@
 
   <div class="lz-aviso" id="lz-aviso" role="status" aria-live="polite" hidden></div>
 
+  <div class="lz-resumo" id="lz-resumo" aria-label="Resumo das tarefas"></div>
+
+  <section class="panel lz-pendencias-painel" aria-labelledby="lz-pend-titulo">
+    <div class="panel-title"><h2 id="lz-pend-titulo">Esperando você</h2><span>Só o Super Admin decide</span></div>
+    <div id="lz-pendencias" aria-live="polite"></div>
+  </section>
+
   <div class="lz-grade">
     <section class="panel" aria-labelledby="lz-org-titulo">
       <div class="panel-title"><h2 id="lz-org-titulo">Organograma</h2><span>Selecione um agente para ver os detalhes</span></div>
@@ -103,7 +110,7 @@
   </div>
 
   <section class="panel lz-tarefa" aria-labelledby="lz-tarefa-titulo">
-    <div class="panel-title"><h2 id="lz-tarefa-titulo">Nova tarefa</h2><span>Modo simulado: nenhum modelo de IA real, nenhuma publicação, nenhum custo</span></div>
+    <div class="panel-title"><h2 id="lz-tarefa-titulo">Nova tarefa</h2><span>Agentes simulados: nenhum modelo de IA real, nenhuma publicação, nenhum custo</span></div>
     <form id="lz-form" novalidate>
       <div class="form-grid">
         <div class="field full">
@@ -119,15 +126,27 @@
           <div class="lz-exemplos" id="lz-exemplos" role="group" aria-labelledby="lz-exemplos-rotulo"></div>
         </div>
       </div>
-      <div class="lz-acoes-form"><button type="submit" class="btn btn-primary" id="lz-iniciar">Iniciar simulação</button></div>
+      <div class="lz-acoes-form"><button type="submit" class="btn btn-primary" id="lz-iniciar">Iniciar tarefa (simulada)</button></div>
     </form>
 
     <div class="lz-execucao" id="lz-execucao" hidden>
-      <div class="lz-execucao-cabeca"><h3>Etapas da tarefa</h3><span class="lz-estado" id="lz-estado" role="status"></span></div>
+      <div class="lz-execucao-cabeca"><h3>Etapas da tarefa <span class="lz-execucao-id" id="lz-execucao-id"></span></h3><span class="lz-estado" id="lz-estado" role="status"></span></div>
+      <div class="lz-progresso"><progress id="lz-progresso" max="1" value="0" aria-labelledby="lz-progresso-texto"></progress><span id="lz-progresso-texto" class="lz-nota"></span></div>
       <ol class="lz-etapas" id="lz-etapas"></ol>
       <div id="lz-decisoes" aria-live="polite"></div>
       <div class="lz-resultado" id="lz-resultado" aria-live="polite"></div>
     </div>
+  </section>
+
+  <section class="panel lz-historico" aria-labelledby="lz-hist-titulo">
+    <div class="panel-title"><h2 id="lz-hist-titulo">Histórico</h2><span>Tarefas e entregas, das mais novas para as mais antigas</span></div>
+    <div class="lz-filtros">
+      <div class="field"><label for="lz-hist-empresa">Cliente</label><select id="lz-hist-empresa"><option value="">Todos</option></select></div>
+      <div class="field"><label for="lz-hist-estado">Situação</label><select id="lz-hist-estado"><option value="">Todas</option></select></div>
+    </div>
+    <div id="lz-hist-lista" aria-live="polite"></div>
+    <div class="lz-hist-entregas" id="lz-hist-entregas" hidden></div>
+    <div class="lz-acoes-form"><button type="button" class="btn" id="lz-hist-mais" hidden>Ver mais</button></div>
   </section>
 </div>
 
@@ -136,8 +155,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 <script src="firebase-config.js"></script>
+<script src="labz-config.js"></script>
 <script src="script.js"></script>
 <script src="labz-ai.js"></script>
 <script>

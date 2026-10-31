@@ -1205,6 +1205,31 @@ function aplicarGatingPorRole() {
   const admin = nivelEhDiretor();
   document.querySelectorAll('[data-somente-admin]').forEach((el) => { el.style.display = admin ? '' : 'none'; });
   document.querySelectorAll('[data-somente-superadmin]').forEach((el) => { el.style.display = USUARIO_ROLE === 'SuperAdmin' ? '' : 'none'; });
+  labzMenuAplicar();
+}
+
+// LABZ AI (Fase S4): atalho "LABZ AI" no menu do perfil, logo abaixo de "Empresas (Super Admin)".
+// DESLIGADO (false) até o Igor autorizar a publicação da tela da LABZ AI. Mesmo ligado, só aparece
+// para o Super Admin — e o menu NÃO é a proteção: o servidor da LABZ AI confere tudo a cada pedido.
+const LABZ_AI_MENU_ATIVO = false;
+// O nome da página é montado em partes DE PROPÓSITO: enquanto a tela não é publicada, o conferidor do
+// "Site seguro" não deve tratar este atalho desligado como uma página do site. Ao publicar (com
+// autorização), volte a escrever o nome da página por inteiro para o conferidor passar a checá-lo.
+const LABZ_AI_PAGINA = ['labz-ai', 'html'].join('.');
+function labzMenuAplicar(ativo = LABZ_AI_MENU_ATIVO) {
+  const menu = document.getElementById('profile-menu');
+  const existente = document.getElementById('labz-ai-menu-link');
+  if (!ativo || USUARIO_ROLE !== 'SuperAdmin' || !menu) { if (existente) existente.remove(); return false; }
+  if (existente) return true;
+  const a = document.createElement('a');
+  a.id = 'labz-ai-menu-link';
+  a.href = LABZ_AI_PAGINA;
+  a.setAttribute('data-somente-superadmin', '');
+  a.insertAdjacentHTML('afterbegin', '<svg class="icone-menu" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M12 3v4"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M9 17h6"/></svg>');
+  a.append(' LABZ AI (Super Admin)');
+  const empresas = menu.querySelector('a[href="empresas.html"]');
+  if (empresas) empresas.insertAdjacentElement('afterend', a); else menu.append(a);
+  return true;
 }
 
 function esconderCarregandoAuth() {

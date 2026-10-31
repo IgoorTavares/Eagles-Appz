@@ -154,6 +154,10 @@ export function conferir({ raiz = '.', saida = '_site' } = {}) {
 }
 
 
+// Arquivos que o próprio GitHub Pages gera no modo antigo (tema padrão jekyll-theme-primer),
+// visto na montagem real com actions/jekyll-build-pages. Não são arquivos do repositório.
+export const GERADOS_PELO_JEKYLL = Object.freeze(['assets/css/style.css']);
+
 // Confere a saída do Jekyll (o modo antigo do Pages) com a trava do _config.yml: o conjunto de
 // arquivos tem que ser EXATAMENTE a lista de permitidos, e cada arquivo igual ao do repositório.
 export function conferirJekyll({ raiz = '.', saida = '_site_jekyll' } = {}) {
@@ -168,7 +172,9 @@ export function conferirJekyll({ raiz = '.', saida = '_site_jekyll' } = {}) {
   const conjunto = new Set(arquivos);
   for (const f of arquivos) {
     if (PROIBIDOS.some((p) => p.test(f))) erros.push(`o modo antigo publicaria um arquivo interno: ${f}`);
-    else if (!PERMITIDOS.includes(f)) erros.push(`o modo antigo publicaria um arquivo fora da lista: ${f}`);
+    else if (GERADOS_PELO_JEKYLL.includes(f)) {
+      if (fs.existsSync(path.join(raiz, f))) erros.push(`o tema do Jekyll sobrescreveria um arquivo do repositório: ${f}`);
+    } else if (!PERMITIDOS.includes(f)) erros.push(`o modo antigo publicaria um arquivo fora da lista: ${f}`);
   }
   for (const f of PERMITIDOS) if (!conjunto.has(f)) erros.push(`o modo antigo não publicaria: ${f}`);
   for (const f of arquivos) {

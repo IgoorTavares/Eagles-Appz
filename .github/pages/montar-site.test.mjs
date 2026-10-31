@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { montar, conferir, conferirJekyll, PERMITIDOS, PAGINAS, DOMINIO } from './montar-site.mjs';
+import { montar, conferir, conferirJekyll, GERADOS_PELO_JEKYLL, PERMITIDOS, PAGINAS, DOMINIO } from './montar-site.mjs';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'site-'));
@@ -208,11 +208,18 @@ test('conferência do modo antigo (Jekyll): só a lista de permitidos, sem nada 
   const ok = path.join(tmp(), 'jk');
   assert.equal(montar({ raiz: RAIZ, saida: ok }).ok, true);
   assert.equal(conferirJekyll({ raiz: RAIZ, saida: ok }).ok, true);
+  // o CSS do tema padrão do GitHub (gerado pelo Jekyll, visto na montagem real) é aceito — só ele
+  fs.mkdirSync(path.join(ok, 'assets/css'), { recursive: true });
+  fs.writeFileSync(path.join(ok, 'assets/css/style.css'), '/* tema primer */');
+  assert.equal(conferirJekyll({ raiz: RAIZ, saida: ok }).ok, true);
+  assert.ok(!fs.existsSync(path.join(RAIZ, 'assets/css/style.css')), 'o site não usa esse caminho');
+  assert.deepEqual([...GERADOS_PELO_JEKYLL], ['assets/css/style.css']);
   for (const [nome, estraga] of [
     ['interno', (d) => { fs.mkdirSync(path.join(d, 'functions-labz'), { recursive: true }); fs.writeFileSync(path.join(d, 'functions-labz/index.js'), 'x'); }],
     ['md', (d) => fs.writeFileSync(path.join(d, 'CLAUDE.md'), 'x')],
     ['regras', (d) => fs.writeFileSync(path.join(d, 'firestore.rules'), 'x')],
     ['extra', (d) => fs.writeFileSync(path.join(d, 'sitemap.xml'), 'x')],
+    ['extra-assets', (d) => { fs.mkdirSync(path.join(d, 'assets/css'), { recursive: true }); fs.writeFileSync(path.join(d, 'assets/css/outro.css'), 'x'); }],
     ['faltando', (d) => fs.rmSync(path.join(d, 'script.js'))],
     ['alterado', (d) => fs.appendFileSync(path.join(d, 'index.html'), '<!-- x -->')],
   ]) {

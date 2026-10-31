@@ -105,6 +105,8 @@ const ACOES = {
   // Fase 4B: o pedido vira execução orquestrada e o Estrategista planeja (plano validado no backend).
   'execucoes.pedido': [obj({ empresaId: { tipo: 'texto', nulo: true, padrao: /^[A-Za-z0-9_-]{1,80}$/ }, objetivo: { tipo: 'texto', obrigatorio: true, min: 5, max: 4000 }, limites: { tipo: 'objeto' } }),
     (s, a, d) => s.motor.pedido(a, { empresaId: d.empresaId || null, objetivo: d.objetivo, limites: d.limites })],
+  // Fase 4C.2 (passo 5): relatório da tarefa (só ids, versões, estados e números; sem conteúdo)
+  'execucoes.relatorio': [obj({ execucaoId: ID }), (s, a, d) => s.relatorios.daTarefa(a, d.execucaoId)],
   'execucoes.criar': [obj({ execucao: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.execucoes.criar(a, d.execucao)],
   'execucoes.transicionar': [obj({ execucaoId: ID, para: { tipo: 'texto', obrigatorio: true }, motivo: { tipo: 'texto', max: 300 }, versaoEsperada: { tipo: 'inteiro', min: 1 } }),
     (s, a, d) => s.execucoes.transicionar(a, d.execucaoId, d.para, { motivo: d.motivo, versaoEsperada: d.versaoEsperada })],

@@ -296,6 +296,19 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - **Rejeição:** `invalidacoes` na execução (o que dependia da versão), eventos `versao_invalidada` e `revisao_solicitada`;
   a execução que esperava por ela vira `dependencia-rejeitada` (nova versão + retomada do Super Admin).
 
+## Fase 4C.2 — passo 5: testes integrados de ponta a ponta e relatório por tarefa
+- **Testes integrados** (`test/integrado-4c2.test.js`, 11 testes): cenários A (campanha com 7 documentos), B (landing page
+  com Dev Web e Engenheiro, risco alto, nada publicado), C (um especialista só), D (os 8 agentes) e E (dois clientes ao
+  mesmo tempo, tudo isolado), mais falhas no fluxo, recuperação (outra instância no mesmo banco), rejeição/substituição/
+  aprovação duplicada/cancelamento/custo, segurança e "aprovar documento não aprova ação". No simulador do Firebase:
+  o cenário A de ponta a ponta (aprovação e relatório pela função).
+- **Estrategista simulado:** "legendas para/de/no …" vira um documento próprio (`legenda-social`, Roteirista).
+- **Relatório por tarefa** (`src/motor/relatorio.js`, API `execucoes.relatorio`): monta a partir da execução, das
+  entregas/versões e dos pedidos de aprovação (não é outra auditoria; não grava nada). Só ids, tipos, versões, hashes,
+  estados, motivos e números: nada de objetivo, briefing, texto de documento, prompt ou credencial. Consumo sempre
+  simulado (`cobrancaReal: false`, `custoConfirmado: null`).
+- Teste novo de retomada atrasada (a mutação R6 do passo 4 passou a ser detectada).
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.
@@ -303,7 +316,7 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 4. O Firebase Emulator **não comprova** a disponibilidade dos índices no Firebase real.
 5. A proteção contra prompt injection (marcadores com código, limpeza, blocos `confiavel`) depende também do tratamento seguro dos dados pelo futuro executor de modelos (Fase 4/6).
 6. Os agentes **ainda não executam** tarefas reais: na Fase 4B o motor usa só modelos simulados (transporte simulado) e o executor só roda localmente.
-7. Os **28 índices** compostos e as **27 isenções** propostos **ainda não foram publicados** (`firestore.indexes.json` não mudou).
+7. Os **28 índices** compostos e as **43 isenções** propostos **ainda não foram publicados** (`firestore.indexes.json` não mudou).
 
 ## O que falta (fases seguintes)
 - Fase 3E (feita): auditoria e correções F1–F7 (ver abaixo). Publicar os 28 índices e as 27 isenções só com autorização.

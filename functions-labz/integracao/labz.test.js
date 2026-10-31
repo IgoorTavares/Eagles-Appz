@@ -579,3 +579,32 @@ test('Fase 4C.2 passo 4 no Firestore real: aprovação pela API retoma sozinha (
   const ev = await ok(tokens.sa, 'auditoria.listar', { tipo: 'execucao.retomada_agendada' });
   assert.equal(ev.itens.filter((e) => e.alvo === `labz_tarefas/${exe.id}`).length, 1, 'uma retomada só');
 });
+
+test('Fase 4C.2 passo 5 no Firestore real: Cenário A de ponta a ponta pela API (pedido → plano → 7 documentos → aprovação → consolidação → relatório)', async () => {
+  const { criarLabz } = require('../src/servicos');
+  const { transporteComModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
+  const banco = criarBancoFirestore(db);
+  const { exigirSuperAdmin } = require('../src/auth/super-admin');
+  const s = criarLabz({ banco, ia: { transporte: transporteComModeloSimulado() } });
+  const ator = await exigirSuperAdmin({ uid: 'sa-teste', token: { email: 'sa@teste.local' } }, { banco, uidsAutorizados: ['sa-teste'] });
+  // o pedido é planejado pelo Estrategista simulado (local); o resto passa pela função do simulador
+  const o = await s.motor.pedido(ator, { empresaId: A.id, objetivo: 'INTEG-4C2P5 campanha completa: diretrizes de marca, posts, carrosséis, roteiro de Reels, legendas para o Instagram e anúncios no Meta Ads' });
+  assert.equal(o.estado, 'READY');
+  await Promise.all([s.executorLocal({ nome: 'I1', concorrencia: 2 }).drenar(), s.executorLocal({ nome: 'I2', concorrencia: 2 }).drenar()]);
+  let d = await ok(tokens.sa, 'execucoes.diagnostico', { execucaoId: o.id });
+  assert.equal(d.diagnostico.motivo, 'dependencia-aguarda-aprovacao');
+  const exe = (await db.doc(`labz_tarefas/${o.id}`).get()).data();
+  const trafego = exe.etapas.find((x) => x.id === 'trafego').resultado.entrega;
+  const r = await ok(tokens.sa, 'entregas.decidir', { entregaId: trafego.id, decisao: { decisao: 'aprovar', versao: trafego.versao, hash: trafego.hash } });
+  assert.ok(['retomada-agendada', 'nada-a-retomar'].includes(r.retomada));
+  await s.monitor.verificar();
+  await Promise.all([s.executorLocal({ nome: 'I3' }).drenar(), s.executorLocal({ nome: 'I4' }).drenar()]);
+  d = await ok(tokens.sa, 'execucoes.diagnostico', { execucaoId: o.id });
+  assert.equal(d.estado, 'COMPLETED');
+  const rel = await ok(tokens.sa, 'execucoes.relatorio', { execucaoId: o.id });
+  assert.equal(rel.documentos.length, 7);
+  assert.ok(rel.documentos.every((x) => typeof x.hash === 'string' && x.hash.length === 64));
+  assert.equal(rel.entregaConsolidada.insumos, 6);
+  assert.equal(rel.consumo.cobrancaReal, false);
+  assert.ok(!JSON.stringify(rel).includes('INTEG-4C2P5'), 'relatório sem o texto do pedido');
+});

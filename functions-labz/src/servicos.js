@@ -22,6 +22,7 @@ const { criarMonitorFila } = require('./motor/monitor-fila');
 const { criarExecutorLocal } = require('./motor/executor-local');
 const { criarEntregas } = require('./entregas/registro');
 const { criarCompartilhamento } = require('./entregas/compartilhamento');
+const { criarRelatorios } = require('./motor/relatorio');
 
 // adaptador: o "agente" que o motor chama. Na Fase 4A é SEMPRE o simulado
 // (nenhum modelo real); os testes passam roteiros próprios.
@@ -53,7 +54,7 @@ function criarLabz({ banco, relogio, adaptador, ia, opcoes = {} }) {
   const monitor = criarMonitorFila({ banco, execucoes, fila, auditoria, relogio, opcoes: opcoes.monitor, retomadas: () => motor.varrerRetomadas() });
   // executor automático LOCAL: uso interno (testes e emulador); não sai pela API e não é agendado
   const executorLocal = (o) => criarExecutorLocal({ motor, monitor, auditoria, opcoes: Object.assign({}, opcoes.executor, o) });
-  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente, entregas, compartilhamento };
+  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente, entregas, compartilhamento, relatorios: criarRelatorios({ banco }) };
 }
 
 module.exports = { criarLabz };

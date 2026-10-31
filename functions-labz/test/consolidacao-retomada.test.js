@@ -353,3 +353,25 @@ test('risco do backend exige aprovação mesmo quando o catálogo não exigiria 
   await rejeita(() => c.motor.decidirAprovacao(c.ator, exe.id, ped.id, { decisao: 'aprovar', assinatura: ped.assinatura, justificativa: 'ok ok' }), 'conflito');
   assert.strictEqual((await diag(c, exe.id)).estado, 'WAITING_APPROVAL');
 });
+
+test('retomada atrasada: se a execução mudou durante a verificação (outra parada), a versão vista impede retomar errado', async () => {
+  const c = await montar();
+  const exe = await plano(c, SENS());
+  await c.executorLocal().drenar();
+  const pin = await pinDe(c, exe.id, 'trafego');
+  await c.entregas.decidir(c.ator, pin.id, { decisao: 'aprovar', versao: 1, hash: pin.hash });
+  // enquanto a retomada confere as dependências, outro fluxo muda a execução (continua REVISION_REQUIRED, mas por OUTRO motivo)
+  const original = c.compartilhamento.resolver;
+  c.compartilhamento.resolver = async (...a) => {
+    const r = await original(...a);
+    const e = await c.banco.obter(caminhos.tarefa(exe.id));
+    await c.banco.atualizar(caminhos.tarefa(exe.id), { versao: e.versao + 1, diagnostico: { motivo: 'limite-de-tokens', etapa: 'legenda' } });
+    return r;
+  };
+  try {
+    const r = await c.motor.tentarRetomadaAutomatica(exe.id);
+    assert.strictEqual(r.resultado, 'nada-a-retomar');
+  } finally { c.compartilhamento.resolver = original; }
+  const d = await diag(c, exe.id);
+  assert.deepStrictEqual([d.estado, d.diagnostico.motivo], ['REVISION_REQUIRED', 'limite-de-tokens'], 'a parada nova (custo) não é atropelada pela aprovação antiga');
+});

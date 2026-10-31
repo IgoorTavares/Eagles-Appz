@@ -278,6 +278,24 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - **Rastreabilidade:** `insumos` na versão produzida (entrega, versão, hash, etapa produtora e consumidora, documento,
   autorização, data) e em `etapa.resultado.insumos`; evento `entrega.insumos_utilizados` só com ids e hash curto.
 
+## Fase 4C.2 — passo 4: consolidação final, risco das operações e retomada automática segura
+- **Consolidação:** a lista de entregas da `consolidacao-final` vem dos documentos JÁ conferidos pelo compartilhamento
+  (versão explícita, integridade, estado); o sistema acrescenta `[sistema]` nas pendências para o que ainda não tem
+  aprovação humana; documento ausente, rejeitado, substituído ou adulterado bloqueia (nada consolidado em silêncio).
+- **Risco** (`src/motor/risco.js`): categoria e nível de cada operação pelas regras do backend (catálogo + tabela;
+  o nível nunca fica abaixo do catálogo; o que o modelo escreve é ignorado). Risco alto exige aprovação mesmo se o
+  catálogo não exigir (ex.: gasto com imagem). O pedido de aprovação leva o risco, preso à assinatura, que é
+  recalculada na decisão. Publicar, código, gastos, envio externo etc. ficam `proibidaNestaFase`: aprovadas, só simulam.
+  Aprovar um DOCUMENTO não libera ação nenhuma citada nele.
+- **Aprovação de entrega:** a decisão guarda empresa, tarefa, etapa, entrega, versão, hash, tipo (`entrega-sensivel`
+  ou `entrega`), aprovador e data. Eventos `entrega.aprovacao_concedida`, `.aprovacao_rejeitada`, `.revisao_solicitada`.
+- **Retomada automática** (`motor.tentarRetomadaAutomatica`, chamada por `entregas.decidir` na API e pelo monitor a
+  cada ciclo): só para a parada `dependencia-aguarda-aprovacao`; confere tarefa ativa, aprovação da versão e hash
+  exatos, integridade, escopo, todas as dependências, custo e empresa; passa a READY com a versão vista (idempotente).
+  Se não der, registra `retomada_bloqueada` com o motivo. O executor existente faz o resto (`retomada_executada`).
+- **Rejeição:** `invalidacoes` na execução (o que dependia da versão), eventos `versao_invalidada` e `revisao_solicitada`;
+  a execução que esperava por ela vira `dependencia-rejeitada` (nova versão + retomada do Super Admin).
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

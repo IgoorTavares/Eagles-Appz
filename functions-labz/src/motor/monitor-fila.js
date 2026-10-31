@@ -16,7 +16,9 @@ const { relogioPadrao } = require('../nucleo/ids');
 
 const PADRAO = { limiteBatimentoMs: 5 * 60 * 1000 };
 
-function criarMonitorFila({ banco, execucoes, fila, auditoria, relogio = relogioPadrao, opcoes = {} }) {
+// retomadas (Fase 4C.2 passo 4, opcional): função do motor que tenta retomar as execuções paradas
+// aguardando a aprovação de um documento (o mesmo caminho da notificação; idempotente).
+function criarMonitorFila({ banco, execucoes, fila, auditoria, relogio = relogioPadrao, opcoes = {}, retomadas }) {
   const cfg = Object.assign({}, PADRAO, opcoes);
   return {
     async verificar() {
@@ -32,10 +34,11 @@ function criarMonitorFila({ banco, execucoes, fila, auditoria, relogio = relogio
           if (await fila.descartar(it.id, exe ? `execucao-${exe.estado}` : 'execucao-inexistente')) r.descartados.push(it.id);
         }
       }
-      if (r.recuperadas.length || r.encerradasPorVencimento.length || r.descartados.length) {
+      r.retomadas = retomadas ? (await retomadas()).filter((x) => x.resultado === 'retomada-agendada').map((x) => x.id) : [];
+      if (r.recuperadas.length || r.encerradasPorVencimento.length || r.descartados.length || r.retomadas.length) {
         await auditoria.registrar('fila.monitor', ATOR_SISTEMA, caminhos.colecoes.fila, {
           recuperadas: r.recuperadas.length, paraFila: r.recuperadas.filter((x) => x.para === 'READY').length, falhas: r.recuperadas.filter((x) => x.para === 'FAILED').length,
-          reservasVencidas: r.reservasVencidas, encerradas: r.encerradasPorVencimento.length, descartados: r.descartados.length,
+          reservasVencidas: r.reservasVencidas, encerradas: r.encerradasPorVencimento.length, descartados: r.descartados.length, retomadas: r.retomadas.length,
         });
       }
       return r;

@@ -50,7 +50,7 @@ function criarLabz({ banco, relogio, adaptador, ia, opcoes = {} }) {
   const entregas = criarEntregas({ banco, auditoria, relogio }); // Fase 4C.1
   const compartilhamento = criarCompartilhamento({ banco, entregas, relogio: relogio || (() => new Date().toISOString()) }); // Fase 4C.2 passo 3
   const motor = criarMotor({ banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador: agente, consumo, entregas, compartilhamento, relogio });
-  const monitor = criarMonitorFila({ banco, execucoes, fila, auditoria, relogio, opcoes: opcoes.monitor });
+  const monitor = criarMonitorFila({ banco, execucoes, fila, auditoria, relogio, opcoes: opcoes.monitor, retomadas: () => motor.varrerRetomadas() });
   // executor automático LOCAL: uso interno (testes e emulador); não sai pela API e não é agendado
   const executorLocal = (o) => criarExecutorLocal({ motor, monitor, auditoria, opcoes: Object.assign({}, opcoes.executor, o) });
   return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente, entregas, compartilhamento };

@@ -132,7 +132,12 @@ const ACOES = {
   'entregas.criar': [obj({ entrega: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.entregas.criar(a, d.entrega)],
   'entregas.novaVersao': [obj({ entregaId: ID, conteudo: { tipo: 'objeto', obrigatorio: true }, versaoBase: { tipo: 'inteiro', min: 0 } }), (s, a, d) => s.entregas.novaVersao(a, d.entregaId, d.conteudo, { versaoBase: d.versaoBase })],
   'entregas.enviarParaRevisao': [obj({ entregaId: ID, versao: N }), (s, a, d) => s.entregas.enviarParaRevisao(a, d.entregaId, d.versao)],
-  'entregas.decidir': [obj({ entregaId: ID, decisao: { tipo: 'objeto', obrigatorio: true } }), (s, a, d) => s.entregas.decidir(a, d.entregaId, d.decisao)],
+  // Fase 4C.2 (passo 4): depois da decisão, a retomada automática segura (ou a invalidação) é tentada; falhar nela não desfaz a decisão
+  'entregas.decidir': [obj({ entregaId: ID, decisao: { tipo: 'objeto', obrigatorio: true } }), async (s, a, d) => {
+    const r = await s.entregas.decidir(a, d.entregaId, d.decisao);
+    const ret = await s.motor.notificarDecisaoEntrega(d.entregaId).catch(() => ({ resultado: 'retomada-nao-tentada' }));
+    return Object.assign({}, r, { retomada: ret.resultado });
+  }],
   'entregas.restaurar': [obj({ entregaId: ID, versao: N, motivo: MOTIVO }), (s, a, d) => s.entregas.restaurar(a, d.entregaId, d.versao, d.motivo)],
 
   'auditoria.listar': [obj({ tipo: { tipo: 'texto', max: 60 }, depoisDe: CURSOR, limite: { tipo: 'inteiro', min: 1, max: 100 } }),

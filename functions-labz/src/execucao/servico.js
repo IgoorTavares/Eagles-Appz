@@ -19,7 +19,7 @@ const { obterAgente } = require('../agentes/catalogo');
 const MAX_TENTATIVAS = 3;
 const AVANCAM = ['PLANNING', 'READY', 'RUNNING', 'REVISION_REQUIRED']; // estados que retomam trabalho
 const PAGINA = 100;
-const CAMPOS_EXTRAS = ['execucaoAtual', 'diagnostico', 'plano', 'etapas', 'custos', 'resultadoFinal', 'limites'];
+const CAMPOS_EXTRAS = ['execucaoAtual', 'diagnostico', 'plano', 'etapas', 'custos', 'resultadoFinal', 'limites', 'retomada']; // retomada: Fase 4C.2 passo 4
 const MAX_HISTORICO = 100;
 
 const ESQUEMA_NOVA_EXECUCAO = {

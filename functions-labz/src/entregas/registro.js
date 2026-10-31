@@ -27,7 +27,7 @@ const { agenteNaExecucao } = require('../agentes/memoria-agente');
 const { FINAIS } = require('../contratos/execucao');
 const C = require('../contratos/entrega');
 const arm = require('./armazenamento');
-const { obterDocumento, validarDocumento } = require('../contratos/documentos');
+const { obterDocumento, validarDocumento, CONSUMO } = require('../contratos/documentos');
 const rep = require('./representacao');
 
 const PAGINA = 100;
@@ -285,10 +285,16 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
       if (!C.transicaoPermitida(v.estado, para)) throw erro('precondicao', `Uma versão ${v.estado} não pode ser ${para}`);
       await arm.lerConteudo(t, v.conteudoRef, e.execucaoId); // integridade conferida ANTES de decidir
       if (e.documento) await conferirDocumentoDaVersao(t, e, v); // documento e Markdown conferidos JUNTOS
-      const decisao = { tipo: para, por: ator.uid, em: relogio(), hash: v.hash, motivo: dados.motivo ? dados.motivo.trim() : null };
+      // Fase 4C.2 (passo 4): a decisão fica presa a empresa, tarefa, etapa, entrega, versão, hash, tipo e aprovador
+      const sensivel = !!(e.documento && CONSUMO[e.documento] && CONSUMO[e.documento].sensivel);
+      const decisao = {
+        tipo: para, por: ator.uid, em: relogio(), hash: v.hash, motivo: dados.motivo ? dados.motivo.trim() : null,
+        empresaId: e.empresaId || null, execucaoId: e.execucaoId, etapaId: e.etapaId || null, entregaId, versao: dados.versao,
+        tipoAprovacao: sensivel ? 'entrega-sensivel' : 'entrega',
+      };
       await t.atualizar(caminhos.versaoEntrega(entregaId, dados.versao), { estado: para, decisao });
       const base = { estadoAtual: para, atualizadoEm: decisao.em, atualizadoPor: ator.uid };
-      if (para === 'aprovada') Object.assign(base, { versaoAprovada: dados.versao, aprovacao: { versao: dados.versao, hash: v.hash, por: ator.uid, em: decisao.em } });
+      if (para === 'aprovada') Object.assign(base, { versaoAprovada: dados.versao, aprovacao: { versao: dados.versao, hash: v.hash, por: ator.uid, em: decisao.em, tipoAprovacao: decisao.tipoAprovacao, execucaoId: e.execucaoId, empresaId: e.empresaId || null } });
       await t.atualizar(caminhos.entrega(entregaId), base);
       r = { entregaId, versao: dados.versao, estado: para, hash: v.hash };
     }).catch(async (e) => {
@@ -296,6 +302,9 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
       throw e;
     });
     await ev('decidida', ator, entregaId, { versao: dados.versao, decisao: para });
+    if (para === 'aprovada') await ev('aprovacao_concedida', ator, entregaId, { versao: dados.versao });
+    if (para === 'rejeitada') await ev('aprovacao_rejeitada', ator, entregaId, { versao: dados.versao });
+    if (para === 'precisa-revisao') await ev('revisao_solicitada', ator, entregaId, { versao: dados.versao });
     return r;
   }
 

@@ -14,6 +14,7 @@ const { erro } = require('../nucleo/erros');
 const { garantir } = require('../nucleo/validador');
 const { relogioPadrao } = require('../nucleo/ids');
 const { hashAcao } = require('./ferramentas-simuladas');
+const { classificarAcao } = require('./risco');
 
 const sha = (x) => crypto.createHash('sha256').update(JSON.stringify(x), 'utf8').digest('hex');
 const ESQUEMA_DECISAO = {
@@ -33,10 +34,13 @@ function criarAprovacoes({ banco, auditoria, relogio = relogioPadrao }) {
     const caminho = caminhos.aprovacaoExecucao(execucaoId, id);
     const existente = await t.obter(caminho);
     if (existente) return Object.assign({ id }, existente);
+    // Fase 4C.2 (passo 4): o risco é do BACKEND (catálogo + regras), preso ao pedido e à assinatura
+    const r = classificarAcao(acao);
+    const risco = { nivel: r.nivel, categoria: r.categoria, proibidaNestaFase: r.proibidaNestaFase, execucaoReal: false };
     const pedido = {
       execucaoId, etapaId: etapa.id, agenteId: etapa.agenteId, tentativaEtapa: etapa.tentativas,
-      ferramentaId: acao.ferramentaId, operacao: acao.operacao, acaoHash: h,
-      assinatura: sha({ execucaoId, etapaId: etapa.id, agenteId: etapa.agenteId, tentativa: etapa.tentativas, acao: h }),
+      ferramentaId: acao.ferramentaId, operacao: acao.operacao, acaoHash: h, risco, tipoAprovacao: 'acao',
+      assinatura: sha({ execucaoId, etapaId: etapa.id, agenteId: etapa.agenteId, tentativa: etapa.tentativas, acao: h, risco }),
       status: 'pendente', criadoEm: relogio(), decisao: null,
     };
     await t.gravar(caminho, pedido);
@@ -64,11 +68,14 @@ function criarAprovacoes({ banco, auditoria, relogio = relogioPadrao }) {
         if (!p) throw erro('nao-encontrado', 'Pedido de aprovação não encontrado');
         if (p.status !== 'pendente') throw erro('precondicao', `Pedido já ${p.status}`);
         if (p.assinatura !== dados.assinatura) throw erro('conflito', 'Assinatura não confere com este pedido', { motivo: 'assinatura-invalida' });
+        // Fase 4C.2 (passo 4): a assinatura é RECALCULADA dos campos guardados (inclusive o risco): pedido adulterado não é decidido
+        const recalculada = sha(Object.assign({ execucaoId, etapaId: p.etapaId, agenteId: p.agenteId, tentativa: p.tentativaEtapa, acao: p.acaoHash }, p.risco ? { risco: p.risco } : {}));
+        if (recalculada !== p.assinatura) throw erro('conflito', 'O pedido de aprovação foi alterado depois de criado', { motivo: 'pedido-adulterado' });
         const etapa = (exe.etapas || []).find((e) => e.id === p.etapaId);
         if (!etapa || etapa.status !== 'aguardando_aprovacao' || !etapa.aprovacoes.includes(aprovacaoId) || etapa.tentativas !== p.tentativaEtapa) {
           throw erro('conflito', 'Este pedido ficou desatualizado: a etapa mudou depois dele', { motivo: 'aprovacao-desatualizada' });
         }
-        const decisao = { por: ator.uid, em: relogio(), motivo: dados.justificativa.trim() };
+        const decisao = { por: ator.uid, em: relogio(), motivo: dados.justificativa.trim(), empresaId: exe.empresaId || null, tipoAprovacao: 'acao', acaoHash: p.acaoHash, risco: p.risco || null };
         await t.atualizar(caminhos.aprovacaoExecucao(execucaoId, aprovacaoId), { status: dados.decisao === 'aprovar' ? 'aprovada' : 'recusada', decisao });
         resultado = { pedido: Object.assign({ id: aprovacaoId }, p, { status: dados.decisao === 'aprovar' ? 'aprovada' : 'recusada', decisao }), etapa, exe };
       }).catch(async (e) => {

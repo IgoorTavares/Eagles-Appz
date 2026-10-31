@@ -48,6 +48,7 @@ const { CONSOLIDACAO } = require('./planejador');
 const { mensagemSegura } = require('../ia/credenciais');
 const { gerarMarkdown } = require('../entregas/representacao');
 const { DOCUMENTO_DA_CONSOLIDACAO } = require('../contratos/documentos');
+const { classificarAcao } = require('./risco');
 
 const MAX_TENTATIVAS_ETAPA = 3; // falhas transitórias por etapa
 const MAX_TENTATIVAS_QUALIDADE = 2; // reprovações estruturais por etapa antes de pedir revisão
@@ -201,9 +202,10 @@ function criarMotor(deps) {
     const acoes = [];
     for (const p of pedidos) {
       if (p.status === 'aprovada') {
+        // Fase 4C.2 (passo 4): mesmo aprovada, operação sensível NÃO é executada de verdade nesta fase (só simulação)
         const r = await executor.executar(etapa.agenteId, { tipo: 'ferramenta', ferramentaId: p.ferramentaId, operacao: p.operacao, parametros: { acaoHash: p.acaoHash } });
-        acoes.push({ ferramentaId: p.ferramentaId, operacao: p.operacao, situacao: 'aprovada-simulada', aprovacao: p.id, simulado: r.simulado });
-        await ev('acao_simulada', exe.id, { etapa: etapa.id, ferramenta: p.ferramentaId, aprovacao: p.id });
+        acoes.push({ ferramentaId: p.ferramentaId, operacao: p.operacao, situacao: 'aprovada-simulada', aprovacao: p.id, simulado: r.simulado, execucaoReal: false, risco: p.risco ? p.risco.nivel : null, categoria: p.risco ? p.risco.categoria : null, bloqueadaNestaFase: !!(p.risco && p.risco.proibidaNestaFase) });
+        await ev('acao_simulada', exe.id, { etapa: etapa.id, ferramenta: p.ferramentaId, aprovacao: p.id, risco: p.risco ? p.risco.nivel : null, execucaoReal: false });
       } else {
         acoes.push({ ferramentaId: p.ferramentaId, operacao: p.operacao, situacao: 'recusada-nao-executada', aprovacao: p.id });
         await ev('acao_recusada', exe.id, { etapa: etapa.id, ferramenta: p.ferramentaId, aprovacao: p.id });
@@ -245,6 +247,7 @@ function criarMotor(deps) {
     if (sinal && sinal.aborted) return liberar(id, token, null, 0);
     let atual = await comCracha(id, token, (x) => comEtapa(x, etapa.id, { status: 'executando', tentativas: tentativa, iniciadaEm: relogio() }));
     await ev('etapa_iniciada', id, { etapa: etapa.id, agente: etapa.agenteId, tentativa });
+    if (etapa.id === CONSOLIDACAO) await ev('consolidacao_iniciada', id, { dependencias: etapa.dependeDe.length, documento: etapa.documento || null });
 
     // Fase 4C.2 (passo 3): plano com documentos → os documentos das dependências vêm do Registro de
     // Entregas (versão fixada, integridade, permissão, aprovação), SEM corte e fora do briefing.
@@ -254,6 +257,11 @@ function criarMotor(deps) {
       if (r.bloqueio) {
         await comCracha(id, token, (x) => comEtapa(x, etapa.id, { status: 'pendente', tentativas: tentativa - 1, ultimoErro: r.bloqueio.motivo }));
         await ev('compartilhamento_bloqueado', id, { etapa: etapa.id, motivo: r.bloqueio.motivo, dependencia: r.bloqueio.dependencia || null });
+        if (r.bloqueio.motivo === 'dependencia-aguarda-aprovacao') {
+          const prod = (exe.etapas || []).find((x) => x.id === r.bloqueio.dependencia);
+          const pin = prod && prod.resultado && prod.resultado.entrega;
+          await ev('aprovacao_documento_solicitada', id, { etapa: etapa.id, dependencia: r.bloqueio.dependencia, entrega: pin ? pin.id : null, versao: pin ? pin.versao : null });
+        }
         await execucoes.transicionar(ATOR_SISTEMA, id, 'REVISION_REQUIRED', { token, motivo: `documento recebido: ${r.bloqueio.motivo}`, extras: { diagnostico: Object.assign({ etapa: etapa.id, em: relogio() }, r.bloqueio) } });
         return { resultado: 'bloqueada-por-dependencia', motivo: r.bloqueio.motivo };
       }
@@ -338,9 +346,15 @@ function criarMotor(deps) {
 
     // Fase 4C.2: na consolidação, as referências às entregas são do SISTEMA (as do modelo são descartadas)
     if (!qProblemas && etapa.documento === DOCUMENTO_DA_CONSOLIDACAO && saida && saida.documento && typeof saida.documento === 'object' && !Array.isArray(saida.documento)) {
+      // Fase 4C.2 (passo 4): a lista vem dos documentos JÁ CONFERIDOS (versão explícita, integridade, estado);
+      // as pendências do sistema (o que ainda não tem aprovação humana) entram antes das do modelo
+      const fonte = recebidos ? recebidos.map((x) => ({ etapaId: x.etapaId, entregaId: x.entregaId, versao: x.versao, hash: x.hash, autorizacao: x.autorizacao, documento: x.documento }))
+        : (exe.etapas || []).filter((x) => x.id !== CONSOLIDACAO && x.resultado && x.resultado.entrega).map((x) => Object.assign({ etapaId: x.id, autorizacao: null, documento: x.documento || null }, { entregaId: x.resultado.entrega.id, versao: x.resultado.entrega.versao, hash: x.resultado.entrega.hash }));
+      const pendSistema = fonte.filter((x) => x.autorizacao !== 'aprovacao-super-admin').map((x) => `[sistema] etapa ${x.etapaId} (${x.documento || 'texto'} v${x.versao}): validada internamente; aguarda a aprovação do Super Admin`);
+      const pendModelo = Array.isArray(saida.documento.pendencias) ? saida.documento.pendencias.filter((p) => typeof p === 'string' && !p.startsWith('[sistema]')) : [];
       saida.documento = Object.assign({}, saida.documento, {
-        entregas: (exe.etapas || []).filter((x) => x.id !== CONSOLIDACAO && x.resultado && x.resultado.entrega).slice(0, 20)
-          .map((x) => ({ etapaId: x.id, entregaId: x.resultado.entrega.id, versao: x.resultado.entrega.versao, hash: x.resultado.entrega.hash })),
+        entregas: fonte.slice(0, 20).map((x) => ({ etapaId: x.etapaId, entregaId: x.entregaId, versao: x.versao, hash: x.hash })),
+        pendencias: [...new Set([...pendSistema, ...pendModelo])].slice(0, 20),
       });
     }
     // Quality Gate (estrutural; com documento, o contrato do catálogo); resposta inválida do provedor conta como reprovação
@@ -370,7 +384,8 @@ function criarMotor(deps) {
       if (entregas) entrega = await entregas.registrarDaEtapa(t, { exe: x, etapa: etapaAtual, tentativa, texto: textoFinal, final: etapa.id === CONSOLIDACAO, documento: etapa.documento ? { dados: saida.documento } : undefined, insumos: insumos || undefined });
       for (const acao of saida.acoes) {
         const a = avaliarAcao(etapa.agenteId, acao);
-        if (a.exigeAprovacao) pedidos.push(await aprovacoes.solicitar(t, id, etapaAtual, acao));
+        // Fase 4C.2 (passo 4): o risco do backend pode EXIGIR aprovação (nunca dispensar a do catálogo)
+        if (a.exigeAprovacao || classificarAcao(acao).exigeAprovacao) pedidos.push(await aprovacoes.solicitar(t, id, etapaAtual, acao));
         else imediatas.push(acao);
       }
       await t.gravar(caminhos.resultadoEtapa(id, etapa.id), {
@@ -381,7 +396,7 @@ function criarMotor(deps) {
         referencias: saida.referencias, fontes: ctx.fontes.map((f) => `${f.origem}:${f.escopo || '-'}:${f.id}@${f.versao}`), caracteres: textoFinal.length, simulado: true, documento: etapa.documento || null,
         entrega: entrega ? { id: entrega.entregaId, versao: entrega.versao, hash: entrega.hash } : null,
         insumos: insumos ? insumos.map((i) => ({ entregaId: i.entregaId, versao: i.versao, hash: i.hash, etapaProdutora: i.etapaProdutora, autorizacao: i.autorizacao })) : undefined,
-        acoes: [...imediatas.map((a) => ({ ferramentaId: a.ferramentaId, operacao: a.operacao, situacao: 'simulada' })), ...pedidos.map((p) => ({ ferramentaId: p.ferramentaId, operacao: p.operacao, situacao: 'aguardando-aprovacao', aprovacao: p.id }))],
+        acoes: [...imediatas.map((a) => ({ ferramentaId: a.ferramentaId, operacao: a.operacao, situacao: 'simulada', risco: classificarAcao(a).nivel, execucaoReal: false })), ...pedidos.map((p) => ({ ferramentaId: p.ferramentaId, operacao: p.operacao, situacao: 'aguardando-aprovacao', aprovacao: p.id, risco: p.risco.nivel, categoria: p.risco.categoria, execucaoReal: false }))],
       };
       return Object.assign(comEtapa(x, etapa.id, { status: pedidos.length ? 'aguardando_aprovacao' : 'concluida', aprovacoes: pedidos.map((p) => p.id), resultado, ultimoErro: null, motivoRevisao: null }), { custos: custos.somar(x.custos, etapa.id, uso, infoCusto(etapa.agenteId, prep, liq)) });
     });
@@ -405,6 +420,7 @@ function criarMotor(deps) {
       return { resultado: 'aguardando-aprovacao' };
     }
     await ev('etapa_concluida', id, { etapa: etapa.id, agente: etapa.agenteId, referencias: saida.referencias.length, acoes: imediatas.length });
+    if (etapa.id === CONSOLIDACAO) await ev('consolidacao_concluida', id, { entregas: insumos ? insumos.length : 0, pendencias: etapa.documento && saida.documento && Array.isArray(saida.documento.pendencias) ? saida.documento.pendencias.length : null });
     if (etapa.id === CONSOLIDACAO && Array.isArray(saida.revisoes) && saida.revisoes.length) return aplicarRevisoes(id, token, saida.revisoes);
     return null;
   }
@@ -485,7 +501,10 @@ function criarMotor(deps) {
     if (exe.estado !== 'READY') return { resultado: 'ignorada', motivo: `estado ${exe.estado}` };
     const token = novoId('crc');
     try {
-      await execucoes.transicionar(ATOR_SISTEMA, id, 'RUNNING', { motivo: `executor ${trabalhador}`, versaoEsperada: exe.versao, extras: { execucaoAtual: { token, trabalhador, desde: relogio() } } });
+      const extrasRun = { execucaoAtual: { token, trabalhador, desde: relogio() } };
+      if (exe.retomada && !exe.retomada.executadaEm) extrasRun.retomada = Object.assign({}, exe.retomada, { executadaEm: relogio(), trabalhador }); // Fase 4C.2 passo 4
+      await execucoes.transicionar(ATOR_SISTEMA, id, 'RUNNING', { motivo: `executor ${trabalhador}`, versaoEsperada: exe.versao, extras: extrasRun });
+      if (extrasRun.retomada) await ev('retomada_executada', id, { entrega: extrasRun.retomada.entregaId, versao: extrasRun.retomada.versao });
     } catch (e) {
       if (e.codigo === 'precondicao') { // empresa arquivada: não avança, é encerrada
         await execucoes.transicionar(ATOR_SISTEMA, id, 'CANCELLED', { motivo: 'empresa arquivada' }).catch(() => {});
@@ -506,9 +525,104 @@ function criarMotor(deps) {
     }
   }
 
+  // ---------- Fase 4C.2 (passo 4): retomada AUTOMÁTICA segura e invalidação ----------
+  // Só para a parada "dependencia-aguarda-aprovacao" (documento sensível): todas as outras continuam
+  // manuais. Confere tudo de novo; a transição para READY usa a versão vista (idempotente: duas
+  // notificações ou dois monitores → no máximo uma retomada). Nunca libera operação externa.
+  const RETOMAVEIS = ['dependencia-aguarda-aprovacao'];
+  async function bloquearRetomada(id, exe, motivo, origem) {
+    await banco.transacao(async (t) => {
+      const e = await t.obter(caminhos.tarefa(id));
+      if (!e || e.versao !== exe.versao || !e.diagnostico) return; // mudou: não mexe
+      await t.atualizar(caminhos.tarefa(id), { diagnostico: Object.assign({}, e.diagnostico, { retomadaAutomatica: { situacao: 'bloqueada', motivo, origem, em: relogio() } }) });
+    });
+    await ev('retomada_bloqueada', id, { motivo, origem });
+    return { resultado: 'retomada-bloqueada', motivo };
+  }
+  async function tentarRetomadaAutomatica(id, { origem = 'notificacao' } = {}) {
+    const exe = await ler(id);
+    if (FINAIS.includes(exe.estado)) return { resultado: 'nada-a-retomar', motivo: 'execucao-encerrada' };
+    const d = exe.diagnostico;
+    if (exe.estado !== 'REVISION_REQUIRED' || !d || !RETOMAVEIS.includes(d.motivo)) return { resultado: 'nada-a-retomar', motivo: exe.estado === 'READY' || exe.estado === 'RUNNING' ? 'ja-retomada' : 'nao-retomavel' };
+    if (!entregas || !compartilhamento) return bloquearRetomada(id, exe, 'sem-registro-de-entregas', origem);
+    const etapa = (exe.etapas || []).find((x) => x.id === d.etapa);
+    const prod = (exe.etapas || []).find((x) => x.id === d.dependencia);
+    const pin = prod && prod.resultado && prod.resultado.entrega;
+    if (!etapa || !pin) return bloquearRetomada(id, exe, 'dependencia-inexistente', origem);
+    const ent = await banco.obter(caminhos.entrega(pin.id));
+    const ver = await banco.obter(caminhos.versaoEntrega(pin.id, pin.versao));
+    if (!ent || !ver) return bloquearRetomada(id, exe, 'dependencia-inexistente', origem);
+    if (['rejeitada', 'precisa-revisao'].includes(ver.estado)) return bloquearRetomada(id, exe, 'dependencia-rejeitada', origem);
+    if (ent.versaoAtual !== pin.versao) return bloquearRetomada(id, exe, 'versao-substituida', origem);
+    const aprovacaoValida = ver.estado === 'aprovada' && ent.versaoAprovada === pin.versao && ver.hash === pin.hash && ent.aprovacao && ent.aprovacao.hash === pin.hash && ver.decisao && ver.decisao.hash === pin.hash;
+    if (!aprovacaoValida) return { resultado: 'aguardando-aprovacao' };
+    try { await entregas.lerParaConsumo(banco, pin.id, pin.versao); } catch (e) {
+      if (e.codigo === 'integridade') return bloquearRetomada(id, exe, 'integridade-falhou', origem);
+      throw e;
+    }
+    // todas as dependências da etapa (pode haver OUTRO documento sensível aguardando)
+    const r = await compartilhamento.resolver(exe, etapa);
+    if (r.bloqueio) {
+      if (r.bloqueio.motivo === 'dependencia-aguarda-aprovacao' && r.bloqueio.dependencia !== d.dependencia) {
+        await banco.transacao(async (t) => {
+          const e = await t.obter(caminhos.tarefa(id));
+          if (e && e.versao === exe.versao) await t.atualizar(caminhos.tarefa(id), { diagnostico: Object.assign({}, e.diagnostico, { dependencia: r.bloqueio.dependencia }) });
+        });
+        return { resultado: 'aguardando-aprovacao', dependencia: r.bloqueio.dependencia };
+      }
+      return bloquearRetomada(id, exe, r.bloqueio.motivo, origem);
+    }
+    const c = custos.verificarAntes(exe, RESERVA_SAIDA_TOKENS);
+    if (!c.permitido) return bloquearRetomada(id, exe, c.motivo, origem);
+    const retomada = { origem, entregaId: pin.id, versao: pin.versao, hash: pin.hash, agendadaEm: relogio(), executadaEm: null };
+    try {
+      await execucoes.transicionar(ATOR_SISTEMA, id, 'READY', { versaoEsperada: exe.versao, motivo: 'retomada automática após aprovação do Super Admin', extras: { diagnostico: null, retomada } });
+    } catch (e) {
+      if (['conflito', 'transicao-invalida'].includes(e.codigo)) return { resultado: 'nada-a-retomar', motivo: 'ja-retomada' };
+      if (e.codigo === 'precondicao') return bloquearRetomada(id, exe, 'empresa-arquivada', origem);
+      throw e;
+    }
+    await ev('retomada_agendada', id, { origem, entrega: pin.id, versao: pin.versao });
+    return { resultado: 'retomada-agendada' };
+  }
+
+  // Depois de uma decisão do Super Admin sobre uma entrega: aprovou → tenta retomar; rejeitou →
+  // marca o que dependia dela (invalidação) e a execução fica para revisão (mecanismo existente).
+  async function notificarDecisaoEntrega(entregaId) {
+    const ent = await banco.obter(caminhos.entrega(entregaId));
+    if (!ent || !ent.execucaoId) return { resultado: 'nada-a-fazer' };
+    const ver = await banco.obter(caminhos.versaoEntrega(entregaId, ent.versaoAtual));
+    const id = ent.execucaoId;
+    if (ver && ['rejeitada', 'precisa-revisao'].includes(ver.estado)) {
+      const exe = await ler(id);
+      const dependentes = (exe.etapas || []).filter((x) => x.resultado && Array.isArray(x.resultado.insumos) && x.resultado.insumos.some((i) => i.entregaId === entregaId && i.versao === ent.versaoAtual)).map((x) => x.id);
+      const produtora = ent.etapaId;
+      await banco.transacao(async (t) => {
+        const e = await t.obter(caminhos.tarefa(id));
+        if (!e) return;
+        const mud = { invalidacoes: (e.invalidacoes || []).concat([{ entregaId, versao: ent.versaoAtual, etapaProdutora: produtora, dependentes, decisao: ver.estado, em: relogio() }]).slice(-50) };
+        if (e.estado === 'REVISION_REQUIRED' && e.diagnostico && e.diagnostico.dependencia === produtora) mud.diagnostico = Object.assign({}, e.diagnostico, { motivo: 'dependencia-rejeitada', revisao: 'nova versão do documento + retomada do Super Admin' });
+        await t.atualizar(caminhos.tarefa(id), mud);
+      });
+      await ev('versao_invalidada', id, { entrega: entregaId, versao: ent.versaoAtual, dependentes: dependentes.slice(0, 10) });
+      await ev('revisao_solicitada', id, { etapa: produtora, motivo: ver.estado });
+      return { resultado: 'invalidada', dependentes };
+    }
+    return tentarRetomadaAutomatica(id, { origem: 'aprovacao' });
+  }
+
   return {
     planejar,
     processar,
+    tentarRetomadaAutomatica,
+    notificarDecisaoEntrega,
+    // Monitor: execuções paradas aguardando aprovação de documento (até 50 por vez) → tenta retomar.
+    async varrerRetomadas() {
+      const lista = await banco.consultar(caminhos.colecoes.tarefas, { onde: [{ campo: 'estado', op: '==', valor: 'REVISION_REQUIRED' }], ordenar: { campo: 'id', direcao: 'asc' }, limite: 50 });
+      const out = [];
+      for (const e of lista) if (e.diagnostico && RETOMAVEIS.includes(e.diagnostico.motivo)) out.push(Object.assign({ id: e.id }, await tentarRetomadaAutomatica(e.id, { origem: 'monitor' })));
+      return out;
+    },
 
     // Executor: pega UM item da fila e processa. O executor automático local
     // (executor-local.js) chama isto em laço; sinal = parar o executor.

@@ -1,0 +1,61 @@
+# PROPOSTA (não publicada): site no GitHub Pages SÓ com os arquivos públicos do frontend.
+#
+# - Em PR e em push na main: só MONTA e CONFERE o site (lista de permitidos + testes). Não publica.
+# - Publicar: só à mão (Actions → "Site seguro" → Run workflow), na main, digitando PUBLICAR,
+#   e só depois que Settings → Pages → Source estiver em "GitHub Actions" (decisão do Igor).
+#   Enquanto a fonte for "Deploy from a branch", o site continua sendo publicado como hoje.
+name: Site seguro (GitHub Pages so com o frontend)
+on:
+  pull_request:
+    paths: ['*.html', 'style.css', 'script.js', 'sw.js', 'manifest.json', 'firebase-config.js', 'CNAME', 'assets/**', '.github/pages/**', '.github/workflows/pages-seguro.yml']
+  push:
+    branches: [main]
+    paths: ['*.html', 'style.css', 'script.js', 'sw.js', 'manifest.json', 'firebase-config.js', 'CNAME', 'assets/**', '.github/pages/**', '.github/workflows/pages-seguro.yml']
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Digite PUBLICAR para publicar o site (só funciona na main, com a fonte do Pages em "GitHub Actions")'
+        required: true
+        default: 'nao'
+permissions:
+  contents: read
+concurrency:
+  group: site-seguro-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  conferir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Testes do artefato público
+        run: node --test .github/pages/montar-site.test.mjs
+      - name: Montar e conferir o site (lista de permitidos)
+        run: node .github/pages/montar-site.mjs --saida _site
+      - name: Guardar o site montado para conferência (não é publicação)
+        uses: actions/upload-artifact@v4
+        with: { name: site-montado, path: _site, retention-days: 7 }
+
+  publicar:
+    needs: conferir
+    # trava tripla: disparo manual + confirmação digitada + só na main
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.confirmar == 'PUBLICAR' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Montar e conferir de novo (o que vai ao ar é exatamente o que foi conferido aqui)
+        run: node .github/pages/montar-site.mjs --saida _site
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -190,6 +190,31 @@ const DOCUMENTOS = Object.freeze({
   },
 });
 
+// ---------- Fase 4C.2 (passo 3): quem pode RECEBER cada documento e quais são sensíveis ----------
+// usadoPor: agentes que podem receber o documento de uma etapa anterior (sempre como DADO).
+// sensivel: só segue para outro agente na versão APROVADA pelo Super Admin (validação interna não basta).
+const TODOS_AGENTES = ['01-guia-marca', '02-designer', '03-carrosseis', '04-roteirista', '05-dev-web', '06-engenheiro', '07-trafego', '08-estrategista'];
+const CONSUMO = Object.freeze({
+  'plano-estrategico': { usadoPor: TODOS_AGENTES, sensivel: false },
+  'consolidacao-final': { usadoPor: [], sensivel: true }, // é a entrega final: não alimenta outra etapa
+  'diretrizes-marca': { usadoPor: TODOS_AGENTES, sensivel: false },
+  'briefing-design': { usadoPor: ['02-designer', '03-carrosseis', '05-dev-web', '07-trafego', '08-estrategista'], sensivel: false },
+  'estrutura-carrossel': { usadoPor: ['02-designer', '03-carrosseis', '04-roteirista', '08-estrategista'], sensivel: false },
+  'roteiro-reels': { usadoPor: ['02-designer', '03-carrosseis', '04-roteirista', '05-dev-web', '07-trafego', '08-estrategista'], sensivel: false },
+  'legenda-social': { usadoPor: ['02-designer', '03-carrosseis', '04-roteirista', '07-trafego', '08-estrategista'], sensivel: false },
+  // orçamento e documentação técnica: só seguem depois da aprovação do Super Admin
+  'plano-trafego': { usadoPor: ['02-designer', '03-carrosseis', '04-roteirista', '07-trafego', '08-estrategista'], sensivel: true },
+  'documentacao-tecnica': { usadoPor: ['05-dev-web', '06-engenheiro', '08-estrategista'], sensivel: true },
+  'relatorio-tecnico': { usadoPor: ['05-dev-web', '06-engenheiro', '08-estrategista'], sensivel: false },
+});
+// O agente pode RECEBER este documento de outra etapa? → { permitido, motivo, sensivel }
+function consumoPermitido(agenteId, documentoId) {
+  const c = typeof documentoId === 'string' && Object.prototype.hasOwnProperty.call(CONSUMO, documentoId) ? CONSUMO[documentoId] : null;
+  if (!c) return { permitido: false, motivo: 'documento-inexistente', sensivel: false };
+  if (!c.usadoPor.includes(agenteId)) return { permitido: false, motivo: 'dependencia-nao-autorizada', sensivel: c.sensivel };
+  return { permitido: true, motivo: 'ok', sensivel: c.sensivel };
+}
+
 const DOCUMENTO_DA_CONSOLIDACAO = 'consolidacao-final';
 const obterDocumento = (id) => (typeof id === 'string' && Object.prototype.hasOwnProperty.call(DOCUMENTOS, id) ? DOCUMENTOS[id] : null);
 const documentosDoAgente = (agenteId) => Object.keys(DOCUMENTOS).filter((k) => DOCUMENTOS[k].agentes.includes(agenteId));
@@ -238,11 +263,13 @@ function conferirCatalogo(agentesExistentes) {
     if (!TIPOS[d.tipoEntrega].formatos.includes('json')) p.push(`${id}: o tipo de entrega não aceita JSON`);
     d.agentes.forEach((a) => { if (!agentesExistentes.includes(a)) p.push(`${id}: agente ${a} inexistente`); });
     if (!REGRAS[id]) p.push(`${id}: sem regras`);
+    if (!CONSUMO[id]) p.push(`${id}: sem política de consumo`);
+    else CONSUMO[id].usadoPor.forEach((a) => { if (!agentesExistentes.includes(a)) p.push(`${id}: consumidor ${a} inexistente`); });
   });
   return p;
 }
 
 module.exports = {
   DOCUMENTOS, VERSAO_CONTRATO, DOCUMENTO_DA_CONSOLIDACAO, LIMITES_LEGENDA, FORMATOS_PECA, CANAIS_TRAFEGO,
-  obterDocumento, documentosDoAgente, documentoPermitido, validarDocumento, conferirCatalogo,
+  obterDocumento, documentosDoAgente, documentoPermitido, validarDocumento, conferirCatalogo, CONSUMO, consumoPermitido,
 };

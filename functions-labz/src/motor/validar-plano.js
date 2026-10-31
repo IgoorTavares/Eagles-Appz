@@ -15,7 +15,7 @@ const { obterAgente } = require('../agentes/catalogo');
 const { avaliarAcao } = require('./ferramentas-simuladas');
 const { ordenar, CONSOLIDACAO } = require('./planejador');
 const custos = require('./custos');
-const { documentoPermitido } = require('../contratos/documentos');
+const { documentoPermitido, consumoPermitido } = require('../contratos/documentos');
 
 const ID = /^[a-z0-9-]{1,30}$/;
 const PROIBIDOS = ['empresaId', 'clienteId', 'tenantId', 'limites', 'maxEtapas', 'permissoes', 'tentativas', 'maxTentativas', 'aprovado', 'aprovacao', 'aprovacoes', 'ferramentas', 'custos', 'modelo', 'provedor'];
@@ -80,6 +80,11 @@ function validarPlano(plano, { exe, outrasEmpresas = [] }) {
     });
     if (e.formato !== undefined && !FORMATOS.includes(e.formato)) add('formato-de-resultado-invalido', e.formato, e.id);
     if (e.documento !== undefined && ag) { const dp = documentoPermitido(e.agenteId, e.documento); if (!dp.permitido) add(dp.motivo, e.documento, e.id); }
+    // Fase 4C.2 (passo 3): quem depende de um documento precisa poder RECEBÊ-LO
+    (e.dependeDe || []).forEach((d) => {
+      const prod = etapas.find((x) => x.id === d);
+      if (prod && prod.documento !== undefined && consumoPermitido(e.agenteId, prod.documento).motivo === 'dependencia-nao-autorizada') add('dependencia-nao-autorizada', `${e.agenteId} não recebe ${prod.documento}`, e.id);
+    });
     if (!e.criterios.every((c) => c.trim().length >= 3)) add('criterio-vazio', 'critério de conclusão vazio', e.id);
     if (ag) (e.acoesPrevistas || []).forEach((a) => {
       const v = avaliarAcao(e.agenteId, { tipo: 'ferramenta', ferramentaId: a.ferramentaId, operacao: a.operacao });

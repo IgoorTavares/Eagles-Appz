@@ -63,7 +63,7 @@ function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPa
   if (!transporte || !['simulado', 'bloqueado'].includes(transporte.tipo)) throw new Error('Fase 4B: só o transporte simulado ou o bloqueado são aceitos');
 
   async function solicitacao(pedido, cfg) {
-    return montarSolicitacao({ ctx: pedido.contexto, modo: pedido.modo, maxEtapas: pedido.maxEtapas || 8, documento: pedido.documento });
+    return montarSolicitacao({ ctx: pedido.contexto, modo: pedido.modo, maxEtapas: pedido.maxEtapas || 8, documento: pedido.documento, documentosRecebidos: pedido.documentosRecebidos });
   }
 
   // Chamada com timeout e cancelamento (o sinal do executor e o do relógio).

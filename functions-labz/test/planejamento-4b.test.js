@@ -3,7 +3,7 @@
 // sociais, anúncios e projeto técnico; planos inválidos recusados.
 const test = require('node:test');
 const assert = require('node:assert');
-const { montarComEmpresas, rejeita } = require('./ajuda');
+const { montarComEmpresas, rejeita, executarComAprovacoes } = require('./ajuda');
 const { transporteComModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
 const { planoSimulado } = require('../src/ia/simulacao/estrategista-simulado');
 const { validarPlano } = require('../src/motor/validar-plano');
@@ -37,8 +37,10 @@ test('seleção automática: o Estrategista escolhe só os especialistas necess�
     const ordem = exe.etapas.map((e) => e.id);
     exe.etapas.forEach((e) => e.dependeDe.forEach((d) => assert.ok(ordem.indexOf(d) < ordem.indexOf(e.id), `${nome}: ${d} antes de ${e.id}`)));
     // execução automática (sem chamada manual por etapa)
-    const exec = c.executorLocal({ concorrencia: 1 });
-    await exec.drenar();
+    // execução automática; documentos SENSÍVEIS (plano de tráfego, documentação técnica) só seguem com a aprovação do Super Admin (4C.2 passo 3)
+    const aprovadas = await executarComAprovacoes(c, exe.id);
+    const sensiveis = exe.etapas.filter((e) => ['plano-trafego', 'documentacao-tecnica'].includes(e.documento)).map((e) => e.id).sort();
+    assert.deepStrictEqual(aprovadas.map((a) => a.etapa).sort(), sensiveis, `${nome}: parou só pelos documentos sensíveis`);
     const d = await c.motor.diagnosticar(c.ator, exe.id);
     assert.strictEqual(d.estado, 'COMPLETED', nome);
     const consolidado = await c.banco.obter(caminhos.resultadoEtapa(exe.id, 'consolidacao'));

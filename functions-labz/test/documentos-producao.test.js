@@ -3,7 +3,7 @@
 // segurança e compatibilidade. Nada real: transporte e modelo simulados.
 const test = require('node:test');
 const assert = require('node:assert');
-const { montarComEmpresas, rejeita } = require('./ajuda');
+const { montarComEmpresas, rejeita, executarComAprovacoes } = require('./ajuda');
 const { transporteComModeloSimulado, criarModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
 const { criarTransporteSimulado } = require('../src/ia/transporte');
 const { adaptadorDoProvedor } = require('../src/ia/provedores');
@@ -51,7 +51,8 @@ test('produção de ponta a ponta: os 10 tipos viram entregas com documento + Ma
   const docs = Object.keys(POR_DOC);
   const e1 = await comPassos(c, docs.slice(0, 5).map((d, i) => passo(`p${i}`, d)));
   const e2 = await comPassos(c, docs.slice(5).map((d, i) => passo(`q${i}`, d)));
-  await c.executorLocal().drenar();
+  // (4C.2 passo 3) a consolidação recebe documentos sensíveis: o Super Admin aprova a versão exata e retoma
+  for (const x of [e1, e2]) await executarComAprovacoes(c, x.id);
   const vistos = new Set();
   for (const exe of [e1, e2]) {
     assert.strictEqual((await c.execucoes.obter(c.ator, exe.id)).estado, 'COMPLETED');
@@ -252,7 +253,8 @@ test('falhas do simulador e limites de custo: tentativas limitadas; bloqueio ant
   const exe = await comPassos(c, [passo('a', 'plano-trafego')]);
   assert.strictEqual((await c.motor.trabalhar('t1')).resultado, 'nova-tentativa');
   c.relogio.avancarDias(1);
-  await c.executorLocal().drenar();
+  const aprovadas = await executarComAprovacoes(c, exe.id); // plano de tráfego é sensível: a consolidação espera o Super Admin
+  assert.deepStrictEqual(aprovadas.map((a) => a.documento), ['plano-trafego']);
   assert.strictEqual((await c.execucoes.obter(c.ator, exe.id)).estado, 'COMPLETED');
   // limite diário do agente: bloqueia ANTES da chamada do documento e não registra nada
   const c2 = await montar();

@@ -532,3 +532,26 @@ test('Fase 4C.2 no Firestore real: documento estruturado e Markdown gravados jun
   assert.equal(nova.versao, 2);
   assert.equal((await ok(tokens.sa, 'entregas.documento', { entregaId: reels.id, versao: 2 })).representacao, 'confere');
 });
+
+test('Fase 4C.2 passo 3 no Firestore real: compartilhamento com versão fixada, insumos registrados e bloqueio de documento sensível', async () => {
+  const { criarLabz } = require('../src/servicos');
+  const { transporteComModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
+  const { exigirSuperAdmin } = require('../src/auth/super-admin');
+  const banco = criarBancoFirestore(db);
+  const s = criarLabz({ banco, ia: { transporte: transporteComModeloSimulado() } });
+  const ator = await exigirSuperAdmin({ uid: 'sa-teste', token: { email: 'sa@teste.local' } }, { banco, uidsAutorizados: ['sa-teste'] });
+  const exe = await s.execucoes.criar(ator, { empresaId: A.id, objetivo: 'INTEG-4C2P3 tráfego e legenda', modo: 'orquestrado' });
+  await s.motor.planejar(ator, exe.id, { passos: [{ id: 'trafego', agenteId: '07-trafego', objetivo: 'Plano de tráfego', documento: 'plano-trafego' }, { id: 'legenda', agenteId: '04-roteirista', objetivo: 'Legenda', documento: 'legenda-social', dependeDe: ['trafego'] }] });
+  await Promise.all([s.executorLocal({ nome: 'G1' }).drenar(), s.executorLocal({ nome: 'G2' }).drenar()]);
+  let d = await ok(tokens.sa, 'execucoes.diagnostico', { execucaoId: exe.id });
+  assert.equal(d.diagnostico.motivo, 'dependencia-aguarda-aprovacao');
+  const pin = (await s.execucoes.obter(ator, exe.id)).etapas.find((x) => x.id === 'trafego').resultado.entrega;
+  await ok(tokens.sa, 'entregas.decidir', { entregaId: pin.id, decisao: { decisao: 'aprovar', versao: pin.versao, hash: pin.hash } });
+  await ok(tokens.sa, 'execucoes.retomar', { execucaoId: exe.id });
+  await s.executorLocal().drenar();
+  d = await ok(tokens.sa, 'execucoes.diagnostico', { execucaoId: exe.id });
+  assert.equal(d.estado, 'COMPLETED');
+  const leg = await ok(tokens.sa, 'entregas.listar', { execucaoId: exe.id, agenteId: '04-roteirista' });
+  const v = (await db.doc(`labz_entregas/${leg.itens[0].id}/labz_versoes_entrega/1`).get()).data();
+  assert.deepEqual([v.insumos[0].entregaId, v.insumos[0].versao, v.insumos[0].autorizacao], [pin.id, pin.versao, 'aprovacao-super-admin']);
+});

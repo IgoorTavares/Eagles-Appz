@@ -8,7 +8,7 @@
 const { erro } = require('../nucleo/erros');
 const { garantir } = require('../nucleo/validador');
 const { obterAgente } = require('../agentes/catalogo');
-const { documentoPermitido, DOCUMENTO_DA_CONSOLIDACAO } = require('../contratos/documentos');
+const { documentoPermitido, consumoPermitido, DOCUMENTO_DA_CONSOLIDACAO } = require('../contratos/documentos');
 
 const CONSOLIDACAO = 'consolidacao';
 const ESQUEMA_PASSO = {
@@ -52,6 +52,10 @@ function montarEtapas(exe, passos, { maxEtapas = 8 } = {}) {
     passos.forEach((p) => {
       if (!obterAgente(p.agenteId)) throw erro('invalido', `Agente desconhecido: ${p.agenteId}`);
       if (p.documento !== undefined) { const d = documentoPermitido(p.agenteId, p.documento); if (!d.permitido) throw erro('invalido', `Documento da etapa ${p.id}: ${d.motivo}`); }
+      (p.dependeDe || []).forEach((d) => {
+        const prod = passos.find((x) => x.id === d);
+        if (prod && prod.documento !== undefined && consumoPermitido(p.agenteId, prod.documento).motivo === 'dependencia-nao-autorizada') throw erro('invalido', `A etapa ${p.id} não pode receber o documento da etapa ${d}`);
+      });
       (p.dependeDe || []).forEach((d) => { if (!ids.includes(d)) throw erro('invalido', `A etapa ${p.id} depende de uma etapa que não existe: ${d}`); if (d === p.id) throw erro('invalido', 'Uma etapa não depende dela mesma'); });
     });
   }

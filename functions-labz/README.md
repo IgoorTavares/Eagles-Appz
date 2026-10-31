@@ -263,6 +263,21 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - **Compatibilidade:** sem `documento` no plano, tudo continua em texto livre (inclusive a consolidação).
 - **API:** `entregas.documento`, `entregas.novaVersaoDocumento`.
 
+## Fase 4C.2 — passo 3: compartilhamento seguro de documentos entre etapas
+- **Onde** (`src/entregas/compartilhamento.js`, usado pelo motor): em planos com documentos, a etapa recebe os documentos
+  das etapas das quais DEPENDE no plano validado, lidos pelo Registro de Entregas (`lerParaConsumo`: integridade do
+  documento + Markdown juntos), como DADO na seção 7 da solicitação (`<dados_documento_recebido codigo=…>`, limpo de
+  marcadores falsos), sem corte. Planos sem documentos seguem como antes (texto anterior no briefing).
+- **Política:** mesma execução e mesma empresa; receptor autorizado pelo catálogo (`CONSUMO.usadoPor`, conferido também
+  no plano); versão FIXADA no resultado da etapa produtora; versão nova não troca em silêncio (`versao-substituida`);
+  rejeitada/precisa-revisão bloqueia; documento sensível (plano de tráfego, documentação técnica) só segue APROVADO
+  (`dependencia-aguarda-aprovacao`); insumo rejeitado depois invalida o derivado (`insumo-invalidado`); na gravação, tudo
+  é conferido de novo na transação do crachá (`dependencia-mudou`). Bloqueio = REVISION_REQUIRED com o motivo.
+- **Retomar** (Super Admin): fixa a versão atual de cada entrega que mudou (se utilizável) e refaz o que dependia dela.
+- **Limites:** até 8 documentos, 24 KB cada, 64 KB e ~16 mil tokens no total; acima disso a etapa bloqueia (`contexto-excede-limite`).
+- **Rastreabilidade:** `insumos` na versão produzida (entrega, versão, hash, etapa produtora e consumidora, documento,
+  autorização, data) e em `etapa.resultado.insumos`; evento `entrega.insumos_utilizados` só com ids e hash curto.
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

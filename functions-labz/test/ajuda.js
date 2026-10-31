@@ -56,4 +56,21 @@ const rejeita = async (fn, codigo) => {
   throw new Error(`esperava erro "${codigo || 'qualquer'}", mas passou`);
 };
 
-module.exports = { montar, montarComEmpresas, memoriaAprovada, rejeita, relogioDeTeste };
+// Fase 4C.2 (passo 3): roda o executor local; quando a execução para porque um documento SENSÍVEL
+// aguarda aprovação, o Super Admin aprova a versão EXATA (número + hash) e retoma. Devolve as aprovações feitas.
+async function executarComAprovacoes(ctx, execucaoId, { max = 10 } = {}) {
+  const feitas = [];
+  for (let i = 0; i < max; i++) {
+    await ctx.executorLocal().drenar();
+    const e = await ctx.execucoes.obter(ctx.ator, execucaoId);
+    if (e.estado !== 'REVISION_REQUIRED' || !e.diagnostico || e.diagnostico.motivo !== 'dependencia-aguarda-aprovacao') break;
+    const prod = e.etapas.find((x) => x.id === e.diagnostico.dependencia);
+    const pino = prod.resultado.entrega;
+    await ctx.entregas.decidir(ctx.ator, pino.id, { decisao: 'aprovar', versao: pino.versao, hash: pino.hash });
+    feitas.push({ etapa: prod.id, documento: prod.documento, versao: pino.versao });
+    await ctx.motor.retomar(ctx.ator, execucaoId);
+  }
+  return feitas;
+}
+
+module.exports = { montar, montarComEmpresas, memoriaAprovada, rejeita, relogioDeTeste, executarComAprovacoes };

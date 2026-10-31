@@ -209,7 +209,8 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
   // exe: a execução lida na transação (RUNNING, crachá certo). Nada vem do modelo além do texto.
   // Idempotente: a mesma etapa/tentativa (ou o mesmo conteúdo) não gera versão duplicada.
   // documento (Fase 4C.2, opcional): { dados } — o tipo é o do PLANO (etapa.documento), nunca o do modelo.
-  async function registrarDaEtapa(t, { exe, etapa, tentativa, texto, final, documento }) {
+  // insumos (Fase 4C.2, passo 3): documentos de outras etapas usados para produzir esta (rastreabilidade).
+  async function registrarDaEtapa(t, { exe, etapa, tentativa, texto, final, documento, insumos }) {
     if (exe.estado !== 'RUNNING' || FINAIS.includes(exe.estado)) throw erro('conflito', 'A execução não está em andamento', { motivo: 'execucao-parou' });
     if (!obterAgente(etapa.agenteId) || !agenteNaExecucao(exe, etapa.agenteId)) throw erro('permissao-negada', 'O agente não faz parte desta execução');
     if (documento && !etapa.documento) throw erro('invalido', 'A etapa não pede documento estruturado');
@@ -219,7 +220,9 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
     const tipo = pd ? pd.doc.tipoEntrega : TIPO_DO_AGENTE[etapa.agenteId];
     const conteudo = pd ? pd.conteudo : { formato: 'texto', nome: `${etapa.id}.txt`, descricao: final ? 'Entrega consolidada da execução' : `Resultado da etapa ${etapa.id}`, texto };
     const preparado = pd ? pd.preparado : arm.prepararConteudo(conteudo);
-    const chave = `${etapa.id}:${tentativa}:${(etapa.revisoes || []).length}`;
+    const assinaturaInsumos = (insumos || []).map((i) => `${i.entregaId}@${i.versao}`).join(',');
+    const chave = `${etapa.id}:${tentativa}:${(etapa.revisoes || []).length}${assinaturaInsumos ? `:${arm.sha256(assinaturaInsumos).slice(0, 12)}` : ''}`;
+    const extraInsumos = insumos && insumos.length ? { insumos: insumos.map((i) => Object.assign({}, i)) } : {};
     const id = idDaEtapa(exe.id, etapa.id);
     const atual = await t.obter(caminhos.entrega(id));
     const estado = final ? 'em-revisao' : 'rascunho';
@@ -228,8 +231,9 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
       if (atual.execucaoId !== exe.id || atual.etapaId !== etapa.id || atual.agenteId !== etapa.agenteId) throw erro('isolamento', 'Entrega de outra execução, etapa ou agente');
       if ((atual.documento || null) !== (etapa.documento || null)) throw erro('isolamento', 'A entrega é de outro tipo de documento');
       const ultima = await t.obter(caminhos.versaoEntrega(id, atual.ultimaVersao));
-      if (ultima && (ultima.origem.chave === chave || ultima.hash === preparado.hash)) return { entregaId: id, versao: atual.ultimaVersao, hash: ultima.hash, nova: false, duplicada: true };
-      const extra = pd ? await gravarRepresentacao(t, exe.id, pd) : undefined;
+      const mesmosInsumos = JSON.stringify((ultima && ultima.insumos) || []) === JSON.stringify(extraInsumos.insumos || []);
+      if (ultima && (ultima.origem.chave === chave || (ultima.hash === preparado.hash && mesmosInsumos))) return { entregaId: id, versao: atual.ultimaVersao, hash: ultima.hash, nova: false, duplicada: true };
+      const extra = Object.assign({}, pd ? await gravarRepresentacao(t, exe.id, pd) : {}, extraInsumos);
       const g = await gravarVersao(t, Object.assign({ id }, atual), { conteudo, preparado, origem, ator: ATOR_SISTEMA, estado, extra });
       await t.atualizar(caminhos.entrega(id), g.base);
       return { entregaId: id, versao: g.n, hash: g.versao.hash, nova: true, tipo, tamanho: preparado.tamanho };
@@ -240,7 +244,7 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
       exigeAprovacao: true, versaoAprovada: null, aprovacao: null, criadoEm: agora, criadoPor: ATOR_SISTEMA.uid, origem: 'etapa', ultimaVersao: 0,
     };
     if (pd) entrega.documento = etapa.documento;
-    const extra = pd ? await gravarRepresentacao(t, exe.id, pd) : undefined;
+    const extra = Object.assign({}, pd ? await gravarRepresentacao(t, exe.id, pd) : {}, extraInsumos);
     const g = await gravarVersao(t, entrega, { conteudo, preparado, origem, ator: ATOR_SISTEMA, estado, extra });
     const doc = Object.assign({}, entrega, g.base);
     delete doc.id;
@@ -341,6 +345,19 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
     }
   }
 
+  // Fase 4C.2 (passo 3): leitura INTERNA para consumo por outra etapa (sem ator: só o motor usa).
+  // Confere a integridade (documento + Markdown juntos; texto pelo hash). → { entrega, versao, texto, dados? }
+  async function lerParaConsumo(leitor, entregaId, n) {
+    const e = await lerEntrega(leitor, entregaId);
+    const v = await lerVersao(leitor, entregaId, n);
+    if (e.documento) {
+      const d = await conferirDocumentoDaVersao(leitor, e, v);
+      return { entrega: e, versao: v, texto: d.markdown, dados: d.dados };
+    }
+    const c = await arm.lerConteudo(leitor, v.conteudoRef, e.execucaoId);
+    return { entrega: e, versao: v, texto: c.texto, dados: null };
+  }
+
   // Fase 4C.2: documento estruturado + Markdown de uma versão, conferidos juntos.
   async function lerDocumento(ator, entregaId, n) {
     exigirAtor(ator);
@@ -412,7 +429,7 @@ function criarEntregas({ banco, auditoria, relogio = relogioPadrao }) {
     });
   }
 
-  return { criar, novaVersao, novaVersaoDocumento, lerDocumento, registrarDaEtapa, enviarParaRevisao, decidir, restaurar, obter, versoes, lerConteudo: lerConteudoVersao, listar, abrirParaAgente, idDaEtapa };
+  return { criar, novaVersao, novaVersaoDocumento, lerDocumento, lerParaConsumo, registrarDaEtapa, enviarParaRevisao, decidir, restaurar, obter, versoes, lerConteudo: lerConteudoVersao, listar, abrirParaAgente, idDaEtapa };
 }
 
 module.exports = { criarEntregas, idDaEtapa, TIPO_DO_AGENTE };

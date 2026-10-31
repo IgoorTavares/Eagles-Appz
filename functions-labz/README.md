@@ -309,6 +309,19 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   simulado (`cobrancaReal: false`, `custoConfirmado: null`).
 - Teste novo de retomada atrasada (a mutação R6 do passo 4 passou a ser detectada).
 
+## Fase 5A — interface (MVP) e demonstração local
+- **Tela:** `demo/ui/labz-ai.html` + `labz-ai.css` + `labz-ai.js` (fora do site: opção A do Igor; só o servidor local mostra, em `/labz-ai.html`). Organograma dos 8 agentes (Super Admin → Guia da
+  Marca → Estrategista → especialistas), painel de cada agente, nova tarefa simulada com etapas, aprovações e resultado
+  marcado como SIMULAÇÃO. CSS todo dentro de `.pg-labz`; nada é montado como HTML a partir de dados (só `textContent`).
+- **Acesso:** a tela abre só para o Super Admin logado (produção, falando com `labzApi`, que confere de novo no servidor) ou
+  na demonstração local. Sem isso, mostra "exclusiva do Super Admin" e não chama a API.
+- **API nova (só leitura):** `catalogo.agentes` — campos públicos do catálogo (sem skills, prompts, configuração de modelo).
+- **Demonstração local:** `npm run demo` → http://127.0.0.1:5180/labz-ai.html (`demo/servidor-local.js`). Só no 127.0.0.1,
+  recusa outro Host/Origin, entrega só os arquivos públicos do site + a tela, troca o `firebase-config.js` por um sem
+  Firebase (nunca toca a produção), usa o backend REAL em memória com agentes e Estrategista SIMULADOS. Não é publicada.
+- **Publicação:** NÃO publicada. A pasta `functions-labz/` já é interna para as duas travas do "Site seguro" (lista de
+  permitidos + `_config.yml`), então a montagem segue verde sem exceção nova. Testes: `test/interface-5a.test.js`.
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

@@ -322,6 +322,25 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - **Publicação:** NÃO publicada. A pasta `functions-labz/` já é interna para as duas travas do "Site seguro" (lista de
   permitidos + `_config.yml`), então a montagem segue verde sem exceção nova. Testes: `test/interface-5a.test.js`.
 
+## Supabase (Arquitetura A) — Fases S1 e S2 (só código; nada criado no Supabase)
+- **S1 — banco PostgreSQL** (`src/armazenamento/banco-postgres.js`): as MESMAS 6 operações (`obter`, `gravar`, `atualizar`,
+  `listar`, `consultar`, `transacao`), sobre uma tabela de documentos por caminho (`labz.docs`). `dados` é `json` (preserva a
+  ORDEM das chaves: as assinaturas das aprovações dependem dela) e `busca` é um `jsonb` gerado só para filtros e índice.
+  Transações `SERIALIZABLE`, repetidas sozinhas em conflito (40001/40P01). Nenhum serviço mudou.
+- **Migração:** `supabase/migrations/20261031000000_labz_inicial.sql`, gerada por `src/armazenamento/postgres-migracao.js`
+  (fonte única; um teste confere). Schema `labz` (não expor na API do Supabase), RLS ligado e forçado, nada para
+  `public/anon/authenticated`, papel `labz_app` sem login (senha definida à mão no projeto, nunca no Git).
+- **Testes no PostgreSQL:** `LABZ_PG_URL=postgresql://… npm run test:postgres` roda TODOS os testes com o PostgreSQL no
+  lugar do banco em memória (banco temporário, apagado no fim). Específicos: `test/banco-postgres.test.js`.
+- **S2 — login:** `src/auth/token-firebase.js` confere o Firebase ID Token só com as chaves PÚBLICAS do Google (assinatura
+  RS256, `iss`, `aud`, `exp`, `iat`, `auth_time`, não anônimo). `src/auth/acesso-supabase.js` transforma o
+  `Authorization: Bearer` no `{ auth }` da API; o perfil vem de `labz_usuarios/{uid}` (banco da LABZ AI) e o acesso exige
+  também o UID na lista do servidor e em `labz_config/acesso`. A rede (`fetch` das chaves) é passada por quem liga o
+  servidor (S3): nada em `src/` acessa a rede. Nenhuma credencial do Firebase: o servidor não alcança o CRM/ERP.
+- **Limitação (documentada):** sem credencial de administrador do Firebase não dá para saber se a conta foi desativada ou
+  se as sessões foram revogadas depois da emissão do token (que vale até 1 hora). Compensação: tirar o UID de
+  `labz_config/acesso` (ou da lista do servidor) corta o acesso na hora.
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.

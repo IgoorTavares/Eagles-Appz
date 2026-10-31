@@ -196,12 +196,13 @@ test('timeout e cancelamento: chamada pendurada vira timeout (nova tentativa); p
 
   // cancelamento: o sinal do executor aborta a chamada pendurada
   let n = 0; // 1ª chamada fica pendurada; as seguintes respondem (a retomada não gasta tentativa, então o roteiro é por chamada)
-  const c2 = await montarComEmpresas({ ia: { transporte: transporteComModeloSimulado(() => (++n === 1 ? 'timeout' : 'ok')), timeoutMs: 60000 } });
+  let chegou; const primeiraChamada = new Promise((ok) => { chegou = ok; });
+  const c2 = await montarComEmpresas({ ia: { transporte: transporteComModeloSimulado(() => { if (++n === 1) { chegou(); return 'timeout'; } return 'ok'; }), timeoutMs: 60000 } });
   const exe = await c2.execucoes.criar(c2.ator, { empresaId: c2.A.id, objetivo: 'Legenda', modo: 'especialista', agenteId: '04-roteirista' });
   await c2.motor.planejar(c2.ator, exe.id);
   const ctrl = new AbortController();
   const p = c2.motor.trabalhar('t1', { sinal: ctrl.signal });
-  await new Promise((ok) => setTimeout(ok, 20));
+  await primeiraChamada; // cancela com a chamada JÁ pendurada (não depende da velocidade do banco)
   ctrl.abort();
   assert.strictEqual((await p).resultado, 'liberada');
   const e = await c2.execucoes.obter(c2.ator, exe.id);

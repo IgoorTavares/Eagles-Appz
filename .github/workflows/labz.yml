@@ -22,3 +22,20 @@ jobs:
         with: { distribution: temurin, java-version: 21 }
       - run: npm install -g firebase-tools
       - run: cd functions-labz && npm ci && npm run test:emulador
+  postgres:
+    # Fase S1 (Supabase): os MESMOS testes com o banco PostgreSQL (contêiner temporário do GitHub,
+    # senha fictícia só deste teste; nunca um banco real).
+    runs-on: ubuntu-latest
+    services:
+      pg:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: teste-local-ficticio }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: cd functions-labz && npm ci && npm run test:postgres
+        env: { LABZ_PG_URL: 'postgresql://postgres:teste-local-ficticio@localhost:5432/postgres' }

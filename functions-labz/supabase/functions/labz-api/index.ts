@@ -1,12 +1,12 @@
 // LABZ AI — Edge Function "labz-api" (S3; publicada na S5B, Etapa 6, pelo painel do Supabase).
 // A tela do Super Admin chama esta função com o ID token do Firebase. Tudo o que importa
-// (token, Super Admin, limites, validação, auditoria) está no backend empacotado (labz.mjs, nesta mesma pasta).
+// (token, Super Admin, limites, validação, auditoria) está no backend empacotado (labz-<versão>.mjs, nesta mesma pasta; o nome muda a cada versão).
 // Segredos lidos do ambiente (Supabase Secrets; nunca no Git):
 //   LABZ_DB_URL            conexão com o papel de LOGIN da LABZ AI (membro de labz_app)
 //   LABZ_SUPERADMIN_UIDS   UIDs do Super Admin, separados por vírgula
 //   LABZ_FIREBASE_PROJETO  projeto do Firebase (labz-18246)
 //   LABZ_ORIGENS           (opcional) origens do navegador permitidas, separadas por vírgula
-import { montarApi, postgres, criarRegistroRecusas } from './labz.mjs';
+import { montarApi, postgres, criarRegistroRecusas } from './labz-01711dac8a7e.mjs';
 
 const env = (k: string) => Deno.env.get(k) ?? '';
 

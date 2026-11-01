@@ -421,6 +421,11 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   - recusas de origem e de token, e logins válidos do Firebase **fora** de `LABZ_SUPERADMIN_UIDS`, só vão para o **log** da função (`src/borda/registro-recusas.js`: etapa e motivo, no máximo 20 linhas por minuto, mais um resumo);
   - a lista do servidor é conferida **antes** do limitador e do banco;
   - a auditoria das operações do Super Admin continua no banco.
+- **Pacote com nome por versão (`labz-<12 primeiros do SHA-256>.mjs`):**
+  - motivo: ao atualizar a `labz-api` pelo editor do painel, a entrada duplicada `labz.mjs` foi publicada com o conteúdo **antigo** (v2: `index.ts` novo e pacote antigo);
+  - agora `npm run empacotar` grava o pacote com o nome da versão, reescreve o `import` de cada `index.ts` e apaga, só no repositório, os pacotes antigos;
+  - `--conferir` confere que cada pasta tem só `index.ts` e o pacote, e que o `import` aponta para ele;
+  - na função publicada, os arquivos antigos ficam **sem uso** (não são apagados).
 - **Supabase local atrás do proxy do sandbox:** o Edge Runtime baixa `@types/node` ao ligar. Sem esse download, dá `BOOT_ERROR`. Para resolver, guarde o pacote no cache do volume `supabase_edge_runtime_*` com o Deno do computador (`DENO_DIR=<volume> deno cache npm:@types/node`) e não use `stop --no-backup` (apaga o cache). Rode `supabase db reset` antes, para não sobrar tarefa antiga na fila.
 
 **Fora da S5B** (cada uma com autorização própria, mais tarde):

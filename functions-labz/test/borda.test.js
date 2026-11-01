@@ -351,12 +351,11 @@ test('worker: parada DURA (aviso de desligamento) devolve a etapa sem gastar ten
 });
 
 test('pacote do Deno: atualizado, determinístico, sem Firebase Admin, e as funções só leem os segredos certos', () => {
-  const { gerar, SAIDAS, PACOTES_PERMITIDOS } = require('../supabase/empacotar');
+  const { gerar, conferirPastas, nomePacote, PASTAS, PACOTES_PERMITIDOS } = require('../supabase/empacotar');
   const g = gerar();
-  assert.equal(SAIDAS.length, 2);
-  for (const saida of SAIDAS) assert.equal(fs.readFileSync(saida, 'utf8'), g.texto, `rode "npm run empacotar" (${saida} desatualizado)`);
-  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'supabase', 'functions', '_labz')), 'nada fora da pasta de cada função (a publicação pela conexão só leva a pasta)');
-  for (const f of ['labz-api', 'labz-worker']) assert.match(fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', f, 'index.ts'), 'utf8'), /from '\.\/labz\.mjs'/);
+  assert.equal(PASTAS.length, 2);
+  assert.deepEqual(conferirPastas(g), [], 'rode "npm run empacotar"');
+  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'supabase', 'functions', '_labz')), 'nada fora da pasta de cada função (a publicação só leva a pasta)');
   assert.equal(gerar().sha256, g.sha256, 'determinístico');
   assert.deepEqual(PACOTES_PERMITIDOS, ['postgres']);
   assert.ok(!g.nomes.some((n) => /node_modules\/(firebase|@google-cloud|@grpc|google-auth)/.test(n)), 'nada do Firebase Admin/Google Cloud');
@@ -373,6 +372,52 @@ test('pacote do Deno: atualizado, determinístico, sem Firebase Admin, e as fun�
   assert.ok(!/obterChaves|criarTransporte|SERVICE_ROLE|service_role/.test(api + wk), 'nenhuma chave de teste nem chave de administrador do Supabase');
   const cfg = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'config.toml'), 'utf8');
   assert.match(cfg, /schemas = \["public", "graphql_public"\]/, 'o schema labz não é exposto pela API REST');
+});
+
+test('S5B Etapa 6: pacote com NOME POR VERSÃO — o index.ts importa exatamente o arquivo gerado, e só ele existe na pasta', () => {
+  const os = require('node:os');
+  const { gerar, conferirPastas, nomePacote, PASTAS } = require('../supabase/empacotar');
+  const crypto = require('node:crypto');
+  const g = gerar();
+  const nome = nomePacote(g.sha256);
+  assert.match(nome, /^labz-[0-9a-f]{12}\.mjs$/);
+  assert.equal(nome, `labz-${crypto.createHash('sha256').update(g.texto).digest('hex').slice(0, 12)}.mjs`, 'o nome vem do SHA-256 do conteúdo');
+  for (const pasta of PASTAS) {
+    assert.deepEqual(fs.readdirSync(pasta).sort(), ['index.ts', nome].sort(), `${pasta}: só index.ts + o pacote da versão (nenhum labz.mjs antigo)`);
+    const idx = fs.readFileSync(path.join(pasta, 'index.ts'), 'utf8');
+    const imports = [...idx.matchAll(/from '(\.\/[^']+)'/g)].map((m) => m[1]);
+    assert.deepEqual(imports, [`./${nome}`], `${pasta}/index.ts importa só o pacote da versão`);
+    assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(pasta, nome))).digest('hex'), g.sha256, 'o arquivo importado é o gerado');
+  }
+  // o conferidor pega os 3 jeitos de errar: import apontando para o nome antigo, arquivo antigo sobrando, conteúdo trocado
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'labz-pacote-'));
+  try {
+    const raiz = path.join(__dirname, '..', 'supabase');
+    fs.cpSync(raiz, path.join(tmp, 'supabase'), { recursive: true, filter: (f) => !f.includes(`${path.sep}migrations`) });
+    const copia = path.join(tmp, 'supabase', 'empacotar.js');
+    // o empacotador copiado procura src/ e node_modules/ um nível acima: aponte para o projeto real
+    fs.symlinkSync(path.join(__dirname, '..', 'src'), path.join(tmp, 'src'));
+    fs.symlinkSync(path.join(__dirname, '..', 'node_modules'), path.join(tmp, 'node_modules'));
+    const E = require(copia);
+    const g2 = E.gerar();
+    assert.deepEqual(E.conferirPastas(g2), []);
+    const api = E.PASTAS[0];
+    const idx = path.join(api, 'index.ts');
+    const original = fs.readFileSync(idx, 'utf8');
+    fs.writeFileSync(idx, original.replace(`./${nome}`, './labz.mjs'));
+    assert.ok(E.conferirPastas(g2).some((p) => /não importa/.test(p)), 'import para o nome antigo é pego');
+    fs.writeFileSync(idx, original);
+    fs.writeFileSync(path.join(api, 'labz.mjs'), 'antigo');
+    assert.ok(E.conferirPastas(g2).some((p) => /arquivos a mais: labz\.mjs/.test(p)), 'arquivo antigo sobrando é pego');
+    E.gravar(g2); // o empacotador apaga o antigo e reescreve o import
+    assert.ok(!fs.existsSync(path.join(api, 'labz.mjs')));
+    fs.writeFileSync(path.join(api, nome), `${g2.texto}// trocado\n`);
+    assert.ok(E.conferirPastas(g2).some((p) => /desatualizado/.test(p)), 'conteúdo trocado é pego');
+    E.gravar(g2);
+    assert.deepEqual(E.conferirPastas(g2), []);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });
 
 test('worker: rodada VAZIA (cron sem nada para fazer) não grava auditoria; rodada com trabalho grava', async () => {

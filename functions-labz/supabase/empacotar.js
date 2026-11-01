@@ -2,8 +2,15 @@
 // LABZ AI — Fase S3: EMPACOTADOR das Edge Functions (sem dependências; determinístico).
 // O backend é CommonJS (Node). O Supabase Edge Runtime é Deno e carrega módulos ES (ESM).
 // Este script junta, num único arquivo ESM (uma cópia idêntica em cada função:
-// supabase/functions/labz-api/labz.mjs e supabase/functions/labz-worker/labz.mjs — a publicação pela
-// conexão Claude/Supabase só envia os arquivos da PRÓPRIA pasta da função):
+// supabase/functions/labz-api/labz-<versão>.mjs e supabase/functions/labz-worker/labz-<versão>.mjs —
+// a publicação só leva os arquivos da PRÓPRIA pasta da função):
+//
+// NOME POR VERSÃO (S5B, Etapa 6): <versão> = os 12 primeiros caracteres do SHA-256 do conteúdo.
+// Achado no painel do Supabase: ao atualizar uma função pelo editor, um arquivo de MESMO nome que
+// aparecia duplicado foi publicado com o conteúdo ANTIGO. Com o nome mudando a cada versão, o
+// editor ACRESCENTA o arquivo novo (não há o que substituir) e o index.ts importa exatamente ele.
+// O empacotador também reescreve a linha de import de cada index.ts e apaga, SÓ AQUI no repositório,
+// os pacotes de versões anteriores (na função publicada, os antigos ficam sem uso).
 //   - todos os arquivos alcançados por require() a partir de supabase/entrada-borda.js;
 //   - os módulos nativos do Node pedidos (node:crypto, node:net...) viram "import" estáticos
 //     (o Deno fornece todos eles);
@@ -18,8 +25,10 @@ const { builtinModules } = require('node:module');
 
 const RAIZ = path.join(__dirname, '..');
 const ENTRADA = path.join(__dirname, 'entrada-borda.js');
-const SAIDAS = ['labz-api', 'labz-worker'].map((f) => path.join(__dirname, 'functions', f, 'labz.mjs'));
-const SAIDA = SAIDAS[0];
+const PASTAS = ['labz-api', 'labz-worker'].map((f) => path.join(__dirname, 'functions', f));
+const RE_PACOTE = /^labz(-[0-9a-f]{12})?\.mjs$/; // o atual e os antigos (inclusive o "labz.mjs" sem versão)
+const RE_IMPORT = /from '\.\/labz(-[0-9a-f]{12})?\.mjs'/g;
+const nomePacote = (sha256) => `labz-${sha256.slice(0, 12)}.mjs`;
 const PACOTES_PERMITIDOS = ['postgres'];
 const NATIVOS = new Set(builtinModules);
 const RE_REQUIRE = /\brequire\(\s*(['"])([^'"\n]+)\1\s*\)/g;
@@ -157,21 +166,45 @@ function gerar() {
   return { texto, nomes, nativos: listaNativos, sha256: crypto.createHash('sha256').update(texto).digest('hex') };
 }
 
-if (require.main === module) {
-  const g = gerar();
-  if (process.argv.includes('--conferir')) {
-    for (const saida of SAIDAS) {
-      const atual = fs.existsSync(saida) ? fs.readFileSync(saida, 'utf8') : '';
-      if (atual !== g.texto) { console.error(`O pacote ${rel(saida)} está DESATUALIZADO: rode "npm run empacotar".`); process.exit(1); }
-    }
-    console.log(`pacote atualizado (${g.nomes.length} módulos, ${Buffer.byteLength(g.texto)} bytes)`);
-  } else {
-    for (const saida of SAIDAS) {
-      fs.mkdirSync(path.dirname(saida), { recursive: true });
-      fs.writeFileSync(saida, g.texto);
-    }
-    console.log(`gravado em ${SAIDAS.map(rel).join(' e ')}: ${g.nomes.length} módulos, ${Buffer.byteLength(g.texto)} bytes, sha256 ${g.sha256.slice(0, 16)}…`);
+// O que a pasta de cada função deve ter para o pacote g: só index.ts + o pacote da versão, e o
+// index.ts importando exatamente esse nome. Devolve a lista de problemas (vazia = tudo certo).
+function conferirPastas(g) {
+  const nome = nomePacote(g.sha256);
+  const problemas = [];
+  for (const pasta of PASTAS) {
+    const arq = path.join(pasta, nome);
+    if (!fs.existsSync(arq) || fs.readFileSync(arq, 'utf8') !== g.texto) problemas.push(`${rel(arq)} ausente ou desatualizado`);
+    const outros = fs.readdirSync(pasta).filter((f) => f !== 'index.ts' && f !== nome);
+    if (outros.length) problemas.push(`${rel(pasta)} tem arquivos a mais: ${outros.join(', ')}`);
+    const imports = [...fs.readFileSync(path.join(pasta, 'index.ts'), 'utf8').matchAll(RE_IMPORT)].map((m) => m[0]);
+    if (imports.length !== 1 || imports[0] !== `from './${nome}'`) problemas.push(`${rel(pasta)}/index.ts não importa ./${nome}`);
+  }
+  return problemas;
+}
+
+function gravar(g) {
+  const nome = nomePacote(g.sha256);
+  for (const pasta of PASTAS) {
+    fs.mkdirSync(pasta, { recursive: true });
+    for (const f of fs.readdirSync(pasta)) if (RE_PACOTE.test(f) && f !== nome) fs.rmSync(path.join(pasta, f));
+    fs.writeFileSync(path.join(pasta, nome), g.texto);
+    const idx = path.join(pasta, 'index.ts');
+    const antes = fs.readFileSync(idx, 'utf8');
+    const depois = antes.replace(RE_IMPORT, `from './${nome}'`);
+    if (depois !== antes) fs.writeFileSync(idx, depois);
   }
 }
 
-module.exports = { gerar, SAIDA, SAIDAS, PACOTES_PERMITIDOS };
+if (require.main === module) {
+  const g = gerar();
+  if (process.argv.includes('--conferir')) {
+    const problemas = conferirPastas(g);
+    if (problemas.length) { console.error(`Pacote DESATUALIZADO (rode "npm run empacotar"):\n- ${problemas.join('\n- ')}`); process.exit(1); }
+    console.log(`pacote atualizado: ${nomePacote(g.sha256)} (${g.nomes.length} módulos, ${Buffer.byteLength(g.texto)} bytes)`);
+  } else {
+    gravar(g);
+    console.log(`gravado ${nomePacote(g.sha256)} em ${PASTAS.map(rel).join(' e ')}: ${g.nomes.length} módulos, ${Buffer.byteLength(g.texto)} bytes, sha256 ${g.sha256}`);
+  }
+}
+
+module.exports = { gerar, gravar, conferirPastas, nomePacote, PASTAS, PACOTES_PERMITIDOS };

@@ -3,9 +3,11 @@
 // teste e um banco PostgreSQL temporário criado e apagado pelo próprio teste.
 import crypto from 'node:crypto';
 import { Buffer } from 'node:buffer';
-import * as L from '../../supabase/functions/labz-api/labz.mjs';
-
-export { L };
+// o pacote tem nome por versão (labz-<12 do sha256>.mjs): acha o da pasta da labz-api
+const PASTA_API = new URL('../../supabase/functions/labz-api/', import.meta.url);
+const PACOTE = [...Deno.readDirSync(PASTA_API)].map((e) => e.name).filter((n) => /^labz-[0-9a-f]{12}\.mjs$/.test(n));
+if (PACOTE.length !== 1) throw new Error(`esperado 1 pacote em labz-api, achei: ${PACOTE.join(', ')}`);
+export const L = await import(new URL(PACOTE[0], PASTA_API).href);
 export const PROJETO = 'labz-18246';
 export const SEGREDO = 'segredo-de-teste-ficticio-com-mais-de-32-caracteres';
 export const ORIGEM = 'https://eagleslabz.com.br';

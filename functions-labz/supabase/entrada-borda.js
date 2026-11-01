@@ -1,4 +1,4 @@
-// LABZ AI — Fase S3: o que vai para dentro do pacote das Edge Functions (labz.mjs).
+// LABZ AI — Fase S3: o que vai para dentro do pacote das Edge Functions (labz-<versão>.mjs).
 // Só a montagem da borda (que puxa o backend em src/) e o driver do PostgreSQL.
 // firebase-admin e firebase-functions NUNCA entram (o empacotador recusa).
 const postgres = require('postgres');

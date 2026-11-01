@@ -11577,7 +11577,7 @@ module.exports = { criarRegistroSkills, selecionarSkills, idDaSkill };
 
 } };
 __defs["supabase/entrada-borda.js"] = { deps: {"../src/borda/acionamento":"src/borda/acionamento.js","../src/borda/montagem":"src/borda/montagem.js","../src/borda/registro-recusas":"src/borda/registro-recusas.js","../src/ia/simulacao/modelo-simulado":"src/ia/simulacao/modelo-simulado.js","../src/ia/transporte":"src/ia/transporte.js","postgres":"node_modules/postgres/cjs/src/index.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
-// LABZ AI — Fase S3: o que vai para dentro do pacote das Edge Functions (labz.mjs).
+// LABZ AI — Fase S3: o que vai para dentro do pacote das Edge Functions (labz-<versão>.mjs).
 // Só a montagem da borda (que puxa o backend em src/) e o driver do PostgreSQL.
 // firebase-admin e firebase-functions NUNCA entram (o empacotador recusa).
 const postgres = require('postgres');

@@ -27,18 +27,20 @@ function lista(v) {
 }
 
 // Configuração da API (labz-api)
-function montarApi({ sql, config = {}, buscar, obterChaves, relogio, ia, opcoes, registrarErro } = {}) {
+function montarApi({ sql, config = {}, buscar, obterChaves, relogio, ia, opcoes, registrarErro, registrarRecusa } = {}) {
   if (!sql) throw new Error('montarApi: falta o cliente sql');
   if (!lista(config.uidsSuperAdmin).length) throw new Error('montarApi: falta a lista de UIDs do Super Admin (LABZ_SUPERADMIN_UIDS)');
   const banco = criarBancoPostgres({ sql });
   const servicos = criarLabz({ banco, relogio, ia: ia || iaSimulada(), opcoes });
   const chaves = obterChaves || criarChavesGoogle({ buscar }); // buscar = fetch (só o index.ts liga a rede)
   const verificador = criarVerificadorFirebase({ projetoId: config.projetoFirebase, obterChaves: chaves });
-  const autenticar = criarAcessoSupabase({ verificador, auditoria: servicos.auditoria });
+  // recusas de login: só no log, nunca no banco (S5B, Etapa 6)
+  const autenticar = criarAcessoSupabase({ verificador, aoRecusar: ({ motivo }) => registrarRecusa && registrarRecusa({ etapa: 'token', motivo }) });
+  const uidsServidor = new Set(lista(config.uidsSuperAdmin));
   const api = criarApi(Object.assign({ servicos, banco, uidsAutorizados: () => config.uidsSuperAdmin, lerSegredo: () => '' }, opcoesApiSupabase(banco)));
   const limitador = criarLimitador({ banco, relogio, limites: config.limites });
   const origens = config.origens ? lista(config.origens) : ORIGENS_PADRAO;
-  const handler = criarHandlerApi({ api, autenticar, limitador, origens, registrarErro });
+  const handler = criarHandlerApi({ api, autenticar, limitador, uidPermitido: (uid) => uidsServidor.has(uid), origens, registrarErro, registrarRecusa });
   return { handler, servicos, banco };
 }
 

@@ -19,9 +19,12 @@ function opcoesApiSupabase(banco) {
   return { lerPerfil: (uid) => banco.obter(caminhoPerfil(uid)), verificarBloqueio: false };
 }
 
-// verificador: criarVerificadorFirebase({ projetoId }); auditoria: opcional (registra recusas sem dados do token)
-function criarAcessoSupabase({ verificador, auditoria } = {}) {
+// verificador: criarVerificadorFirebase({ projetoId });
+// aoRecusar({ motivo }): opcional; só para o LOG (src/borda/registro-recusas.js). A recusa de token
+// NUNCA grava no banco (S5B, Etapa 6): sem login, nenhuma chamada pode fazer o banco crescer.
+function criarAcessoSupabase({ verificador, aoRecusar, auditoria } = {}) {
   if (typeof verificador !== 'function') throw new Error('criarAcessoSupabase: falta o verificador de token');
+  if (auditoria !== undefined) throw new Error('criarAcessoSupabase: recusas de token não vão para o banco (use aoRecusar, que só escreve no log)');
   return async function autenticar(cabecalhoAuthorization) {
     const m = /^Bearer ([A-Za-z0-9_.-]+)$/.exec(String(cabecalhoAuthorization || ''));
     try {
@@ -30,7 +33,7 @@ function criarAcessoSupabase({ verificador, auditoria } = {}) {
       // o mesmo formato de request.auth do Firebase: a API e o exigirSuperAdmin não mudam
       return { uid: t.uid, token: { email: t.email, email_verified: t.emailVerificado, firebase: { sign_in_provider: t.provedor } } };
     } catch (e) {
-      if (auditoria) await auditoria.registrar('auth.token_recusado', null, 'labz', { motivo: String((e && e.motivo) || 'token').slice(0, 40) }).catch(() => {});
+      if (aoRecusar) { try { aoRecusar({ motivo: String((e && e.motivo) || 'token').slice(0, 40) }); } catch (x) { /* o log nunca derruba a resposta */ } }
       throw erro('nao-autenticado', MENSAGEM_NEGADO); // a mesma mensagem sempre (não revela o motivo)
     }
   };

@@ -119,6 +119,26 @@ test('ponta a ponta no PostgreSQL (login com permissão mínima): API → aciona
   assert.ok(itens(ev).length >= 1, 'a rodada que trabalhou fica registrada (a vazia, não)');
 });
 
+test('S5B Etapa 6 no PostgreSQL: recusas (sem login, token falso, login válido fora da lista, origem estranha) não gravam NADA', { skip: pular }, async () => {
+  await preparar();
+  const recusas = [];
+  const { handler } = montarApi({ sql: app, config: { uidsSuperAdmin: 'sa-etapa6', projetoFirebase: PROJETO, origens: 'https://eagleslabz.com.br' }, obterChaves, registrarRecusa: (r) => recusas.push(r) });
+  const estado = async () => (await admin`select count(*)::int as n, coalesce(max(atualizado_em)::text, '') as ultimo from labz.docs`)[0];
+  const antes = await estado();
+  const pedir = (headers) => handler(new Request('http://local/labz-api', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, headers), body: '{"acao":"catalogo.agentes"}' }));
+  const casos = [
+    [{}, 401],
+    [{ authorization: 'Bearer abc.def.ghi' }, 401],
+    [{ authorization: `Bearer ${emitir({ aud: 'outro-projeto' })}` }, 401],
+    [{ authorization: `Bearer ${emitir({ sub: 'qualquer-usuario-do-crm' })}` }, 403],
+    [{ origin: 'https://site-malicioso.example' }, 403],
+  ];
+  for (let i = 0; i < 20; i++) for (const [h, st] of casos) assert.equal((await pedir(h)).status, st);
+  assert.deepEqual(await estado(), antes, '100 chamadas recusadas e o banco exatamente igual');
+  assert.equal((await admin`select count(*)::int as n from labz.docs where caminho like 'labz_limites/qualquer%'`)[0].n, 0, 'nem contador de limite para quem está fora da lista');
+  assert.ok(recusas.length === 100 && !JSON.stringify(recusas).includes('eyJ'));
+});
+
 test.after(async () => {
   if (app) await app.end({ timeout: 2 });
   if (admin) await admin.end({ timeout: 2 });

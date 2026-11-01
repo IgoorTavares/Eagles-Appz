@@ -1,5 +1,5 @@
 // LABZ AI — pacote das Edge Functions (GERADO por supabase/empacotar.js; não edite à mão).
-// Módulos: 87 · postgres 3.4.9 · nativos: node:buffer, node:crypto, node:fs, node:net, node:os, node:perf_hooks, node:process, node:stream, node:timers, node:tls
+// Módulos: 88 · postgres 3.4.9 · nativos: node:buffer, node:crypto, node:fs, node:net, node:os, node:perf_hooks, node:process, node:stream, node:timers, node:tls
 /* eslint-disable */
 import * as __n0 from "node:buffer";
 import * as __n1 from "node:crypto";
@@ -3726,9 +3726,12 @@ function opcoesApiSupabase(banco) {
   return { lerPerfil: (uid) => banco.obter(caminhoPerfil(uid)), verificarBloqueio: false };
 }
 
-// verificador: criarVerificadorFirebase({ projetoId }); auditoria: opcional (registra recusas sem dados do token)
-function criarAcessoSupabase({ verificador, auditoria } = {}) {
+// verificador: criarVerificadorFirebase({ projetoId });
+// aoRecusar({ motivo }): opcional; só para o LOG (src/borda/registro-recusas.js). A recusa de token
+// NUNCA grava no banco (S5B, Etapa 6): sem login, nenhuma chamada pode fazer o banco crescer.
+function criarAcessoSupabase({ verificador, aoRecusar, auditoria } = {}) {
   if (typeof verificador !== 'function') throw new Error('criarAcessoSupabase: falta o verificador de token');
+  if (auditoria !== undefined) throw new Error('criarAcessoSupabase: recusas de token não vão para o banco (use aoRecusar, que só escreve no log)');
   return async function autenticar(cabecalhoAuthorization) {
     const m = /^Bearer ([A-Za-z0-9_.-]+)$/.exec(String(cabecalhoAuthorization || ''));
     try {
@@ -3737,7 +3740,7 @@ function criarAcessoSupabase({ verificador, auditoria } = {}) {
       // o mesmo formato de request.auth do Firebase: a API e o exigirSuperAdmin não mudam
       return { uid: t.uid, token: { email: t.email, email_verified: t.emailVerificado, firebase: { sign_in_provider: t.provedor } } };
     } catch (e) {
-      if (auditoria) await auditoria.registrar('auth.token_recusado', null, 'labz', { motivo: String((e && e.motivo) || 'token').slice(0, 40) }).catch(() => {});
+      if (aoRecusar) { try { aoRecusar({ motivo: String((e && e.motivo) || 'token').slice(0, 40) }); } catch (x) { /* o log nunca derruba a resposta */ } }
       throw erro('nao-autenticado', MENSAGEM_NEGADO); // a mesma mensagem sempre (não revela o motivo)
     }
   };
@@ -3976,17 +3979,20 @@ function consumirPostgres(sql, schema = 'labz') {
 module.exports = { criarVerificadorAcionamento, consumirPostgres, mensagemAcionamento, assinar, MOTIVOS };
 
 } };
-__defs["src/borda/http.js"] = { deps: {"../api/labz-api":"src/api/labz-api.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+__defs["src/borda/http.js"] = { deps: {"../api/labz-api":"src/api/labz-api.js","../auth/super-admin":"src/auth/super-admin.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
 // LABZ AI — Fase S3: a "porta" HTTP das duas Edge Functions, com Request/Response padrão da web
 // (iguais no Node 20+ e no Deno). Nenhuma lógica de negócio aqui: só travas e tradução.
 //
 // labz-api — ordem das travas:
 //   CORS (só as origens da lista) → só POST → só JSON → tamanho (200 KB) → token do Firebase
-//   (assinatura, projeto, validade) → limite de pedidos por UID → criarApi() (Super Admin:
-//   lista do servidor + perfil no banco da LABZ AI + lista do banco; validação; auditoria).
+//   (assinatura, projeto, validade) → UID na lista do SERVIDOR (segredo; sem banco) → limite de
+//   pedidos por UID → criarApi() (Super Admin: lista do servidor + perfil no banco da LABZ AI +
+//   lista do banco; validação; auditoria).
+//   Até passar pela lista do servidor, NADA toca o banco: recusas vão só para o log (S5B, Etapa 6).
 // labz-worker — só POST, sem corpo útil → acionamento assinado E registrado no banco (uma vez só)
 //   → rodada com orçamento. Nunca recebe dados do navegador.
 const { traduzirErro } = require('../api/labz-api');
+const { MENSAGEM_NEGADO } = require('../auth/super-admin');
 
 const MAX_CORPO = 200 * 1024;
 const STATUS = {
@@ -4023,16 +4029,18 @@ async function lerCorpo(request, max) {
 
 // api: criarApi(...); autenticar(cabecalho) → { uid, token }; limitador: criarLimitador(...)
 // origens: lista exata de origens do navegador permitidas (ex.: https://eagleslabz.com.br)
-// registrarErro(e): log do servidor (sem dados do pedido)
-function criarHandlerApi({ api, autenticar, limitador, origens = [], maxCorpo = MAX_CORPO, registrarErro = () => {} }) {
-  if (typeof api !== 'function' || typeof autenticar !== 'function' || !limitador) throw new Error('criarHandlerApi: faltam peças');
+// uidPermitido(uid) → boolean: a lista do SERVIDOR (LABZ_SUPERADMIN_UIDS), conferida SEM banco
+// registrarRecusa({ etapa, motivo }): só log (src/borda/registro-recusas.js); registrarErro(e): log de erro
+function criarHandlerApi({ api, autenticar, limitador, uidPermitido, origens = [], maxCorpo = MAX_CORPO, registrarErro = () => {}, registrarRecusa = () => {} }) {
+  if (typeof api !== 'function' || typeof autenticar !== 'function' || !limitador || typeof uidPermitido !== 'function') throw new Error('criarHandlerApi: faltam peças');
   const permitidas = new Set(origens);
+  const recusa = (etapa, motivo) => { try { registrarRecusa({ etapa, motivo }); } catch (e) { /* o log nunca derruba a resposta */ } };
   return async function handlerApi(request) {
     const origem = request.headers.get('origin');
     const cors = origem && permitidas.has(origem)
       ? { 'access-control-allow-origin': origem, vary: 'Origin', 'access-control-allow-credentials': 'false' }
       : { vary: 'Origin' };
-    if (origem && !permitidas.has(origem)) return falha(403, 'permission-denied', 'Origem não permitida.', cors);
+    if (origem && !permitidas.has(origem)) { recusa('origem', 'nao-permitida'); return falha(403, 'permission-denied', 'Origem não permitida.', cors); }
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: Object.assign({}, cors, { 'access-control-allow-methods': 'POST', 'access-control-allow-headers': 'authorization, content-type', 'access-control-max-age': '600' }) });
     }
@@ -4045,6 +4053,9 @@ function criarHandlerApi({ api, autenticar, limitador, origens = [], maxCorpo = 
     if (!pedido || typeof pedido !== 'object' || Array.isArray(pedido) || typeof pedido.acao !== 'string') return falha(400, 'invalid-argument', 'Pedido inválido.', cors);
     try {
       const auth = await autenticar(request.headers.get('authorization'));
+      // login válido do Firebase, mas fora da lista do servidor (ex.: qualquer usuário do CRM):
+      // recusado aqui, com a MESMA resposta do Super Admin negado, e sem tocar o banco
+      if (!uidPermitido(auth.uid)) { recusa('lista-servidor', 'fora-da-lista'); return falha(403, 'permission-denied', MENSAGEM_NEGADO, cors); }
       await limitador.verificar(auth.uid, pedido.acao);
       const r = await api({ auth, data: { acao: pedido.acao, dados: pedido.dados } });
       return json(200, r, cors);
@@ -4155,18 +4166,20 @@ function lista(v) {
 }
 
 // Configuração da API (labz-api)
-function montarApi({ sql, config = {}, buscar, obterChaves, relogio, ia, opcoes, registrarErro } = {}) {
+function montarApi({ sql, config = {}, buscar, obterChaves, relogio, ia, opcoes, registrarErro, registrarRecusa } = {}) {
   if (!sql) throw new Error('montarApi: falta o cliente sql');
   if (!lista(config.uidsSuperAdmin).length) throw new Error('montarApi: falta a lista de UIDs do Super Admin (LABZ_SUPERADMIN_UIDS)');
   const banco = criarBancoPostgres({ sql });
   const servicos = criarLabz({ banco, relogio, ia: ia || iaSimulada(), opcoes });
   const chaves = obterChaves || criarChavesGoogle({ buscar }); // buscar = fetch (só o index.ts liga a rede)
   const verificador = criarVerificadorFirebase({ projetoId: config.projetoFirebase, obterChaves: chaves });
-  const autenticar = criarAcessoSupabase({ verificador, auditoria: servicos.auditoria });
+  // recusas de login: só no log, nunca no banco (S5B, Etapa 6)
+  const autenticar = criarAcessoSupabase({ verificador, aoRecusar: ({ motivo }) => registrarRecusa && registrarRecusa({ etapa: 'token', motivo }) });
+  const uidsServidor = new Set(lista(config.uidsSuperAdmin));
   const api = criarApi(Object.assign({ servicos, banco, uidsAutorizados: () => config.uidsSuperAdmin, lerSegredo: () => '' }, opcoesApiSupabase(banco)));
   const limitador = criarLimitador({ banco, relogio, limites: config.limites });
   const origens = config.origens ? lista(config.origens) : ORIGENS_PADRAO;
-  const handler = criarHandlerApi({ api, autenticar, limitador, origens, registrarErro });
+  const handler = criarHandlerApi({ api, autenticar, limitador, uidPermitido: (uid) => uidsServidor.has(uid), origens, registrarErro, registrarRecusa });
   return { handler, servicos, banco };
 }
 
@@ -4182,6 +4195,45 @@ function montarWorker({ sql, config = {}, relogio, ia, opcoes, aoFundo, agoraMs,
 }
 
 module.exports = { montarApi, montarWorker, ORIGENS_PADRAO };
+
+} };
+__defs["src/borda/registro-recusas.js"] = { deps: {}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+// LABZ AI — S5B, Etapa 6: registro das RECUSAS da labz-api, só no LOG da Edge Function (nunca no banco).
+// Por quê: com a função aberta na internet, cada chamada recusada que gravasse no PostgreSQL
+// seria um jeito de encher o banco (500 MB no plano grátis, sem backup) sem login nenhum.
+// O que vai para o log: só a ETAPA da recusa (lista fechada) e o MOTIVO técnico (código curto).
+// Nunca: token, cabeçalho, e-mail, UID, IP, origem, corpo do pedido ou URL de conexão.
+// Controle de volume: no máximo `maxPorMinuto` linhas por minuto por instância; o que passar
+// disso vira UMA linha de resumo ("suprimidas: N") quando o minuto vira.
+const ETAPAS = Object.freeze(['origem', 'token', 'lista-servidor']);
+const RE_MOTIVO = /^[a-z0-9-]{1,40}$/;
+
+function criarRegistroRecusas({ escrever, maxPorMinuto = 20, agoraMs = () => Date.now() } = {}) {
+  if (typeof escrever !== 'function') return () => {};
+  if (!Number.isInteger(maxPorMinuto) || maxPorMinuto < 1 || maxPorMinuto > 1000) throw new Error('criarRegistroRecusas: maxPorMinuto inválido');
+  let janela = -1;
+  let escritas = 0;
+  let suprimidas = 0;
+  const emitir = (linha) => { try { escrever(JSON.stringify(linha)); } catch (e) { /* o log nunca derruba a resposta */ } };
+  return function registrarRecusa({ etapa, motivo } = {}) {
+    const minuto = Math.floor(agoraMs() / 60000);
+    if (minuto !== janela) {
+      if (suprimidas > 0) emitir({ evento: 'labz-api.recusas_suprimidas', n: suprimidas });
+      janela = minuto;
+      escritas = 0;
+      suprimidas = 0;
+    }
+    if (escritas >= maxPorMinuto) { suprimidas++; return; }
+    escritas++;
+    emitir({
+      evento: 'labz-api.recusa',
+      etapa: ETAPAS.includes(etapa) ? etapa : 'outra',
+      motivo: RE_MOTIVO.test(String(motivo || '')) ? motivo : 'outro',
+    });
+  };
+}
+
+module.exports = { criarRegistroRecusas, ETAPAS };
 
 } };
 __defs["src/borda/worker.js"] = { deps: {"../auth/super-admin":"src/auth/super-admin.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
@@ -11524,18 +11576,19 @@ function criarRegistroSkills(deps) {
 module.exports = { criarRegistroSkills, selecionarSkills, idDaSkill };
 
 } };
-__defs["supabase/entrada-borda.js"] = { deps: {"../src/borda/acionamento":"src/borda/acionamento.js","../src/borda/montagem":"src/borda/montagem.js","../src/ia/simulacao/modelo-simulado":"src/ia/simulacao/modelo-simulado.js","../src/ia/transporte":"src/ia/transporte.js","postgres":"node_modules/postgres/cjs/src/index.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+__defs["supabase/entrada-borda.js"] = { deps: {"../src/borda/acionamento":"src/borda/acionamento.js","../src/borda/montagem":"src/borda/montagem.js","../src/borda/registro-recusas":"src/borda/registro-recusas.js","../src/ia/simulacao/modelo-simulado":"src/ia/simulacao/modelo-simulado.js","../src/ia/transporte":"src/ia/transporte.js","postgres":"node_modules/postgres/cjs/src/index.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
 // LABZ AI — Fase S3: o que vai para dentro do pacote das Edge Functions (labz.mjs).
 // Só a montagem da borda (que puxa o backend em src/) e o driver do PostgreSQL.
 // firebase-admin e firebase-functions NUNCA entram (o empacotador recusa).
 const postgres = require('postgres');
 const { montarApi, montarWorker } = require('../src/borda/montagem');
 const { assinar } = require('../src/borda/acionamento');
+const { criarRegistroRecusas } = require('../src/borda/registro-recusas');
 // só para os testes no Deno (simulação; nenhum transporte real existe)
 const { criarTransporteSimulado } = require('../src/ia/transporte');
 const { criarModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
 
-module.exports = { postgres, montarApi, montarWorker, assinar, criarTransporteSimulado, criarModeloSimulado };
+module.exports = { postgres, montarApi, montarWorker, assinar, criarRegistroRecusas, criarTransporteSimulado, criarModeloSimulado };
 
 } };
 const __m = __carregar("supabase/entrada-borda.js");
@@ -11543,6 +11596,7 @@ export const postgres = __m.postgres;
 export const montarApi = __m.montarApi;
 export const montarWorker = __m.montarWorker;
 export const assinar = __m.assinar;
+export const criarRegistroRecusas = __m.criarRegistroRecusas;
 export const criarTransporteSimulado = __m.criarTransporteSimulado;
 export const criarModeloSimulado = __m.criarModeloSimulado;
-export const MODULOS = ["node_modules/postgres/cjs/src/bytes.js","node_modules/postgres/cjs/src/connection.js","node_modules/postgres/cjs/src/errors.js","node_modules/postgres/cjs/src/index.js","node_modules/postgres/cjs/src/large.js","node_modules/postgres/cjs/src/query.js","node_modules/postgres/cjs/src/queue.js","node_modules/postgres/cjs/src/result.js","node_modules/postgres/cjs/src/subscribe.js","node_modules/postgres/cjs/src/types.js","src/agentes/catalogo.js","src/agentes/memoria-agente.js","src/api/labz-api.js","src/armazenamento/banco-postgres.js","src/armazenamento/caminhos.js","src/armazenamento/postgres-migracao.js","src/auditoria/eventos.js","src/auth/acesso-supabase.js","src/auth/super-admin.js","src/auth/token-firebase.js","src/borda/acionamento.js","src/borda/http.js","src/borda/limitador.js","src/borda/montagem.js","src/borda/worker.js","src/contratos/agente.js","src/contratos/documentos.js","src/contratos/empresa.js","src/contratos/entrega.js","src/contratos/execucao.js","src/contratos/memoria.js","src/contratos/recuperacao.js","src/empresas/servico.js","src/entregas/armazenamento.js","src/entregas/compartilhamento.js","src/entregas/registro.js","src/entregas/representacao.js","src/execucao/fila.js","src/execucao/preparacao.js","src/execucao/servico.js","src/ferramentas/catalogo.js","src/ferramentas/permissoes.js","src/ia/adaptador-modelos.js","src/ia/config-modelos.js","src/ia/contrato.js","src/ia/credenciais.js","src/ia/prompt.js","src/ia/provedores/anthropic.js","src/ia/provedores/google.js","src/ia/provedores/index.js","src/ia/provedores/openai.js","src/ia/provedores/simulado.js","src/ia/simulacao/documentos-simulados.js","src/ia/simulacao/estrategista-simulado.js","src/ia/simulacao/modelo-simulado.js","src/ia/transporte.js","src/memoria/auditor.js","src/memoria/contexto.js","src/memoria/correcoes.js","src/memoria/indice.js","src/memoria/markdown.js","src/memoria/protecao-global.js","src/memoria/ranqueador.js","src/memoria/recuperador.js","src/memoria/registro.js","src/memoria/verificacoes.js","src/motor/adaptador-simulado.js","src/motor/aprovacoes.js","src/motor/consumo.js","src/motor/custos.js","src/motor/executor-local.js","src/motor/ferramentas-simuladas.js","src/motor/monitor-fila.js","src/motor/motor.js","src/motor/planejador.js","src/motor/qualidade.js","src/motor/relatorio.js","src/motor/risco.js","src/motor/validar-plano.js","src/nucleo/erros.js","src/nucleo/ids.js","src/nucleo/validador.js","src/nucleo/versionamento.js","src/segredos/provedores.js","src/servicos.js","src/skills/registro.js","supabase/entrada-borda.js"];
+export const MODULOS = ["node_modules/postgres/cjs/src/bytes.js","node_modules/postgres/cjs/src/connection.js","node_modules/postgres/cjs/src/errors.js","node_modules/postgres/cjs/src/index.js","node_modules/postgres/cjs/src/large.js","node_modules/postgres/cjs/src/query.js","node_modules/postgres/cjs/src/queue.js","node_modules/postgres/cjs/src/result.js","node_modules/postgres/cjs/src/subscribe.js","node_modules/postgres/cjs/src/types.js","src/agentes/catalogo.js","src/agentes/memoria-agente.js","src/api/labz-api.js","src/armazenamento/banco-postgres.js","src/armazenamento/caminhos.js","src/armazenamento/postgres-migracao.js","src/auditoria/eventos.js","src/auth/acesso-supabase.js","src/auth/super-admin.js","src/auth/token-firebase.js","src/borda/acionamento.js","src/borda/http.js","src/borda/limitador.js","src/borda/montagem.js","src/borda/registro-recusas.js","src/borda/worker.js","src/contratos/agente.js","src/contratos/documentos.js","src/contratos/empresa.js","src/contratos/entrega.js","src/contratos/execucao.js","src/contratos/memoria.js","src/contratos/recuperacao.js","src/empresas/servico.js","src/entregas/armazenamento.js","src/entregas/compartilhamento.js","src/entregas/registro.js","src/entregas/representacao.js","src/execucao/fila.js","src/execucao/preparacao.js","src/execucao/servico.js","src/ferramentas/catalogo.js","src/ferramentas/permissoes.js","src/ia/adaptador-modelos.js","src/ia/config-modelos.js","src/ia/contrato.js","src/ia/credenciais.js","src/ia/prompt.js","src/ia/provedores/anthropic.js","src/ia/provedores/google.js","src/ia/provedores/index.js","src/ia/provedores/openai.js","src/ia/provedores/simulado.js","src/ia/simulacao/documentos-simulados.js","src/ia/simulacao/estrategista-simulado.js","src/ia/simulacao/modelo-simulado.js","src/ia/transporte.js","src/memoria/auditor.js","src/memoria/contexto.js","src/memoria/correcoes.js","src/memoria/indice.js","src/memoria/markdown.js","src/memoria/protecao-global.js","src/memoria/ranqueador.js","src/memoria/recuperador.js","src/memoria/registro.js","src/memoria/verificacoes.js","src/motor/adaptador-simulado.js","src/motor/aprovacoes.js","src/motor/consumo.js","src/motor/custos.js","src/motor/executor-local.js","src/motor/ferramentas-simuladas.js","src/motor/monitor-fila.js","src/motor/motor.js","src/motor/planejador.js","src/motor/qualidade.js","src/motor/relatorio.js","src/motor/risco.js","src/motor/validar-plano.js","src/nucleo/erros.js","src/nucleo/ids.js","src/nucleo/validador.js","src/nucleo/versionamento.js","src/segredos/provedores.js","src/servicos.js","src/skills/registro.js","supabase/entrada-borda.js"];

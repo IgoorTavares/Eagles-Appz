@@ -149,6 +149,7 @@ function gerar() {
   linhas.push('export const montarApi = __m.montarApi;');
   linhas.push('export const montarWorker = __m.montarWorker;');
   linhas.push('export const assinar = __m.assinar;');
+  linhas.push('export const criarRegistroRecusas = __m.criarRegistroRecusas;');
   linhas.push('export const criarTransporteSimulado = __m.criarTransporteSimulado;');
   linhas.push('export const criarModeloSimulado = __m.criarModeloSimulado;');
   linhas.push(`export const MODULOS = ${JSON.stringify(nomes)};`);

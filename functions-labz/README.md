@@ -413,6 +413,16 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 | **11** | Tarefa simulada de ponta a ponta (fila → gatilho → worker → concluída); conferir invocações, tamanho do banco e logs depois de 24 h | 🤖 + 👤 | só leitura | — |
 | **12** | Primeiro backup (exportação), feito pelo Igor no computador ou pelo painel, e guardado fora do Supabase. A conexão Claude/Supabase volta ao modo **somente leitura** | 👤 | não | — |
 
+**Andamento real (projeto `ducvpgrtsguaxqhnnupd`, us-east-1):**
+- Etapas 0–5 concluídas (3 migrações, `labz_borda` com senha, 5 segredos; o `LABZ_WORKER_SEGREDO` vem do `gerar-senha.html`, seção "Segredo do worker").
+- **Etapa 6, como publicar:** o pacote (645 KB) é grande demais para a conexão Claude/Supabase. Por isso o Igor publica **pelo painel**: Edge Functions → Deploy a new function → Via Editor → arrastar o zip (`index.ts` + `labz.mjs`) e **trocar o nome aleatório** que o painel sugere. Depois disso, o Claude baixa o código publicado (`get_edge_function`) e compara os SHA-256.
+- **Etapa 6, Verify JWT:** fica **ligado** até o Igor autorizar o desligamento.
+- **Correção da Etapa 6 — nenhuma chamada sem login grava no banco:**
+  - recusas de origem e de token, e logins válidos do Firebase **fora** de `LABZ_SUPERADMIN_UIDS`, só vão para o **log** da função (`src/borda/registro-recusas.js`: etapa e motivo, no máximo 20 linhas por minuto, mais um resumo);
+  - a lista do servidor é conferida **antes** do limitador e do banco;
+  - a auditoria das operações do Super Admin continua no banco.
+- **Supabase local atrás do proxy do sandbox:** o Edge Runtime baixa `@types/node` ao ligar. Sem esse download, dá `BOOT_ERROR`. Para resolver, guarde o pacote no cache do volume `supabase_edge_runtime_*` com o Deno do computador (`DENO_DIR=<volume> deno cache npm:@types/node`) e não use `stop --no-backup` (apaga o cache). Rode `supabase db reset` antes, para não sobrar tarefa antiga na fila.
+
 **Fora da S5B** (cada uma com autorização própria, mais tarde):
 - publicar a tela no site (`LABZ_API_URL`, lista do Site seguro);
 - ligar o menu LABZ AI;

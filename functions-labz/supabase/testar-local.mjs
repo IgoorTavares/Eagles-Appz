@@ -58,9 +58,16 @@ async function limparBanco() {
   await admin.unsafe(`alter role ${PAPEL} with nologin password null`).catch(() => {});
 }
 
+// Só para ambientes de teste atrás de um proxy que reassina o TLS (ex.: o sandbox do Claude Code):
+// LABZ_TESTE_CA=/caminho/ca.crt faz o Edge Runtime local confiar nele ao baixar os tipos do npm.
+// A cópia fica na pasta das funções (a única que o contêiner enxerga) e é APAGADA no fim.
+const CA_TESTE = process.env.LABZ_TESTE_CA ? path.join(RAIZ, 'supabase', 'functions', '.labz-teste-ca.crt') : null;
+
 function servirFuncoes() {
   const arq = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'labz-')), 'funcoes.env');
+  if (CA_TESTE) fs.copyFileSync(process.env.LABZ_TESTE_CA, CA_TESTE);
   fs.writeFileSync(arq, [
+    ...(CA_TESTE ? [`DENO_CERT=${CA_TESTE}`] : []),
     `LABZ_DB_URL=postgresql://${PAPEL}:${SENHA}@db:5432/postgres`,
     'LABZ_SUPERADMIN_UIDS=sa',
     `LABZ_FIREBASE_PROJETO=${PROJETO}`,
@@ -73,7 +80,7 @@ function servirFuncoes() {
   let log = '';
   p.stdout.on('data', (d) => { log += d; });
   p.stderr.on('data', (d) => { log += d; });
-  return { p, log: () => log, apagar: () => fs.rmSync(path.dirname(arq), { recursive: true, force: true }) };
+  return { p, log: () => log, apagar: () => { fs.rmSync(path.dirname(arq), { recursive: true, force: true }); if (CA_TESTE) fs.rmSync(CA_TESTE, { force: true }); } };
 }
 
 async function http(url, opcoes = {}) {
@@ -97,7 +104,9 @@ async function esperarFuncao() {
   const serv = servirFuncoes();
   let codigo = 1;
   try {
-    conferir(await esperarFuncao(), 'as duas funções sobem no Edge Runtime', serv.log().split('\n').find((l) => /edge-runtime|Serving/i.test(l)) || '');
+    const subiu = await esperarFuncao();
+    conferir(subiu, 'as duas funções sobem no Edge Runtime', serv.log().split('\n').find((l) => /edge-runtime|Serving/i.test(l)) || '');
+    if (!subiu) console.log(`--- registro do Edge Runtime (valores de teste, fictícios) ---\n${serv.log().slice(-4000)}`);
 
     // ---------- 1. labz-api no Edge Runtime ----------
     const api = `${FUNCS}/labz-api`;
@@ -106,6 +115,7 @@ async function esperarFuncao() {
     // "Access-Control-Allow-Origin: *" em tudo. Por isso a função confere a origem NO SERVIDOR:
     // outra origem recebe 403 antes de qualquer trabalho (e o login vai no cabeçalho, sem cookie).
     conferir(pre.status >= 200 && pre.status < 300, 'API: pré-voo do navegador respondido', `${pre.status}, allow-origin ${pre.headers.get('access-control-allow-origin')} (posto pelo gateway)`);
+    const docsAntes = (await admin`select count(*)::int as n from labz.docs`)[0].n;
     const outra = await http(api, { method: 'POST', headers: { origin: 'https://site-malicioso.example', 'content-type': 'application/json' }, body: '{"acao":"catalogo.agentes"}' });
     conferir(outra.status === 403, 'API: outra origem → 403 no servidor (mesmo com o * do gateway)');
     const semToken = await http(api, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"acao":"catalogo.agentes"}' });
@@ -116,8 +126,9 @@ async function esperarFuncao() {
     // chaves do Google (sem rede no contêiner, nem baixa: falha FECHADA) → 401
     const falso = await http(api, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${emitir()}` }, body: '{"acao":"catalogo.agentes"}' });
     conferir(falso.status === 401, 'API: token assinado por chave de teste NÃO é aceito pela função real → 401');
-    const motivos = await admin`select dados->'detalhes'->>'motivo' as m from labz.docs where colecao = 'labz_eventos' and dados->>'tipo' = 'auth.token_recusado' order by atualizado_em`;
-    conferir(motivos.length >= 3, 'API: recusas auditadas (só o motivo, sem o token)', motivos.map((x) => x.m).join(', '));
+    // S5B, Etapa 6: recusas vão só para o LOG da função; nenhuma gravação no banco
+    const docsDepois = (await admin`select count(*)::int as n from labz.docs`)[0].n;
+    conferir(docsDepois === docsAntes, 'API: recusas NÃO gravam no banco (só no log da função)', `documentos antes ${docsAntes}, depois ${docsDepois}`);
     conferir((await http(api, { method: 'GET' })).status === 405, 'API: GET → 405');
 
     // ---------- 2. labz-worker no Edge Runtime ----------

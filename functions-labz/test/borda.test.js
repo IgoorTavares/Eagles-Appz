@@ -35,9 +35,10 @@ async function montarBorda({ limites = { porMinuto: 100, tarefasPorHora: 100 }, 
   await c.banco.gravar('labz_usuarios/d1', { role: 'Diretor', nome: 'Diretor' });
   const api = criarApi(Object.assign({ servicos: c, banco: c.banco, uidsAutorizados: () => 'sa,d1', lerSegredo: () => '' }, opcoesApiSupabase(c.banco)));
   const verificador = criarVerificadorFirebase({ projetoId: PROJETO, obterChaves });
-  const autenticar = criarAcessoSupabase({ verificador, auditoria: c.auditoria });
+  const recusas = [];
+  const autenticar = criarAcessoSupabase({ verificador, aoRecusar: ({ motivo }) => recusas.push({ etapa: 'token', motivo }) });
   const limitador = criarLimitador({ banco: c.banco, relogio: () => '2026-11-01T12:00:30.000Z', limites });
-  const handler = criarHandlerApi({ api, autenticar, limitador, origens: [ORIGEM] });
+  const handler = criarHandlerApi({ api, autenticar, limitador, uidPermitido: (uid) => ['sa', 'd1'].includes(uid), origens: [ORIGEM], registrarRecusa: (r) => recusas.push(r) });
   const pedir = async (corpo, { token = emitir(), origem = ORIGEM, metodo = 'POST', tipo = 'application/json', bruto } = {}) => {
     const headers = {};
     if (tipo) headers['content-type'] = tipo;
@@ -47,7 +48,7 @@ async function montarBorda({ limites = { porMinuto: 100, tarefasPorHora: 100 }, 
     const texto = await r.text();
     return { status: r.status, headers: r.headers, corpo: texto ? JSON.parse(texto) : null };
   };
-  return Object.assign(c, { transporte, pedir, handler });
+  return Object.assign(c, { transporte, pedir, handler, recusas });
 }
 
 test('API (HTTP): CORS só para a origem do site, só POST + JSON, tamanho limitado e respostas sem cache', async () => {
@@ -89,6 +90,74 @@ test('API (HTTP): sem token, token inválido/expirado/de outro projeto → 401 (
   const d = await c.pedir({ acao: 'catalogo.agentes' }, { token: emitir({ sub: 'd1', email: 'd1@teste.local' }) });
   assert.equal(d.status, 403);
   assert.equal(d.corpo.erro.detalhes, undefined);
+});
+
+// retrato do banco inteiro (caminhos + conteúdo): qualquer gravação muda o retrato
+async function retrato(banco) {
+  const caminhos = banco._caminhosAsync ? await banco._caminhosAsync() : banco._caminhos(); // no PostgreSQL: a tabela inteira
+  const docs = await Promise.all(caminhos.map(async (p) => [p, await banco.obter(p)]));
+  return JSON.stringify(docs);
+}
+
+test('S5B Etapa 6: chamadas SEM login válido ou fora da lista do servidor NÃO gravam nada no banco (só log, sem dados sensíveis)', async () => {
+  const c = await montarBorda();
+  const antes = await retrato(c.banco);
+  const agora = Math.floor(Date.now() / 1000);
+  const tokenIntruso = emitir({ sub: 'intruso', email: 'intruso@teste.local' }); // login VÁLIDO do Firebase, fora da lista
+  const casos = [
+    [{ token: null }, 401],
+    [{ token: 'abc.def.ghi' }, 401],
+    [{ token: emitir({ exp: agora - 600, iat: agora - 4000, auth_time: agora - 4000 }) }, 401],
+    [{ token: emitir({ aud: 'outro-projeto' }) }, 401],
+    [{ token: tokenIntruso }, 403],
+    [{ origem: 'https://site-malicioso.example' }, 403],
+    [{ metodo: 'GET' }, 405],
+    [{ tipo: 'text/plain' }, 415],
+    [{ bruto: '{nao-e-json' }, 400],
+  ];
+  for (let volta = 0; volta < 5; volta++) {
+    for (const [op, status] of casos) assert.equal((await c.pedir({ acao: 'catalogo.agentes' }, op)).status, status, JSON.stringify(op));
+  }
+  assert.equal(await retrato(c.banco), antes, 'o banco ficou EXATAMENTE igual');
+  // fora da lista: a MESMA resposta do Super Admin negado (não revela se o login era válido)
+  const fora = await c.pedir({ acao: 'catalogo.agentes' }, { token: tokenIntruso });
+  const diretor = await c.pedir({ acao: 'catalogo.agentes' }, { token: emitir({ sub: 'd1', email: 'd1@teste.local' }) });
+  assert.deepEqual([fora.status, fora.corpo.erro], [diretor.status, diretor.corpo.erro]);
+  // o log: só etapa e motivo, de listas fechadas; nada de token, e-mail ou UID
+  assert.ok(c.recusas.length >= 30);
+  const texto = JSON.stringify(c.recusas);
+  for (const proibido of ['eyJ', 'intruso', '@', 'malicioso', 'Bearer']) assert.ok(!texto.includes(proibido), proibido);
+  assert.ok(c.recusas.every((r) => Object.keys(r).sort().join() === 'etapa,motivo' && ['origem', 'token', 'lista-servidor'].includes(r.etapa)));
+  assert.ok(c.recusas.some((r) => r.etapa === 'token' && r.motivo === 'sem-bearer'));
+  assert.ok(c.recusas.some((r) => r.etapa === 'lista-servidor'));
+});
+
+test('S5B Etapa 6: o Super Admin continua passando, e o que é dele continua auditado/limitado no banco', async () => {
+  const c = await montarBorda({ limites: { porMinuto: 3, tarefasPorHora: 100 } });
+  for (let i = 0; i < 3; i++) assert.equal((await c.pedir({ acao: 'catalogo.agentes' })).status, 200);
+  assert.equal((await c.pedir({ acao: 'catalogo.agentes' })).status, 429, 'o limite por UID continua valendo para quem está na lista');
+  assert.ok(await c.banco.obter('labz_limites/sa'), 'o contador do Super Admin continua no banco');
+  // da lista do servidor, mas com perfil errado no banco: continua auditado (só UIDs da lista chegam aqui)
+  const d = await c.pedir({ acao: 'catalogo.agentes' }, { token: emitir({ sub: 'd1', email: 'd1@teste.local' }) });
+  assert.equal(d.status, 403);
+  const negados = await c.auditoria.listarPagina({ tipo: 'auth.acesso_negado', limite: 20 });
+  assert.ok(negados.itens.length >= 1);
+  assert.equal((await c.auditoria.listarPagina({ tipo: 'auth.token_recusado', limite: 20 })).itens.length, 0, 'recusa de token nunca vira auditoria no banco');
+});
+
+test('S5B Etapa 6: registro de recusas — linhas fechadas e volume limitado (resumo das suprimidas)', () => {
+  const { criarRegistroRecusas } = require('../src/borda/registro-recusas');
+  const linhas = [];
+  let t = 0;
+  const reg = criarRegistroRecusas({ escrever: (l) => linhas.push(JSON.parse(l)), maxPorMinuto: 5, agoraMs: () => t });
+  for (let i = 0; i < 1000; i++) reg({ etapa: 'token', motivo: 'assinatura' });
+  assert.equal(linhas.length, 5, 'no máximo 5 por minuto');
+  t = 60000;
+  reg({ etapa: 'qualquer coisa <script>', motivo: 'eyJhbGciOi.xxx Bearer @' });
+  assert.deepEqual(linhas[5], { evento: 'labz-api.recusas_suprimidas', n: 995 });
+  assert.deepEqual(linhas[6], { evento: 'labz-api.recusa', etapa: 'outra', motivo: 'outro' }, 'texto estranho nunca vai para o log');
+  assert.doesNotThrow(() => criarRegistroRecusas({ escrever: () => { throw new Error('log fora'); } })({ etapa: 'token', motivo: 'x' }));
+  assert.throws(() => require('../src/auth/acesso-supabase').criarAcessoSupabase({ verificador: async () => ({}), auditoria: {} }), /não vão para o banco/);
 });
 
 test('API (HTTP): limite de pedidos por UID (por minuto e de tarefas novas por hora) → 429', async () => {

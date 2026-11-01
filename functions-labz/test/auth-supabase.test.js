@@ -92,9 +92,10 @@ async function montarSupabase() {
   let lidos = [];
   const banco = Object.assign({}, c.banco, { obter: (p) => { lidos.push(p); return c.banco.obter(p); } });
   const api = criarApi(Object.assign({ servicos: c, banco, uidsAutorizados: () => 'sa,d1', lerSegredo: () => '' }, opcoesApiSupabase(banco)));
-  const autenticar = criarAcessoSupabase({ verificador: verificador(), auditoria: c.auditoria });
+  const recusas = [];
+  const autenticar = criarAcessoSupabase({ verificador: verificador(), aoRecusar: (r) => recusas.push(r) });
   const chamar = async (token, acao = 'catalogo.agentes', dados = {}) => api({ auth: await autenticar(`Bearer ${token}`), data: { acao, dados } }).then((r) => r.resultado);
-  return Object.assign(c, { chamar, autenticar, lidos: () => lidos, zerarLidos: () => { lidos = []; } });
+  return Object.assign(c, { chamar, autenticar, recusas, lidos: () => lidos, zerarLidos: () => { lidos = []; } });
 }
 
 test('autorização completa: token válido + lista do servidor + perfil no banco da LABZ AI + lista do banco', async () => {
@@ -110,8 +111,9 @@ test('autorização completa: token válido + lista do servidor + perfil no banc
   await rejeita(() => c.chamar(emitir()), 'permissao-negada');
   const negados = await c.auditoria.listarPagina({ tipo: 'auth.acesso_negado', limite: 20 });
   assert.ok(negados.itens.some((e) => e.detalhes && e.detalhes.motivo === 'fora-da-lista-do-banco'));
-  const recusados = await c.auditoria.listarPagina({ tipo: 'auth.token_recusado', limite: 20 });
-  assert.ok(recusados.itens.length >= 1 && recusados.itens.every((e) => !JSON.stringify(e).includes('eyJ')), 'a auditoria não guarda o token');
+  // recusas de token: só para o log (aoRecusar), nunca no banco, e sem o token
+  assert.equal((await c.auditoria.listarPagina({ tipo: 'auth.token_recusado', limite: 20 })).itens.length, 0);
+  assert.ok(c.recusas.length >= 3 && c.recusas.every((r) => Object.keys(r).join() === 'motivo' && !JSON.stringify(r).includes('eyJ')));
 });
 
 test('a autenticação NÃO dá acesso ao CRM/ERP: não lê usuarios/ nem tentativas_login, e não carrega o Firebase Admin', async () => {

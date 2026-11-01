@@ -4,8 +4,9 @@
 const postgres = require('postgres');
 const { montarApi, montarWorker } = require('../src/borda/montagem');
 const { assinar } = require('../src/borda/acionamento');
+const { criarRegistroRecusas } = require('../src/borda/registro-recusas');
 // só para os testes no Deno (simulação; nenhum transporte real existe)
 const { criarTransporteSimulado } = require('../src/ia/transporte');
 const { criarModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
 
-module.exports = { postgres, montarApi, montarWorker, assinar, criarTransporteSimulado, criarModeloSimulado };
+module.exports = { postgres, montarApi, montarWorker, assinar, criarRegistroRecusas, criarTransporteSimulado, criarModeloSimulado };

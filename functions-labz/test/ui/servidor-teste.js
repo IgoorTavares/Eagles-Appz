@@ -49,7 +49,7 @@ async function criarServidoresTeste({ apiUrlVazia = false, scriptJs = null, limi
   };
   const api = criarApi(Object.assign({ servicos, banco, uidsAutorizados: () => 'sa,d1', lerSegredo: () => '' }, opcoesApiSupabase(banco)));
   const verificador = criarVerificadorFirebase({ projetoId: PROJETO, obterChaves });
-  const autenticar = criarAcessoSupabase({ verificador, auditoria: servicos.auditoria });
+  const autenticar = criarAcessoSupabase({ verificador });
   const limitador = criarLimitador({ banco, limites });
   const pedidos = []; // registro do que chegou na API (para os testes)
   let handler = null;
@@ -102,7 +102,7 @@ async function criarServidoresTeste({ apiUrlVazia = false, scriptJs = null, limi
   await new Promise((ok) => servApi.listen(0, '127.0.0.1', ok));
   await new Promise((ok) => servSite.listen(0, '127.0.0.1', ok));
   const site = `http://127.0.0.1:${servSite.address().port}`;
-  handler = criarHandlerApi({ api, autenticar, limitador, origens: [site] });
+  handler = criarHandlerApi({ api, autenticar, limitador, uidPermitido: (uid) => ['sa', 'd1'].includes(uid), origens: [site] });
   return {
     site, pedidos, servicos, banco, ator, empresas, transporte, drenar,
     async fechar() { worker.pararTudo(); await Promise.all([new Promise((ok) => servApi.close(ok)), new Promise((ok) => servSite.close(ok))]); },

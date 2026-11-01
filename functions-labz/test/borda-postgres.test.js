@@ -139,6 +139,24 @@ test('S5B Etapa 6 no PostgreSQL: recusas (sem login, token falso, login válido 
   assert.ok(recusas.length === 100 && !JSON.stringify(recusas).includes('eyJ'));
 });
 
+test('S5B Etapa 6 no PostgreSQL (worker): chamadas sem acionamento válido não mudam NADA no banco', { skip: pular }, async () => {
+  await preparar();
+  const { handler } = montarWorker({ sql: app, config: { segredoWorker: SEGREDO } });
+  const estado = async () => (await admin`select (select count(*)::int from labz.docs) as d, (select count(*)::int from labz.acionamentos where consumido_em is not null) as c, (select count(*)::int from labz.acionamentos) as a`)[0];
+  const antes = await estado();
+  const agora = Math.floor(Date.now() / 1000);
+  const id = `acn_${'e'.repeat(32)}`;
+  const forjado = { 'x-labz-acionamento': id, 'x-labz-tempo': String(agora), 'x-labz-motivo': 'manual', 'x-labz-assinatura': `v1=${'0'.repeat(64)}` };
+  const certoSemRegistro = Object.assign({}, forjado, { 'x-labz-assinatura': `v1=${require('../src/borda/acionamento').assinar(SEGREDO, id, agora, 'manual')}` });
+  for (let i = 0; i < 10; i++) {
+    for (const h of [{}, forjado, certoSemRegistro]) {
+      const r = await handler(new Request('http://local/labz-worker', { method: 'POST', headers: h, body: '{}' }));
+      assert.equal(r.status, 401);
+    }
+  }
+  assert.deepEqual(await estado(), antes, '30 chamadas recusadas e o banco igual (nada criado, nada consumido)');
+});
+
 test.after(async () => {
   if (app) await app.end({ timeout: 2 });
   if (admin) await admin.end({ timeout: 2 });

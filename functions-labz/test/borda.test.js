@@ -231,6 +231,33 @@ test('worker (HTTP): sem acionamento válido → 401 e NADA roda; com acionament
   assert.equal(rodadas, 2);
 });
 
+test('S5B Etapa 6 (worker): sem assinatura válida, a chamada é recusada SEM consultar o banco e sem rodar nada', async () => {
+  let consultas = 0;
+  let rodadas = 0;
+  const consumir = async () => { consultas++; return false; };
+  const agora = 1_800_000_000;
+  const verificar = criarVerificadorAcionamento({ segredo: SEGREDO, consumir, agoraSeg: () => agora });
+  const h = criarHandlerWorker({ verificarAcionamento: verificar, worker: { rodar: async () => { rodadas++; return {}; } } });
+  const id = `acn_${'d'.repeat(32)}`;
+  const chamar = (headers, metodo = 'POST') => h(new Request('http://x/labz-worker', { method: metodo, headers, body: metodo === 'POST' ? '{}' : undefined }));
+  const cab = (tempo, motivo, ass) => ({ 'x-labz-acionamento': id, 'x-labz-tempo': String(tempo), 'x-labz-motivo': motivo, 'x-labz-assinatura': ass });
+  const casos = [
+    [{}, 401], // sem nada
+    [{ authorization: 'Bearer qualquer-coisa' }, 401], // um login (de qualquer tipo) não serve para o worker
+    [cab(agora, 'fila', 'v1=123'), 401], // formato
+    [cab(agora, 'fila', `v1=${assinar('outro-segredo-qualquer-com-mais-de-32-caracteres', id, agora, 'fila')}`), 401], // segredo errado
+    [cab(agora - 500, 'fila', `v1=${assinar(SEGREDO, id, agora - 500, 'fila')}`), 401], // velha (fora da janela)
+  ];
+  for (let i = 0; i < 10; i++) for (const [hd, st] of casos) assert.equal((await chamar(hd)).status, st);
+  assert.equal((await chamar({}, 'GET')).status, 405);
+  assert.equal(consultas, 0, 'nenhuma consulta ao banco antes de a assinatura conferir');
+  assert.equal(rodadas, 0, 'nada roda');
+  // só com a assinatura CERTA (quem tem o segredo) o banco é consultado — e, sem o registro, recusa
+  assert.equal((await chamar(cab(agora, 'fila', `v1=${assinar(SEGREDO, id, agora, 'fila')}`))).status, 401);
+  assert.equal(consultas, 1);
+  assert.equal(rodadas, 0);
+});
+
 // relógio controlado pelo teste (o "tempo" que o worker vê)
 function relogioWorker() { let t = 0; return { agoraMs: () => t, avancar: (ms) => { t += ms; } }; }
 const chamadasExec = (transporte) => transporte.chamadas.filter((x) => x.modo !== 'planejar');

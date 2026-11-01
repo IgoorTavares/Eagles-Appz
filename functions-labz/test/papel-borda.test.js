@@ -19,7 +19,7 @@ const URL_PG = process.env.LABZ_PG_URL;
 // carrega as funções da própria página (o mesmo código que roda no navegador do Igor)
 function funcoesDaPagina() {
   const codigo = PAGINA.match(/<script>([\s\S]*?)<\/script>/)[1];
-  return new Function(`${codigo}\nreturn { senhaAleatoria, verificadorScram, montarUrl, PROJETO };`)();
+  return new Function(`${codigo}\nreturn { senhaAleatoria, verificadorScram, montarUrl, hostValido, PROJETO };`)();
 }
 function scramIndependente(senha, sal, it = 4096) {
   const salted = crypto.pbkdf2Sync(senha, sal, it, 32, 'sha256');
@@ -36,7 +36,16 @@ test('gerador offline: senha forte (40, só letras e números), verificador SCRA
   assert.notEqual(f.senhaAleatoria(40), s, 'cada vez uma senha nova');
   const sal = crypto.randomBytes(16);
   assert.equal(await f.verificadorScram(s, new Uint8Array(sal)), scramIndependente(s, sal));
-  assert.equal(f.montarUrl('X', 'h.pooler.supabase.com'), 'postgresql://labz_borda.ducvpgrtsguaxqhnnupd:X@h.pooler.supabase.com:6543/postgres');
+  assert.equal(f.montarUrl('X', 'aws-0-us-east-1.pooler.supabase.com'), 'postgresql://labz_borda.ducvpgrtsguaxqhnnupd:X@aws-0-us-east-1.pooler.supabase.com:6543/postgres');
+  assert.equal(f.montarUrl('X', ' aws-1-us-east-1.pooler.supabase.com '), 'postgresql://labz_borda.ducvpgrtsguaxqhnnupd:X@aws-1-us-east-1.pooler.supabase.com:6543/postgres');
+  for (const ruim of ['', 'https://aws-0-us-east-1.pooler.supabase.com', 'aws-0-us-east-1.pooler.supabase.com:6543', 'x@aws-0-us-east-1.pooler.supabase.com', 'aws-0-us-east-1.pooler.supabase.com.evil.example', 'evil.example', 'aws-0-us-east-1.pooler.supabase.co']) {
+    assert.equal(f.hostValido(ruim), false, ruim);
+    assert.throws(() => f.montarUrl('X', ruim), /inválido/, ruim);
+  }
+  // a senha e a URL (que tem a senha) ficam escondidas na tela; nada de autocompletar
+  assert.match(PAGINA, /<input id="senha" type="password" readonly autocomplete="off"/);
+  assert.match(PAGINA, /<input id="url" type="password" readonly autocomplete="off"/);
+  assert.doesNotMatch(PAGINA, /value="aws-/, 'o endereço do pooler não vem preenchido (tem que ser o do painel)');
   assert.match(PAGINA, /Content-Security-Policy" content="default-src 'none'/, 'a política da página bloqueia qualquer conexão');
   assert.doesNotMatch(PAGINA, /fetch\(|XMLHttpRequest|WebSocket|sendBeacon|<link|<img|src="http|localStorage|sessionStorage/i, 'nada sai do computador e nada fica guardado');
   // o comando que vai para o SQL Editor leva só o verificador (a senha não aparece nele)

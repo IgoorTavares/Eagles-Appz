@@ -60,6 +60,21 @@
   </ol>
 </div>
 
+<h2>Segredo do worker (<code>LABZ_WORKER_SEGREDO</code>)</h2>
+<div class="caixa aviso">
+  Independente da senha acima. 64 caracteres aleatórios (0–9 e a–f), criados aqui no navegador, sem internet.
+  Guarde no gerenciador de senhas: ele vai para o segredo <code>LABZ_WORKER_SEGREDO</code> (Etapa 5) e, com o
+  <strong>mesmo valor</strong>, para o cofre do Supabase como <code>labz_worker_segredo</code> (Etapa 10).
+</div>
+<div class="caixa">
+  <button type="button" id="gerar-worker">Gerar segredo do worker</button>
+  <p id="estado-worker" role="status"></p>
+  <div id="resultado-worker" hidden>
+    <input id="segredo-worker" type="password" readonly autocomplete="off" spellcheck="false" aria-label="Segredo do worker (escondido)">
+    <p><button type="button" class="secundario" data-mostrar="segredo-worker">Mostrar</button> <button type="button" class="secundario" data-copiar="segredo-worker">Copiar segredo</button></p>
+  </div>
+</div>
+
 <script>
 'use strict';
 const PROJETO = 'ducvpgrtsguaxqhnnupd';
@@ -92,6 +107,10 @@ async function verificadorScram(senha, sal, iteracoes = 4096) {
 // só aceita o endereço do pooler do Supabase (nada de "https://", espaços, usuário ou porta junto)
 const RE_HOST = /^aws-[0-9]+-[a-z]{2}-[a-z]+-[0-9]+\.pooler\.supabase\.com$/;
 function hostValido(host) { return RE_HOST.test(String(host || '').trim()); }
+// segredo do worker: 32 bytes do gerador criptográfico → 64 caracteres hexadecimais (sem viés)
+function segredoWorker() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join('');
+}
 function montarUrl(senha, host) {
   if (!hostValido(host)) throw new Error('endereço do pooler inválido');
   return `postgresql://labz_borda.${PROJETO}:${senha}@${String(host).trim()}:6543/postgres`;
@@ -118,6 +137,13 @@ if (typeof window !== 'undefined' && document.getElementById('gerar')) {
     $('estado').textContent = 'Pronto. Siga o passo a passo abaixo.';
   });
   $('host').addEventListener('input', atualizarUrl);
+  $('gerar-worker').addEventListener('click', () => {
+    $('segredo-worker').value = segredoWorker();
+    $('segredo-worker').type = 'password';
+    document.querySelector('[data-mostrar="segredo-worker"]').textContent = 'Mostrar';
+    $('resultado-worker').hidden = false;
+    $('estado-worker').textContent = 'Pronto. Copie para o gerenciador de senhas (gerar de novo troca o valor).';
+  });
   document.addEventListener('click', (e) => {
     const m = e.target && e.target.dataset && e.target.dataset.mostrar;
     if (!m) return;

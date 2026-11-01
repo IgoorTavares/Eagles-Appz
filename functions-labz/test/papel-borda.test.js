@@ -19,7 +19,7 @@ const URL_PG = process.env.LABZ_PG_URL;
 // carrega as funções da própria página (o mesmo código que roda no navegador do Igor)
 function funcoesDaPagina() {
   const codigo = PAGINA.match(/<script>([\s\S]*?)<\/script>/)[1];
-  return new Function(`${codigo}\nreturn { senhaAleatoria, verificadorScram, montarUrl, hostValido, PROJETO };`)();
+  return new Function(`${codigo}\nreturn { senhaAleatoria, verificadorScram, montarUrl, hostValido, segredoWorker, PROJETO };`)();
 }
 function scramIndependente(senha, sal, it = 4096) {
   const salted = crypto.pbkdf2Sync(senha, sal, it, 32, 'sha256');
@@ -50,6 +50,27 @@ test('gerador offline: senha forte (40, só letras e números), verificador SCRA
   assert.doesNotMatch(PAGINA, /fetch\(|XMLHttpRequest|WebSocket|sendBeacon|<link|<img|src="http|localStorage|sessionStorage/i, 'nada sai do computador e nada fica guardado');
   // o comando que vai para o SQL Editor leva só o verificador (a senha não aparece nele)
   assert.match(PAGINA, /\$\('sql'\)\.value = `alter role labz_borda with password '\$\{v\}';`/);
+});
+
+test('segredo do worker: 64 caracteres hexadecimais, sempre novo, sem viés aparente, e aceito pelo verificador do worker', () => {
+  const f = funcoesDaPagina();
+  const { criarVerificadorAcionamento } = require('../src/borda/acionamento');
+  const vistos = new Set();
+  const contagem = new Map();
+  for (let i = 0; i < 2000; i++) {
+    const s = f.segredoWorker();
+    assert.match(s, /^[0-9a-f]{64}$/);
+    vistos.add(s);
+    for (const c of s) contagem.set(c, (contagem.get(c) || 0) + 1);
+  }
+  assert.equal(vistos.size, 2000, 'nenhum repetido');
+  // 128 mil caracteres em 16 símbolos: cada um perto de 8000 (folga larga, só pega erro grosseiro)
+  assert.equal(contagem.size, 16);
+  for (const [c, n] of contagem) assert.ok(n > 7200 && n < 8800, `${c}: ${n}`);
+  assert.doesNotThrow(() => criarVerificadorAcionamento({ segredo: f.segredoWorker(), consumir: async () => true }));
+  // o segredo fica escondido por padrão e é independente do gerador da senha
+  assert.match(PAGINA, /<input id="segredo-worker" type="password" readonly autocomplete="off"/);
+  assert.match(PAGINA, /crypto\.getRandomValues\(new Uint8Array\(32\)\)/);
 });
 
 test('migração do papel: só atributos sem poder administrativo, herda labz_app sem "vestir", limites de sessão, sem senha', () => {
@@ -103,6 +124,10 @@ test('no PostgreSQL: o verificador da página funciona (senha certa entra, errad
     assert.equal((await conexao`select count(*)::int as n from labz.docs`)[0].n, 1);
     await conexao`update labz.docs set dados = '{"ok":2}' where caminho = 'labz_x/a'`;
     await conexao`delete from labz.docs where caminho = 'labz_x/a'`;
+    const segredoGerado = f.segredoWorker();
+    const [g] = await db`select * from labz.criar_acionamento('manual', ${segredoGerado})`;
+    const { assinar } = require('../src/borda/acionamento');
+    assert.equal(g.assinatura, assinar(segredoGerado, g.id, Number(g.tempo), g.motivo), 'o segredo gerado assina igual no banco e no worker');
     const [a] = await db`select * from labz.criar_acionamento('manual', 'segredo-ficticio-de-teste-com-mais-de-32-caracteres')`;
     const consumo = await conexao`update labz.acionamentos set consumido_em = now(), consumido_por = 'worker' where id = ${a.id} and consumido_em is null returning id`;
     assert.equal(consumo.length, 1);

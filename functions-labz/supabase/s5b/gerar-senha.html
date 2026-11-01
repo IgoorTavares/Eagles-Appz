@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Funciona SEM internet: nada sai deste computador (a política abaixo bloqueia qualquer conexão). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>LABZ AI · Senha do papel labz_borda</title>
+<style>
+  body { font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; color: #1d2433; background: #f6f7f9; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 24px; }
+  .caixa { background: #fff; border: 1px solid #d9dde5; border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+  .aviso { background: #fff7e6; border-color: #f0c36d; }
+  code, textarea, input { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  textarea, input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #c4cad6; border-radius: 6px; background: #fbfcfd; }
+  textarea { resize: vertical; min-height: 64px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid #2c6e1a; background: #3fae12; color: #fff; cursor: pointer; }
+  button.secundario { background: #fff; color: #1d2433; border-color: #c4cad6; }
+  ol li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<h1>LABZ AI — senha do papel <code>labz_borda</code></h1>
+<div class="caixa aviso">
+  <strong>Esta página não usa a internet.</strong> A senha é criada aqui no seu navegador e não é enviada a ninguém.
+  Não mande a senha pelo chat. Guarde-a só no seu gerenciador de senhas e no segredo <code>LABZ_DB_URL</code> do Supabase.
+</div>
+
+<div class="caixa">
+  <button type="button" id="gerar">Gerar senha nova</button>
+  <p id="estado" role="status"></p>
+</div>
+
+<div id="resultado" hidden>
+  <h2>1. Senha (guarde no seu gerenciador de senhas)</h2>
+  <div class="caixa"><input id="senha" readonly aria-label="Senha gerada"> <p><button type="button" class="secundario" data-copiar="senha">Copiar senha</button></p></div>
+
+  <h2>2. Comando para o SQL Editor do Supabase (leva só o verificador, NÃO a senha)</h2>
+  <div class="caixa"><textarea id="sql" readonly aria-label="Comando SQL"></textarea><p><button type="button" class="secundario" data-copiar="sql">Copiar comando</button></p></div>
+
+  <h2>3. Conexão para o segredo <code>LABZ_DB_URL</code> (leva a senha)</h2>
+  <div class="caixa">
+    <label for="host">Endereço do pooler (painel do Supabase → Connect → Transaction pooler → "host")</label>
+    <input id="host" value="aws-0-us-east-1.pooler.supabase.com" spellcheck="false">
+    <label for="url">LABZ_DB_URL</label>
+    <textarea id="url" readonly aria-label="LABZ_DB_URL"></textarea>
+    <p><button type="button" class="secundario" data-copiar="url">Copiar LABZ_DB_URL</button></p>
+  </div>
+
+  <h2>Passo a passo</h2>
+  <ol>
+    <li>Copie a <strong>senha</strong> para o seu gerenciador de senhas.</li>
+    <li>No Supabase, abra <strong>SQL Editor</strong>, cole o <strong>comando</strong> do item 2 e clique em <em>Run</em>.</li>
+    <li>Confira o endereço do pooler (item 3) e guarde a <strong>LABZ_DB_URL</strong> no gerenciador também (ela vai para o segredo das funções na etapa 5).</li>
+    <li>Feche esta página. Ao abrir de novo, ela gera outra senha (a anterior não fica guardada aqui).</li>
+  </ol>
+</div>
+
+<script>
+'use strict';
+const PROJETO = 'ducvpgrtsguaxqhnnupd';
+const ALFABETO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; // sem símbolos: não precisa "escapar" na URL
+
+function senhaAleatoria(tamanho) {
+  const limite = 256 - (256 % ALFABETO.length); // sem viés
+  let s = '';
+  while (s.length < tamanho) {
+    const b = crypto.getRandomValues(new Uint8Array(tamanho * 2));
+    for (const x of b) if (x < limite && s.length < tamanho) s += ALFABETO[x % ALFABETO.length];
+  }
+  return s;
+}
+const b64 = (u8) => btoa(String.fromCharCode(...new Uint8Array(u8)));
+const texto = (s) => new TextEncoder().encode(s);
+async function hmac(chave, dados) {
+  const k = await crypto.subtle.importKey('raw', chave, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', k, dados));
+}
+// Verificador SCRAM-SHA-256 no formato do PostgreSQL (RFC 5802/7677; o mesmo que o PostgreSQL grava).
+async function verificadorScram(senha, sal, iteracoes = 4096) {
+  const base = await crypto.subtle.importKey('raw', texto(senha), 'PBKDF2', false, ['deriveBits']);
+  const salted = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: sal, iterations: iteracoes }, base, 256));
+  const clientKey = await hmac(salted, texto('Client Key'));
+  const storedKey = new Uint8Array(await crypto.subtle.digest('SHA-256', clientKey));
+  const serverKey = await hmac(salted, texto('Server Key'));
+  return `SCRAM-SHA-256$${iteracoes}:${b64(sal)}$${b64(storedKey)}:${b64(serverKey)}`;
+}
+function montarUrl(senha, host) {
+  return `postgresql://labz_borda.${PROJETO}:${senha}@${host}:6543/postgres`;
+}
+if (typeof window !== 'undefined' && document.getElementById('gerar')) {
+  const $ = (id) => document.getElementById(id);
+  let atual = '';
+  const atualizarUrl = () => { $('url').value = atual ? montarUrl(atual, $('host').value.trim()) : ''; };
+  $('gerar').addEventListener('click', async () => {
+    $('estado').textContent = 'Gerando…';
+    atual = senhaAleatoria(40);
+    const sal = crypto.getRandomValues(new Uint8Array(16));
+    const v = await verificadorScram(atual, sal);
+    $('senha').value = atual;
+    $('sql').value = `alter role labz_borda with password '${v}';`;
+    atualizarUrl();
+    $('resultado').hidden = false;
+    $('estado').textContent = 'Pronto. Siga o passo a passo abaixo.';
+  });
+  $('host').addEventListener('input', atualizarUrl);
+  document.addEventListener('click', async (e) => {
+    const id = e.target && e.target.dataset && e.target.dataset.copiar;
+    if (!id) return;
+    const campo = $(id);
+    campo.select();
+    try { await navigator.clipboard.writeText(campo.value); e.target.textContent = 'Copiado ✓'; } catch (_) { document.execCommand('copy'); e.target.textContent = 'Copiado ✓'; }
+  });
+}
+</script>
+</body>
+</html>

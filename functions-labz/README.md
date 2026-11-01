@@ -403,7 +403,7 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 | **1** | Identidade e limpeza do projeto: id, nome, região, plano Free, sem dados de outros sistemas (`supabase/s5b/00-verificar-projeto.sql` + `list_tables` + `list_extensions` + `get_advisors`) | 🤖 | **não** (só leitura) | — |
 | **2** 🔒 | Migração 1 (`…_labz_inicial.sql`): schema `labz`, tabela `docs`, RLS forçado, papel `labz_app` sem login → conferir com `supabase/s5b/10-conferir-permissoes.sql` + `get_advisors` | 🤖 | sim (só o schema `labz`) | `drop schema labz cascade; drop role labz_app;` (ainda sem dados) |
 | **3** 🔒 | Migração 2 (`…_labz_acionamentos.sql`): tabela de acionamentos e funções de assinatura → conferir de novo | 🤖 | sim | ver o relatório da S5A, seção 3 |
-| **4** 🔒 | Papel de login das funções. O Claude cria `create role labz_borda login in role labz_app;` **sem senha**. O Igor, no SQL Editor, define a senha (`alter role labz_borda with password '…'`), que o Claude nunca vê | 🤖 + 👤 | sim | `drop role labz_borda;` |
+| **4** 🔒 | Papel de login das funções: o Claude aplica a migração `…_labz_borda.sql` (papel **sem senha**, sem nenhum poder administrativo, herda só `labz_app`, limites de sessão). O Igor abre **`supabase/s5b/gerar-senha.html`** no computador (funciona sem internet), guarda a senha no gerenciador e roda no SQL Editor só o comando com o **verificador SCRAM** (o projeto registra os comandos DDL no log, então a senha em si nunca vai para o banco) | 🤖 + 👤 | sim | `drop role labz_borda;` |
 | **5** 🔒 | Segredos das funções (o Claude cria o pedido; o Igor digita os valores no painel): `LABZ_DB_URL` (pooler, modo transação, porta 6543, usuário `labz_borda.<id>`), `LABZ_SUPERADMIN_UIDS`, `LABZ_FIREBASE_PROJETO`, `LABZ_WORKER_SEGREDO` (32+ caracteres; `openssl rand -hex 32` no computador do Igor) | 🤖 + 👤 | sim (só segredos) | apagar ou trocar no painel |
 | **6** 🔒 | Publicar `labz-api` e `labz-worker` (`index.ts` + `labz.mjs` de cada pasta, `verify_jwt = false`; as duas conferem a autenticação no próprio código). Conferir com `list_edge_functions` | 🤖 | sim (2 funções) | apagar as funções no painel |
 | **7** | Testes de recusa, só de leitura: sem token → 401; token inválido → 401; outra origem → 403; worker sem acionamento → 401; logs sem dados sensíveis (`get_logs`) | 🤖 + 👤 | **não** | — |
@@ -425,7 +425,7 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   - criar o projeto;
   - guardar a senha do banco no gerenciador de senhas;
   - avisar "projeto criado".
-- **Etapa 4:** rodar **uma** linha no SQL Editor (a senha do `labz_borda`).
+- **Etapa 4:** abrir `supabase/s5b/gerar-senha.html`, guardar a senha e a `LABZ_DB_URL` no gerenciador e rodar **uma** linha no SQL Editor (o verificador, nunca a senha).
 - **Etapa 5:**
   - digitar os 4 segredos no painel, quando a conexão pedir;
   - montar a `LABZ_DB_URL` com a string do pooler (Connect → Transaction pooler), trocando o usuário por `labz_borda.<id>` e a senha pela da etapa 4.

@@ -207,7 +207,7 @@ test('restauração: só aceita banco LOCAL e recusa endereço remoto antes de c
   assert.match(r.stderr, /RECUSADO: "db\.ducvpgrtsguaxqhnnupd\.supabase\.co" não é este computador/);
   const fonte = ler('restaurar-local.mjs');
   assert.ok(fonte.indexOf('exigirBancoLocal(url); // recusa endereço remoto') < fonte.indexOf('await abrirBackup(a.arquivo)'));
-  assert.match(fonte, /if \(n !== 0\) throw new RecusaLocal/, 'só grava em banco vazio');
+  assert.match(fonte, /if \(n !== 0 && !\(n === 1 && padrao === 1\)\) throw new RecusaLocal/, 'só grava em banco vazio (ou só com o interruptor padrão da migração 3)');
   // achado do ensaio: sem o ::text, o driver mandava o JSON como texto JSON ("{...}" entre aspas) e a regra docs_objeto recusava
   assert.match(fonte, /\$4::text::json, \$5::text::timestamptz/, 'o texto do JSON entra exato');
 });
@@ -216,4 +216,57 @@ test('Git: arquivos de backup ficam fora do repositório; as ferramentas ficam d
   const ignorado = (f) => spawnSync('git', ['check-ignore', '-q', f], { cwd: REPO }).status === 0;
   for (const f of ['labz-backup-20261104-1830Z.cifrado.json', 'qualquer/labz-backup-20261104-1830Z.aberto.json', 'functions-labz/supabase/backup/Supabase Snippet.csv', 'functions-labz/supabase/backup/resultado.json', 'outro.cifrado.json', 'labz-backup.csv']) assert.ok(ignorado(f), `deveria ser ignorado: ${f}`);
   for (const f of ['functions-labz/supabase/backup/labz-backup.html', 'functions-labz/supabase/backup/nucleo.js', 'functions-labz/supabase/backup/exportar-dados.sql', 'functions-labz/README.md']) assert.ok(!ignorado(f), `deveria ficar no Git: ${f}`);
+});
+
+// ---------- Etapa 12.5: teste de restauração no computador do Igor ----------
+test('senha no terminal: colar (tudo de uma vez, com o Enter) funciona; apagar, cancelar e teclas de controle', async () => {
+  const { processarTeclas } = await import('../supabase/backup/restaurar-local.mjs');
+  assert.deepEqual(processarTeclas('', 'frase secreta com ç e 🚀\r'), { senha: 'frase secreta com ç e 🚀', fim: 'ok' }, 'colar: chega num pedaço só');
+  assert.deepEqual(processarTeclas('', 'abc\n'), { senha: 'abc', fim: 'ok' });
+  let r = processarTeclas('', 'ab');
+  r = processarTeclas(r.senha, 'c');
+  assert.deepEqual(r, { senha: 'abc', fim: null }, 'digitar: um pedaço por tecla');
+  assert.deepEqual(processarTeclas('abc', '\u007f\u007fx\r'), { senha: 'ax', fim: 'ok' }, 'apagar (backspace)');
+  assert.deepEqual(processarTeclas('a🚀', '\u007f\r'), { senha: 'a', fim: 'ok' }, 'apagar um emoji inteiro');
+  assert.deepEqual(processarTeclas('abc', 'x\u0003y'), { senha: '', fim: 'cancelado' }, 'Ctrl+C cancela e descarta');
+  assert.deepEqual(processarTeclas('', '\u001b[A\tz\r'), { senha: '[Az', fim: 'ok' }, 'teclas de controle (Esc, Tab) não entram');
+});
+
+test('comando guiado: só arquivo cifrado, nunca liga a um Supabase remoto, confere antes de subir o banco e apaga no fim', async () => {
+  const { argumentos, CLI_VERSAO } = await import('../supabase/backup/teste-restauracao.mjs');
+  assert.deepEqual(argumentos(['x.cifrado.json', '--tarefa', 'exe_abc', '--entregas', '2']).entregas, 2);
+  assert.throws(() => argumentos([]), /Informe o arquivo/);
+  assert.throws(() => argumentos(['x', '--tarefa', 'a;b']), /inválido/);
+  assert.throws(() => argumentos(['x', '--db', 'postgresql://remoto']), /desconhecida/, 'não há como apontar para outro banco');
+  assert.match(CLI_VERSAO, /^\d+\.\d+\.\d+$/, 'Supabase CLI com versão fixa');
+  const fonte = ler('teste-restauracao.mjs');
+  assert.doesNotMatch(fonte.replace(/\/\/.*$/gm, ''), /--linked|--db-url|'link'|'push'|'login'|'deploy'|SUPABASE_ACCESS_TOKEN/, 'nenhum comando remoto do Supabase CLI');
+  assert.ok(fonte.indexOf('await abrirBackup(') < fonte.indexOf('if (!subirComRepeticao('), 'o backup é aberto e conferido ANTES de subir o banco');
+  assert.ok(fonte.indexOf('exigirBancoLocal(url)') < fonte.indexOf('await restaurar('), 'trava de banco local antes de restaurar');
+  assert.match(fonte, /supabase\(\['stop', '--no-backup'\]\)/, 'no fim apaga os dados locais');
+  assert.match(fonte, /\} finally \{\s+if \(subiu && !a\.manter\)/, 'apaga mesmo se algo falhar no meio');
+  // arquivo sem senha e arquivo inexistente: recusados antes de tocar no Docker ou em qualquer banco
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'labz-125-'));
+  try {
+    const doc = await docFicticio();
+    fs.writeFileSync(path.join(tmp, 'x.csv'), comoCsv(doc));
+    const semSenha = spawnSync(process.execPath, [path.join(PASTA, 'teste-restauracao.mjs'), path.join(tmp, 'x.csv')], { encoding: 'utf8', env: { ...process.env, SUPABASE_CLI: '/nao/existe' } });
+    assert.equal(semSenha.status, 3);
+    assert.match(semSenha.stderr, /só aceita o backup CIFRADO/);
+    assert.doesNotMatch(semSenha.stdout, /\[2\/7\]/);
+    const nada = spawnSync(process.execPath, [path.join(PASTA, 'teste-restauracao.mjs'), path.join(tmp, 'nao-existe.cifrado.json')], { encoding: 'utf8' });
+    assert.equal(nada.status, 1);
+    assert.match(nada.stderr, /Arquivo não encontrado/);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('conferência da restauração: só leitura e só resultados (nunca o conteúdo dos documentos)', () => {
+  const fonte = ler('conferir-restauracao.mjs');
+  assert.match(fonte, /sql\.begin\('read only'/, 'transação só de leitura: qualquer gravação seria recusada pelo próprio banco');
+  const sqls = [...fonte.matchAll(/unsafe\(`([^`]*)`/g), ...fonte.matchAll(/unsafe\('([^']*)'/g)].map((m) => m[1]).join('\n');
+  assert.doesNotMatch(sqls.replace(/'[^']*'/g, "''"), /\b(insert|update|delete|alter|create|drop|grant|revoke|truncate)\b/i, 'nenhum comando de escrita (fora os nomes de privilégio entre aspas)');
+  assert.match(fonte, /arm\.lerConteudo\(leitor, v\.conteudoRef, e\.execucaoId\)/, 'o conteúdo das entregas é conferido pela mesma função do backend');
+  // o que é impresso: só nome da conferência e detalhe (números, hash, estado), nunca dados
+  assert.match(fonte, /export const imprimir = \(r\) => r\.forEach\(\(x\) => console\.log\(`\$\{x\.ok \? 'ok    ' : 'FALHOU'\} \$\{x\.nome\}/);
+  assert.doesNotMatch(fonte, /item\([^)]*\b(e|exe|v|c)\.(texto|dados|nome|objetivo)\b/, 'nenhum campo de conteúdo vai para o relatório');
 });

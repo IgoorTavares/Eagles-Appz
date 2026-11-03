@@ -481,6 +481,9 @@ na produção ou roda **só no computador local**. Nenhuma senha, chave ou dado 
 | `nucleo.js` | O código do formato e da criptografia (o mesmo da página; um teste confere). |
 | `restaurar-local.mjs` | Restauração **só local** (recusa qualquer endereço que não seja este computador). |
 | `ensaiar-etapa12.mjs` | Ensaio completo com dados fictícios no Supabase local. |
+| `teste-restauracao.mjs` | Passo 12.5: teste de restauração guiado, de ponta a ponta, no computador do Igor (um comando). |
+| `conferir-restauracao.mjs` | Conferência de uma restauração local (só leitura; mostra só resultados). |
+| `ensaiar-etapa12-5.mjs` | Ensaio do passo 12.5 com dados fictícios criados pelo backend. |
 | `sincronizar-pagina.mjs` | Copia o `nucleo.js` para dentro da página (rodar depois de mudar o núcleo). |
 
 ### O que o backup cobre
@@ -629,3 +632,38 @@ commit;
   `node supabase/backup/comparar-estrutura.mjs producao.json local.json`.
   No banco local, o CLI guarda cada migração dividida em comandos, então `--repo` só vale para o retrato
   da produção (onde o texto foi registrado inteiro).
+
+### Teste de restauração no computador do Igor (passo 12.5)
+
+Tudo roda **no computador do Igor**: o backup cifrado não sai de lá, a senha é digitada só por ele e o
+banco usado é um Supabase **local** (Docker), montado do zero pelas 4 migrações. Nada se conecta ao
+projeto de produção: o comando recusa uma pasta ligada a um projeto remoto, não usa nenhum comando
+remoto do Supabase CLI e a restauração só aceita 127.0.0.1/localhost/::1.
+
+**Requisitos** (uma vez só; tudo grátis): Windows 10/11 64 bits (com WSL 2) ou macOS recente; 8 GB de
+memória; uns 5 GB livres no disco; permissão para instalar programas; **Docker Desktop** e **Node.js 20
+ou mais novo**. O Supabase CLI vem sozinho pelo `npx` (versão fixa `2.122.0`); a internet só é usada
+nas instalações e no primeiro download das imagens (cerca de 2 GB).
+
+**O comando** (na pasta `functions-labz`, depois de `npm ci --omit=dev` e com o Docker Desktop aberto):
+
+```
+npm run backup:teste-restauracao -- "<caminho do arquivo>.cifrado.json" --tarefa <id da tarefa> --entregas <n>
+```
+
+Os 7 passos: (1) confere que o arquivo é cifrado, que a pasta não está ligada a um projeto remoto e que
+o Docker está pronto; (2) pede a senha (**espere aparecer "Senha do backup:" antes de colar**; colar
+antes faz o terminal mostrar o texto) e abre + confere o backup antes de qualquer banco; (3) sobe o
+Supabase local e remonta o banco pelas 4 migrações (tenta 3 vezes se o Docker acabou de abrir);
+(4) pausa o relógio automático **local** (para ele não mexer nos dados durante o teste); (5) restaura
+numa transação; (6) confere e mostra só resultados (`conferir-restauracao.mjs`: contagem, impressão
+digital, documentos íntegros, tarefa COMPLETED, entregas com o conteúdo conferido pelo sha256, RLS,
+permissões, estrutura igual à da produção e nenhum pedido para fora); (7) desliga o Supabase local e
+**apaga os dados restaurados** (`--manter` deixa ligado). Termina com `RESULTADO: APROVADO`,
+`REPROVADO` ou `INTERROMPIDO`.
+
+O banco recém-montado já tem o interruptor do worker desligado (criado pela migração 3); a restauração
+aceita só esse documento, exatamente com esse valor, e o do backup entra no lugar dele.
+
+Ensaio com dados fictícios (o backend de verdade cria empresa, tarefa COMPLETED e 2 entregas):
+`SUPABASE_CLI=supabase npm run backup:ensaio-restauracao`.

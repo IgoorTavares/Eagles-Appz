@@ -15,7 +15,9 @@
     "test:supabase-local": "node supabase/testar-local.mjs",
     "test:ui": "node --test --test-concurrency=1 test/ui/*.test.js",
     "backup:ensaio": "node supabase/backup/ensaiar-etapa12.mjs",
-    "backup:sincronizar-pagina": "node supabase/backup/sincronizar-pagina.mjs"
+    "backup:sincronizar-pagina": "node supabase/backup/sincronizar-pagina.mjs",
+    "backup:teste-restauracao": "node supabase/backup/teste-restauracao.mjs",
+    "backup:ensaio-restauracao": "node supabase/backup/ensaiar-etapa12-5.mjs"
   },
   "private": true,
   "dependencies": {

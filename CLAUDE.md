@@ -280,6 +280,14 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
     - `labz.docs` tem exatamente 2 linhas: `labz_usuarios/<UID>` = `{"role":"SuperAdmin"}` e `labz_config/acesso` = `{"uids":["<UID>"]}` (1 UID, igual ao do perfil);
     - o UID (28 caracteres) foi conferido por SHA-256 contra o Digest do segredo `LABZ_SUPERADMIN_UIDS`, sem passar pelo chat (calibração com `LABZ_FIREBASE_PROJETO` e `LABZ_ORIGENS`);
     - **o UID nunca vai para o repositório nem para os relatórios.**
+  - **Etapa 9 concluída (03/11/2026): primeiro teste real com o login do Super Admin.**
+    - Testes feitos pelo console do navegador no próprio `eagleslabz.com.br` (sem publicar a interface e sem mudar o site, que não tem CSP).
+    - Verify JWT da `labz-api` desligado só durante os testes e **religado no fim**; a `labz-worker` ficou ligada o tempo todo.
+    - E9-1: sem login → pré-voo `OPTIONS 204` + `POST 401`, recusa só no log.
+    - E9-2: login real → `POST 200` com os 8 agentes; conexão do `labz_borda` pelo Supavisor (prova da `LABZ_DB_URL`); a única gravação foi `labz_limites/<UID>`.
+    - E9-3: `https://example.com` → pré-voo `OPTIONS 403`, bloqueado pelo navegador.
+    - **E9-4 pulado (decisão do Igor):** a recusa de outra conta Firebase válida só está comprovada nos testes locais, ainda não no ambiente real.
+    - Estado final: `labz.docs` com 3 documentos (perfil, lista e contador), 0 eventos e 0 acionamentos.
   - Achado antes do T2 (corrigido e publicado na `labz-api` v3): recusas de login gravavam um evento no banco e logins do Firebase fora da lista gravavam contador e auditoria, ou seja, sem ser Super Admin dava para encher o banco. Agora: lista do servidor conferida antes de qualquer acesso ao banco; recusas só no log da função (`src/borda/registro-recusas.js`, 20 por minuto); `criarAcessoSupabase` recusa a opção `auditoria`.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.

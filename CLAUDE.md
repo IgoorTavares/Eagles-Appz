@@ -288,6 +288,12 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
     - E9-3: `https://example.com` → pré-voo `OPTIONS 403`, bloqueado pelo navegador.
     - **E9-4 pulado (decisão do Igor):** a recusa de outra conta Firebase válida só está comprovada nos testes locais, ainda não no ambiente real.
     - Estado final: `labz.docs` com 3 documentos (perfil, lista e contador), 0 eventos e 0 acionamentos.
+  - **Etapa 10, passo 10.1 (só no repositório; nada aplicado no Supabase real):**
+    - migração 3 com o **interruptor** `labz_config/worker`: nasce `{"ativo":false}`; ausente, com outro formato ou com erro = desligado. A fila e o tique só acionam o worker com ele ligado; o acionamento `'manual'` (só o dono do banco) ignora o interruptor.
+    - **Tique econômico** (`labz.ha_trabalho()`): só chama o worker com item da fila pendente ou em andamento, ou tarefa PLANNING/READY/RUNNING/REVISION_REQUIRED.
+    - `labz.limpar_historico_cron()`: só o job `labz-worker-tique`; execuções ok com mais de 7 dias, falhas com mais de 30 dias.
+    - Testes: Supabase local 48/48 (`testar-local.mjs`, que agora também acusa erro inesperado como falha) e `test/migracao-gatilhos.test.js`; `npm test` 340, PostgreSQL 352/352.
+    - Emergência: `update labz.docs set dados = '{"ativo":false}'::json where caminho = 'labz_config/worker';`. Tarefa já iniciada termina a rodada (até cerca de 2 min) e fica parada. Para encerrar de vez: `execucoes.transicionar` → `CANCELLED`.
   - Achado antes do T2 (corrigido e publicado na `labz-api` v3): recusas de login gravavam um evento no banco e logins do Firebase fora da lista gravavam contador e auditoria, ou seja, sem ser Super Admin dava para encher o banco. Agora: lista do servidor conferida antes de qualquer acesso ao banco; recusas só no log da função (`src/borda/registro-recusas.js`, 20 por minuto); `criarAcessoSupabase` recusa a opção `auditoria`.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.

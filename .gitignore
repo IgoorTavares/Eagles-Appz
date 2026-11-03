@@ -1,0 +1,8 @@
+# LABZ AI — arquivos de BACKUP (Etapa 12): nunca vão para o Git (o repositório é público).
+labz-backup*
+*.cifrado.json
+*.aberto.json
+**/supabase/backup/*.csv
+**/supabase/backup/*.json
+# a página offline (ferramenta, sem dados) continua no repositório
+!functions-labz/supabase/backup/labz-backup.html

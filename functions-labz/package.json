@@ -13,7 +13,9 @@
     "empacotar": "node supabase/empacotar.js",
     "test:deno": "deno test -A --no-check test/deno/",
     "test:supabase-local": "node supabase/testar-local.mjs",
-    "test:ui": "node --test --test-concurrency=1 test/ui/*.test.js"
+    "test:ui": "node --test --test-concurrency=1 test/ui/*.test.js",
+    "backup:ensaio": "node supabase/backup/ensaiar-etapa12.mjs",
+    "backup:sincronizar-pagina": "node supabase/backup/sincronizar-pagina.mjs"
   },
   "private": true,
   "dependencies": {

@@ -463,3 +463,169 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - Fase 4: o trabalhador que executa os agentes (usa a porta de memória e a preparação por etapa).
 - Fase 4: motor de orquestração (trabalhador da fila, planner, quality gate, custos).
 - Fases 5–8: conteúdo das skills, provedores de IA, interface e integrações.
+
+## Backup do Supabase (Etapa 12)
+
+Ferramentas para o backup do schema `labz` do projeto Supabase da LABZ AI. Tudo aqui é **só leitura**
+na produção ou roda **só no computador local**. Nenhuma senha, chave ou dado real fica neste repositório
+(o `.gitignore` da raiz bloqueia os arquivos de backup).
+
+| Arquivo | Para quê |
+|---|---|
+| `exportar-dados.sql` | Consulta de exportação (SQL Editor). Linha 0 = cabeçalho; linhas 1..N = documentos. |
+| `impressao-digital.sql` | Só o cabeçalho (total, contagem, sha256), sem dados: conferência pela conexão Claude/Supabase. |
+| `retrato-estrutura.sql` | Retrato da estrutura (tabelas, colunas, restrições, índices, RLS, funções, gatilhos, permissões, papéis, cron, extensões, migrações). Sem dados e sem segredos. |
+| `comparar-estrutura.mjs` | Compara dois retratos (`--repo` confere o texto das migrações com os arquivos). |
+| `retrato-local.mjs` | Gera o retrato de um banco local. |
+| `labz-backup.html` | Página **offline**: confere o arquivo baixado, cifra com senha e abre/confere um backup cifrado. |
+| `nucleo.js` | O código do formato e da criptografia (o mesmo da página; um teste confere). |
+| `restaurar-local.mjs` | Restauração **só local** (recusa qualquer endereço que não seja este computador). |
+| `ensaiar-etapa12.mjs` | Ensaio completo com dados fictícios no Supabase local. |
+| `sincronizar-pagina.mjs` | Copia o `nucleo.js` para dentro da página (rodar depois de mudar o núcleo). |
+
+### O que o backup cobre
+
+- **Dados:** a tabela `labz.docs`, inteira, num retrato único (uma consulta só).
+- **Estrutura:** as migrações em `supabase/migrations/` (versionadas no Git), comprovadas contra a produção pelo retrato da estrutura.
+- **Fora, de propósito:** `labz.acionamentos` (bilhetes de uso único, apagados em 1 dia), o histórico do `pg_cron` e do `pg_net`, os **valores** do Vault e as senhas dos papéis. Na recuperação, os segredos são gerados de novo (página `s5b/gerar-senha.html`) e cadastrados pelo Igor.
+
+### Formato 1: exportação e documento aberto (`labz-backup-dados`, versão 1)
+
+A consulta `exportar-dados.sql` devolve as colunas `ordem` e `linha`:
+
+- `ordem = 0`: o **cabeçalho**, um objeto JSON:
+  `{"formato":"labz-backup-dados","versao":1,"algoritmo":"sha256-netstring-v1","tabela":"labz.docs","geradoEm":"AAAA-MM-DDTHH:MM:SSZ","total":N,"contagem":{"<coleção>":n,...},"sha256":"<64 hex>"}`
+- `ordem = 1..N`: um documento por linha, como texto JSON de uma lista com 5 textos:
+  `[caminho, colecao, id, atualizado_em, dados]`. `atualizado_em` em UTC com microssegundos
+  (`AAAA-MM-DDTHH:MM:SS.ffffffZ`); `dados` é o **texto exato** do JSON gravado (a ordem das chaves importa).
+  As linhas vêm em ordem de `caminho` (collation "C").
+
+O **documento aberto** (`*.aberto.json`, o que a página produz) é o mesmo conteúdo já normalizado:
+`{"formato":"labz-backup-dados","versao":1,"cabecalho":{...},"linhas":[[5 textos],...]}`.
+
+**Impressão digital (`sha256-netstring-v1`):** para cada documento, na ordem, e para cada um dos 5
+campos, na ordem, escreve-se `<tamanho em bytes UTF-8>:<texto>` (sem separador). O sha256 desses bytes
+(em hexadecimal minúsculo) é a impressão digital. Exemplo: o campo `ação` vira `6:ação` (o `ç` e o `ã` ocupam 2 bytes cada).
+
+Um arquivo só está íntegro se: tem exatamente um cabeçalho; as linhas vão de 1 a N sem buraco;
+N = `total`; a contagem por coleção bate; `caminho = colecao/id` e não se repete; e o sha256 recalculado
+é igual ao do cabeçalho. **Baixar não basta**: o SQL Editor pode limitar o número de linhas, e a página
+acusa "incompleto".
+
+### Formato 2: backup cifrado (`labz-backup-cifrado`, versão 1)
+
+```json
+{
+  "formato": "labz-backup-cifrado",
+  "versao": 1,
+  "kdf":   { "nome": "PBKDF2", "hash": "SHA-256", "iteracoes": 600000, "sal": "<base64, 16 bytes>" },
+  "cifra": { "nome": "AES-GCM", "bitsChave": 256, "iv": "<base64, 12 bytes>", "bitsTag": 128 },
+  "aad":   "<texto JSON do rótulo: formato, versao, geradoEm, cifradoEm, total, sha256>",
+  "dados": "<base64 de: texto cifrado + etiqueta de 16 bytes no fim>"
+}
+```
+
+- **Chave:** PBKDF2-HMAC-SHA256 da senha (UTF-8, normalizada em NFC), com o `sal`, `iteracoes` vezes, 32 bytes.
+- **Cifra:** AES-256-GCM (criptografia **autenticada**: qualquer byte alterado, ou senha errada, faz a abertura falhar).
+  O texto do campo `aad` entra como "dado associado": o rótulo fica visível sem senha, mas não pode ser
+  alterado sem a abertura falhar.
+- **Conteúdo aberto:** o documento aberto (formato 1) em UTF-8.
+- Sal e IV novos e aleatórios a cada cifragem. Senha mínima de 12 caracteres. A página **abre a cópia
+  cifrada de novo e confere** antes de entregar o arquivo.
+- Ao abrir, a impressão digital e o total são conferidos contra o cabeçalho **e** contra o rótulo.
+
+### Recuperar sem a ferramenta original
+
+Se a página `labz-backup.html` ou este repositório não estiverem disponíveis, o formato acima basta.
+Os dois programas abaixo fazem a mesma coisa (abrem, conferem e gravam o documento aberto); um teste
+automático roda exatamente estes textos.
+
+**Python** (3.8+, com `pip install cryptography`):
+
+```python
+# recuperar-labz-backup.py — abre e confere um backup cifrado da LABZ AI sem a página original.
+# Uso: python3 recuperar-labz-backup.py arquivo.cifrado.json saida.aberto.json
+# A senha é perguntada (não aparece na tela) ou lida da variável LABZ_BACKUP_SENHA.
+import base64, getpass, hashlib, json, os, sys, unicodedata
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+env = json.load(open(sys.argv[1], encoding="utf-8"))
+k, c = env["kdf"], env["cifra"]
+if env["formato"] != "labz-backup-cifrado" or env["versao"] != 1 or k["nome"] != "PBKDF2" or k["hash"] != "SHA-256" or c["nome"] != "AES-GCM" or c["bitsChave"] != 256:
+    sys.exit("Formato desconhecido.")
+senha = os.environ.get("LABZ_BACKUP_SENHA") or getpass.getpass("Senha do backup: ")
+chave = hashlib.pbkdf2_hmac("sha256", unicodedata.normalize("NFC", senha).encode("utf-8"), base64.b64decode(k["sal"]), k["iteracoes"], 32)
+try:
+    texto = AESGCM(chave).decrypt(base64.b64decode(c["iv"]), base64.b64decode(env["dados"]), env["aad"].encode("utf-8"))
+except Exception:
+    sys.exit("Não abriu: senha errada ou arquivo alterado.")
+doc = json.loads(texto.decode("utf-8"))
+h = hashlib.sha256()
+for linha in doc["linhas"]:
+    for campo in linha:
+        b = campo.encode("utf-8")
+        h.update(str(len(b)).encode("ascii") + b":" + b)
+rotulo = json.loads(env["aad"])
+if not (h.hexdigest() == doc["cabecalho"]["sha256"] == rotulo["sha256"] and len(doc["linhas"]) == doc["cabecalho"]["total"] == rotulo["total"]):
+    sys.exit("A impressão digital NÃO bate: não use este arquivo.")
+with open(sys.argv[2], "wb") as f:
+    f.write(texto)
+print("Aberto e conferido:", len(doc["linhas"]), "documentos, sha256", h.hexdigest())
+```
+
+**Node.js** (18+, sem instalar nada; usa só o módulo `crypto` do próprio Node):
+
+```js
+// recuperar-labz-backup.js — o mesmo que o programa em Python.
+// Uso: LABZ_BACKUP_SENHA='...' node recuperar-labz-backup.js arquivo.cifrado.json saida.aberto.json
+const crypto = require('crypto');
+const fs = require('fs');
+const env = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (env.formato !== 'labz-backup-cifrado' || env.versao !== 1 || env.kdf.nome !== 'PBKDF2' || env.kdf.hash !== 'SHA-256' || env.cifra.nome !== 'AES-GCM' || env.cifra.bitsChave !== 256) throw new Error('Formato desconhecido.');
+const senha = process.env.LABZ_BACKUP_SENHA;
+if (!senha) throw new Error('Defina a variável LABZ_BACKUP_SENHA.');
+const chave = crypto.pbkdf2Sync(Buffer.from(senha.normalize('NFC'), 'utf8'), Buffer.from(env.kdf.sal, 'base64'), env.kdf.iteracoes, 32, 'sha256');
+const tudo = Buffer.from(env.dados, 'base64');
+const decifra = crypto.createDecipheriv('aes-256-gcm', chave, Buffer.from(env.cifra.iv, 'base64'));
+decifra.setAAD(Buffer.from(env.aad, 'utf8'));
+decifra.setAuthTag(tudo.subarray(tudo.length - 16));
+const texto = Buffer.concat([decifra.update(tudo.subarray(0, tudo.length - 16)), decifra.final()]);
+const doc = JSON.parse(texto.toString('utf8'));
+const h = crypto.createHash('sha256');
+for (const linha of doc.linhas) for (const campo of linha) { const b = Buffer.from(campo, 'utf8'); h.update(`${b.length}:`); h.update(b); }
+const rotulo = JSON.parse(env.aad);
+const hx = h.digest('hex');
+if (hx !== doc.cabecalho.sha256 || hx !== rotulo.sha256 || doc.linhas.length !== doc.cabecalho.total || doc.linhas.length !== rotulo.total) throw new Error('A impressão digital NÃO bate: não use este arquivo.');
+fs.writeFileSync(process.argv[3], texto);
+console.log('Aberto e conferido:', doc.linhas.length, 'documentos, sha256', hx);
+```
+
+**Gravar os dados num banco sem o `restaurar-local.mjs`** (num banco vazio, com as 4 migrações aplicadas;
+na produção, **só com autorização do Igor**). No lugar de `<LINHAS>`, cole o conteúdo do campo `"linhas"`
+do documento aberto (a lista que começa com `[[` e termina com `]]`). Antes, confira que o texto
+`$labzbackup$` não aparece no arquivo.
+
+```sql
+begin;
+alter table labz.docs disable trigger user; -- gravar não pode chamar o worker
+insert into labz.docs (caminho, colecao, id, dados, atualizado_em)
+select l->>0, l->>1, l->>2, (l->>4)::json, (l->>3)::timestamptz
+from json_array_elements($labzbackup$<LINHAS>$labzbackup$::json) as l;
+alter table labz.docs enable trigger user;
+-- rode impressao-digital.sql aqui: o "sha256" precisa ser igual ao do cabeçalho do backup.
+-- igual → commit;   diferente → rollback;
+commit;
+```
+
+### Como usar (resumo)
+
+- **Conferir/cifrar** (Igor): abrir `labz-backup.html` no navegador (com dois cliques, sem internet).
+- **Restaurar no Supabase local:**
+  `supabase start && supabase db reset` e depois
+  `node supabase/backup/restaurar-local.mjs arquivo.cifrado.json` (a senha é perguntada).
+  Só conferir, sem banco: `--so-conferir`.
+- **Ensaio com dados fictícios:** `supabase db reset` e depois `npm run backup:ensaio`.
+- **Comparar estruturas:** `node supabase/backup/retrato-local.mjs local.json` e
+  `node supabase/backup/comparar-estrutura.mjs producao.json local.json`.
+  No banco local, o CLI guarda cada migração dividida em comandos, então `--repo` só vale para o retrato
+  da produção (onde o texto foi registrado inteiro).

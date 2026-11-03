@@ -55,3 +55,14 @@ test('migração 3: limpeza do cron guarda as FALHAS por mais tempo (diagnóstic
   assert.match(corpo, /d\.end_time is not null/, 'execução em andamento nunca é apagada');
   assert.match(corpo, /limit 1000/);
 });
+
+test('reversão da migração 3: só desfaz objetos da LABZ AI, sem apagar dados nem mexer no Vault', () => {
+  const R = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'reversao', '20261101000100_labz_gatilhos_reverter.sql'), 'utf8').replace(/--.*$/gm, '');
+  const drops = [...R.matchAll(/drop function if exists ([a-z_.]+)\(/g)].map((m) => m[1]).sort();
+  const criadas = [...semComentarios.matchAll(/create or replace function\s+([a-z_.]+)\(/gi)].map((m) => m[1]).sort();
+  assert.deepEqual(drops, criadas, 'remove exatamente as funções que a migração 3 cria');
+  assert.match(R, /drop trigger if exists labz_fila_acionar on labz\.docs;/);
+  assert.match(R, /perform cron\.unschedule\('labz-worker-tique'\)/);
+  assert.deepEqual([...R.matchAll(/delete from ([a-z_.]+) where ([^;]+);/g)].map((m) => `${m[1]}|${m[2].trim()}`), ["labz.docs|caminho = 'labz_config/worker'"], 'só apaga o interruptor');
+  assert.doesNotMatch(R, /vault|drop extension|drop table|drop schema|truncate|alter role|grant/i);
+});

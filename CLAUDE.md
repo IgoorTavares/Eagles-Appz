@@ -275,6 +275,11 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
     - `labz-api` v3 (pacote `labz-01711dac8a7e.mjs`, `index.ts` com SHA-256 `c879da4b…`): T1 (gateway 401), T2 (o código respondeu 401, `booted`; recusa só no log, banco intacto).
     - `labz-worker` v1 (mesmo pacote, `index.ts` com SHA-256 `b6407a17…`): A1 (hashes conferidos), W1 (gateway 401), W2 (o código respondeu 401, "Chamada do worker recusada.", `booted`), W3 (banco intacto, nenhuma conexão do `labz_borda`).
     - Verify JWT **ligado** nas duas. Desligar só por decisão do Igor: na `labz-api` antes da Etapa 9 (login Firebase); no worker na Etapa 10 (chamadas do banco).
+  - **Etapa 7 (formalização dos testes) aprovada; Etapa 8 concluída (03/11/2026):**
+    - o Igor rodou no SQL Editor o comando com travas (formato do UID e "nada pode existir antes"), ensaiado localmente com 19 de 19 aprovações;
+    - `labz.docs` tem exatamente 2 linhas: `labz_usuarios/<UID>` = `{"role":"SuperAdmin"}` e `labz_config/acesso` = `{"uids":["<UID>"]}` (1 UID, igual ao do perfil);
+    - o UID (28 caracteres) foi conferido por SHA-256 contra o Digest do segredo `LABZ_SUPERADMIN_UIDS`, sem passar pelo chat (calibração com `LABZ_FIREBASE_PROJETO` e `LABZ_ORIGENS`);
+    - **o UID nunca vai para o repositório nem para os relatórios.**
   - Achado antes do T2 (corrigido e publicado na `labz-api` v3): recusas de login gravavam um evento no banco e logins do Firebase fora da lista gravavam contador e auditoria, ou seja, sem ser Super Admin dava para encher o banco. Agora: lista do servidor conferida antes de qualquer acesso ao banco; recusas só no log da função (`src/borda/registro-recusas.js`, 20 por minuto); `criarAcessoSupabase` recusa a opção `auditoria`.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.

@@ -14,7 +14,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { RAIZ, conectarLocal, urlLocal } from './local.mjs';
 import { conferirRestauracao } from './conferir-restauracao.mjs';
-import { SERVICOS_DESLIGADOS, subirComRepeticao, prepararRedeLocal, REDE_LOCAL } from './teste-restauracao.mjs';
+import { SERVICOS_DESLIGADOS, subirComRepeticao, prepararRedeLocal, REDE_LOCAL, urlComSenha } from './teste-restauracao.mjs';
 
 const require = createRequire(import.meta.url);
 const N = require('./nucleo.js');
@@ -25,6 +25,7 @@ const CLI = process.env.SUPABASE_CLI;
 if (!CLI) { console.error('Defina SUPABASE_CLI com o caminho do Supabase CLI.'); process.exit(2); }
 const SENHA = `ensaio-125-${crypto.randomBytes(8).toString('hex')}`; // fictícia
 const SEGREDO = crypto.randomBytes(32).toString('hex'); // fictício
+const SENHA_LOCAL = crypto.randomBytes(24).toString('hex'); // a tranca do banco local, fixada só no ensaio (no uso real é aleatória e ninguém vê)
 const NOME_EMPRESA = 'Empresa Ficticia do Ensaio 12.5';
 const OBJETIVO = 'Escrever as legendas da semana.';
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'labz-ensaio125-'));
@@ -32,7 +33,7 @@ let falhas = 0;
 let total = 0;
 const conferir = (c, nome, extra = '') => { total++; console.log(`${c ? 'ok    ' : 'FALHOU'} ${nome}${extra ? ` — ${extra}` : ''}`); if (!c) falhas++; };
 const cli = (args) => spawnSync(CLI, args, { cwd: RAIZ, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-const orquestrar = (args, env = {}) => spawnSync(process.execPath, [path.join(PASTA, 'teste-restauracao.mjs'), ...args], { cwd: RAIZ, encoding: 'utf8', env: { ...process.env, ...env } });
+const orquestrar = (args, env = {}) => spawnSync(process.execPath, [path.join(PASTA, 'teste-restauracao.mjs'), ...args], { cwd: RAIZ, encoding: 'utf8', env: { ...process.env, LABZ_TESTE_SENHA_LOCAL: SENHA_LOCAL, ...env } });
 const csvCampo = (s) => `"${String(s).replace(/"/g, '""')}"`;
 
 try {
@@ -133,7 +134,11 @@ try {
   // 6. a conferência pega dados estragados de propósito (com --manter, para mexer no banco local)
   const m = orquestrar([cifrado, '--tarefa', tarefa, '--entregas', String(nEntregas), '--manter'], { SUPABASE_CLI: CLI, LABZ_BACKUP_SENHA: SENHA });
   conferir(m.status === 0, 'restauração mantida para os testes de estrago');
-  const u2 = urlLocal();
+  const padrao = conectarLocal(urlLocal(), { connect_timeout: 10 });
+  const padraoEntra = await padrao`select 1`.then(() => true, () => false);
+  await padrao.end({ timeout: 2 }).catch(() => {});
+  conferir(!padraoEntra && /banco local trancado/.test(m.stdout), 'tranca: com o banco trancado, a senha padrão "postgres" não entra mais');
+  const u2 = urlComSenha(urlLocal(), SENHA_LOCAL);
   const backupCab = N.abrirArquivo(fs.readFileSync(path.join(TMP, 'exportado.csv'), 'utf8')).doc.cabecalho;
   const referencia = JSON.parse(fs.readFileSync(path.join(PASTA, 'retratos', 'producao-2026-11-03.json'), 'utf8'));
   const falhou = async (nome) => (await conferirRestauracao(u2, { cabecalho: backupCab, tarefa, entregasEsperadas: nEntregas, referencia, cronPausado: true })).filter((x) => !x.ok).map((x) => x.nome).join(' | ') || `(${nome}: nada acusado)`;

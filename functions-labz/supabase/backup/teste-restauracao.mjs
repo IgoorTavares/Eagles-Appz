@@ -10,6 +10,7 @@
 //  5. restaura numa transação (restaurar-local.mjs: só 127.0.0.1/localhost/::1);
 //  6. confere tudo (conferir-restauracao.mjs) e mostra SÓ resultados, sem conteúdo de documentos;
 //  7. desliga o Supabase local e APAGA os dados restaurados (a não ser com --manter).
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -93,6 +94,28 @@ export function portasAbertasParaRede(texto) {
   return abertas;
 }
 
+// TRANCA do banco local: troca a senha de TODOS os usuários que podem entrar por uma senha aleatória
+// que só existe neste processo (pelo docker exec, como administrador interno, que só entra por dentro
+// do container). Assim, mesmo que o Docker deixe a porta visível na rede (achado no Windows), ninguém
+// entra. Depois confere que a senha padrão "postgres" deixou de funcionar.
+export const SQL_TRANCAR = (senha) => {
+  if (!/^[0-9a-f]{32,128}$/.test(senha)) throw new Error('senha local inválida');
+  return `do $tranca$ declare r record; begin
+  for r in select rolname from pg_roles where rolcanlogin loop
+    execute format('alter role %I with password %L', r.rolname, '${senha}');
+  end loop;
+end $tranca$;`;
+};
+export function trancarBancoLocal(senha) {
+  const r = rodar('docker', ['exec', '-i', 'supabase_db_labz-local', 'psql', '-v', 'ON_ERROR_STOP=1', '-q', '-U', 'supabase_admin', '-d', 'postgres'], { input: SQL_TRANCAR(senha), encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+  if (r.status !== 0) throw new RecusaLocal('RECUSADO: não consegui trancar o banco local com uma senha só deste teste. Nada foi restaurado.');
+}
+export function urlComSenha(url, senha) {
+  const u = new URL(url);
+  u.password = senha;
+  return u.toString();
+}
+
 function supabase(args, { mostrar = true } = {}) {
   const viaEnv = process.env.SUPABASE_CLI;
   const [cmd, base] = viaEnv ? [viaEnv, []] : ['npx', ['--yes', `supabase@${CLI_VERSAO}`]];
@@ -127,16 +150,25 @@ async function principal() {
     if (!subirComRepeticao((args) => supabase(args).status === 0)) throw new Error('O Supabase local não subiu (veja a mensagem acima). Confira se o Docker Desktop está aberto e tente de novo.');
     if (supabase(['db', 'reset', '--network-id', REDE_LOCAL]).status !== 0) throw new Error('Não consegui remontar o banco local (veja a mensagem acima).');
     const st = supabase(['status', '-o', 'json'], { mostrar: false });
-    const url = JSON.parse(st.stdout).DB_URL;
+    let url = JSON.parse(st.stdout).DB_URL;
     exigirBancoLocal(url);
+    // 1ª proteção: tranca o banco com uma senha aleatória (vale em qualquer sistema).
+    const senhaLocal = process.env.LABZ_TESTE_SENHA_LOCAL || crypto.randomBytes(24).toString('hex');
+    trancarBancoLocal(senhaLocal);
+    const padrao = conectarLocal(url, { connect_timeout: 10 });
+    const aindaAbre = await padrao`select 1`.then(() => true, () => false);
+    await padrao.end({ timeout: 2 }).catch(() => {});
+    if (aindaAbre) throw new RecusaLocal('RECUSADO: a senha padrão do banco local ainda funciona. Nada foi restaurado.');
+    url = urlComSenha(url, senhaLocal);
+    console.log('ok     banco local trancado com uma senha aleatória que só existe durante este teste (a senha padrão não entra mais)');
+    // 2ª proteção: portas só para este computador (no Linux/Mac a rede própria garante; o Docker do Windows pode ignorar).
     const ps = rodar('docker', ['ps', '--filter', 'name=_labz-local', '--format', '{{.Names}}|{{.Ports}}'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     const abertas = portasAbertasParaRede(ps.stdout);
-    if (ps.status !== 0 || !/127\.0\.0\.1:\d+->5432/.test(ps.stdout) || abertas.length) {
-      const linhaBanco = String(ps.stdout || '').split(/\r?\n/).find((l) => /supabase_db_/.test(l));
-      const motivo = abertas.length ? `aberto em ${abertas.join(', ')}` : ps.status !== 0 ? 'o Docker não respondeu à conferência das portas' : `porta do banco: ${linhaBanco ? linhaBanco.split('|')[1] || 'sem porta' : 'não encontrada'}`;
-      throw new RecusaLocal(`RECUSADO: não foi possível confirmar que o banco local só aceita conexões deste computador (${motivo}). Nada foi restaurado.`);
+    if (ps.status === 0 && /127\.0\.0\.1:\d+->5432/.test(ps.stdout) && !abertas.length) {
+      console.log('ok     o banco local só aceita conexões deste computador (127.0.0.1)');
+    } else {
+      console.log(`AVISO  a porta do banco local ficou visível na rede (${abertas.join(', ') || 'não confirmado'}), mas ele está trancado com a senha aleatória acima: ninguém de fora consegue entrar.`);
     }
-    console.log('ok     o banco local só aceita conexões deste computador (127.0.0.1)');
     console.log('ok     banco LOCAL pronto (127.0.0.1), montado do zero pelas migrações');
 
     titulo(4, 'Pausar o relógio automático LOCAL durante o teste');

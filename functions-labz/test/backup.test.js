@@ -314,3 +314,17 @@ test('banco local preso a 127.0.0.1: rede própria, conferência das portas ANTE
   assert.ok(fonte.indexOf("require.resolve('postgres')") < fonte.indexOf('await abrirBackup('), 'peças conferidas antes de pedir a senha');
   assert.equal(REDE_LOCAL, 'labz-restauracao-local');
 });
+
+test('tranca do banco local: senha aleatória para todos os usuários, conferida ANTES de restaurar', async () => {
+  const { SQL_TRANCAR, urlComSenha } = await import('../supabase/backup/teste-restauracao.mjs');
+  const senha = 'a'.repeat(48);
+  assert.match(SQL_TRANCAR(senha), /for r in select rolname from pg_roles where rolcanlogin loop/);
+  assert.match(SQL_TRANCAR(senha), new RegExp(`alter role %I with password %L', r\\.rolname, '${senha}'`));
+  for (const ruim of ["x'; drop table t; --", 'curta', 'A'.repeat(48)]) assert.throws(() => SQL_TRANCAR(ruim), /senha local inválida/, 'só hexadecimal: nada entra no SQL');
+  assert.equal(urlComSenha('postgresql://postgres:postgres@127.0.0.1:54322/postgres', senha), `postgresql://postgres:${senha}@127.0.0.1:54322/postgres`);
+  const fonte = ler('teste-restauracao.mjs');
+  const i = (t) => { const n = fonte.indexOf(t); assert.ok(n > 0, t); return n; };
+  assert.ok(i('trancarBancoLocal(senhaLocal)') < i('if (aindaAbre) throw new RecusaLocal') && i('if (aindaAbre) throw new RecusaLocal') < i('await restaurar('), 'tranca e prova da tranca antes de restaurar');
+  assert.match(fonte, /'docker', \['exec', '-i', 'supabase_db_labz-local', 'psql'/, 'a senha nova vai pela entrada do psql (não fica na linha de comando)');
+  assert.match(fonte, /crypto\.randomBytes\(24\)\.toString\('hex'\)/);
+});

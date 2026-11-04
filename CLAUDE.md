@@ -428,6 +428,32 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
   - Interface: o endereço da API mal configurado (http de fora, usuário/senha, parâmetros, lixo) deixa a tela desligada e sem pedidos; teste garante que, quando o `LABZ_API_URL` for preenchido (I3), ele é https, termina em `/functions/v1/labz-api`, está liberado na CSP e o arquivo não tem chave.
   - Testes: `npm test` 382 (370 aprovados, 12 só PostgreSQL); navegador 19/19 (inclui as 37 páginas do CRM/ERP); publicação segura 25/25.
   - Recomendação para a D1: opção A (Verify JWT desligado na `labz-api`) com as travas do código. Proposta (não feita): conferir conta desativada no Firebase pelo Identity Toolkit (`accounts:lookup`), a validar com teste real.
+  - **I2 encerrada** (aprovação do Igor condicionada ao GitHub): o commit `a75b9d5` passou em todos os testes do GitHub, incluindo o job do **PostgreSQL** (com o Deno), interface, integração, Site seguro e Guarda do Pages.
+  - Decisão D1 do Igor (04/11/2026): opção A como **arquitetura candidata**. Desligar o Verify JWT na produção **não** está autorizado. Antes da I4: avaliação de exposição pública, consumo de cota, proteção contra abuso e plano de reversão.
+- **LABZ AI — proteção de contas desativadas e sessões revogadas (estudo e implementação aprovados pelo Igor; só ambiente isolado; NÃO ligada na produção):**
+  - `functions-labz/src/auth/conta-ativa.js`:
+    - `criarConferidorConta` consulta o Identity Toolkit `accounts:lookup` com o próprio `idToken` e a apiKey **pública**;
+    - recusa conta desativada, sessão revogada (`validSince` depois do `auth_time`), conta sumida e UID diferente;
+    - falha fechada (3 s), e o resultado bom fica guardado 5 min (máximo 15).
+  - `comConferenciaDeConta` embrulha o `autenticar` atual sem mudar a ordem das travas: só quem está na lista do servidor gera consulta (intruso = 0 consultas).
+  - Desenho (latência, custo e disponibilidade) no `functions-labz/README.md`. O custo precisa ser confirmado na documentação oficial, porque `firebase.google.com` e `docs.cloud.google.com` não abrem no sandbox.
+  - O pacote das Edge Functions **não mudou** (`labz-01711dac8a7e`, o mesmo da produção). Um teste garante que o módulo não entra no pacote enquanto não for ligado.
+  - Testes: `test/conta-ativa.test.js` 5/5 (Identity Toolkit falso); 2 mutações detectadas (sem `validSince`; consulta para quem está fora da lista).
+- **LABZ AI — I3 (preparação da v155; 04/11/2026; NÃO publicada, sem merge; Verify JWT continua ligado; I4 **não** autorizada):**
+  - Site seguro (`.github/pages/montar-site.mjs`):
+    - `LABZ_AI_PREPARADOS` virou `LABZ_AI_PUBLICADOS`: os 4 arquivos (`labz-ai.html/.css/.js`, `labz-config.js`) saem de `functions-labz/demo/ui`, idênticos (sha256);
+    - fora de `PERMITIDOS`, porque não ficam na raiz; o modo antigo (Jekyll) não os teria;
+    - artefato com **59** arquivos (55 + 4) e o link do menu conferido;
+    - o workflow `pages-seguro.yml` **não mudou** (publicação continua manual: digitar PUBLICAR, na `main`).
+  - `labz-config.js`: `LABZ_API_URL = 'https://ducvpgrtsguaxqhnnupd.supabase.co/functions/v1/labz-api'` (público, não é segredo; liberado na CSP; teste confere).
+  - `script.js`: `LABZ_AI_MENU_ATIVO = true` (menu só para o Super Admin; para esconder, `false`); `LABZ_AI_PAGINA = 'labz-ai.html'` escrito por inteiro; entrada "04/11/2026 · LABZ AI (Super Admin)" no topo do `CFG_CHANGELOG`.
+  - `sw.js`: `eagles-cache-v155`. O `APP_SHELL` não mudou (a tela da LABZ AI precisa de internet e não entra no cache de quem não é Super Admin).
+  - Tela: se o gateway responder 401 `UNAUTHORIZED_*` (Verify JWT ligado), mostra "servidor ainda bloqueado", desliga os botões e não insiste (1 tentativa + 1 com o login renovado). Antes, diria "o servidor recusou este acesso".
+  - Testes:
+    - `npm test` 387 (375 aprovados, 12 só PostgreSQL);
+    - navegador **20/20** (+ teste do gateway bloqueado; menu ligado por padrão só para o Super Admin; as 37 páginas sem erro novo);
+    - montador **26/26** (+ teste: só os 4 arquivos; referência a arquivo interno na tela barrada; sem um deles, a montagem falha).
+  - **Ordem obrigatória para publicar (I4, com autorização):** merge do PR 15 → desligar o Verify JWT da `labz-api` → publicar o site pelo "Site seguro". Se o site for publicado com a trava ligada, a tela do Super Admin só mostra "servidor ainda bloqueado" (nada quebra para os outros usuários).
   - Achado antes do T2 (corrigido e publicado na `labz-api` v3): recusas de login gravavam um evento no banco e logins do Firebase fora da lista gravavam contador e auditoria, ou seja, sem ser Super Admin dava para encher o banco. Agora: lista do servidor conferida antes de qualquer acesso ao banco; recusas só no log da função (`src/borda/registro-recusas.js`, 20 por minuto); `criarAcessoSupabase` recusa a opção `auditoria`.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.

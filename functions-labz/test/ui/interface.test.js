@@ -286,3 +286,17 @@ test('I2: o endereço da API (quando preenchido) precisa ser https e estar liber
     assert.match(u.pathname, /^\/functions\/v1\/labz-api$/);
   }
 });
+
+test('I3: enquanto a trava "Verify JWT" do Supabase estiver ligada, a tela explica isso (não diz que você foi recusado) e não insiste', { timeout: 60000 }, async () => {
+  const s = await criarServidoresTeste({ gatewayVerifyJwt: true });
+  const { pagina, erros, contexto } = await abrirLabz(s, { teste: SA });
+  try {
+    await esperarTexto(pagina, '#lz-aviso', /trava "Verify JWT" do Supabase está ligada/, 20000);
+    assert.match(await pagina.textContent('#lz-modo'), /servidor ainda bloqueado/);
+    assert.equal(await pagina.locator('#labz-sem-permissao').isHidden(), true, 'não mostra a recusa de acesso');
+    assert.equal(await pagina.$eval('#lz-iniciar', (b) => b.disabled), true);
+    await pagina.waitForTimeout(3000);
+    assert.equal(s.pedidos.filter((p) => p.metodo === 'POST').length, 2, '1ª tentativa + 1 com o token renovado, e para');
+    assert.deepEqual(erros, []);
+  } finally { await contexto.close(); await s.fechar(); }
+});

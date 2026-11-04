@@ -29,11 +29,12 @@ export const IMAGENS = [
 ];
 export const PERMITIDOS = Object.freeze([...PAGINAS, ...RECURSOS, ...IMAGENS]);
 
-// LABZ AI (Fase S4): arquivos PREPARADOS para quando a publicação da tela for AUTORIZADA.
-// NÃO entram no site: não fazem parte de PERMITIDOS, o workflow não muda e não há opção de linha de
-// comando para incluí-los. Só os testes fazem um ENSAIO (montar({ ensaioLabz: true })) numa pasta
-// temporária, para provar que a inclusão funcionaria (referências, cópia idêntica, nada interno).
-export const LABZ_AI_PREPARADOS = Object.freeze([
+// LABZ AI (v155, etapa I3): a tela da LABZ AI (só para o Super Admin) entra no site a partir da pasta
+// onde ela é desenvolvida e testada (functions-labz/demo/ui). Só ESTES 4 arquivos saem de lá, sempre com
+// o mesmo nome no site; o resto de functions-labz/ continua proibido (PROIBIDOS) e nunca é copiado.
+// Eles não entram em PERMITIDOS porque não ficam na raiz do repositório (o modo antigo do Pages, que
+// publicava a raiz, simplesmente não os teria: ver conferirJekyll).
+export const LABZ_AI_PUBLICADOS = Object.freeze([
   { origem: 'functions-labz/demo/ui/labz-ai.html', publicado: 'labz-ai.html' },
   { origem: 'functions-labz/demo/ui/labz-ai.css', publicado: 'labz-ai.css' },
   { origem: 'functions-labz/demo/ui/labz-ai.js', publicado: 'labz-ai.js' },
@@ -94,11 +95,11 @@ export function referencias(arquivo, texto) {
   return refs;
 }
 
-export function montar({ raiz = '.', saida = '_site', ensaioLabz = false } = {}) {
+export function montar({ raiz = '.', saida = '_site' } = {}) {
   const erros = [];
   const avisos = [];
-  const extras = ensaioLabz ? LABZ_AI_PREPARADOS : [];
-  for (const x of extras) if (!fs.existsSync(path.join(raiz, x.origem))) erros.push(`preparado que não existe: ${x.origem}`);
+  const extras = LABZ_AI_PUBLICADOS;
+  for (const x of extras) if (!fs.existsSync(path.join(raiz, x.origem))) erros.push(`arquivo da LABZ AI que não existe: ${x.origem}`);
   // 1) todos os permitidos existem no repositório
   for (const f of PERMITIDOS) if (!fs.existsSync(path.join(raiz, f))) erros.push(`permitido que não existe no repositório: ${f}`);
   // 2) página ou imagem pública nova sem decisão (fora da lista) → falha

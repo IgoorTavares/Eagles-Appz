@@ -55,14 +55,15 @@ test('tela (S4): modo https com o token do Firebase, sem credencial no navegador
   assert.match(html, /<script src="firebase-config\.js"><\/script>\s*<script src="labz-config\.js"><\/script>\s*<script src="script\.js"><\/script>\s*<script src="labz-ai\.js"><\/script>/);
   for (const id of ['lz-resumo', 'lz-pendencias', 'lz-hist-lista', 'lz-hist-empresa', 'lz-hist-estado', 'lz-hist-mais', 'lz-progresso', 'lz-org']) assert.match(html, new RegExp(`id="${id}"`), id);
   const cfg = ler(path.join(UI, 'labz-config.js'));
-  assert.match(cfg, /^const LABZ_API_URL = '';$/m, 'vazio até a S5');
+  assert.match(cfg, /^const LABZ_API_URL = 'https:\/\/ducvpgrtsguaxqhnnupd\.supabase\.co\/functions\/v1\/labz-api';$/m, 'v155 (I3): o projeto labz-ai do Supabase');
   const codigo = cfg.replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(codigo, /key|senha|secret|token|eyJ|service_role|sb_/i, 'nenhum segredo na configuração pública');
 });
 
-test('CRM/ERP: o menu "LABZ AI" está preparado, mas DESLIGADO, e só existiria para o Super Admin', () => {
+test('CRM/ERP: o menu "LABZ AI" (v155: LIGADO) só existe para o Super Admin', () => {
   const s = ler(path.join(RAIZ, 'script.js'));
-  assert.match(s, /^let LABZ_AI_MENU_ATIVO = false;$/m);
+  assert.match(s, /^let LABZ_AI_MENU_ATIVO = true;$/m);
+  assert.match(s, /^const LABZ_AI_PAGINA = 'labz-ai\.html';$/m, 'nome escrito por inteiro: o conferidor do Site seguro checa o link');
   // I1 (D2): item do MENU PRINCIPAL, só para o Super Admin, sem atalho no menu do perfil
   assert.match(s, /function labzMenuLiberado\(\) \{\n  return LABZ_AI_MENU_ATIVO === true && typeof USUARIO_ROLE !== 'undefined' && USUARIO_ROLE === 'SuperAdmin';\n\}/);
   assert.match(s, /\{ key: 'labz-ai', href: LABZ_AI_PAGINA, label: 'LABZ AI', soSuperAdmin: true \},\n\];/);
@@ -75,24 +76,28 @@ test('CRM/ERP: o menu "LABZ AI" está preparado, mas DESLIGADO, e só existiria 
   for (const f of fs.readdirSync(RAIZ).filter((x) => x.endsWith('.html'))) assert.doesNotMatch(ler(path.join(RAIZ, f)), /labz-ai|labz-config/, `${f} não aponta para a LABZ AI`);
 });
 
-test('Site seguro: os 4 arquivos da LABZ AI estão PREPARADOS (ensaio passa), mas fora do site e do workflow', async () => {
+test('Site seguro (v155): os 4 arquivos da LABZ AI são publicados a partir de functions-labz/demo/ui, idênticos, e nada mais de functions-labz', async () => {
   const m = await import(pathToFileURL(path.join(RAIZ, '.github/pages/montar-site.mjs')).href);
-  assert.deepEqual(m.LABZ_AI_PREPARADOS.map((x) => x.publicado), ['labz-ai.html', 'labz-ai.css', 'labz-ai.js', 'labz-config.js']);
-  assert.ok(m.LABZ_AI_PREPARADOS.every((x) => !m.PERMITIDOS.includes(x.publicado)), 'nenhum na lista pública');
+  assert.equal(m.LABZ_AI_PREPARADOS, undefined, 'não existe mais "ensaio": a publicação é a de verdade');
+  assert.deepEqual(m.LABZ_AI_PUBLICADOS.map((x) => [x.origem, x.publicado]), [
+    ['functions-labz/demo/ui/labz-ai.html', 'labz-ai.html'], ['functions-labz/demo/ui/labz-ai.css', 'labz-ai.css'],
+    ['functions-labz/demo/ui/labz-ai.js', 'labz-ai.js'], ['functions-labz/demo/ui/labz-config.js', 'labz-config.js']]);
+  assert.ok(m.LABZ_AI_PUBLICADOS.every((x) => !m.PERMITIDOS.includes(x.publicado)), 'fora de PERMITIDOS (não ficam na raiz)');
   const os = require('node:os');
+  const crypto = require('node:crypto');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'labz-site-'));
   try {
-    const normal = m.montar({ raiz: RAIZ, saida: path.join(tmp, 'normal') });
-    assert.ok(normal.ok, normal.erros.join('\n'));
-    assert.ok(!normal.arquivos.some((f) => /labz/.test(f)), 'a montagem de verdade não leva nada da LABZ AI');
-    assert.deepEqual(normal.avisos, []);
-    const ensaio = m.montar({ raiz: RAIZ, saida: path.join(tmp, 'ensaio'), ensaioLabz: true });
-    assert.ok(ensaio.ok, ensaio.erros.join('\n'));
-    assert.equal(ensaio.arquivos.length, normal.arquivos.length + 4);
-    assert.deepEqual(ensaio.avisos, []);
-    assert.ok(!ensaio.arquivos.some((f) => m.PROIBIDOS.some((p) => p.test(f))), 'nada interno nem no ensaio');
+    const r = m.montar({ raiz: RAIZ, saida: path.join(tmp, 'site') });
+    assert.ok(r.ok, r.erros.join('\n'));
+    assert.deepEqual(r.avisos, []);
+    assert.equal(r.arquivos.length, m.PERMITIDOS.length + 4);
+    assert.deepEqual(r.arquivos.filter((f) => /labz/.test(f)).sort(), ['labz-ai.css', 'labz-ai.html', 'labz-ai.js', 'labz-config.js']);
+    assert.ok(!r.arquivos.some((f) => m.PROIBIDOS.some((p) => p.test(f))), 'nada interno');
+    const h = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+    for (const x of m.LABZ_AI_PUBLICADOS) assert.equal(h(path.join(tmp, 'site', x.publicado)), h(path.join(RAIZ, x.origem)), `${x.publicado} idêntico`);
+    assert.ok(r.referencias.some((x) => /labz-ai\.html/.test(JSON.stringify(x))), 'o link do menu (script.js) foi conferido');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   const wf = ler(path.join(RAIZ, '.github/workflows/pages-seguro.yml'));
-  assert.doesNotMatch(wf, /ensaioLabz|labz/i, 'o workflow não muda');
-  assert.doesNotMatch(ler(path.join(RAIZ, '.github/pages/montar-site.mjs')), /process\.argv[^\n]*labz/i, 'não há opção de linha de comando para incluir');
+  assert.doesNotMatch(wf, /labz/i, 'o workflow não muda (continua manual: digitar PUBLICAR)');
+  assert.doesNotMatch(ler(path.join(RAIZ, '.github/pages/montar-site.mjs')), /process\.argv[^\n]*labz/i);
 });

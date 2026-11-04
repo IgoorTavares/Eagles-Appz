@@ -67,14 +67,14 @@ async function abrirLogado(s, pg, role, viewport) {
   return r;
 }
 
-test('menu principal (computador): "LABZ AI" desligado para todos; ligado, só o Super Admin vê, e nunca no menu do perfil', { timeout: 120000 }, async () => {
+test('menu principal (computador, v155: LIGADO): só o Super Admin vê "LABZ AI", nunca no menu do perfil; desligar a chave esconde de todos', { timeout: 120000 }, async () => {
   const s = await criarServidoresTeste();
   try {
     for (const [role, deveria] of PAPEIS) {
       const { pagina, contexto } = await abrirLogado(s, 'index.html', role);
       try {
-        assert.equal(await pagina.evaluate(() => LABZ_AI_MENU_ATIVO), false, 'desligado até a publicação autorizada');
-        assert.equal(await pagina.locator(`#topbar-nav ${LINK}`).count(), 0, `${role}: desligado, não aparece`);
+        assert.equal(await pagina.evaluate(() => LABZ_AI_MENU_ATIVO), true, 'ligado na v155');
+        assert.equal(await pagina.locator(`#topbar-nav ${LINK}`).count(), deveria ? 1 : 0, `${role}: sem precisar ligar nada`);
         await ligar(pagina);
         assert.equal(await pagina.locator(`#topbar-nav ${LINK}`).count(), deveria ? 1 : 0, role);
         assert.equal(await pagina.locator(`#profile-menu ${LINK}`).count(), 0, `${role}: sem atalho repetido no perfil`);

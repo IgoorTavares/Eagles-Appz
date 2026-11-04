@@ -31,7 +31,7 @@ const SUPABASE_PRODUCAO = 'https://ducvpgrtsguaxqhnnupd.supabase.co';
 
 async function lerCorpo(req) { const p = []; for await (const x of req) p.push(x); return Buffer.concat(p); }
 
-async function criarServidoresTeste({ apiUrlVazia = false, apiUrlBruta = null, scriptJs = null, limites = { porMinuto: 100000, tarefasPorHora: 1000 } } = {}) {
+async function criarServidoresTeste({ apiUrlVazia = false, apiUrlBruta = null, gatewayVerifyJwt = false, scriptJs = null, limites = { porMinuto: 100000, tarefasPorHora: 1000 } } = {}) {
   const m = await import(pathToFileURL(path.join(RAIZ, '.github/pages/montar-site.mjs')).href);
   const publicos = new Set(m.PERMITIDOS);
 
@@ -69,6 +69,11 @@ async function criarServidoresTeste({ apiUrlVazia = false, apiUrlBruta = null, s
       let acao = null;
       try { acao = corpo ? JSON.parse(corpo.toString('utf8')).acao : null; } catch (e) { /* inválido */ }
       pedidos.push({ acao, metodo: req.method, autorizacao: /^Bearer [A-Za-z0-9_.-]+$/.test(req.headers.authorization || ''), cookie: !!req.headers.cookie, origem: req.headers.origin || null, em: Date.now() });
+      // I3: imita o GATEWAY do Supabase com o Verify JWT ligado (o login do Firebase não é JWT do Supabase)
+      if (gatewayVerifyJwt && req.method === 'POST') {
+        res.writeHead(401, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+        return res.end(JSON.stringify({ code: 'UNAUTHORIZED_ASYMMETRIC_JWT', message: 'Invalid JWT' }));
+      }
       const r = await handler(new Request(`http://127.0.0.1${req.url}`, { method: req.method, headers: Object.fromEntries(Object.entries(req.headers).filter(([k, v]) => typeof v === 'string' && !['host', 'connection', 'content-length', 'transfer-encoding', 'keep-alive'].includes(k))), body: corpo && corpo.length ? corpo : undefined }));
       const h = {};
       r.headers.forEach((v, k) => { h[k] = v; });

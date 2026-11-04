@@ -403,6 +403,42 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   - Ligado: o login do Firebase é barrado pelo gateway.
   - Desligado: o código confere tudo.
 
+### Proteção extra: conta desativada e sessão revogada (desenho; implementado e testado só em ambiente isolado)
+
+**O problema:**
+- A `labz-api` confere o login do Firebase só com as chaves **públicas** do Google.
+- Ela sabe que o login é legítimo, mas não sabe se a conta foi **desativada** ou se as sessões foram **revogadas** depois.
+- O login do Firebase vale até 1 hora.
+
+**Como funciona** (`src/auth/conta-ativa.js`):
+- A API consulta o próprio Firebase Auth: `POST https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=<apiKey pública>`, levando o **próprio** login da pessoa (`idToken`).
+- A apiKey é a mesma do `firebase-config.js` (pública). Não usa credencial de administrador e não muda nada no Firebase.
+- Recusa quando:
+  - a conta está desativada (campo `disabled` ou erro `USER_DISABLED`);
+  - a conta sumiu ou o login foi invalidado;
+  - o login foi feito **antes** de `validSince` (sessão revogada; é a mesma regra do Firebase Admin);
+  - o UID da resposta é diferente do UID do login.
+- A consulta só acontece para quem já passou pela lista do servidor. Um intruso nunca gera consulta ao Google (testado), então não dá para usar a LABZ AI para gastar a cota do Firebase.
+- Falha **fechada**: se o Google estiver fora do ar ou lento (mais de 3 s), ninguém entra.
+- A recusa vai só para o log, com o motivo. Nada é gravado no banco.
+
+**Impacto:**
+- **Latência:** 1 consulta a mais (estimativa: 50 a 300 ms, de us-east-1 para o Google), só quando o resultado não está guardado. O resultado **bom** fica guardado por 5 minutos por login (o máximo configurável é 15). Com o uso normal (1 pessoa), isso dá no máximo 1 consulta a cada 5 minutos.
+- **Custo:** consultar a própria conta pelo Firebase Auth não tem cobrança separada no plano atual. O volume é mínimo: no máximo cerca de 12 consultas por hora, por pessoa. Isso precisa ser **confirmado na documentação oficial** quando for ligar (a página não abre no ambiente de testes).
+- **Disponibilidade:** passa a depender também do Identity Toolkit do Google. A API já depende das chaves públicas do Google.
+- **O que muda na prática:** a desativação ou revogação passa a valer em até **5 minutos**, em vez de até 1 hora. Tirar o UID da lista continua cortando na hora.
+
+**Estado:** **não está ligado** na produção. O pacote das Edge Functions não inclui este módulo (um teste confere).
+- Para ligar, é preciso: ler a apiKey pública numa configuração da função, embrulhar o `autenticar` em `montarApi`, empacotar e publicar uma nova versão.
+- Ligar é mudança de produção e precisa de autorização própria. Antes, testar com uma conta de teste desativada de verdade.
+
+### I3 — versão v155 (preparada; NÃO publicada)
+
+- O montador do Site seguro publica os 4 arquivos da tela (`LABZ_AI_PUBLICADOS`) a partir de `functions-labz/demo/ui`, idênticos. O resto de `functions-labz/` continua proibido. O workflow não mudou.
+- `labz-config.js` aponta para `https://ducvpgrtsguaxqhnnupd.supabase.co/functions/v1/labz-api`. Um teste confere: https, caminho certo, liberado na CSP e sem chave.
+- O menu foi ligado (`LABZ_AI_MENU_ATIVO = true`, só para o Super Admin), e o nome da página está escrito por inteiro (o conferidor checa o link).
+- Enquanto o Verify JWT estiver ligado na produção, a tela mostra "servidor ainda bloqueado" e não insiste.
+
 ## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
 
 - **Projeto:** exclusivo da LABZ AI, na organização do Igor, no plano Free.

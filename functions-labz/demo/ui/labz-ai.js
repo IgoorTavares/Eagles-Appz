@@ -140,6 +140,8 @@
       let { status, j } = await postarHttps(acao, dados, false);
       if (status === 401) ({ status, j } = await postarHttps(acao, dados, true)); // token vencido: pede um novo UMA vez
       if (status === 200 && j && j.ok) return j.resultado;
+      // 401 do GATEWAY do Supabase (Verify JWT ligado): o pedido nem chegou ao código da LABZ AI
+      if (status === 401 && j && typeof j.code === 'string' && /^UNAUTHORIZED_/.test(j.code)) throw new ErroApi({ codigo: 'gateway', mensagem: 'O servidor da LABZ AI ainda não aceita o login do Eagles Labz (trava do Supabase ligada).' }, 401);
       throw new ErroApi((j && j.erro) || { codigo: status === 429 ? 'resource-exhausted' : 'internal' }, status);
     }
     throw new ErroApi({ codigo: 'permission-denied', mensagem: 'Acesso negado.' }, 403);
@@ -634,6 +636,12 @@
       estado.agentes = await chamar('catalogo.agentes');
       estado.porId = Object.fromEntries(estado.agentes.map((a) => [a.id, a]));
     } catch (e) {
+      if (e && e.codigo === 'gateway') {
+        $('lz-modo').textContent = 'Super Admin · servidor ainda bloqueado';
+        $('lz-modo').dataset.tom = 'alerta';
+        desligarTela('O servidor da LABZ AI ainda não aceita o login do Eagles Labz: a trava "Verify JWT" do Supabase está ligada. Nada foi gravado e nada foi alterado.');
+        return;
+      }
       if (negado(e)) {
         // a tela pode ter achado que era Super Admin; quem decide é o servidor
         $('labz-conteudo').hidden = true;

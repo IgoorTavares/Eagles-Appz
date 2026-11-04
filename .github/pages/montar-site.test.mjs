@@ -6,7 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { montar, conferir, conferirJekyll, GERADOS_PELO_JEKYLL, PERMITIDOS, PAGINAS, DOMINIO } from './montar-site.mjs';
+import { montar, conferir, conferirJekyll, GERADOS_PELO_JEKYLL, PERMITIDOS, PAGINAS, DOMINIO, LABZ_AI_PUBLICADOS } from './montar-site.mjs';
+
+// v155: a tela da LABZ AI (4 arquivos de functions-labz/demo/ui) também é publicada
+const NO_SITE = [...PERMITIDOS, ...LABZ_AI_PUBLICADOS.map((x) => x.publicado)];
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'site-'));
@@ -14,7 +17,7 @@ const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'site-'));
 // cópia da raiz só com o que o montador lê (permitidos + alguns internos para provar que ficam de fora)
 function raizDeTeste(extra = {}) {
   const r = tmp();
-  for (const f of [...PERMITIDOS, 'CLAUDE.md', 'firestore.rules', 'firebase.json', 'package.json', 'functions/index.js', 'functions-labz/index.js', 'testes-regras/regras.test.mjs']) {
+  for (const f of [...PERMITIDOS, ...LABZ_AI_PUBLICADOS.map((x) => x.origem), 'CLAUDE.md', 'firestore.rules', 'firebase.json', 'package.json', 'functions/index.js', 'functions-labz/index.js', 'testes-regras/regras.test.mjs']) {
     if (!fs.existsSync(path.join(RAIZ, f))) continue;
     fs.mkdirSync(path.dirname(path.join(r, f)), { recursive: true });
     fs.copyFileSync(path.join(RAIZ, f), path.join(r, f));
@@ -29,7 +32,7 @@ test('o site real monta e passa na conferência, sem avisos', () => {
   assert.deepEqual(r.erros, []);
   assert.deepEqual(r.avisos, []);
   assert.equal(r.ok, true);
-  assert.deepEqual(r.arquivos, [...PERMITIDOS].sort());
+  assert.deepEqual(r.arquivos, [...NO_SITE].sort());
   assert.ok(r.referencias.length > 500, 'as referências das páginas, CSS, JS, sw.js e manifesto foram conferidas');
 });
 
@@ -205,8 +208,11 @@ test('sem .nojekyll na raiz (ele desligaria a trava do _config.yml no modo antig
 });
 
 test('conferência do modo antigo (Jekyll): só a lista de permitidos, sem nada interno e sem alteração', () => {
+  // no modo antigo o Jekyll publica a RAIZ e exclui functions-labz/ (_config.yml): a tela da LABZ AI não sairia
+  const semLabz = (d) => { for (const x of LABZ_AI_PUBLICADOS) fs.rmSync(path.join(d, x.publicado)); };
   const ok = path.join(tmp(), 'jk');
   assert.equal(montar({ raiz: RAIZ, saida: ok }).ok, true);
+  semLabz(ok);
   assert.equal(conferirJekyll({ raiz: RAIZ, saida: ok }).ok, true);
   // o CSS do tema padrão do GitHub (gerado pelo Jekyll, visto na montagem real) é aceito — só ele
   fs.mkdirSync(path.join(ok, 'assets/css'), { recursive: true });
@@ -225,6 +231,7 @@ test('conferência do modo antigo (Jekyll): só a lista de permitidos, sem nada 
   ]) {
     const d = path.join(tmp(), 'jk');
     montar({ raiz: RAIZ, saida: d });
+    semLabz(d);
     estraga(d);
     const r = conferirJekyll({ raiz: RAIZ, saida: d });
     assert.equal(r.ok, false, nome);
@@ -324,4 +331,18 @@ test('guarda em PR (VOLTAS=0): só confere a fonte; não lista nem cancela nada'
   const r = rodarGuarda({ tipo: 'workflow', runs: '555' }, 0);
   assert.equal(r.status, 0);
   assert.doesNotMatch(r.chamadas, /actions\/runs/);
+});
+
+test('v155: a tela da LABZ AI sai de functions-labz/demo/ui só com os 4 arquivos; se ela apontar para algo interno, a montagem é barrada', () => {
+  assert.deepEqual(LABZ_AI_PUBLICADOS.map((x) => x.publicado), ['labz-ai.html', 'labz-ai.css', 'labz-ai.js', 'labz-config.js']);
+  assert.ok(LABZ_AI_PUBLICADOS.every((x) => x.origem === `functions-labz/demo/ui/${x.publicado}`));
+  const html = fs.readFileSync(path.join(RAIZ, 'functions-labz/demo/ui/labz-ai.html'), 'utf8').replace('</body>', '<script src="functions-labz/src/api/labz-api.js"></script></body>');
+  const raiz = raizDeTeste({ 'functions-labz/demo/ui/labz-ai.html': html, 'functions-labz/src/api/labz-api.js': '// interno' });
+  const r = montar({ raiz, saida: path.join(tmp(), '_site') });
+  assert.equal(r.ok, false);
+  assert.ok(r.erros.some((e) => e.includes('functions-labz/src/api/labz-api.js')));
+  // sem um dos 4 arquivos, a montagem falha (não publica a tela pela metade)
+  const raiz2 = raizDeTeste();
+  fs.rmSync(path.join(raiz2, 'functions-labz/demo/ui/labz-config.js'));
+  assert.equal(montar({ raiz: raiz2, saida: path.join(tmp(), '_site') }).ok, false);
 });

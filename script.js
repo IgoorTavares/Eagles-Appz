@@ -1209,14 +1209,13 @@ function aplicarGatingPorRole() {
 }
 
 // LABZ AI (I1): item "LABZ AI" no MENU PRINCIPAL (barra de cima no computador; no celular, a gaveta
-// lateral: a da barra de cima, a do ERP ou a do CRM). Só aparece para o Super Admin, e só depois que a
-// publicação for autorizada: até lá fica DESLIGADO (false). O menu NÃO é a proteção: o servidor da
-// LABZ AI confere tudo a cada pedido, e a própria página recusa quem não é Super Admin sem chamar nada.
-let LABZ_AI_MENU_ATIVO = false;
-// O nome da página é montado em partes DE PROPÓSITO: enquanto a tela não é publicada, o conferidor do
-// "Site seguro" não deve tratar este item desligado como uma página do site. Ao publicar (com
-// autorização), volte a escrever o nome da página por inteiro para o conferidor passar a checá-lo.
-const LABZ_AI_PAGINA = ['labz-ai', 'html'].join('.');
+// lateral: a da barra de cima, a do ERP ou a do CRM). Só aparece para o Super Admin. LIGADO na v155
+// (etapa I3); para esconder de novo sem mexer em mais nada, basta trocar para false. O menu NÃO é a
+// proteção: o servidor da LABZ AI confere tudo a cada pedido, e a própria página recusa quem não é
+// Super Admin sem chamar nada.
+let LABZ_AI_MENU_ATIVO = true;
+// Escrito por inteiro: o conferidor do "Site seguro" confere que a página existe no site publicado.
+const LABZ_AI_PAGINA = 'labz-ai.html';
 function labzMenuLiberado() {
   return LABZ_AI_MENU_ATIVO === true && typeof USUARIO_ROLE !== 'undefined' && USUARIO_ROLE === 'SuperAdmin';
 }
@@ -6608,6 +6607,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '04/11/2026 · LABZ AI (Super Admin)', itens: [
+    { titulo: 'LABZ AI no menu do Super Admin', badges: ['novo'], texto: 'O Super Admin ganhou o item "LABZ AI" no menu principal (no celular, na gaveta do menu): a equipe de agentes especializados, com o que espera a sua decisão, nova tarefa, organograma, histórico e entregas. Nesta versão os agentes são simulados: nenhum modelo de IA pago é usado e nada é publicado. Diretores, equipe e clientes não veem nada novo.' },
+  ] },
   { data: '23/10/2026 · Estabilidade e correções', itens: [
     { titulo: 'Troca de senha sem erro falso', badges: ['corrigido'], texto: 'Em Configurações → Perfil, a troca de senha dava certo mas mostrava uma mensagem de erro. Agora aparece "Senha alterada ✓" e os campos são limpos. Todas as telas pedem o mesmo mínimo: 8 caracteres.' },
     { titulo: '"Salvo" só quando foi salvo de verdade', badges: ['corrigido'], texto: 'Os dados da empresa só mostram "Salvo ✓" depois que o servidor confirma. Sem internet, o aviso diz que ainda falta confirmar e muda sozinho quando a conexão volta. Se der erro, o que você digitou continua na tela. Administrativo e Financeiro consultam os dados da empresa, mas só o Diretor altera.' },

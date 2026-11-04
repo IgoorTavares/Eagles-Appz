@@ -396,6 +396,13 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - **Recusa:** quem não é Super Admin vê "Área exclusiva do Super Admin", e a página não chama o servidor.
 - **CSP da página:** só o Firebase (login), as fontes e o Supabase da LABZ AI. Qualquer outro endereço é bloqueado pelo navegador. Ao trocar de projeto do Supabase, atualize o `connect-src` (um teste confere).
 
+### I2 — segurança da API, sem a interface
+
+- `npm test` inclui `test/seguranca-i2.test.js`: as 68 ações contra visitantes sem login, com token inválido ou de outro projeto, intruso, Diretor, Cliente e sem perfil. Também cobre ataques ao token, botões de desligar, isolamento entre empresas, limites e auditoria.
+- Ensaio do Verify JWT no Supabase local: `supabase start` e depois `SUPABASE_CLI=supabase node supabase/ensaiar-i2-verify-jwt.mjs`. Atrás de um proxy que reassina o TLS, use também `LABZ_TESTE_CA=/caminho/ca.crt` e guarde o `@types/node` no volume do Edge Runtime, como explicado na S5B.
+  - Ligado: o login do Firebase é barrado pelo gateway.
+  - Desligado: o código confere tudo.
+
 ## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
 
 - **Projeto:** exclusivo da LABZ AI, na organização do Igor, no plano Free.

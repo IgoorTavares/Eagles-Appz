@@ -406,6 +406,28 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
     - `npm test` 372 (360 aprovados, 12 só PostgreSQL); publicação segura 25/25;
     - barra de cima com o item ligado sem estourar em 861/1024/1280/1440 px;
     - 2 mutações (menu sem o filtro de Super Admin; CSP com curinga) detectadas.
+- **LABZ AI — I2 (validação de autenticação, autorização e integração da API; 04/11/2026; só local; nada mudou na produção; I3/I4 **não** autorizadas):**
+  - GitHub do commit `d35ead6` (I1): testes da LABZ AI, Site seguro e Guarda do Pages **verdes**.
+  - `functions-labz/test/seguranca-i2.test.js` (10 testes), pela porta HTTP real da `labz-api`, sem a interface:
+    - as **68 ações** recusam sem login, token inválido ou de outro projeto (401), sem gravar nada;
+    - recusam também intruso, Diretor, Cliente, sem perfil e Super Admin fora da lista do banco (403), com a mesma resposta para todos;
+    - o Super Admin passa da autenticação em todas;
+    - ataques ao token (HS256 com a chave pública, `alg none`, carga trocada, `kid` desconhecido, outra chave, vencido, futuro, anônimo, `aud`/`iss` de outro projeto, cabeçalho torto, token em cookie) → 401;
+    - "botões de desligar" (lista do banco, perfil, lista do servidor, lista vazia) cortam na hora com o mesmo token;
+    - isolamento entre empresas (histórico, entregas, cursor);
+    - limites 429 (minuto e tarefas por hora);
+    - auditoria com o autor e sem token;
+    - respostas sem cache, `nosniff`, sem rastro interno, CORS só para o site;
+    - limitação documentada: conta desativada no Firebase passa até o token vencer (máx. 1 h); a lista corta na hora.
+  - Mutações: `aud` removido, lista do servidor aberta e origem não conferida → **todas detectadas**.
+  - `functions-labz/supabase/ensaiar-i2-verify-jwt.mjs` (Supabase **local**, Edge Runtime de verdade):
+    - Verify JWT **ligado**: o login do Firebase é barrado pelo **gateway** (`UNAUTHORIZED_ASYMMETRIC_JWT`), então a tela não funciona; a chave **pública** do Supabase passa pelo gateway e só o código recusa (o gateway não protege de verdade);
+    - **desligado**: tudo chega ao código, que recusa corretamente;
+    - o Kong local responde o pré-voo com `*` (diferente da produção, onde o código responde só para o site: Etapa 9).
+  - Para o ensaio no sandbox, o `@types/node` foi guardado no volume `supabase_edge_runtime_labz-local` com o Deno 2.1.4 (`DENO_DIR` + `DENO_CERT`).
+  - Interface: o endereço da API mal configurado (http de fora, usuário/senha, parâmetros, lixo) deixa a tela desligada e sem pedidos; teste garante que, quando o `LABZ_API_URL` for preenchido (I3), ele é https, termina em `/functions/v1/labz-api`, está liberado na CSP e o arquivo não tem chave.
+  - Testes: `npm test` 382 (370 aprovados, 12 só PostgreSQL); navegador 19/19 (inclui as 37 páginas do CRM/ERP); publicação segura 25/25.
+  - Recomendação para a D1: opção A (Verify JWT desligado na `labz-api`) com as travas do código. Proposta (não feita): conferir conta desativada no Firebase pelo Identity Toolkit (`accounts:lookup`), a validar com teste real.
   - Achado antes do T2 (corrigido e publicado na `labz-api` v3): recusas de login gravavam um evento no banco e logins do Firebase fora da lista gravavam contador e auditoria, ou seja, sem ser Super Admin dava para encher o banco. Agora: lista do servidor conferida antes de qualquer acesso ao banco; recusas só no log da função (`src/borda/registro-recusas.js`, 20 por minuto); `criarAcessoSupabase` recusa a opção `auditoria`.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.

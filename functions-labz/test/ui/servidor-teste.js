@@ -31,7 +31,7 @@ const SUPABASE_PRODUCAO = 'https://ducvpgrtsguaxqhnnupd.supabase.co';
 
 async function lerCorpo(req) { const p = []; for await (const x of req) p.push(x); return Buffer.concat(p); }
 
-async function criarServidoresTeste({ apiUrlVazia = false, scriptJs = null, limites = { porMinuto: 100000, tarefasPorHora: 1000 } } = {}) {
+async function criarServidoresTeste({ apiUrlVazia = false, apiUrlBruta = null, scriptJs = null, limites = { porMinuto: 100000, tarefasPorHora: 1000 } } = {}) {
   const m = await import(pathToFileURL(path.join(RAIZ, '.github/pages/montar-site.mjs')).href);
   const publicos = new Set(m.PERMITIDOS);
 
@@ -91,7 +91,7 @@ async function criarServidoresTeste({ apiUrlVazia = false, scriptJs = null, limi
     }
     let rel = decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html';
     if (rel === 'firebase-config.js') return enviar(200, "const FIREBASE_CONFIG = { apiKey: 'chave-de-teste-ficticia', authDomain: 'teste.local', projectId: 'labz-18246' };\n", TIPOS['.js']);
-    if (rel === 'labz-config.js') return enviar(200, `const LABZ_API_URL = '${apiUrlVazia ? '' : `http://127.0.0.1:${servApi.address().port}/functions/v1/labz-api`}';\n`, TIPOS['.js']);
+    if (rel === 'labz-config.js') return enviar(200, `const LABZ_API_URL = ${JSON.stringify(apiUrlBruta !== null ? apiUrlBruta.replace('PORTA', servApi.address().port) : apiUrlVazia ? '' : `http://127.0.0.1:${servApi.address().port}/functions/v1/labz-api`)};\n`, TIPOS['.js']);
     if (rel === 'sw.js') return enviar(200, 'self.addEventListener("install",()=>self.skipWaiting());', TIPOS['.js']);
     if (rel === 'script.js' && scriptJs) return enviar(200, scriptJs, TIPOS['.js']);
     // I1: a página tem uma política de segurança (CSP) que só deixa falar com o Supabase REAL; no teste a

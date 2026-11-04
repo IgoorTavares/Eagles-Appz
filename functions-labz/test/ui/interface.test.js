@@ -260,3 +260,29 @@ test('CSP no navegador: a tela inteira funciona sem nenhum bloqueio, e falar com
     assert.deepEqual(erros, []);
   } finally { await contexto.close(); await s.fechar(); }
 });
+
+// ---------- I2: endereço da API (labz-config.js) ----------
+test('I2: endereço da API mal configurado (http de fora, com usuário/senha, com parâmetros ou lixo) → a tela fica desligada e não chama nada', { timeout: 120000 }, async () => {
+  for (const bruto of ['http://api-de-fora.example/functions/v1/labz-api', 'https://usuario:senha@127.0.0.1:PORTA/functions/v1/labz-api', 'https://127.0.0.1:PORTA/functions/v1/labz-api?chave=x', 'https://127.0.0.1:PORTA/functions/v1/labz-api#x', 'javascript:alert(1)', 'não é endereço']) {
+    const s = await criarServidoresTeste({ apiUrlBruta: bruto });
+    const { pagina, contexto } = await abrirLabz(s, { teste: SA });
+    try {
+      await esperarTexto(pagina, '#lz-modo', /servidor não ligado/, 20000);
+      await pagina.waitForTimeout(800);
+      assert.equal(s.pedidos.length, 0, `${bruto}: nenhum pedido`);
+    } finally { await contexto.close(); await s.fechar(); }
+  }
+});
+
+test('I2: o endereço da API (quando preenchido) precisa ser https e estar liberado na política de segurança da página (CSP)', () => {
+  const cfg = fs.readFileSync(path.join(__dirname, '..', '..', 'demo', 'ui', 'labz-config.js'), 'utf8');
+  const m = /^const LABZ_API_URL = '([^']*)';$/m.exec(cfg);
+  assert.ok(m, 'labz-config.js no formato esperado');
+  assert.doesNotMatch(cfg, /eyJ|sb_secret_|service_role'|apikey\s*=/i, 'nenhuma chave no arquivo público');
+  if (m[1]) {
+    const u = new URL(m[1]);
+    assert.equal(u.protocol, 'https:');
+    assert.ok(cspDaPagina()['connect-src'].includes(u.origin), `CSP libera ${u.origin}`);
+    assert.match(u.pathname, /^\/functions\/v1\/labz-api$/);
+  }
+});

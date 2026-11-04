@@ -59,9 +59,10 @@ export function subirComRepeticao(rodar, { tentativas = 3, pausaMs = 15000 } = {
 }
 // No Windows, "npx" é um .cmd e só roda pelo cmd.exe. Para não cair no aviso DEP0190 do Node (lista de
 // argumentos com shell), a linha é montada aqui. Os argumentos são sempre FIXOS deste arquivo (nunca
-// vêm do usuário); o que tiver espaço ou aspas vai entre aspas.
+// vêm do usuário). Vai entre aspas o que tiver espaço, aspas ou um caractere que o cmd.exe interpreta
+// (| & < > ^ ( ) %): achado no Windows do Igor, o "|" do formato do docker ps virava um "pipe".
 export function linhaDeComando(cmd, args) {
-  return [cmd, ...args].map((a) => (/[\s"]/.test(a) ? `"${String(a).replace(/"/g, '""')}"` : a)).join(' ');
+  return [cmd, ...args].map((a) => (/[\s"|&<>^()%!]/.test(a) ? `"${String(a).replace(/"/g, '""')}"` : a)).join(' ');
 }
 function rodar(cmd, args, opcoes) {
   if (process.platform === 'win32') return spawnSync(linhaDeComando(cmd, args), { ...opcoes, shell: true });
@@ -131,7 +132,9 @@ async function principal() {
     const ps = rodar('docker', ['ps', '--filter', 'name=_labz-local', '--format', '{{.Names}}|{{.Ports}}'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     const abertas = portasAbertasParaRede(ps.stdout);
     if (ps.status !== 0 || !/127\.0\.0\.1:\d+->5432/.test(ps.stdout) || abertas.length) {
-      throw new RecusaLocal(`RECUSADO: o banco local ficou aberto para a rede (${abertas.join(', ') || 'não confirmado'}). Nada foi restaurado.`);
+      const linhaBanco = String(ps.stdout || '').split(/\r?\n/).find((l) => /supabase_db_/.test(l));
+      const motivo = abertas.length ? `aberto em ${abertas.join(', ')}` : ps.status !== 0 ? 'o Docker não respondeu à conferência das portas' : `porta do banco: ${linhaBanco ? linhaBanco.split('|')[1] || 'sem porta' : 'não encontrada'}`;
+      throw new RecusaLocal(`RECUSADO: não foi possível confirmar que o banco local só aceita conexões deste computador (${motivo}). Nada foi restaurado.`);
     }
     console.log('ok     o banco local só aceita conexões deste computador (127.0.0.1)');
     console.log('ok     banco LOCAL pronto (127.0.0.1), montado do zero pelas migrações');

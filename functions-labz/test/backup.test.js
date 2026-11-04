@@ -249,6 +249,8 @@ test('comando guiado: só arquivo cifrado, nunca liga a um Supabase remoto, conf
   const { linhaDeComando } = await import('../supabase/backup/teste-restauracao.mjs');
   assert.equal(linhaDeComando('npx', ['--yes', 'supabase@2.122.0', 'start', '-x', 'a,b']), 'npx --yes supabase@2.122.0 start -x a,b');
   assert.equal(linhaDeComando('C:\\Program Files\\sb.exe', ['status']), '"C:\\Program Files\\sb.exe" status', 'caminho com espaço vai entre aspas');
+  assert.equal(linhaDeComando('docker', ['ps', '--format', '{{.Names}}|{{.Ports}}']), 'docker ps --format "{{.Names}}|{{.Ports}}"', 'o | do formato vai entre aspas (no cmd.exe ele vira pipe)');
+  for (const c of ['&', '<', '>', '^', '(', ')', '%', '!']) assert.match(linhaDeComando('x', [`a${c}b`]), /^x "a.b"$/, c);
   assert.doesNotMatch(ler('teste-restauracao.mjs').replace(/\/\/.*$/gm, ''), /spawnSync\([^)]*,\s*\[[^\]]*\],\s*\{[^}]*shell:\s*(true|process)/, 'nada de lista de argumentos com shell (aviso DEP0190 do Node)');
   const fonte = ler('teste-restauracao.mjs');
   assert.doesNotMatch(fonte.replace(/\/\/.*$/gm, ''), /--linked|--db-url|'link'|'push'|'login'|'deploy'|SUPABASE_ACCESS_TOKEN/, 'nenhum comando remoto do Supabase CLI');

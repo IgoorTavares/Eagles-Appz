@@ -340,4 +340,15 @@ test('Windows: o teste só roda com a regra do Firewall que bloqueia a porta do 
   assert.ok(i("process.platform === 'win32' && !firewallBloqueiaPorta()") < i('await abrirBackup('), 'no Windows, sem a regra, para antes de pedir a senha');
   assert.ok(i('sem bloqueio de firewall. Nada foi restaurado.') < i('await restaurar('), 'porta aberta sem firewall = recusa antes de restaurar');
   assert.equal(REGRA_FIREWALL, 'LABZ teste restauracao - bloquear 54322');
+  assert.ok(i('Firewall do Windows bloqueia a entrada na porta') < i('await abrirBackup('), 'no Windows, o passo 1 MOSTRA a conferência do Firewall (pasta antiga = sem essa linha)');
+});
+
+test('guia de recuperação (12.6): o README tem os 4 cenários e os comandos batem com o código', async () => {
+  const leia = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
+  const { REGRA_FIREWALL, CLI_VERSAO } = await import('../supabase/backup/teste-restauracao.mjs');
+  for (const t of ['## Guia de recuperação (passo 12.6)', 'Cenário 1', 'Cenário 2', 'Cenário 3', 'Cenário 4', 'Emergência']) assert.ok(leia.includes(t), t);
+  for (const c of [`New-NetFirewallRule -DisplayName "${REGRA_FIREWALL}"`, `Get-NetFirewallRule -DisplayName "${REGRA_FIREWALL}"`, `Remove-NetFirewallRule -DisplayName "${REGRA_FIREWALL}"`]) assert.ok(leia.includes(c), c);
+  assert.ok(leia.includes(`\`${CLI_VERSAO}\``), 'versão do CLI documentada = a do código');
+  for (const m of fs.readdirSync(path.join(__dirname, '..', 'supabase', 'migrations'))) assert.ok(leia.includes(m), `migração ${m} citada no guia`);
+  assert.ok(leia.includes(`update labz.docs set dados = '{"ativo":false}'::json where caminho = 'labz_config/worker';`), 'comando de emergência');
 });

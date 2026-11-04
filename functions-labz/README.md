@@ -611,12 +611,15 @@ do documento aberto (a lista que começa com `[[` e termina com `]]`). Antes, co
 ```sql
 begin;
 alter table labz.docs disable trigger user; -- gravar não pode chamar o worker
+-- banco recém-montado: a migração 3 já criou o interruptor desligado; o do backup entra no lugar dele
+delete from labz.docs where caminho = 'labz_config/worker' and dados::text = '{"ativo":false}';
 insert into labz.docs (caminho, colecao, id, dados, atualizado_em)
 select l->>0, l->>1, l->>2, (l->>4)::json, (l->>3)::timestamptz
 from json_array_elements($labzbackup$<LINHAS>$labzbackup$::json) as l;
 alter table labz.docs enable trigger user;
 -- rode impressao-digital.sql aqui: o "sha256" precisa ser igual ao do cabeçalho do backup.
--- igual → commit;   diferente → rollback;
+-- igual → desligue o interruptor (o do backup pode estar ligado) e confirme; diferente → rollback;
+update labz.docs set dados = '{"ativo":false}'::json where caminho = 'labz_config/worker';
 commit;
 ```
 
@@ -678,3 +681,244 @@ scripts de instalação). Antes do backup real, ensaiar com o **backup de exempl
 O Supabase local, por padrão, abre o banco em `0.0.0.0` (para a rede) com a senha `postgres`. O comando
 guiado usa uma rede própria do Docker (`labz-restauracao-local`, portas presas a `127.0.0.1`), desliga os
 serviços que não usa e **recusa restaurar** se alguma porta estiver aberta para fora (`docker ps`).
+
+**Proteção da porta do banco local (obrigatória com dados reais).** São três proteções, e o comando
+guiado confere todas sozinho:
+
+1. **Tranca:** logo depois de montar o banco, todos os usuários que podem entrar recebem uma senha
+   aleatória, que só existe na memória do programa durante o teste. O programa **prova** que a senha
+   padrão `postgres` não entra mais; se ainda entrar, RECUSA.
+2. **Rede própria do Docker** com as portas presas a `127.0.0.1`. Funciona no Linux e no Mac. O Docker
+   Desktop do Windows ignora essa opção e publica a porta em `0.0.0.0` e `[::]`.
+3. **Firewall do Windows (só no Windows; obrigatório):** a regra `LABZ teste restauracao - bloquear 54322`
+   bloqueia a entrada de outros aparelhos na porta 54322. O próprio computador continua usando a porta,
+   porque o Firewall não filtra a volta interna (loopback). O programa confere a regra no passo 1, antes
+   de pedir a senha, e de novo antes de restaurar. Sem a regra, RECUSA.
+
+No Windows, o passo 1 mostra a linha `ok     Firewall do Windows bloqueia a entrada na porta 54322 (…)`.
+**Se essa linha não aparecer, a pasta está desatualizada:** pare (Ctrl+C) e baixe a branch de novo.
+No teste real de 04/11/2026 isso aconteceu, e o Firewall teve de ser conferido à mão depois do teste.
+
+Os comandos da regra são rodados no **PowerShell como administrador** (botão direito no menu Iniciar →
+"Terminal (Administrador)"). Numa janela comum, o Windows responde "Acesso negado".
+
+```
+New-NetFirewallRule -DisplayName "LABZ teste restauracao - bloquear 54322" -Direction Inbound -Protocol TCP -LocalPort 54322 -Action Block -Profile Any
+Get-NetFirewallRule -DisplayName "LABZ teste restauracao - bloquear 54322" | Format-List DisplayName,Enabled,Direction,Action
+Remove-NetFirewallRule -DisplayName "LABZ teste restauracao - bloquear 54322"
+```
+
+A ordem é: criar a regra antes do teste, conferir que ela aparece com Enabled `True`, Direction
+`Inbound` e Action `Block`, e apagar depois do teste. Depois de apagada, o `Get-NetFirewallRule` responde
+com um erro de "não encontrado", e é isso que se espera.
+
+### Instalação no Windows (uma vez só)
+
+Uma instalação por vez, conferindo cada uma antes de passar para a próxima. Este roteiro foi usado no
+computador do Igor em 04/11/2026: Windows 11 Pro, Node.js 24.21.0, WSL 3.0.3.0 e Docker Desktop 29.9.2.
+
+| # | O quê | Como conferir |
+|---|---|---|
+| 1 | **Windows 10/11 de 64 bits**, 8 GB de memória ou mais (feche outros programas antes do teste), uns 5 GB livres | `winver` |
+| 2 | **Virtualização habilitada** | Gerenciador de Tarefas → Desempenho → CPU → "Virtualização: Habilitado" |
+| 3 | **WSL 2**: no PowerShell como administrador, `wsl --install --no-distribution`, e depois reiniciar | `wsl --version` (versão padrão 2) |
+| 4 | **Docker Desktop** (site oficial, opção "WSL 2"); abrir e esperar "Engine running" | `docker run hello-world` |
+| 5 | **Node.js 20 ou mais novo** (versão LTS do site oficial) | `node -v` e `npm.cmd -v` |
+| 6 | O projeto: baixar a branch em zip pelo GitHub e extrair numa pasta curta (`C:\labz-teste`) | a pasta `functions-labz` existe |
+| 7 | As peças: na pasta `functions-labz`, `npm.cmd ci --omit=dev --ignore-scripts` | o passo 1 do comando não reclama de "peças" |
+| 8 | Ensaio com o backup de exemplo (seção acima) | `RESULTADO: APROVADO (15 de 15 conferências)` |
+
+O Supabase CLI não precisa ser instalado: o `npx` baixa a versão fixa `2.122.0`. O aviso "A new version
+of Supabase CLI is available" pode ser ignorado. O aviso "All services bind to 0.0.0.0" é um texto fixo
+do CLI; o que vale são as três proteções acima.
+
+### Limpeza segura depois de um teste
+
+O passo 7 já desliga o Supabase local, apaga os dados restaurados (`stop --no-backup`) e apaga a rede
+própria do Docker, mesmo quando algo falha no meio (a não ser com `--manter`). Para conferir, no
+PowerShell:
+
+```
+docker ps -a --filter "name=labz-local"
+docker volume ls --filter "name=labz-local"
+docker network ls --filter "name=labz-restauracao-local"
+```
+
+Os três comandos devem mostrar só o cabeçalho. Se sobrar algo, por exemplo porque o computador desligou
+no meio do teste (na pasta `functions-labz`):
+
+```
+npx --yes supabase@2.122.0 stop --no-backup --network-id labz-restauracao-local
+docker network rm labz-restauracao-local
+```
+
+Depois:
+
+- apagar a regra do Firewall (comando acima);
+- nunca deixar um arquivo `.aberto.json` (sem senha) no computador; se algum foi criado, apagar e
+  esvaziar a lixeira;
+- a pasta `C:\labz-teste` não tem dados reais e pode ser apagada quando quiser;
+- o backup cifrado **não** é apagado: ele fica no computador e na pasta privada do Google Drive.
+
+### Quando fazer backup
+
+Decisão D5 do Igor:
+
+- fazer um backup novo depois de qualquer mudança importante (migração, publicação de função, cadastro
+  ou correção de dados) e, no mínimo, **a cada 14 dias**;
+- guardar sempre o **primeiro** (03/11/2026) e os **3 mais recentes**; os outros podem ser apagados;
+- **próximo backup previsto: até 17/11/2026**.
+
+O plano Free do Supabase **não tem backup automático**: os backups são só estes.
+
+Como fazer: o mesmo roteiro dos passos 12.3 e 12.4.
+
+1. Antes, o Claude confere pela conexão (só leitura) o total e a impressão digital esperados, com
+   `impressao-digital.sql`.
+2. O Igor roda `exportar-dados.sql` no SQL Editor e baixa o CSV.
+3. Na página `labz-backup.html`, confere ("Íntegro" e a mesma impressão) e cifra com a senha dele.
+4. Guarda o `.cifrado.json` no computador e no Drive e apaga o CSV, esvaziando a lixeira.
+
+Com a mesma senha de sempre (no gerenciador de senhas), basta lembrar uma.
+
+Um teste de restauração (passo 12.5) vale a pena de vez em quando, por exemplo a cada 3 meses, ou
+depois de mudar uma migração.
+
+## Guia de recuperação (passo 12.6)
+
+Regras que valem em **todos** os cenários:
+
+- a produção só é alterada com **autorização do Igor** para aquele passo;
+- o arquivo do backup e a senha nunca passam pelo chat nem pelo GitHub;
+- **toda gravação feita depois do último backup se perde** quando se restaura um backup.
+
+Antes de qualquer conserto, desligar o worker para nada novo começar (ver "Emergência").
+
+### Emergência: parar a LABZ AI agora
+
+No SQL Editor (um comando só; não apaga nada):
+
+```sql
+update labz.docs set dados = '{"ativo":false}'::json where caminho = 'labz_config/worker';
+```
+
+Uma tarefa que já começou termina a rodada (até cerca de 2 minutos) e fica parada. Para encerrar de vez
+uma tarefa, use `execucoes.transicionar` para `CANCELLED`. Para ligar de novo, depois de resolvido, use
+o mesmo comando com `{"ativo":true}`.
+
+Se for preciso cortar também o acesso pela API, tire o UID do segredo `LABZ_SUPERADMIN_UIDS` no painel
+(Edge Functions → Secrets). Isso vale na hora.
+
+### Cenário 1 — dados apagados ou alterados por engano
+
+Exemplos: uma memória, uma tarefa ou uma empresa sumiu ou ficou errada.
+
+1. **Parar:** comando de emergência.
+2. **Guardar o estado atual antes de mexer:** fazer uma exportação nova (como no backup normal), mesmo
+   com o erro. Assim nada do que existe hoje se perde, e dá para comparar.
+3. **Descobrir o que mudou:** o Claude compara, pela conexão e só com números e caminhos (sem conteúdo),
+   o total e a contagem por coleção de hoje (`impressao-digital.sql`) com os do backup.
+4. **Ver o backup sem tocar na produção:** o Igor abre o backup no próprio computador.
+   - Para a conferência completa num banco local, use o teste de restauração (12.5).
+   - Para ler o conteúdo, use o programa de "Recuperar sem a ferramenta original", que grava um
+     `.aberto.json`; apague-o no fim.
+5. **Devolver só o que faltou:** o Claude prepara um SQL que grava **só os caminhos combinados**, numa
+   transação (mesmo modelo do SQL manual acima, com os gatilhos desligados e filtrando pelos caminhos).
+   O Igor cola o conteúdo no SQL Editor, de modo que os dados não passam pelo chat. Precisa de
+   autorização.
+6. **Conferir:** comparar a contagem com a esperada e ligar o interruptor de novo.
+
+A ferramenta `restaurar-local.mjs` **nunca** grava na produção: só aceita este computador e banco vazio.
+Isso é de propósito.
+
+### Cenário 2 — banco corrompido ou estrutura alterada
+
+Exemplos: uma função ou permissão diferente, uma regra de RLS desligada, documentos inválidos.
+
+1. **Parar:** comando de emergência.
+2. **Diagnóstico (só leitura, pelo Claude):**
+   - `retrato-estrutura.sql` na produção e `comparar-estrutura.mjs --repo` contra o retrato local
+     montado pelas migrações; mostra exatamente qual das 13 seções mudou;
+   - `impressao-digital.sql` e o `get_advisors` do Supabase.
+3. **Estrutura diferente:** reaplicar só a parte que mudou, com o texto da migração original (os
+   arquivos estão em `supabase/migrations/`). Precisa de autorização.
+   - Se a migração 3 (agendamento) estiver com problema, a reversão pronta é
+     `supabase/reversao/20261101000100_labz_gatilhos_reverter.sql`; depois, aplicar a migração 3 de novo.
+   - Repetir a comparação até dar 13 de 13.
+4. **Dados inválidos:** seguir o Cenário 1. Se o estrago for grande, seguir o Cenário 3 num projeto novo.
+
+### Cenário 3 — perda do projeto Supabase
+
+Exemplos: projeto apagado, pausado sem volta ou conta perdida.
+
+Se o projeto foi só **pausado** (o plano Free pausa depois de 7 dias de pouca atividade), primeiro veja
+no painel se aparece a opção de restaurar o projeto. Nesse caso, nada abaixo é necessário.
+
+Para montar de novo, cada passo com autorização, como na S5B:
+
+1. **Projeto novo** (Igor, no painel): o mesmo plano e uma região próxima; a Data API sem expor tabelas
+   automaticamente.
+2. **As 4 migrações, nesta ordem e sem mudar nada:**
+   - `20261031000000_labz_inicial.sql`
+   - `20261101000000_labz_acionamentos.sql`
+   - `20261101000050_labz_borda.sql`
+   - `20261101000100_labz_gatilhos.sql`
+
+   A migração 3 cria o interruptor **desligado**. Depois, conferir com `s5b/10-conferir-permissoes.sql`,
+   e a comparação da estrutura deve dar 13 de 13.
+3. **Senha do `labz_borda`:** uma nova, pela página `s5b/gerar-senha.html`; o Igor roda só o
+   verificador.
+4. **Os 5 segredos das funções**, com valores novos onde for o caso:
+   - `LABZ_DB_URL`, com o endereço do projeto novo;
+   - `LABZ_SUPERADMIN_UIDS`;
+   - `LABZ_FIREBASE_PROJETO` = `labz-18246`;
+   - `LABZ_WORKER_SEGREDO`, um novo;
+   - `LABZ_ORIGENS`.
+5. **Publicar as 2 funções** (Cenário 4, passo 3), com Verify JWT **ligado**.
+6. **Restaurar os dados**, com o projeto ainda sem nenhum uso:
+   - o Igor abre o backup no computador com o programa de "Recuperar sem a ferramenta original";
+   - roda o SQL manual daquela seção no SQL Editor; ele troca o interruptor padrão pelo do backup,
+     confere a impressão digital e deixa o interruptor **desligado**;
+   - apaga o `.aberto.json`.
+
+   O perfil do Super Admin e a lista de acesso voltam com os dados, e o login continua o mesmo (o
+   Firebase não muda).
+7. **Conferir:**
+   - total e impressão digital iguais aos do backup (`impressao-digital.sql`);
+   - estrutura 13 de 13;
+   - testes de recusa da S5B (T1/T2, W1–W3).
+8. **Agendamento:** os dois segredos do Vault pelo formulário (`labz_worker_url` com o endereço novo e
+   `labz_worker_segredo` = o mesmo valor do passo 4). Depois, Verify JWT do worker desligado, um
+   `select labz.acionar_worker('manual')` de teste e, por último, o interruptor ligado (passos 10.3 a
+   10.6).
+9. **Interface:** se ela já estiver publicada, trocar o endereço da API (`LABZ_API_URL`).
+
+Se um trabalho estava no meio quando o backup foi feito, o monitor da fila retoma ou desiste sozinho
+quando o interruptor for ligado.
+
+### Cenário 4 — falha nas Edge Functions (`labz-api` ou `labz-worker`)
+
+1. **Parar o worker:** comando de emergência. A `labz-api` pode continuar.
+2. **Diagnóstico (só leitura, pelo Claude):**
+   - versão e estado das funções (`list_edge_functions`);
+   - logs das últimas horas (`labz-api.recusa`, `BOOT_ERROR`, tempo esgotado);
+   - o código publicado comparado com o do repositório pelo SHA-256 (`get_edge_function`).
+
+   Os nomes dos segredos são conferidos no painel; os valores, nunca.
+3. **Publicar de novo a versão boa**, pelo painel (o pacote é grande demais para a conexão):
+   - no repositório, `npm run empacotar -- --conferir` (cada pasta tem só o `index.ts` e o
+     `labz-<sha12>.mjs`);
+   - zipar os dois arquivos da pasta da função;
+   - no painel, Edge Functions → a função → Deploy a new version → via Editor → arrastar o zip;
+   - conferir que o nome continua `labz-api` ou `labz-worker`;
+   - para voltar a uma versão anterior, usar os mesmos arquivos de um commit anterior.
+4. **Verify JWT:** na `labz-api`, **ligado**, desligando só durante testes autorizados; na `labz-worker`,
+   **desligado** (o banco chama sem login do Supabase; a função confere o acionamento assinado).
+5. **Conferir:**
+   - os testes de recusa (sem login → 401; worker sem acionamento → 401);
+   - o SHA-256 publicado igual ao do repositório;
+   - um acionamento `'manual'` de teste com resposta 202.
+
+   Só então ligar o interruptor.
+
+O banco não é afetado por uma falha das funções: os dados continuam lá.

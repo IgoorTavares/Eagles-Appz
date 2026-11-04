@@ -153,6 +153,9 @@ async function principal() {
   }
   const referencia = JSON.parse(fs.readFileSync(a.referencia, 'utf8'));
   console.log('ok     backup cifrado · projeto sem ligação remota · Docker pronto');
+  // Linha visível de propósito: no teste real de 04/11/2026 a pasta estava desatualizada e o Firewall não
+  // foi conferido pelo programa. No Windows, sem esta linha no passo 1, a pasta é antiga: baixe de novo.
+  if (process.platform === 'win32') console.log(`ok     Firewall do Windows bloqueia a entrada na porta ${PORTA_BANCO_LOCAL} (regra "${REGRA_FIREWALL}")`);
 
   titulo(2, 'Abrir e conferir o backup (espere o pedido; a senha não aparece na tela; cole e aperte Enter; 3 tentativas)');
   const b = await abrirBackup(a.arquivo);

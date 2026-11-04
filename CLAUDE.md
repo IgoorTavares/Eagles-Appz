@@ -353,6 +353,25 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
     - **Teste real com o backup cifrado: APROVADO (04/11/2026; feito pelo Igor no computador dele; 12.6 **não** autorizado).** O backup real abriu com a senha (que não passou pelo chat) e deu **46 documentos** com a impressão `d2f9b06f…57496`, a mesma da produção em 03/11. Banco local montado pelas 4 migrações e trancado (a senha padrão não entra mais), relógio local pausado. Os 46 documentos foram restaurados com a mesma impressão no banco. Conferência **15/15**: 14 coleções, documentos íntegros, tarefa `exe_c74353f2db6146dc888d` COMPLETED (sem executor preso e com a empresa), 2 entregas e 2 versões íntegras pelo sha256, RLS ligado e forçado, anon/authenticated/service_role sem acesso, estrutura igual à da produção (13 de 13), 0 acionamentos, 0 pedidos HTTP e Vault local vazio. No fim, banco local apagado.
       - Desvio registrado: a pasta do Igor tinha a versão de antes do commit `8dd6ded`, então o programa **não conferiu** o Firewall (só mostrou o AVISO de porta visível, com o banco trancado). Comprovado à parte, pelo Igor, logo depois do teste e antes de apagar a regra: `LABZ teste restauracao - bloquear 54322` existia, com Enabled True, Inbound e Block (foi criada antes do teste). Nenhum container nem volume `labz-local` sobrou (`docker ps -a` e `docker volume ls` vazios). A regra foi apagada depois (`Get-NetFirewallRule` responde "não encontrado"). Proteções em vigor durante o teste: a tranca com senha aleatória e o Firewall.
       - Produção, Firebase e CRM/ERP intocados; nada foi enviado ao chat nem ao GitHub (nem o arquivo, nem a senha, nem documentos). O arquivo cifrado continua só no computador e no Drive do Igor.
+  - **Etapa 12, passo 12.6 concluído; Etapa 12 ENCERRADA (04/11/2026; o 12.5 foi aprovado pelo Igor):** documentação final no `functions-labz/README.md`.
+    - Seção "Backup do Supabase (Etapa 12)", com 4 partes novas:
+      - proteção da porta: tranca + rede própria + Firewall obrigatório no Windows, com os comandos `New-`/`Get-`/`Remove-NetFirewallRule`;
+      - instalação no Windows, em 8 passos (Windows, virtualização, WSL 2, Docker Desktop, Node.js, projeto, `npm.cmd ci`, ensaio de exemplo);
+      - limpeza segura (`docker ps -a`/`volume ls`/`network ls` vazios; `stop --no-backup --network-id`);
+      - quando fazer backup (D5: depois de mudanças importantes e no mínimo a cada 14 dias; guardar o primeiro e os 3 mais recentes; **próximo até 17/11/2026**; o Free não tem backup automático).
+    - "Guia de recuperação (passo 12.6)":
+      - emergência (interruptor e corte pelo `LABZ_SUPERADMIN_UIDS`);
+      - Cenário 1, dados apagados: exportar o estado atual, comparar só números e devolver só os caminhos combinados, com autorização; o `restaurar-local.mjs` nunca grava na produção;
+      - Cenário 2, corrupção ou estrutura: retrato + `comparar-estrutura --repo`, reaplicar a parte da migração; reversão da migração 3;
+      - Cenário 3, perda do projeto: projeto novo, 4 migrações, `labz_borda`, 5 segredos, funções, dados pelo SQL manual, conferências, Vault/worker/interruptor;
+      - Cenário 4, Edge Functions: diagnóstico, nova publicação pelo zip, Verify JWT e conferências.
+    - O SQL manual de recuperação passou a trocar o interruptor padrão da migração 3 pelo do backup e a deixar o interruptor **desligado** antes do `commit`.
+    - Código: no Windows, o passo 1 do `teste-restauracao.mjs` agora **mostra** a linha do Firewall (sem ela, a pasta está desatualizada; foi o que aconteceu no teste real).
+    - Testes:
+      - `test/backup.test.js` 19/19, com teste novo: o guia tem os 4 cenários, os comandos do Firewall com o nome da regra do código, a versão do CLI, as 4 migrações e o comando de emergência;
+      - `npm test` 372 (360 aprovados, 12 só PostgreSQL);
+      - ensaio 12.5: 20/20.
+    - Nada executado na produção, no Firebase ou no CRM/ERP. Nenhuma restauração real nova.
   - Achado antes do T2 (corrigido e publicado na `labz-api` v3): recusas de login gravavam um evento no banco e logins do Firebase fora da lista gravavam contador e auditoria, ou seja, sem ser Super Admin dava para encher o banco. Agora: lista do servidor conferida antes de qualquer acesso ao banco; recusas só no log da função (`src/borda/registro-recusas.js`, 20 por minuto); `criarAcessoSupabase` recusa a opção `auditoria`.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.

@@ -1205,6 +1205,40 @@ function aplicarGatingPorRole() {
   const admin = nivelEhDiretor();
   document.querySelectorAll('[data-somente-admin]').forEach((el) => { el.style.display = admin ? '' : 'none'; });
   document.querySelectorAll('[data-somente-superadmin]').forEach((el) => { el.style.display = USUARIO_ROLE === 'SuperAdmin' ? '' : 'none'; });
+  labzMenuAplicar();
+}
+
+// LABZ AI (I1): item "LABZ AI" no MENU PRINCIPAL (barra de cima no computador; no celular, a gaveta
+// lateral: a da barra de cima, a do ERP ou a do CRM). Só aparece para o Super Admin. LIGADO na v155
+// (etapa I3); para esconder de novo sem mexer em mais nada, basta trocar para false. O menu NÃO é a
+// proteção: o servidor da LABZ AI confere tudo a cada pedido, e a própria página recusa quem não é
+// Super Admin sem chamar nada.
+let LABZ_AI_MENU_ATIVO = true;
+// Escrito por inteiro: o conferidor do "Site seguro" confere que a página existe no site publicado.
+const LABZ_AI_PAGINA = 'labz-ai.html';
+function labzMenuLiberado() {
+  return LABZ_AI_MENU_ATIVO === true && typeof USUARIO_ROLE !== 'undefined' && USUARIO_ROLE === 'SuperAdmin';
+}
+// No CRM a gaveta do celular é a barra lateral do próprio CRM (sem links de páginas): lá o item entra
+// logo abaixo do menu do CRM e só aparece no celular (no computador já está na barra de cima).
+function labzMenuAplicar() {
+  const painel = document.getElementById('crm-sidebar-painel');
+  const existente = document.getElementById('labz-ai-crm-link');
+  if (!labzMenuLiberado() || !painel) { if (existente) existente.remove(); return false; }
+  if (existente) return true;
+  const nav = painel.querySelector('nav');
+  const a = document.createElement('a');
+  a.id = 'labz-ai-crm-link';
+  a.className = 'mn-nav-item labz-ai-crm-link';
+  a.href = LABZ_AI_PAGINA;
+  a.style.cssText = 'justify-content:flex-start; gap:9px; margin-top:6px;';
+  a.insertAdjacentHTML('afterbegin', ic('brilho', 'ic-herda'));
+  a.append(' LABZ AI');
+  const soNoCelular = () => { a.hidden = !(window.matchMedia && window.matchMedia('(max-width: 860px)').matches); };
+  soNoCelular();
+  if (window.matchMedia) { try { window.matchMedia('(max-width: 860px)').addEventListener('change', soNoCelular); } catch (e) { /* navegador antigo */ } }
+  if (nav) nav.insertAdjacentElement('afterend', a); else painel.append(a);
+  return true;
 }
 
 function esconderCarregandoAuth() {
@@ -1375,6 +1409,8 @@ const NAV_ITEMS = [
   },
   { key: 'financeiro', href: 'financeiro.html', label: 'Financeiro', plano: 'erp' },
   { key: 'crm', href: 'crm.html', label: 'CRM', plano: 'crm' },
+  // LABZ AI (I1): módulo independente do CRM/ERP, só para o Super Admin (ver labzMenuLiberado)
+  { key: 'labz-ai', href: LABZ_AI_PAGINA, label: 'LABZ AI', soSuperAdmin: true },
 ];
 
 // Um item aparece se: não tem plano marcado (sempre visível), a empresa
@@ -6571,6 +6607,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '04/11/2026 · LABZ AI (Super Admin)', itens: [
+    { titulo: 'LABZ AI no menu do Super Admin', badges: ['novo'], texto: 'O Super Admin ganhou o item "LABZ AI" no menu principal (no celular, na gaveta do menu): a equipe de agentes especializados, com o que espera a sua decisão, nova tarefa, organograma, histórico e entregas. Nesta versão os agentes são simulados: nenhum modelo de IA pago é usado e nada é publicado. Diretores, equipe e clientes não veem nada novo.' },
+  ] },
   { data: '23/10/2026 · Estabilidade e correções', itens: [
     { titulo: 'Troca de senha sem erro falso', badges: ['corrigido'], texto: 'Em Configurações → Perfil, a troca de senha dava certo mas mostrava uma mensagem de erro. Agora aparece "Senha alterada ✓" e os campos são limpos. Todas as telas pedem o mesmo mínimo: 8 caracteres.' },
     { titulo: '"Salvo" só quando foi salvo de verdade', badges: ['corrigido'], texto: 'Os dados da empresa só mostram "Salvo ✓" depois que o servidor confirma. Sem internet, o aviso diz que ainda falta confirmar e muda sozinho quando a conexão volta. Se der erro, o que você digitou continua na tela. Administrativo e Financeiro consultam os dados da empresa, mas só o Diretor altera.' },
@@ -11593,7 +11632,7 @@ async function sisMontarParaEmpresa(tenantId, versao) {
 // =====================================================================
 const ERP_MOB_ICONES = { painel: 'quadro', 'meu-negocio': 'grafico', cadastros: 'pessoas', vendas: 'carrinho', estoque: 'estoque', financeiro: 'dinheiro', crm: 'conversa',
   produtos: 'pacote', 'clientes-fornecedores': 'pessoas', vendedores: 'usuario', funcionarios: 'usuario', 'pedidos-venda': 'documento', 'objetos-postagem': 'enviar', contratos: 'prancheta', 'nfse-externo': 'abrir',
-  'estoque-posicao': 'estoque', 'lancamentos-estoque': 'repetir', 'conferencia-estoque': 'aprovado', 'pedido-compras': 'carrinho', 'notas-fiscais-entrada': 'documento', 'fornecedores-atalho': 'pessoas' };
+  'labz-ai': 'brilho', 'estoque-posicao': 'estoque', 'lancamentos-estoque': 'repetir', 'conferencia-estoque': 'aprovado', 'pedido-compras': 'carrinho', 'notas-fiscais-entrada': 'documento', 'fornecedores-atalho': 'pessoas' };
 function planoTemCrm() { return !TENANT_PLANO || TENANT_PLANO !== 'erp'; }
 function erpEhCelular() { return window.matchMedia && window.matchMedia('(max-width: 860px)').matches; }
 function erpMobItens() {
@@ -13868,6 +13907,7 @@ function crmUsaDadosDoErp() {
 }
 
 function itemVisivelNoPlano(item) {
+  if (item.soSuperAdmin) return labzMenuLiberado();
   if (!item.plano) return true;
   if (!TENANT_PLANO) return true;
   if (TENANT_PLANO === 'ambos') return true;

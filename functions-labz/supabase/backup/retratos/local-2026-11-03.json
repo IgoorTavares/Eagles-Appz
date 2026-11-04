@@ -1,0 +1,696 @@
+{
+  "formato": "labz-retrato-estrutura",
+  "versao": 1,
+  "comparavel": {
+    "tabelas": [
+      {
+        "nome": "acionamentos",
+        "tipo": "r",
+        "dono": "postgres",
+        "rls": true,
+        "rlsForcado": true
+      },
+      {
+        "nome": "docs",
+        "tipo": "r",
+        "dono": "postgres",
+        "rls": true,
+        "rlsForcado": true
+      }
+    ],
+    "colunas": [
+      {
+        "tabela": "acionamentos",
+        "ordem": 1,
+        "nome": "id",
+        "tipo": "text",
+        "naoNulo": true,
+        "padrao": null,
+        "gerada": "",
+        "collation": "default"
+      },
+      {
+        "tabela": "acionamentos",
+        "ordem": 2,
+        "nome": "motivo",
+        "tipo": "text",
+        "naoNulo": true,
+        "padrao": null,
+        "gerada": "",
+        "collation": "default"
+      },
+      {
+        "tabela": "acionamentos",
+        "ordem": 3,
+        "nome": "tempo",
+        "tipo": "bigint",
+        "naoNulo": true,
+        "padrao": null,
+        "gerada": "",
+        "collation": null
+      },
+      {
+        "tabela": "acionamentos",
+        "ordem": 4,
+        "nome": "criado_em",
+        "tipo": "timestamp with time zone",
+        "naoNulo": true,
+        "padrao": "now()",
+        "gerada": "",
+        "collation": null
+      },
+      {
+        "tabela": "acionamentos",
+        "ordem": 5,
+        "nome": "consumido_em",
+        "tipo": "timestamp with time zone",
+        "naoNulo": false,
+        "padrao": null,
+        "gerada": "",
+        "collation": null
+      },
+      {
+        "tabela": "acionamentos",
+        "ordem": 6,
+        "nome": "consumido_por",
+        "tipo": "text",
+        "naoNulo": false,
+        "padrao": null,
+        "gerada": "",
+        "collation": "default"
+      },
+      {
+        "tabela": "docs",
+        "ordem": 1,
+        "nome": "caminho",
+        "tipo": "text",
+        "naoNulo": true,
+        "padrao": null,
+        "gerada": "",
+        "collation": "default"
+      },
+      {
+        "tabela": "docs",
+        "ordem": 2,
+        "nome": "colecao",
+        "tipo": "text",
+        "naoNulo": true,
+        "padrao": null,
+        "gerada": "",
+        "collation": "default"
+      },
+      {
+        "tabela": "docs",
+        "ordem": 3,
+        "nome": "id",
+        "tipo": "text",
+        "naoNulo": true,
+        "padrao": null,
+        "gerada": "",
+        "collation": "default"
+      },
+      {
+        "tabela": "docs",
+        "ordem": 4,
+        "nome": "dados",
+        "tipo": "json",
+        "naoNulo": true,
+        "padrao": null,
+        "gerada": "",
+        "collation": null
+      },
+      {
+        "tabela": "docs",
+        "ordem": 5,
+        "nome": "busca",
+        "tipo": "jsonb",
+        "naoNulo": false,
+        "padrao": "(dados)::jsonb",
+        "gerada": "s",
+        "collation": null
+      },
+      {
+        "tabela": "docs",
+        "ordem": 6,
+        "nome": "atualizado_em",
+        "tipo": "timestamp with time zone",
+        "naoNulo": true,
+        "padrao": "now()",
+        "gerada": "",
+        "collation": null
+      }
+    ],
+    "restricoes": [
+      {
+        "tabela": "acionamentos",
+        "nome": "acionamentos_id",
+        "tipo": "c",
+        "definicao": "CHECK ((id ~ '^acn_[0-9a-f]{32}$'::text))"
+      },
+      {
+        "tabela": "acionamentos",
+        "nome": "acionamentos_motivo",
+        "tipo": "c",
+        "definicao": "CHECK ((motivo = ANY (ARRAY['cron'::text, 'fila'::text, 'manual'::text])))"
+      },
+      {
+        "tabela": "acionamentos",
+        "nome": "acionamentos_pkey",
+        "tipo": "p",
+        "definicao": "PRIMARY KEY (id)"
+      },
+      {
+        "tabela": "acionamentos",
+        "nome": "acionamentos_por",
+        "tipo": "c",
+        "definicao": "CHECK (((consumido_por IS NULL) OR (char_length(consumido_por) <= 80)))"
+      },
+      {
+        "tabela": "docs",
+        "nome": "docs_caminho_valido",
+        "tipo": "c",
+        "definicao": "CHECK (((caminho ~ '^[^/]+(/[^/]+/[^/]+)*/[^/]+$'::text) AND (char_length(caminho) <= 1500)))"
+      },
+      {
+        "tabela": "docs",
+        "nome": "docs_objeto",
+        "tipo": "c",
+        "definicao": "CHECK ((json_typeof(dados) = 'object'::text))"
+      },
+      {
+        "tabela": "docs",
+        "nome": "docs_partes",
+        "tipo": "c",
+        "definicao": "CHECK ((caminho = ((colecao || '/'::text) || id)))"
+      },
+      {
+        "tabela": "docs",
+        "nome": "docs_pkey",
+        "tipo": "p",
+        "definicao": "PRIMARY KEY (caminho)"
+      },
+      {
+        "tabela": "docs",
+        "nome": "docs_tamanho",
+        "tipo": "c",
+        "definicao": "CHECK ((octet_length((dados)::text) <= 1048576))"
+      }
+    ],
+    "indices": [
+      {
+        "tabela": "acionamentos",
+        "nome": "acionamentos_criado",
+        "definicao": "CREATE INDEX acionamentos_criado ON labz.acionamentos USING btree (criado_em)"
+      },
+      {
+        "tabela": "acionamentos",
+        "nome": "acionamentos_pkey",
+        "definicao": "CREATE UNIQUE INDEX acionamentos_pkey ON labz.acionamentos USING btree (id)"
+      },
+      {
+        "tabela": "docs",
+        "nome": "docs_busca",
+        "definicao": "CREATE INDEX docs_busca ON labz.docs USING gin (busca jsonb_path_ops)"
+      },
+      {
+        "tabela": "docs",
+        "nome": "docs_colecao_id",
+        "definicao": "CREATE INDEX docs_colecao_id ON labz.docs USING btree (colecao, id COLLATE \"C\")"
+      },
+      {
+        "tabela": "docs",
+        "nome": "docs_pkey",
+        "definicao": "CREATE UNIQUE INDEX docs_pkey ON labz.docs USING btree (caminho)"
+      }
+    ],
+    "politicas": [
+      {
+        "tabela": "acionamentos",
+        "nome": "labz_app_consumir",
+        "permissiva": "PERMISSIVE",
+        "papeis": [
+          "labz_app"
+        ],
+        "comando": "ALL",
+        "usando": "true",
+        "conferindo": "true"
+      },
+      {
+        "tabela": "docs",
+        "nome": "labz_app_acesso",
+        "permissiva": "PERMISSIVE",
+        "papeis": [
+          "labz_app"
+        ],
+        "comando": "ALL",
+        "usando": "true",
+        "conferindo": "true"
+      }
+    ],
+    "funcoes": [
+      {
+        "nome": "acionar_worker",
+        "argumentos": "p_motivo text",
+        "retorno": "bigint",
+        "linguagem": "plpgsql",
+        "securityDefiner": true,
+        "volatilidade": "v",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "8e2d152cc5e326284b4a778ee6f3818655034260e167c4c56ad0767dd418955f"
+      },
+      {
+        "nome": "ao_entrar_na_fila",
+        "argumentos": "",
+        "retorno": "trigger",
+        "linguagem": "plpgsql",
+        "securityDefiner": true,
+        "volatilidade": "v",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "ceddc42da4b5b9af8d1293b6719ec26269032437ac52213eb4fd50fac27cad22"
+      },
+      {
+        "nome": "criar_acionamento",
+        "argumentos": "p_motivo text, p_segredo text",
+        "retorno": "TABLE(id text, tempo bigint, motivo text, assinatura text)",
+        "linguagem": "plpgsql",
+        "securityDefiner": true,
+        "volatilidade": "v",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "c195361d9d974eb8e1be8356c43e6ead8ae6054fbaa70ea543d08e117e38f1a2"
+      },
+      {
+        "nome": "ha_trabalho",
+        "argumentos": "",
+        "retorno": "boolean",
+        "linguagem": "plpgsql",
+        "securityDefiner": true,
+        "volatilidade": "s",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "c681c107ac0b93bf992a894d288426ab4cebd06779af91187b0da0a74b01274a"
+      },
+      {
+        "nome": "limpar_acionamentos",
+        "argumentos": "",
+        "retorno": "integer",
+        "linguagem": "plpgsql",
+        "securityDefiner": true,
+        "volatilidade": "v",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "455fd40c1f5412553ab6b46799fe0ec55e52ea5cd5b73f2a299ef5afeddf62fb"
+      },
+      {
+        "nome": "limpar_eventos_operacionais",
+        "argumentos": "",
+        "retorno": "integer",
+        "linguagem": "plpgsql",
+        "securityDefiner": true,
+        "volatilidade": "v",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "7e3c393a0100fba7b1e0e7f48cf10daacb1dce8c8f920eb221679ebec6daf66a"
+      },
+      {
+        "nome": "limpar_historico_cron",
+        "argumentos": "",
+        "retorno": "integer",
+        "linguagem": "plpgsql",
+        "securityDefiner": true,
+        "volatilidade": "v",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "bfe37a8f8a3916bd1b40003f7259e3e8cebe6a53505afc9789a5b3b339be61c7"
+      },
+      {
+        "nome": "mensagem_acionamento",
+        "argumentos": "p_id text, p_tempo bigint, p_motivo text",
+        "retorno": "text",
+        "linguagem": "sql",
+        "securityDefiner": false,
+        "volatilidade": "i",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "65f5256b05fe3266c715854035ecaf0e5a28cbe2c62ea6d3fe36b5241a1f2587"
+      },
+      {
+        "nome": "tique",
+        "argumentos": "",
+        "retorno": "bigint",
+        "linguagem": "plpgsql",
+        "securityDefiner": true,
+        "volatilidade": "v",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "3f586b1a306eb85b06eeb06247c5e705b19fdafe7315af190eadb9b80ea82281"
+      },
+      {
+        "nome": "worker_ativo",
+        "argumentos": "",
+        "retorno": "boolean",
+        "linguagem": "plpgsql",
+        "securityDefiner": true,
+        "volatilidade": "s",
+        "configuracao": [
+          "search_path=\"\""
+        ],
+        "dono": "postgres",
+        "sha256Codigo": "5a673ef2ab6dda767e89951e1187091eba6e61e4b5898b21c2e2498a6da66e22"
+      }
+    ],
+    "gatilhos": [
+      {
+        "tabela": "docs",
+        "nome": "labz_fila_acionar",
+        "definicao": "CREATE TRIGGER labz_fila_acionar AFTER INSERT ON labz.docs FOR EACH ROW WHEN ((new.colecao = 'labz_fila'::text)) EXECUTE FUNCTION labz.ao_entrar_na_fila()",
+        "habilitado": "O"
+      }
+    ],
+    "permissoes": [
+      {
+        "objeto": "funcao acionar_worker(p_motivo text)",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "funcao ao_entrar_na_fila()",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "funcao criar_acionamento(p_motivo text, p_segredo text)",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "funcao ha_trabalho()",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "funcao limpar_acionamentos()",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "funcao limpar_eventos_operacionais()",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "funcao limpar_historico_cron()",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "funcao mensagem_acionamento(p_id text, p_tempo bigint, p_motivo text)",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "funcao tique()",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "funcao worker_ativo()",
+        "papel": "postgres",
+        "privilegio": "EXECUTE",
+        "repassa": false
+      },
+      {
+        "objeto": "schema labz",
+        "papel": "labz_app",
+        "privilegio": "USAGE",
+        "repassa": false
+      },
+      {
+        "objeto": "schema labz",
+        "papel": "postgres",
+        "privilegio": "CREATE",
+        "repassa": false
+      },
+      {
+        "objeto": "schema labz",
+        "papel": "postgres",
+        "privilegio": "USAGE",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela acionamentos",
+        "papel": "labz_app",
+        "privilegio": "SELECT",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela acionamentos",
+        "papel": "postgres",
+        "privilegio": "DELETE",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela acionamentos",
+        "papel": "postgres",
+        "privilegio": "INSERT",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela acionamentos",
+        "papel": "postgres",
+        "privilegio": "MAINTAIN",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela acionamentos",
+        "papel": "postgres",
+        "privilegio": "REFERENCES",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela acionamentos",
+        "papel": "postgres",
+        "privilegio": "SELECT",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela acionamentos",
+        "papel": "postgres",
+        "privilegio": "TRIGGER",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela acionamentos",
+        "papel": "postgres",
+        "privilegio": "TRUNCATE",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela acionamentos",
+        "papel": "postgres",
+        "privilegio": "UPDATE",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "labz_app",
+        "privilegio": "DELETE",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "labz_app",
+        "privilegio": "INSERT",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "labz_app",
+        "privilegio": "SELECT",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "labz_app",
+        "privilegio": "UPDATE",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "postgres",
+        "privilegio": "DELETE",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "postgres",
+        "privilegio": "INSERT",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "postgres",
+        "privilegio": "MAINTAIN",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "postgres",
+        "privilegio": "REFERENCES",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "postgres",
+        "privilegio": "SELECT",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "postgres",
+        "privilegio": "TRIGGER",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "postgres",
+        "privilegio": "TRUNCATE",
+        "repassa": false
+      },
+      {
+        "objeto": "tabela docs",
+        "papel": "postgres",
+        "privilegio": "UPDATE",
+        "repassa": false
+      }
+    ],
+    "privilegiosPadrao": [],
+    "papeis": [
+      {
+        "nome": "labz_app",
+        "login": false,
+        "superusuario": false,
+        "herda": true,
+        "criaPapel": false,
+        "criaBanco": false,
+        "replicacao": false,
+        "ignoraRls": false,
+        "limiteConexoes": -1,
+        "configuracao": null,
+        "membroDe": []
+      },
+      {
+        "nome": "labz_borda",
+        "login": true,
+        "superusuario": false,
+        "herda": true,
+        "criaPapel": false,
+        "criaBanco": false,
+        "replicacao": false,
+        "ignoraRls": false,
+        "limiteConexoes": 15,
+        "configuracao": [
+          "statement_timeout=30s",
+          "lock_timeout=10s",
+          "idle_in_transaction_session_timeout=60s"
+        ],
+        "membroDe": [
+          {
+            "papel": "labz_app",
+            "herda": true,
+            "assume": false
+          }
+        ]
+      }
+    ],
+    "cron": [
+      {
+        "nome": "labz-worker-tique",
+        "agenda": "* * * * *",
+        "comando": "select labz.tique()",
+        "ativo": true
+      }
+    ],
+    "extensoes": [
+      {
+        "nome": "pg_cron",
+        "schema": "pg_catalog"
+      },
+      {
+        "nome": "pg_net",
+        "schema": "extensions"
+      },
+      {
+        "nome": "supabase_vault",
+        "schema": "vault"
+      }
+    ],
+    "migracoes": [
+      "labz_inicial",
+      "labz_acionamentos",
+      "labz_borda",
+      "labz_gatilhos"
+    ]
+  },
+  "ambiente": {
+    "geradoEm": "2026-11-03T20:25:59Z",
+    "postgres": "17.11",
+    "extensoesVersao": {
+      "pg_cron": "1.6.4",
+      "pg_net": "0.20.4",
+      "supabase_vault": "0.3.1"
+    },
+    "migracoes": [
+      {
+        "versao": "20261031000000",
+        "nome": "labz_inicial",
+        "sha256Texto": "d0c38b71460e754182635652c465e4824154a772c1ecae414dad29036238d5d1"
+      },
+      {
+        "versao": "20261101000000",
+        "nome": "labz_acionamentos",
+        "sha256Texto": "252fe014287dcf80a0ec501b7a7a7475c9751695049f049aa625dd89ce9424d5"
+      },
+      {
+        "versao": "20261101000050",
+        "nome": "labz_borda",
+        "sha256Texto": "f8334ff4109a88157bd140205ac9f32015b15470a0280e87364c7823b16c7724"
+      },
+      {
+        "versao": "20261101000100",
+        "nome": "labz_gatilhos",
+        "sha256Texto": "fc2296049f3cfeaf6936af3d4b518acd68d57d350b76044e83a94cd560cc4082"
+      }
+    ],
+    "vaultNomes": []
+  }
+}

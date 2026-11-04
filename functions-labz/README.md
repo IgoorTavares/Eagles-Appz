@@ -322,6 +322,297 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - **Publicação:** NÃO publicada. A pasta `functions-labz/` já é interna para as duas travas do "Site seguro" (lista de
   permitidos + `_config.yml`), então a montagem segue verde sem exceção nova. Testes: `test/interface-5a.test.js`.
 
+## Supabase (Arquitetura A) — Fases S1 e S2 (só código; nada criado no Supabase)
+- **S1 — banco PostgreSQL** (`src/armazenamento/banco-postgres.js`): as MESMAS 6 operações (`obter`, `gravar`, `atualizar`,
+  `listar`, `consultar`, `transacao`), sobre uma tabela de documentos por caminho (`labz.docs`). `dados` é `json` (preserva a
+  ORDEM das chaves: as assinaturas das aprovações dependem dela) e `busca` é um `jsonb` gerado só para filtros e índice.
+  Transações `SERIALIZABLE`, repetidas sozinhas em conflito (40001/40P01). Nenhum serviço mudou.
+- **Migração:** `supabase/migrations/20261031000000_labz_inicial.sql`, gerada por `src/armazenamento/postgres-migracao.js`
+  (fonte única; um teste confere). Schema `labz` (não expor na API do Supabase), RLS ligado e forçado, nada para
+  `public/anon/authenticated`, papel `labz_app` sem login (senha definida à mão no projeto, nunca no Git).
+- **Testes no PostgreSQL:** `LABZ_PG_URL=postgresql://… npm run test:postgres` roda TODOS os testes com o PostgreSQL no
+  lugar do banco em memória (banco temporário, apagado no fim). Específicos: `test/banco-postgres.test.js`.
+- **S2 — login:** `src/auth/token-firebase.js` confere o Firebase ID Token só com as chaves PÚBLICAS do Google (assinatura
+  RS256, `iss`, `aud`, `exp`, `iat`, `auth_time`, não anônimo). `src/auth/acesso-supabase.js` transforma o
+  `Authorization: Bearer` no `{ auth }` da API; o perfil vem de `labz_usuarios/{uid}` (banco da LABZ AI) e o acesso exige
+  também o UID na lista do servidor e em `labz_config/acesso`. A rede (`fetch` das chaves) é passada por quem liga o
+  servidor (S3): nada em `src/` acessa a rede. Nenhuma credencial do Firebase: o servidor não alcança o CRM/ERP.
+- **Limitação (documentada):** sem credencial de administrador do Firebase não dá para saber se a conta foi desativada ou
+  se as sessões foram revogadas depois da emissão do token (que vale até 1 hora). Compensação: tirar o UID de
+  `labz_config/acesso` (ou da lista do servidor) corta o acesso na hora.
+
+## Supabase — Fase S3: Edge Functions (só local; nada publicado, nenhum projeto real)
+- **Duas funções** em `supabase/functions/`:
+  - `labz-api` (a tela do Super Admin chama): CORS só para as origens da lista (outra origem → 403 no servidor), só
+    `POST` + JSON, até 200 KB, token do Firebase (S2), limite de pedidos por UID no banco (`src/borda/limitador.js`:
+    60/min e 20 tarefas novas/hora) e a mesma `criarApi()` de sempre (Super Admin, validação, auditoria, aprovações).
+  - `labz-worker` (chamada SÓ pelo banco): cada chamada precisa de um **acionamento** criado e assinado pelo banco
+    (HMAC-SHA256), dentro da janela de 120 s, e que é **consumido uma única vez** (`src/borda/acionamento.js`).
+    Nem o segredo nem a URL bastam. Responde 202 e trabalha ao fundo (`EdgeRuntime.waitUntil`).
+- **Montagem:** `src/borda/montagem.js` (recebe `sql`, a rede e a configuração de fora; agentes sempre simulados);
+  portas HTTP em `src/borda/http.js` (Request/Response padrão, iguais no Node e no Deno).
+- **Pacote para o Deno:** `npm run empacotar` gera `supabase/functions/_labz/labz.mjs` (empacotador próprio, sem
+  dependências, determinístico; recusa `require` calculado e qualquer pacote além do `postgres`). Um teste confere que o
+  pacote gravado está atualizado e não contém Firebase Admin. O pacote fornece `setImmediate`/`clearImmediate`
+  (o Edge Runtime não tem; achado no teste local).
+- **Migrações:** 2 (`…_labz_acionamentos.sql`, portável: tabela `labz.acionamentos`, assinatura no banco, permissões
+  mínimas) e 3 (`…_labz_gatilhos.sql`, só Supabase: gatilho na fila → `pg_net`; `pg_cron` a cada 1 minuto; URL e segredo
+  no **Vault**; sem eles, nada é chamado).
+- **Orçamento do worker** (`src/borda/worker.js`): parada SUAVE (padrão 60 s) só ENTRE etapas, sem cortar chamada;
+  parada DURA (120 s ou aviso de desligamento) devolve a etapa sem gastar tentativa; queda sem aviso → reserva vence e o
+  monitor recupera. Toda chamada avança pelo menos uma etapa. Chamada do gatilho que acha a fila vazia olha mais uma vez.
+- **Testes:** `npm test` (unidade da borda), `npm run test:postgres`, `LABZ_PG_URL=… npm run test:deno` (o pacote no
+  Deno, com SIGKILL de verdade) e, com `supabase start`, `SUPABASE_CLI=supabase npm run test:supabase-local` (Edge Runtime,
+  gatilhos, pg_net, pg_cron, Vault e a API REST fechada; segredos fictícios gerados e apagados na hora).
+- **Limitações:** o token de teste nunca é aceito pela função real (só chaves do Google; sem rede no contêiner, falha
+  fechada); `process.cpuUsage()` devolve 0 no Edge Runtime, então o orçamento de CPU só vale onde há medida (o limite de
+  CPU do próprio runtime continua); a queda sem aviso refaz a chamada cortada (1 a mais por queda); o gateway local
+  (Kong) responde ao pré-voo com `Access-Control-Allow-Origin: *` (a origem é conferida na função).
+
+## Fase S4 — interface integrada à labz-api (só desenvolvimento; NADA publicado)
+- **Tela** (`demo/ui/labz-ai.{html,css,js}` + `labz-config.js`): modos `demo` (servidor local), `https` (Super Admin
+  logado + `LABZ_API_URL` preenchido: `fetch` para a Edge Function com `Authorization: Bearer <ID token do Firebase>`,
+  `credentials: 'omit'`, renova o token UMA vez em 401) e `desligado` (URL vazia: avisa e não chama nada). O SDK de
+  funções do Firebase saiu (precisaria do Blaze). Nenhuma credencial no navegador; o token nunca é guardado.
+- **Painéis:** resumo (esperando você / em andamento / concluídas), "Esperando você" (documento sensível, ação de risco e
+  entrega final), progresso da tarefa, histórico com filtros por cliente e situação, "Ver mais" e entregas por tarefa.
+  Organograma dos 8 agentes preservado. Tudo por `textContent`; CSS só em `.pg-labz`.
+- **Atualização eficiente:** um pedido por vez; o relatório só quando o diagnóstico muda; 3 s com a tarefa ativa, 6 s
+  parada, painéis a cada 30 s (cabe no limite de 60/min); pausa com a aba escondida; espera crescente em erro; 60 s em 429.
+- **Backend:** ação nova só de leitura `execucoes.historico` (do mais novo para o mais antigo, só resumo, filtros e cursor
+  presos à empresa).
+- **Menu do CRM/ERP:** `labzMenuAplicar()` no `script.js` (atalho abaixo de "Empresas (Super Admin)"), **desligado**
+  (`LABZ_AI_MENU_ATIVO = false`); ligado, só para o Super Admin. O menu não é a proteção: o servidor confere tudo.
+- **Site seguro:** `LABZ_AI_PREPARADOS` em `.github/pages/montar-site.mjs` (4 arquivos e o nome publicado). Não entram no
+  site nem no workflow; só um teste faz o ensaio (`montar({ ensaioLabz: true })`).
+- **Testes:** `test/interface-s4.test.js` (unidade) e `npm run test:ui` (navegador: Super Admin de ponta a ponta, aba
+  escondida, Diretor/equipe sem chamada, tela "enganada" recusada pelo servidor, token vencido, servidor desligado, XSS,
+  isolamento por cliente, 1280/768/375/320 px, demonstração; regressão de todas as páginas do CRM/ERP e do menu).
+
+### I1 — a tela dentro do Eagles Labz (só código; nada publicado)
+
+- **Menu:** item "LABZ AI" no menu principal (`NAV_ITEMS`, `soSuperAdmin`), só para o Super Admin. Aparece na barra de cima, nas gavetas do celular (barra de cima e ERP) e na barra lateral do CRM (só no celular). Fica **desligado** (`LABZ_AI_MENU_ATIVO = false`) até a publicação autorizada.
+- **Visual:** "Mesa de Operação Premium", só em `.pg-labz`. Ordem: resumo → decisões + nova tarefa → equipe → histórico. No celular, as decisões e a nova tarefa vêm primeiro.
+- **Recusa:** quem não é Super Admin vê "Área exclusiva do Super Admin", e a página não chama o servidor.
+- **CSP da página:** só o Firebase (login), as fontes e o Supabase da LABZ AI. Qualquer outro endereço é bloqueado pelo navegador. Ao trocar de projeto do Supabase, atualize o `connect-src` (um teste confere).
+
+### I2 — segurança da API, sem a interface
+
+- `npm test` inclui `test/seguranca-i2.test.js`: as 68 ações contra visitantes sem login, com token inválido ou de outro projeto, intruso, Diretor, Cliente e sem perfil. Também cobre ataques ao token, botões de desligar, isolamento entre empresas, limites e auditoria.
+- Ensaio do Verify JWT no Supabase local: `supabase start` e depois `SUPABASE_CLI=supabase node supabase/ensaiar-i2-verify-jwt.mjs`. Atrás de um proxy que reassina o TLS, use também `LABZ_TESTE_CA=/caminho/ca.crt` e guarde o `@types/node` no volume do Edge Runtime, como explicado na S5B.
+  - Ligado: o login do Firebase é barrado pelo gateway.
+  - Desligado: o código confere tudo.
+
+### Proteção extra: conta desativada e sessão revogada (desenho; implementado e testado só em ambiente isolado)
+
+**O problema:**
+- A `labz-api` confere o login do Firebase só com as chaves **públicas** do Google.
+- Ela sabe que o login é legítimo, mas não sabe se a conta foi **desativada** ou se as sessões foram **revogadas** depois.
+- O login do Firebase vale até 1 hora.
+
+**Como funciona** (`src/auth/conta-ativa.js`):
+- A API consulta o próprio Firebase Auth: `POST https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=<apiKey pública>`, levando o **próprio** login da pessoa (`idToken`).
+- A apiKey é a mesma do `firebase-config.js` (pública). Não usa credencial de administrador e não muda nada no Firebase.
+- Recusa quando:
+  - a conta está desativada (campo `disabled` ou erro `USER_DISABLED`);
+  - a conta sumiu ou o login foi invalidado;
+  - o login foi feito **antes** de `validSince` (sessão revogada; é a mesma regra do Firebase Admin);
+  - o UID da resposta é diferente do UID do login.
+- A consulta só acontece para quem já passou pela lista do servidor. Um intruso nunca gera consulta ao Google (testado), então não dá para usar a LABZ AI para gastar a cota do Firebase.
+- Falha **fechada**: se o Google estiver fora do ar ou lento (mais de 3 s), ninguém entra.
+- A recusa vai só para o log, com o motivo. Nada é gravado no banco.
+
+**Impacto:**
+- **Latência:** 1 consulta a mais (estimativa: 50 a 300 ms, de us-east-1 para o Google), só quando o resultado não está guardado. O resultado **bom** fica guardado por 5 minutos por login (o máximo configurável é 15). Com o uso normal (1 pessoa), isso dá no máximo 1 consulta a cada 5 minutos.
+- **Custo:** consultar a própria conta pelo Firebase Auth não tem cobrança separada no plano atual. O volume é mínimo: no máximo cerca de 12 consultas por hora, por pessoa. Isso precisa ser **confirmado na documentação oficial** quando for ligar (a página não abre no ambiente de testes).
+- **Disponibilidade:** passa a depender também do Identity Toolkit do Google. A API já depende das chaves públicas do Google.
+- **O que muda na prática:** a desativação ou revogação passa a valer em até **5 minutos**, em vez de até 1 hora. Tirar o UID da lista continua cortando na hora.
+
+**Estado:** **não está ligado** na produção. O pacote das Edge Functions não inclui este módulo (um teste confere).
+- Para ligar, é preciso: ler a apiKey pública numa configuração da função, embrulhar o `autenticar` em `montarApi`, empacotar e publicar uma nova versão.
+- Ligar é mudança de produção e precisa de autorização própria. Antes, testar com uma conta de teste desativada de verdade.
+
+### I3 — versão v155 (preparada; NÃO publicada)
+
+- O montador do Site seguro publica os 4 arquivos da tela (`LABZ_AI_PUBLICADOS`) a partir de `functions-labz/demo/ui`, idênticos. O resto de `functions-labz/` continua proibido. O workflow não mudou.
+- `labz-config.js` aponta para `https://ducvpgrtsguaxqhnnupd.supabase.co/functions/v1/labz-api`. Um teste confere: https, caminho certo, liberado na CSP e sem chave.
+- O menu foi ligado (`LABZ_AI_MENU_ATIVO = true`, só para o Super Admin), e o nome da página está escrito por inteiro (o conferidor checa o link).
+- Enquanto o Verify JWT estiver ligado na produção, a tela mostra "servidor ainda bloqueado" e não insiste.
+
+### I4-A — API v4 e roteiros da publicação (preparados; NADA publicado)
+
+**API v4** (`supabase/functions/labz-api`, pacote `labz-b49c379e0336.mjs`):
+- A conferência de conta ativa (`src/auth/conta-ativa.js`) passa a valer no `montarApi`.
+- O `index.ts` lê `LABZ_FIREBASE_API_KEY`, a apiKey **pública** do `firebase-config.js`. Com `exigirContaAtiva`, sem a chave a função **não liga** (falha fechada).
+- Na produção continua a v3 (`labz-01711dac8a7e.mjs`), e o zip de volta é idêntico ao publicado (SHA-256 conferido).
+- O worker não muda e não precisa de nova publicação.
+
+**Teste só de leitura com a conta secundária** (no console do navegador, em `eagleslabz.com.br`, logado com a conta **secundária**):
+- só faz consultas `accounts:lookup` (ler a própria conta) ao Firebase Auth;
+- não chama a LABZ AI, não grava nada no navegador e não mostra e-mail, UID nem o login;
+- o login real só vai para o Google na consulta L1–L6.
+
+```
+(async () => {
+  // 1) o login da conta que está aberta nesta aba (só leitura; nada é gravado)
+  const u = firebase.auth().currentUser;
+  if (!u) { console.log('Entre com a conta secundária primeiro.'); return; }
+  const chavePublica = firebase.app().options.apiKey; // a mesma do firebase-config.js (pública)
+  const url = (chave) => 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(chave);
+  const consultar = async (idToken, chave) => {
+    const r = await fetch(url(chave), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken }) });
+    return { status: r.status, j: await r.json().catch(() => ({})) };
+  };
+  const erro = (j) => String((j.error && j.error.message) || '').split(/[ :]/)[0];
+  const tk = await u.getIdToken(); // não é mostrado nem guardado
+  const carga = JSON.parse(atob(tk.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+  // 2) a consulta que a API v4 vai fazer (L1–L6)
+  const t0 = performance.now();
+  const a = await consultar(tk, chavePublica);
+  const ms = Math.round(performance.now() - t0);
+  const c = a.j.users && a.j.users[0];
+  // 3) os dois casos de erro, com um login FALSO (o real não é enviado de novo)
+  const b = await consultar('login.falso.teste', chavePublica);
+  const d = await consultar('login.falso.teste', 'chave-errada-de-teste');
+  console.table({
+    'L1 resposta': a.status,
+    'L2 uma conta': !!a.j.users && a.j.users.length === 1,
+    'L3 mesma conta do login': !!c && c.localId === carga.sub,
+    'L4 desativada': c ? !!c.disabled : 'sem conta',
+    'L5 sessão válida (validSince <= login)': c ? Number(c.validSince || 0) <= carga.auth_time : 'sem conta',
+    'L6 tempo (ms)': ms,
+    'L7 login falso': `${b.status} ${erro(b.j)}`,
+    'L8 chave errada': `${d.status} ${erro(d.j).slice(0, 20)}`,
+  });
+})();
+```
+
+Resultado esperado:
+- L1 `200`
+- L2 e L3 `true`
+- L4 `false`
+- L5 `true`
+- L6 abaixo de cerca de 500
+- L7 `400 INVALID_ID_TOKEN`
+- L8 `400` (chave recusada; a v4 trata isso como "ninguém entra")
+
+**Teste controlado de desativação** (com a conta **secundária**; **só com autorização do Igor**, porque muda o Firebase):
+1. **D0:** numa janela anônima, logado com a conta secundária, rodar o teste acima. O esperado é L4 `false`.
+2. **D1:** Firebase Console → Authentication → Users → conta secundária → **Disable account**. Anotar o horário.
+3. **D2:** na **mesma janela** (o login antigo continua guardado nela), rodar o teste de novo. O esperado é L1 `400` com `USER_DISABLED`, ou L4 `true`. Os dois a v4 recusa (testado).
+4. **D3:** Firebase Console → **Enable account**. Anotar o horário.
+5. **D4:** entrar de novo e rodar o teste. O esperado é igual ao D0.
+
+Se a reativação falhar, a conta continua existindo e o Igor reativa pelo mesmo menu. Nada no CRM/ERP é apagado.
+
+**Abuso da cota grátis: o que só OBSERVA × o que BLOQUEIA antes da função**
+
+Fatos da documentação oficial:
+- 500 mil chamadas por mês;
+- as chamadas contam "independente do código de resposta";
+- o pré-voo `OPTIONS` não conta;
+- se a cota estourar, vem o aviso por e-mail, um período de tolerância e depois possíveis restrições (projeto pausado, banco só leitura ou erro 402);
+- não há cobrança.
+
+| Tipo | Medida | Impede a chamada de chegar ao CÓDIGO? | Impede que ela CONTE na cota? | Efeito colateral |
+|---|---|---|---|---|
+| Observa | consulta só de leitura dos registros (`query_logs`) + página de uso do Supabase + e-mail automático da cota | não | não | nenhum |
+| Reduz o estrago (dentro da função) | recusas antes do banco; intruso sem consulta ao Google; limite por UID (60/min, 20 tarefas/h) | não | não | nenhum (já ativo) |
+| **Bloqueia antes** | **B1: religar o Verify JWT** (o gateway recusa antes do código) | **sim** | **não garantido** (a documentação não diz se a recusa do gateway conta) | a tela da LABZ AI para |
+| **Bloqueia antes** | **B2: publicar a função com outro nome** e trocar o `LABZ_API_URL` (o endereço antigo passa a dar "não encontrado") | **sim** | provavelmente sim (não há função para chamar), a confirmar | o atacante pode achar o endereço novo (o site é público) |
+| **Bloqueia tudo** | **B3: pausar o projeto da LABZ AI** | **sim** | **sim** (a documentação diz que pausar para a contagem) | a LABZ AI para inteira até reativar (os dados ficam guardados) |
+
+No plano grátis **não existe** limite por IP, firewall de aplicação (WAF) nem domínio próprio para as funções. A restrição de rede do Supabase vale só para o **banco**, não para as funções. O CRM/ERP (Firebase) não é afetado por nenhuma dessas medidas.
+
+- **Linha de base (04/11/2026):** 0 chamadas às funções em 24 h.
+- **Uso esperado:** com 1 a 2 horas de uso por dia, cerca de 10 a 20 mil por mês (2% a 4% da cota).
+- **Consulta de acompanhamento:** `select log_attributes['function_id'] as funcao, log_attributes['response.status_code'] as status, count() as n from logs where source = 'function_edge_logs' group by funcao, status`.
+- **Níveis:**
+  - **N1 (aviso):** mais de 2 mil chamadas por dia ou mais de 500 recusas por hora. Avisar o Igor e acompanhar.
+  - **N2:** mais de 15 mil por dia → **B2**.
+  - **N3:** mais de 50% da cota → **B3**. O B1 pode ser usado na hora como primeira resposta, sabendo que talvez não proteja a cota.
+
+**Ordem da publicação (I4-B) e o que fazer quando algo falha:**
+
+| # | Passo | Se falhar | Volta |
+|---|---|---|---|
+| 0 | Backup novo (Igor) + teste L1–L8 | parar; nada foi mudado | — |
+| 1 | Merge do PR 15 (nada é publicado) | GitHub vermelho na `main` → parar e corrigir num PR; o site e as funções continuam como estão | revert do merge (R4, sem publicar) |
+| 2 | `LABZ_FIREBASE_API_KEY` + publicar a **v4**, com o **Verify JWT ainda ligado**. Prova de que ligou (como o T2 da Etapa 6): um pedido com a chave pública passa pelo gateway e o **código** responde 401; o registro mostra `booted` | a função não liga (BOOT_ERROR) ou o SHA-256 diverge → **R2** (v3). Com a trava ligada, ninguém de fora chegava ao código | R2 |
+| 3 | (opcional, com autorização) D0–D4 | resultado diferente → R2; reativar a conta | R2 |
+| 4 | Desligar o Verify JWT da `labz-api` | qualquer recusa que vire 200, ou a conta secundária entrando → **R1** imediato | R1 (+ R2) |
+| 5 | Publicar o site (Site seguro, PUBLICAR) | a montagem falha → nada é publicado; o site publicado com erro → **R3** (esconder o menu) ou **R4** (v154) | R3/R4 |
+| 6 | Validar no site + 2 dias de acompanhamento | erro na tela da LABZ AI → R1/R3; erro no CRM/ERP → **R4** imediato | R1/R3/R4 |
+
+**Volta atrás** (cada uma independe das outras):
+- **R1:** religar o Verify JWT, no painel. Leva segundos. A tela mostra "servidor ainda bloqueado".
+- **R2:** publicar o `labz-api-v3.zip`, idêntico ao que está publicado hoje (SHA-256 conferido em 04/11).
+- **R3:** `LABZ_AI_MENU_ATIVO = false` + publicar o site.
+- **R4:** um PR que desfaz o merge (revert) + publicar o site. Volta a v154; o `sw.js` antigo faz os aparelhos trocarem o cache.
+- **R5:** desligar o interruptor do worker.
+
+A v155 e a v4 **não migram nem apagam dados** e não mudam as regras do Firebase. Nenhuma volta atrás exige recuperar backup.
+
+## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
+
+- **Projeto:** exclusivo da LABZ AI, na organização do Igor, no plano Free.
+- **Regra de ouro:** cada etapa só começa com a autorização do Igor para **aquela** etapa. Toda alteração é seguida de uma conferência **só de leitura**.
+- **Ferramentas:** tudo pela conexão Claude/Supabase, porque o ambiente do Claude não alcança o `supabase.com`.
+- **Segredos:** os valores secretos **nunca passam pelo Claude**. O Igor digita cada um direto no painel.
+- **Legenda:** 🤖 = o Claude faz pela conexão · 👤 = o Igor faz no painel · 🔒 = precisa de autorização própria.
+
+| Etapa | O que acontece | Quem | Alteração no Supabase? | Como desfazer |
+|---|---|---|---|---|
+| **0** | O Igor cria o projeto `labz-ai` (São Paulo, Free; Data API sem exposição automática de tabelas; nenhum add-on) e avisa o Claude | 👤 | sim (pelo Igor) | apagar o projeto (vazio) |
+| **1** | Identidade e limpeza do projeto: id, nome, região, plano Free, sem dados de outros sistemas (`supabase/s5b/00-verificar-projeto.sql` + `list_tables` + `list_extensions` + `get_advisors`) | 🤖 | **não** (só leitura) | — |
+| **2** 🔒 | Migração 1 (`…_labz_inicial.sql`): schema `labz`, tabela `docs`, RLS forçado, papel `labz_app` sem login → conferir com `supabase/s5b/10-conferir-permissoes.sql` + `get_advisors` | 🤖 | sim (só o schema `labz`) | `drop schema labz cascade; drop role labz_app;` (ainda sem dados) |
+| **3** 🔒 | Migração 2 (`…_labz_acionamentos.sql`): tabela de acionamentos e funções de assinatura → conferir de novo | 🤖 | sim | ver o relatório da S5A, seção 3 |
+| **4** 🔒 | Papel de login das funções: o Claude aplica a migração `…_labz_borda.sql` (papel **sem senha**, sem nenhum poder administrativo, herda só `labz_app`, limites de sessão). O Igor abre **`supabase/s5b/gerar-senha.html`** no computador (funciona sem internet), guarda a senha no gerenciador e roda no SQL Editor só o comando com o **verificador SCRAM** (o projeto registra os comandos DDL no log, então a senha em si nunca vai para o banco) | 🤖 + 👤 | sim | `drop role labz_borda;` |
+| **5** 🔒 | Segredos das funções (o Claude cria o pedido; o Igor digita os valores no painel): `LABZ_DB_URL` (pooler, modo transação, porta 6543, usuário `labz_borda.<id>`), `LABZ_SUPERADMIN_UIDS`, `LABZ_FIREBASE_PROJETO`, `LABZ_WORKER_SEGREDO` (32+ caracteres; `openssl rand -hex 32` no computador do Igor) | 🤖 + 👤 | sim (só segredos) | apagar ou trocar no painel |
+| **6** 🔒 | Publicar `labz-api` e `labz-worker` (`index.ts` + `labz.mjs` de cada pasta, `verify_jwt = false`; as duas conferem a autenticação no próprio código). Conferir com `list_edge_functions` | 🤖 | sim (2 funções) | apagar as funções no painel |
+| **7** | Testes de recusa, só de leitura: sem token → 401; token inválido → 401; outra origem → 403; worker sem acionamento → 401; logs sem dados sensíveis (`get_logs`) | 🤖 + 👤 | **não** | — |
+| **8** 🔒 | Cadastrar o Super Admin no banco da LABZ AI: `labz_usuarios/{uid}` (role `SuperAdmin`) e `labz_config/acesso` (`uids`). O UID não é segredo; o Igor informa | 🤖 | sim (2 linhas) | apagar as 2 linhas |
+| **9** | Teste com o login real do Igor, numa cópia **local** da tela apontando para a API, sem publicar nada no site: catálogo dos 8 agentes; um Diretor de teste é recusado | 👤 + 🤖 | só leitura | — |
+| **10** 🔒🔒 | **Autorização separada, em passos (decisão do Igor).** 10.1: código (interruptor `labz_config/worker`, fechado por padrão; tique econômico, que só chama o worker com trabalho; limpeza só do histórico do cron da LABZ AI). 10.2: migração 3 aplicada **com o interruptor desligado**. 10.3: o Igor cadastra `labz_worker_url` e `labz_worker_segredo` (o **mesmo** valor da etapa 5) **pelo formulário do Vault**, não pelo SQL Editor, que guarda o texto. 10.4: Verify JWT da `labz-worker` desligado (o `pg_net` não manda login do Supabase). 10.5: um `labz.acionar_worker('manual')` de teste. 10.6: ligar o interruptor | 🤖 + 👤 | sim (**liga o agendamento**) | interruptor `{"ativo":false}` (na hora); `select cron.unschedule('labz-worker-tique');`; o restante na seção 3 da S5A |
+| **11** | Tarefa simulada de ponta a ponta (fila → gatilho → worker → concluída); conferir invocações, tamanho do banco e logs depois de 24 h | 🤖 + 👤 | só leitura | — |
+| **12** | Primeiro backup (exportação), feito pelo Igor no computador ou pelo painel, e guardado fora do Supabase. A conexão Claude/Supabase volta ao modo **somente leitura** | 👤 | não | — |
+
+**Andamento real (projeto `ducvpgrtsguaxqhnnupd`, us-east-1):**
+- Etapas 0–5 concluídas (3 migrações, `labz_borda` com senha, 5 segredos; o `LABZ_WORKER_SEGREDO` vem do `gerar-senha.html`, seção "Segredo do worker").
+- **Etapa 6, como publicar:** o pacote (645 KB) é grande demais para a conexão Claude/Supabase. Por isso o Igor publica **pelo painel**: Edge Functions → Deploy a new function → Via Editor → arrastar o zip (`index.ts` + `labz.mjs`) e **trocar o nome aleatório** que o painel sugere. Depois disso, o Claude baixa o código publicado (`get_edge_function`) e compara os SHA-256.
+- **Etapa 6, Verify JWT:** fica **ligado** até o Igor autorizar o desligamento.
+- **Correção da Etapa 6 — nenhuma chamada sem login grava no banco:**
+  - recusas de origem e de token, e logins válidos do Firebase **fora** de `LABZ_SUPERADMIN_UIDS`, só vão para o **log** da função (`src/borda/registro-recusas.js`: etapa e motivo, no máximo 20 linhas por minuto, mais um resumo);
+  - a lista do servidor é conferida **antes** do limitador e do banco;
+  - a auditoria das operações do Super Admin continua no banco.
+- **Pacote com nome por versão (`labz-<12 primeiros do SHA-256>.mjs`):**
+  - motivo: ao atualizar a `labz-api` pelo editor do painel, a entrada duplicada `labz.mjs` foi publicada com o conteúdo **antigo** (v2: `index.ts` novo e pacote antigo);
+  - agora `npm run empacotar` grava o pacote com o nome da versão, reescreve o `import` de cada `index.ts` e apaga, só no repositório, os pacotes antigos;
+  - `--conferir` confere que cada pasta tem só `index.ts` e o pacote, e que o `import` aponta para ele;
+  - na função publicada, os arquivos antigos ficam **sem uso** (não são apagados).
+- **Supabase local atrás do proxy do sandbox:** o Edge Runtime baixa `@types/node` ao ligar. Sem esse download, dá `BOOT_ERROR`. Para resolver, guarde o pacote no cache do volume `supabase_edge_runtime_*` com o Deno do computador (`DENO_DIR=<volume> deno cache npm:@types/node`) e não use `stop --no-backup` (apaga o cache). Rode `supabase db reset` antes, para não sobrar tarefa antiga na fila.
+
+**Fora da S5B** (cada uma com autorização própria, mais tarde):
+- publicar a tela no site (`LABZ_API_URL`, lista do Site seguro);
+- ligar o menu LABZ AI;
+- modelos de IA reais;
+- qualquer deploy automático.
+
+### O que o Igor precisa fazer em cada etapa
+
+- **Etapa 0:**
+  - criar o projeto;
+  - guardar a senha do banco no gerenciador de senhas;
+  - avisar "projeto criado".
+- **Etapa 4:** abrir `supabase/s5b/gerar-senha.html`, guardar a senha e a `LABZ_DB_URL` no gerenciador e rodar **uma** linha no SQL Editor (o verificador, nunca a senha).
+- **Etapa 5:**
+  - digitar os 4 segredos no painel, quando a conexão pedir;
+  - montar a `LABZ_DB_URL` com a string do pooler (Connect → Transaction pooler), trocando o usuário por `labz_borda.<id>` e a senha pela da etapa 4.
+- **Etapa 8:** informar o seu UID do Firebase (Authentication → Users), que não é segredo.
+- **Etapa 9:** abrir a cópia local da tela e entrar com o seu login.
+- **Etapa 10:** autorizar à parte e rodar **uma** linha no SQL Editor (o segredo no Vault).
+- **Etapa 12:** fazer a exportação de backup.
+
 ## Limitações que continuam (não resolvidas)
 1. A aprovação (e o rollback e a reativação) ainda lê o escopo inteiro na transação, para preservar a consistência (decisão da 3B).
 2. A busca trabalha com candidatos limitados (até 100 por escopo, com a consulta complementar) e **não garante recuperação exaustiva**; avisa com `completa: false`.
@@ -336,3 +627,462 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - Fase 4: o trabalhador que executa os agentes (usa a porta de memória e a preparação por etapa).
 - Fase 4: motor de orquestração (trabalhador da fila, planner, quality gate, custos).
 - Fases 5–8: conteúdo das skills, provedores de IA, interface e integrações.
+
+## Backup do Supabase (Etapa 12)
+
+Ferramentas para o backup do schema `labz` do projeto Supabase da LABZ AI. Tudo aqui é **só leitura**
+na produção ou roda **só no computador local**. Nenhuma senha, chave ou dado real fica neste repositório
+(o `.gitignore` da raiz bloqueia os arquivos de backup).
+
+| Arquivo | Para quê |
+|---|---|
+| `exportar-dados.sql` | Consulta de exportação (SQL Editor). Linha 0 = cabeçalho; linhas 1..N = documentos. |
+| `impressao-digital.sql` | Só o cabeçalho (total, contagem, sha256), sem dados: conferência pela conexão Claude/Supabase. |
+| `retrato-estrutura.sql` | Retrato da estrutura (tabelas, colunas, restrições, índices, RLS, funções, gatilhos, permissões, papéis, cron, extensões, migrações). Sem dados e sem segredos. |
+| `comparar-estrutura.mjs` | Compara dois retratos (`--repo` confere o texto das migrações com os arquivos). |
+| `retrato-local.mjs` | Gera o retrato de um banco local. |
+| `labz-backup.html` | Página **offline**: confere o arquivo baixado, cifra com senha e abre/confere um backup cifrado. |
+| `nucleo.js` | O código do formato e da criptografia (o mesmo da página; um teste confere). |
+| `restaurar-local.mjs` | Restauração **só local** (recusa qualquer endereço que não seja este computador). |
+| `ensaiar-etapa12.mjs` | Ensaio completo com dados fictícios no Supabase local. |
+| `teste-restauracao.mjs` | Passo 12.5: teste de restauração guiado, de ponta a ponta, no computador do Igor (um comando). |
+| `conferir-restauracao.mjs` | Conferência de uma restauração local (só leitura; mostra só resultados). |
+| `ensaiar-etapa12-5.mjs` | Ensaio do passo 12.5 com dados fictícios criados pelo backend. |
+| `sincronizar-pagina.mjs` | Copia o `nucleo.js` para dentro da página (rodar depois de mudar o núcleo). |
+
+### O que o backup cobre
+
+- **Dados:** a tabela `labz.docs`, inteira, num retrato único (uma consulta só).
+- **Estrutura:** as migrações em `supabase/migrations/` (versionadas no Git), comprovadas contra a produção pelo retrato da estrutura.
+- **Fora, de propósito:** `labz.acionamentos` (bilhetes de uso único, apagados em 1 dia), o histórico do `pg_cron` e do `pg_net`, os **valores** do Vault e as senhas dos papéis. Na recuperação, os segredos são gerados de novo (página `s5b/gerar-senha.html`) e cadastrados pelo Igor.
+
+### Formato 1: exportação e documento aberto (`labz-backup-dados`, versão 1)
+
+A consulta `exportar-dados.sql` devolve as colunas `ordem` e `linha`:
+
+- `ordem = 0`: o **cabeçalho**, um objeto JSON:
+  `{"formato":"labz-backup-dados","versao":1,"algoritmo":"sha256-netstring-v1","tabela":"labz.docs","geradoEm":"AAAA-MM-DDTHH:MM:SSZ","total":N,"contagem":{"<coleção>":n,...},"sha256":"<64 hex>"}`
+- `ordem = 1..N`: um documento por linha, como texto JSON de uma lista com 5 textos:
+  `[caminho, colecao, id, atualizado_em, dados]`. `atualizado_em` em UTC com microssegundos
+  (`AAAA-MM-DDTHH:MM:SS.ffffffZ`); `dados` é o **texto exato** do JSON gravado (a ordem das chaves importa).
+  As linhas vêm em ordem de `caminho` (collation "C").
+
+O **documento aberto** (`*.aberto.json`, o que a página produz) é o mesmo conteúdo já normalizado:
+`{"formato":"labz-backup-dados","versao":1,"cabecalho":{...},"linhas":[[5 textos],...]}`.
+
+**Impressão digital (`sha256-netstring-v1`):** para cada documento, na ordem, e para cada um dos 5
+campos, na ordem, escreve-se `<tamanho em bytes UTF-8>:<texto>` (sem separador). O sha256 desses bytes
+(em hexadecimal minúsculo) é a impressão digital. Exemplo: o campo `ação` vira `6:ação` (o `ç` e o `ã` ocupam 2 bytes cada).
+
+Um arquivo só está íntegro se: tem exatamente um cabeçalho; as linhas vão de 1 a N sem buraco;
+N = `total`; a contagem por coleção bate; `caminho = colecao/id` e não se repete; e o sha256 recalculado
+é igual ao do cabeçalho. **Baixar não basta**: o SQL Editor pode limitar o número de linhas, e a página
+acusa "incompleto".
+
+### Formato 2: backup cifrado (`labz-backup-cifrado`, versão 1)
+
+```json
+{
+  "formato": "labz-backup-cifrado",
+  "versao": 1,
+  "kdf":   { "nome": "PBKDF2", "hash": "SHA-256", "iteracoes": 600000, "sal": "<base64, 16 bytes>" },
+  "cifra": { "nome": "AES-GCM", "bitsChave": 256, "iv": "<base64, 12 bytes>", "bitsTag": 128 },
+  "aad":   "<texto JSON do rótulo: formato, versao, geradoEm, cifradoEm, total, sha256>",
+  "dados": "<base64 de: texto cifrado + etiqueta de 16 bytes no fim>"
+}
+```
+
+- **Chave:** PBKDF2-HMAC-SHA256 da senha (UTF-8, normalizada em NFC), com o `sal`, `iteracoes` vezes, 32 bytes.
+- **Cifra:** AES-256-GCM (criptografia **autenticada**: qualquer byte alterado, ou senha errada, faz a abertura falhar).
+  O texto do campo `aad` entra como "dado associado": o rótulo fica visível sem senha, mas não pode ser
+  alterado sem a abertura falhar.
+- **Conteúdo aberto:** o documento aberto (formato 1) em UTF-8.
+- Sal e IV novos e aleatórios a cada cifragem. Senha mínima de 12 caracteres. A página **abre a cópia
+  cifrada de novo e confere** antes de entregar o arquivo.
+- Ao abrir, a impressão digital e o total são conferidos contra o cabeçalho **e** contra o rótulo.
+
+### Recuperar sem a ferramenta original
+
+Se a página `labz-backup.html` ou este repositório não estiverem disponíveis, o formato acima basta.
+Os dois programas abaixo fazem a mesma coisa (abrem, conferem e gravam o documento aberto); um teste
+automático roda exatamente estes textos.
+
+**Python** (3.8+, com `pip install cryptography`):
+
+```python
+# recuperar-labz-backup.py — abre e confere um backup cifrado da LABZ AI sem a página original.
+# Uso: python3 recuperar-labz-backup.py arquivo.cifrado.json saida.aberto.json
+# A senha é perguntada (não aparece na tela) ou lida da variável LABZ_BACKUP_SENHA.
+import base64, getpass, hashlib, json, os, sys, unicodedata
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+env = json.load(open(sys.argv[1], encoding="utf-8"))
+k, c = env["kdf"], env["cifra"]
+if env["formato"] != "labz-backup-cifrado" or env["versao"] != 1 or k["nome"] != "PBKDF2" or k["hash"] != "SHA-256" or c["nome"] != "AES-GCM" or c["bitsChave"] != 256:
+    sys.exit("Formato desconhecido.")
+senha = os.environ.get("LABZ_BACKUP_SENHA") or getpass.getpass("Senha do backup: ")
+chave = hashlib.pbkdf2_hmac("sha256", unicodedata.normalize("NFC", senha).encode("utf-8"), base64.b64decode(k["sal"]), k["iteracoes"], 32)
+try:
+    texto = AESGCM(chave).decrypt(base64.b64decode(c["iv"]), base64.b64decode(env["dados"]), env["aad"].encode("utf-8"))
+except Exception:
+    sys.exit("Não abriu: senha errada ou arquivo alterado.")
+doc = json.loads(texto.decode("utf-8"))
+h = hashlib.sha256()
+for linha in doc["linhas"]:
+    for campo in linha:
+        b = campo.encode("utf-8")
+        h.update(str(len(b)).encode("ascii") + b":" + b)
+rotulo = json.loads(env["aad"])
+if not (h.hexdigest() == doc["cabecalho"]["sha256"] == rotulo["sha256"] and len(doc["linhas"]) == doc["cabecalho"]["total"] == rotulo["total"]):
+    sys.exit("A impressão digital NÃO bate: não use este arquivo.")
+with open(sys.argv[2], "wb") as f:
+    f.write(texto)
+print("Aberto e conferido:", len(doc["linhas"]), "documentos, sha256", h.hexdigest())
+```
+
+**Node.js** (18+, sem instalar nada; usa só o módulo `crypto` do próprio Node):
+
+```js
+// recuperar-labz-backup.js — o mesmo que o programa em Python.
+// Uso: LABZ_BACKUP_SENHA='...' node recuperar-labz-backup.js arquivo.cifrado.json saida.aberto.json
+const crypto = require('crypto');
+const fs = require('fs');
+const env = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (env.formato !== 'labz-backup-cifrado' || env.versao !== 1 || env.kdf.nome !== 'PBKDF2' || env.kdf.hash !== 'SHA-256' || env.cifra.nome !== 'AES-GCM' || env.cifra.bitsChave !== 256) throw new Error('Formato desconhecido.');
+const senha = process.env.LABZ_BACKUP_SENHA;
+if (!senha) throw new Error('Defina a variável LABZ_BACKUP_SENHA.');
+const chave = crypto.pbkdf2Sync(Buffer.from(senha.normalize('NFC'), 'utf8'), Buffer.from(env.kdf.sal, 'base64'), env.kdf.iteracoes, 32, 'sha256');
+const tudo = Buffer.from(env.dados, 'base64');
+const decifra = crypto.createDecipheriv('aes-256-gcm', chave, Buffer.from(env.cifra.iv, 'base64'));
+decifra.setAAD(Buffer.from(env.aad, 'utf8'));
+decifra.setAuthTag(tudo.subarray(tudo.length - 16));
+const texto = Buffer.concat([decifra.update(tudo.subarray(0, tudo.length - 16)), decifra.final()]);
+const doc = JSON.parse(texto.toString('utf8'));
+const h = crypto.createHash('sha256');
+for (const linha of doc.linhas) for (const campo of linha) { const b = Buffer.from(campo, 'utf8'); h.update(`${b.length}:`); h.update(b); }
+const rotulo = JSON.parse(env.aad);
+const hx = h.digest('hex');
+if (hx !== doc.cabecalho.sha256 || hx !== rotulo.sha256 || doc.linhas.length !== doc.cabecalho.total || doc.linhas.length !== rotulo.total) throw new Error('A impressão digital NÃO bate: não use este arquivo.');
+fs.writeFileSync(process.argv[3], texto);
+console.log('Aberto e conferido:', doc.linhas.length, 'documentos, sha256', hx);
+```
+
+**Gravar os dados num banco sem o `restaurar-local.mjs`** (num banco vazio, com as 4 migrações aplicadas;
+na produção, **só com autorização do Igor**). No lugar de `<LINHAS>`, cole o conteúdo do campo `"linhas"`
+do documento aberto (a lista que começa com `[[` e termina com `]]`). Antes, confira que o texto
+`$labzbackup$` não aparece no arquivo.
+
+```sql
+begin;
+alter table labz.docs disable trigger user; -- gravar não pode chamar o worker
+-- banco recém-montado: a migração 3 já criou o interruptor desligado; o do backup entra no lugar dele
+delete from labz.docs where caminho = 'labz_config/worker' and dados::text = '{"ativo":false}';
+insert into labz.docs (caminho, colecao, id, dados, atualizado_em)
+select l->>0, l->>1, l->>2, (l->>4)::json, (l->>3)::timestamptz
+from json_array_elements($labzbackup$<LINHAS>$labzbackup$::json) as l;
+alter table labz.docs enable trigger user;
+-- rode impressao-digital.sql aqui: o "sha256" precisa ser igual ao do cabeçalho do backup.
+-- igual → desligue o interruptor (o do backup pode estar ligado) e confirme; diferente → rollback;
+update labz.docs set dados = '{"ativo":false}'::json where caminho = 'labz_config/worker';
+commit;
+```
+
+### Como usar (resumo)
+
+- **Conferir/cifrar** (Igor): abrir `labz-backup.html` no navegador (com dois cliques, sem internet).
+- **Restaurar no Supabase local:**
+  `supabase start && supabase db reset` e depois
+  `node supabase/backup/restaurar-local.mjs arquivo.cifrado.json` (a senha é perguntada).
+  Só conferir, sem banco: `--so-conferir`.
+- **Ensaio com dados fictícios:** `supabase db reset` e depois `npm run backup:ensaio`.
+- **Comparar estruturas:** `node supabase/backup/retrato-local.mjs local.json` e
+  `node supabase/backup/comparar-estrutura.mjs producao.json local.json`.
+  No banco local, o CLI guarda cada migração dividida em comandos, então `--repo` só vale para o retrato
+  da produção (onde o texto foi registrado inteiro).
+
+### Teste de restauração no computador do Igor (passo 12.5)
+
+Tudo roda **no computador do Igor**: o backup cifrado não sai de lá, a senha é digitada só por ele e o
+banco usado é um Supabase **local** (Docker), montado do zero pelas 4 migrações. Nada se conecta ao
+projeto de produção: o comando recusa uma pasta ligada a um projeto remoto, não usa nenhum comando
+remoto do Supabase CLI e a restauração só aceita 127.0.0.1/localhost/::1.
+
+**Requisitos** (uma vez só; tudo grátis): Windows 10/11 64 bits (com WSL 2) ou macOS recente; 8 GB de
+memória; uns 5 GB livres no disco; permissão para instalar programas; **Docker Desktop** e **Node.js 20
+ou mais novo**. O Supabase CLI vem sozinho pelo `npx` (versão fixa `2.122.0`); a internet só é usada
+nas instalações e no primeiro download das imagens (cerca de 2 GB).
+
+**O comando** (na pasta `functions-labz`, depois de `npm ci --omit=dev` e com o Docker Desktop aberto):
+
+```
+npm run backup:teste-restauracao -- "<caminho do arquivo>.cifrado.json" --tarefa <id da tarefa> --entregas <n>
+```
+
+Os 7 passos: (1) confere que o arquivo é cifrado, que a pasta não está ligada a um projeto remoto e que
+o Docker está pronto; (2) pede a senha (**espere aparecer "Senha do backup:" antes de colar**; colar
+antes faz o terminal mostrar o texto) e abre + confere o backup antes de qualquer banco; (3) sobe o
+Supabase local e remonta o banco pelas 4 migrações (tenta 3 vezes se o Docker acabou de abrir);
+(4) pausa o relógio automático **local** (para ele não mexer nos dados durante o teste); (5) restaura
+numa transação; (6) confere e mostra só resultados (`conferir-restauracao.mjs`: contagem, impressão
+digital, documentos íntegros, tarefa COMPLETED, entregas com o conteúdo conferido pelo sha256, RLS,
+permissões, estrutura igual à da produção e nenhum pedido para fora); (7) desliga o Supabase local e
+**apaga os dados restaurados** (`--manter` deixa ligado). Termina com `RESULTADO: APROVADO`,
+`REPROVADO` ou `INTERROMPIDO`.
+
+O banco recém-montado já tem o interruptor do worker desligado (criado pela migração 3); a restauração
+aceita só esse documento, exatamente com esse valor, e o do backup entra no lugar dele.
+
+Ensaio com dados fictícios (o backend de verdade cria empresa, tarefa COMPLETED e 2 entregas):
+`SUPABASE_CLI=supabase npm run backup:ensaio-restauracao`.
+
+**No Windows (roteiro do Igor):** pasta curta para evitar caminhos longos (`C:\labz-teste`); usar
+`npm.cmd` no PowerShell (o `npm` sozinho pode ser bloqueado pela política de scripts do Windows);
+instalar com `npm.cmd ci --omit=dev --ignore-scripts` (só o necessário, cerca de 70 MB, sem rodar
+scripts de instalação). Antes do backup real, ensaiar com o **backup de exemplo** (dados fictícios):
+`supabase/backup/exemplo/backup-de-exemplo-ficticio.json`, senha pública `exemplo-ficticio-labz-2026`,
+`--tarefa exe_45fb2d9e4a4d459e9091 --entregas 2` (46 documentos; um teste confere que ele abre e está íntegro).
+
+O Supabase local, por padrão, abre o banco em `0.0.0.0` (para a rede) com a senha `postgres`. O comando
+guiado usa uma rede própria do Docker (`labz-restauracao-local`, portas presas a `127.0.0.1`), desliga os
+serviços que não usa e **recusa restaurar** se alguma porta estiver aberta para fora (`docker ps`).
+
+**Proteção da porta do banco local (obrigatória com dados reais).** São três proteções, e o comando
+guiado confere todas sozinho:
+
+1. **Tranca:** logo depois de montar o banco, todos os usuários que podem entrar recebem uma senha
+   aleatória, que só existe na memória do programa durante o teste. O programa **prova** que a senha
+   padrão `postgres` não entra mais; se ainda entrar, RECUSA.
+2. **Rede própria do Docker** com as portas presas a `127.0.0.1`. Funciona no Linux e no Mac. O Docker
+   Desktop do Windows ignora essa opção e publica a porta em `0.0.0.0` e `[::]`.
+3. **Firewall do Windows (só no Windows; obrigatório):** a regra `LABZ teste restauracao - bloquear 54322`
+   bloqueia a entrada de outros aparelhos na porta 54322. O próprio computador continua usando a porta,
+   porque o Firewall não filtra a volta interna (loopback). O programa confere a regra no passo 1, antes
+   de pedir a senha, e de novo antes de restaurar. Sem a regra, RECUSA.
+
+No Windows, o passo 1 mostra a linha `ok     Firewall do Windows bloqueia a entrada na porta 54322 (…)`.
+**Se essa linha não aparecer, a pasta está desatualizada:** pare (Ctrl+C) e baixe a branch de novo.
+No teste real de 04/11/2026 isso aconteceu, e o Firewall teve de ser conferido à mão depois do teste.
+
+Os comandos da regra são rodados no **PowerShell como administrador** (botão direito no menu Iniciar →
+"Terminal (Administrador)"). Numa janela comum, o Windows responde "Acesso negado".
+
+```
+New-NetFirewallRule -DisplayName "LABZ teste restauracao - bloquear 54322" -Direction Inbound -Protocol TCP -LocalPort 54322 -Action Block -Profile Any
+Get-NetFirewallRule -DisplayName "LABZ teste restauracao - bloquear 54322" | Format-List DisplayName,Enabled,Direction,Action
+Remove-NetFirewallRule -DisplayName "LABZ teste restauracao - bloquear 54322"
+```
+
+A ordem é: criar a regra antes do teste, conferir que ela aparece com Enabled `True`, Direction
+`Inbound` e Action `Block`, e apagar depois do teste. Depois de apagada, o `Get-NetFirewallRule` responde
+com um erro de "não encontrado", e é isso que se espera.
+
+### Instalação no Windows (uma vez só)
+
+Uma instalação por vez, conferindo cada uma antes de passar para a próxima. Este roteiro foi usado no
+computador do Igor em 04/11/2026: Windows 11 Pro, Node.js 24.21.0, WSL 3.0.3.0 e Docker Desktop 29.9.2.
+
+| # | O quê | Como conferir |
+|---|---|---|
+| 1 | **Windows 10/11 de 64 bits**, 8 GB de memória ou mais (feche outros programas antes do teste), uns 5 GB livres | `winver` |
+| 2 | **Virtualização habilitada** | Gerenciador de Tarefas → Desempenho → CPU → "Virtualização: Habilitado" |
+| 3 | **WSL 2**: no PowerShell como administrador, `wsl --install --no-distribution`, e depois reiniciar | `wsl --version` (versão padrão 2) |
+| 4 | **Docker Desktop** (site oficial, opção "WSL 2"); abrir e esperar "Engine running" | `docker run hello-world` |
+| 5 | **Node.js 20 ou mais novo** (versão LTS do site oficial) | `node -v` e `npm.cmd -v` |
+| 6 | O projeto: baixar a branch em zip pelo GitHub e extrair numa pasta curta (`C:\labz-teste`) | a pasta `functions-labz` existe |
+| 7 | As peças: na pasta `functions-labz`, `npm.cmd ci --omit=dev --ignore-scripts` | o passo 1 do comando não reclama de "peças" |
+| 8 | Ensaio com o backup de exemplo (seção acima) | `RESULTADO: APROVADO (15 de 15 conferências)` |
+
+O Supabase CLI não precisa ser instalado: o `npx` baixa a versão fixa `2.122.0`. O aviso "A new version
+of Supabase CLI is available" pode ser ignorado. O aviso "All services bind to 0.0.0.0" é um texto fixo
+do CLI; o que vale são as três proteções acima.
+
+### Limpeza segura depois de um teste
+
+O passo 7 já desliga o Supabase local, apaga os dados restaurados (`stop --no-backup`) e apaga a rede
+própria do Docker, mesmo quando algo falha no meio (a não ser com `--manter`). Para conferir, no
+PowerShell:
+
+```
+docker ps -a --filter "name=labz-local"
+docker volume ls --filter "name=labz-local"
+docker network ls --filter "name=labz-restauracao-local"
+```
+
+Os três comandos devem mostrar só o cabeçalho. Se sobrar algo, por exemplo porque o computador desligou
+no meio do teste (na pasta `functions-labz`):
+
+```
+npx --yes supabase@2.122.0 stop --no-backup --network-id labz-restauracao-local
+docker network rm labz-restauracao-local
+```
+
+Depois:
+
+- apagar a regra do Firewall (comando acima);
+- nunca deixar um arquivo `.aberto.json` (sem senha) no computador; se algum foi criado, apagar e
+  esvaziar a lixeira;
+- a pasta `C:\labz-teste` não tem dados reais e pode ser apagada quando quiser;
+- o backup cifrado **não** é apagado: ele fica no computador e na pasta privada do Google Drive.
+
+### Quando fazer backup
+
+Decisão D5 do Igor:
+
+- fazer um backup novo depois de qualquer mudança importante (migração, publicação de função, cadastro
+  ou correção de dados) e, no mínimo, **a cada 14 dias**;
+- guardar sempre o **primeiro** (03/11/2026) e os **3 mais recentes**; os outros podem ser apagados;
+- **próximo backup previsto: até 17/11/2026**.
+
+O plano Free do Supabase **não tem backup automático**: os backups são só estes.
+
+Como fazer: o mesmo roteiro dos passos 12.3 e 12.4.
+
+1. Antes, o Claude confere pela conexão (só leitura) o total e a impressão digital esperados, com
+   `impressao-digital.sql`.
+2. O Igor roda `exportar-dados.sql` no SQL Editor e baixa o CSV.
+3. Na página `labz-backup.html`, confere ("Íntegro" e a mesma impressão) e cifra com a senha dele.
+4. Guarda o `.cifrado.json` no computador e no Drive e apaga o CSV, esvaziando a lixeira.
+
+Com a mesma senha de sempre (no gerenciador de senhas), basta lembrar uma.
+
+Um teste de restauração (passo 12.5) vale a pena de vez em quando, por exemplo a cada 3 meses, ou
+depois de mudar uma migração.
+
+## Guia de recuperação (passo 12.6)
+
+Regras que valem em **todos** os cenários:
+
+- a produção só é alterada com **autorização do Igor** para aquele passo;
+- o arquivo do backup e a senha nunca passam pelo chat nem pelo GitHub;
+- **toda gravação feita depois do último backup se perde** quando se restaura um backup.
+
+Antes de qualquer conserto, desligar o worker para nada novo começar (ver "Emergência").
+
+### Emergência: parar a LABZ AI agora
+
+No SQL Editor (um comando só; não apaga nada):
+
+```sql
+update labz.docs set dados = '{"ativo":false}'::json where caminho = 'labz_config/worker';
+```
+
+Uma tarefa que já começou termina a rodada (até cerca de 2 minutos) e fica parada. Para encerrar de vez
+uma tarefa, use `execucoes.transicionar` para `CANCELLED`. Para ligar de novo, depois de resolvido, use
+o mesmo comando com `{"ativo":true}`.
+
+Se for preciso cortar também o acesso pela API, tire o UID do segredo `LABZ_SUPERADMIN_UIDS` no painel
+(Edge Functions → Secrets). Isso vale na hora.
+
+### Cenário 1 — dados apagados ou alterados por engano
+
+Exemplos: uma memória, uma tarefa ou uma empresa sumiu ou ficou errada.
+
+1. **Parar:** comando de emergência.
+2. **Guardar o estado atual antes de mexer:** fazer uma exportação nova (como no backup normal), mesmo
+   com o erro. Assim nada do que existe hoje se perde, e dá para comparar.
+3. **Descobrir o que mudou:** o Claude compara, pela conexão e só com números e caminhos (sem conteúdo),
+   o total e a contagem por coleção de hoje (`impressao-digital.sql`) com os do backup.
+4. **Ver o backup sem tocar na produção:** o Igor abre o backup no próprio computador.
+   - Para a conferência completa num banco local, use o teste de restauração (12.5).
+   - Para ler o conteúdo, use o programa de "Recuperar sem a ferramenta original", que grava um
+     `.aberto.json`; apague-o no fim.
+5. **Devolver só o que faltou:** o Claude prepara um SQL que grava **só os caminhos combinados**, numa
+   transação (mesmo modelo do SQL manual acima, com os gatilhos desligados e filtrando pelos caminhos).
+   O Igor cola o conteúdo no SQL Editor, de modo que os dados não passam pelo chat. Precisa de
+   autorização.
+6. **Conferir:** comparar a contagem com a esperada e ligar o interruptor de novo.
+
+A ferramenta `restaurar-local.mjs` **nunca** grava na produção: só aceita este computador e banco vazio.
+Isso é de propósito.
+
+### Cenário 2 — banco corrompido ou estrutura alterada
+
+Exemplos: uma função ou permissão diferente, uma regra de RLS desligada, documentos inválidos.
+
+1. **Parar:** comando de emergência.
+2. **Diagnóstico (só leitura, pelo Claude):**
+   - `retrato-estrutura.sql` na produção e `comparar-estrutura.mjs --repo` contra o retrato local
+     montado pelas migrações; mostra exatamente qual das 13 seções mudou;
+   - `impressao-digital.sql` e o `get_advisors` do Supabase.
+3. **Estrutura diferente:** reaplicar só a parte que mudou, com o texto da migração original (os
+   arquivos estão em `supabase/migrations/`). Precisa de autorização.
+   - Se a migração 3 (agendamento) estiver com problema, a reversão pronta é
+     `supabase/reversao/20261101000100_labz_gatilhos_reverter.sql`; depois, aplicar a migração 3 de novo.
+   - Repetir a comparação até dar 13 de 13.
+4. **Dados inválidos:** seguir o Cenário 1. Se o estrago for grande, seguir o Cenário 3 num projeto novo.
+
+### Cenário 3 — perda do projeto Supabase
+
+Exemplos: projeto apagado, pausado sem volta ou conta perdida.
+
+Se o projeto foi só **pausado** (o plano Free pausa depois de 7 dias de pouca atividade), primeiro veja
+no painel se aparece a opção de restaurar o projeto. Nesse caso, nada abaixo é necessário.
+
+Para montar de novo, cada passo com autorização, como na S5B:
+
+1. **Projeto novo** (Igor, no painel): o mesmo plano e uma região próxima; a Data API sem expor tabelas
+   automaticamente.
+2. **As 4 migrações, nesta ordem e sem mudar nada:**
+   - `20261031000000_labz_inicial.sql`
+   - `20261101000000_labz_acionamentos.sql`
+   - `20261101000050_labz_borda.sql`
+   - `20261101000100_labz_gatilhos.sql`
+
+   A migração 3 cria o interruptor **desligado**. Depois, conferir com `s5b/10-conferir-permissoes.sql`,
+   e a comparação da estrutura deve dar 13 de 13.
+3. **Senha do `labz_borda`:** uma nova, pela página `s5b/gerar-senha.html`; o Igor roda só o
+   verificador.
+4. **Os 5 segredos das funções**, com valores novos onde for o caso:
+   - `LABZ_DB_URL`, com o endereço do projeto novo;
+   - `LABZ_SUPERADMIN_UIDS`;
+   - `LABZ_FIREBASE_PROJETO` = `labz-18246`;
+   - `LABZ_WORKER_SEGREDO`, um novo;
+   - `LABZ_ORIGENS`.
+5. **Publicar as 2 funções** (Cenário 4, passo 3), com Verify JWT **ligado**.
+6. **Restaurar os dados**, com o projeto ainda sem nenhum uso:
+   - o Igor abre o backup no computador com o programa de "Recuperar sem a ferramenta original";
+   - roda o SQL manual daquela seção no SQL Editor; ele troca o interruptor padrão pelo do backup,
+     confere a impressão digital e deixa o interruptor **desligado**;
+   - apaga o `.aberto.json`.
+
+   O perfil do Super Admin e a lista de acesso voltam com os dados, e o login continua o mesmo (o
+   Firebase não muda).
+7. **Conferir:**
+   - total e impressão digital iguais aos do backup (`impressao-digital.sql`);
+   - estrutura 13 de 13;
+   - testes de recusa da S5B (T1/T2, W1–W3).
+8. **Agendamento:** os dois segredos do Vault pelo formulário (`labz_worker_url` com o endereço novo e
+   `labz_worker_segredo` = o mesmo valor do passo 4). Depois, Verify JWT do worker desligado, um
+   `select labz.acionar_worker('manual')` de teste e, por último, o interruptor ligado (passos 10.3 a
+   10.6).
+9. **Interface:** se ela já estiver publicada, trocar o endereço da API (`LABZ_API_URL`).
+
+Se um trabalho estava no meio quando o backup foi feito, o monitor da fila retoma ou desiste sozinho
+quando o interruptor for ligado.
+
+### Cenário 4 — falha nas Edge Functions (`labz-api` ou `labz-worker`)
+
+1. **Parar o worker:** comando de emergência. A `labz-api` pode continuar.
+2. **Diagnóstico (só leitura, pelo Claude):**
+   - versão e estado das funções (`list_edge_functions`);
+   - logs das últimas horas (`labz-api.recusa`, `BOOT_ERROR`, tempo esgotado);
+   - o código publicado comparado com o do repositório pelo SHA-256 (`get_edge_function`).
+
+   Os nomes dos segredos são conferidos no painel; os valores, nunca.
+3. **Publicar de novo a versão boa**, pelo painel (o pacote é grande demais para a conexão):
+   - no repositório, `npm run empacotar -- --conferir` (cada pasta tem só o `index.ts` e o
+     `labz-<sha12>.mjs`);
+   - zipar os dois arquivos da pasta da função;
+   - no painel, Edge Functions → a função → Deploy a new version → via Editor → arrastar o zip;
+   - conferir que o nome continua `labz-api` ou `labz-worker`;
+   - para voltar a uma versão anterior, usar os mesmos arquivos de um commit anterior.
+4. **Verify JWT:** na `labz-api`, **ligado**, desligando só durante testes autorizados; na `labz-worker`,
+   **desligado** (o banco chama sem login do Supabase; a função confere o acionamento assinado).
+5. **Conferir:**
+   - os testes de recusa (sem login → 401; worker sem acionamento → 401);
+   - o SHA-256 publicado igual ao do repositório;
+   - um acionamento `'manual'` de teste com resposta 202.
+
+   Só então ligar o interruptor.
+
+O banco não é afetado por uma falha das funções: os dados continuam lá.

@@ -29,9 +29,14 @@ test('nenhum arquivo de skill, memória ou prompt no repositório', () => {
   });
 });
 
-test('só as bibliotecas oficiais do Firebase; nenhum segredo de verdade guardado em arquivo', () => {
+test('só as bibliotecas oficiais do Firebase + o driver do PostgreSQL (versão fixa); nenhum segredo de verdade guardado em arquivo', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(RAIZ, 'package.json'), 'utf8'));
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['firebase-admin', 'firebase-functions']);
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['firebase-admin', 'firebase-functions', 'postgres']);
+  // Fase S1 (Supabase): o driver entra com a versão EXATA (sem ^ ou ~), sem dependências próprias
+  assert.match(pkg.dependencies.postgres, /^\d+\.\d+\.\d+$/, 'postgres com versão fixa');
+  const lock = JSON.parse(fs.readFileSync(path.join(RAIZ, 'package-lock.json'), 'utf8'));
+  assert.equal(lock.packages['node_modules/postgres'].version, pkg.dependencies.postgres);
+  assert.ok(!lock.packages['node_modules/postgres'].dependencies, 'o driver não traz dependências');
   assert.ok(!fs.existsSync(path.join(RAIZ, '.secret.local')), '.secret.local não pode existir no repositório');
   const gi = fs.readFileSync(path.join(RAIZ, '.gitignore'), 'utf8');
   assert.ok(gi.includes('.secret.local') && gi.includes('node_modules'));

@@ -8,12 +8,22 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:emulador": "node integracao/rodar.js",
-    "demo": "node demo/servidor-local.js"
+    "demo": "node demo/servidor-local.js",
+    "test:postgres": "node test/postgres/rodar.js",
+    "empacotar": "node supabase/empacotar.js",
+    "test:deno": "deno test -A --no-check test/deno/",
+    "test:supabase-local": "node supabase/testar-local.mjs",
+    "test:ui": "node --test --test-concurrency=1 test/ui/*.test.js",
+    "backup:ensaio": "node supabase/backup/ensaiar-etapa12.mjs",
+    "backup:sincronizar-pagina": "node supabase/backup/sincronizar-pagina.mjs",
+    "backup:teste-restauracao": "node supabase/backup/teste-restauracao.mjs",
+    "backup:ensaio-restauracao": "node supabase/backup/ensaiar-etapa12-5.mjs"
   },
   "private": true,
   "dependencies": {
     "firebase-admin": "^12.7.0",
-    "firebase-functions": "^6.6.0"
+    "firebase-functions": "^6.6.0",
+    "postgres": "3.4.9"
   },
   "devDependencies": {
     "firebase": "^10.14.1"

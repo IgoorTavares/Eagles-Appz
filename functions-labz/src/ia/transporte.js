@@ -35,7 +35,10 @@ function criarTransporteSimulado(responder) {
         // fica esperando até ser cancelada (timeout ou parada do executor)
         await new Promise((resolve, reject) => {
           if (!sinal) return; // sem sinal: nunca termina (o adaptador sempre passa um)
-          sinal.addEventListener('abort', () => reject(new ErroProvedor('cancelado', 'Chamada simulada abortada', { provedor })), { once: true });
+          const cancelar = () => reject(new ErroProvedor('cancelado', 'Chamada simulada abortada', { provedor }));
+          // o cancelamento pode ter chegado ENQUANTO a resposta era preparada (antes de escutar): não pode se perder
+          if (sinal.aborted) return cancelar();
+          sinal.addEventListener('abort', cancelar, { once: true });
         });
       }
       return r;

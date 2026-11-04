@@ -29,7 +29,7 @@ const { criarRelatorios } = require('./motor/relatorio');
 // ia (Fase 4B, opcional): { transporte, limitador?, timeoutMs? } liga o adaptador
 // de MODELOS (OpenAI/Anthropic/Google/simulado por agente). Só aceita o
 // transporte simulado ou o bloqueado: nenhuma chamada real nesta fase.
-// opcoes.monitor / opcoes.executor: configurações do monitor e do executor local.
+// opcoes.monitor / opcoes.executor / opcoes.fila: configurações do monitor, do executor local e da fila.
 function criarLabz({ banco, relogio, adaptador, ia, opcoes = {} }) {
   const auditoria = criarAuditoria(banco, relogio);
   const empresas = criarServicoEmpresas({ banco, auditoria, relogio });
@@ -39,7 +39,7 @@ function criarLabz({ banco, relogio, adaptador, ia, opcoes = {} }) {
   const skills = criarRegistroSkills({ banco, auditoria, relogio });
   const contexto = criarContexto({ banco, registro: memoria, skills, recuperador, auditoria, relogio });
   const auditor = criarAuditorMemoria({ registro: memoria, relogio });
-  const fila = criarFila({ banco, relogio });
+  const fila = criarFila({ banco, relogio, opcoes: opcoes.fila }); // opcoes.fila (Fase S3): prazo da reserva etc.
   const execucoes = criarExecucoes({ banco, auditoria, empresas, fila, relogio });
   const preparacao = criarPreparacao({ banco, contexto, auditoria, relogio });
   // porta de memória dos agentes: uso interno (trabalhador da Fase 4); não sai pela API

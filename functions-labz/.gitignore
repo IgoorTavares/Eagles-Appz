@@ -2,3 +2,4 @@ node_modules/
 .secret.local
 *.log
 .regras-emulador.rules
+supabase/functions/.labz-teste-ca.crt

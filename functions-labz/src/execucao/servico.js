@@ -168,6 +168,30 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
       const itens = (await banco.consultar(caminhos.colecoes.tarefas, opcoes)).map((e) => Object.assign({}, e));
       return { itens, proximo: itens.length === lim ? itens[itens.length - 1].id : null };
     },
+    // Fase S4: HISTÓRICO para a interface — do mais novo para o mais antigo, só um RESUMO (sem
+    // conteúdo, sem prompts, sem resultados), paginado (até 50). Mesmos filtros de listarPagina.
+    async historico(ator, { estado, empresaId, depoisDe, limite } = {}) {
+      exigirAtor(ator);
+      const lim = Math.min(Math.max(1, limite || 20), 50);
+      const onde = [];
+      if (estado) onde.push({ campo: 'estado', op: '==', valor: estado });
+      if (empresaId) onde.push({ campo: 'empresaId', op: '==', valor: empresaId });
+      const opcoes = { onde, ordenar: { campo: 'criadoEm', direcao: 'desc' }, limite: lim, cursorMesmoFiltro: ['empresaId'] };
+      if (depoisDe) opcoes.depoisDe = depoisDe;
+      const docs = await banco.consultar(caminhos.colecoes.tarefas, opcoes);
+      const itens = docs.map((e) => {
+        const etapas = Array.isArray(e.etapas) ? e.etapas : [];
+        const diag = e.diagnostico || null;
+        return {
+          id: e.id, objetivo: String(e.objetivo || '').slice(0, 160), empresaId: e.empresaId || null, estado: e.estado, modo: e.modo || null,
+          criadoEm: e.criadoEm || null, atualizadoEm: e.atualizadoEm || null,
+          etapas: { total: etapas.length, concluidas: etapas.filter((x) => x.status === 'concluida').length, falharam: etapas.filter((x) => x.status === 'falhou').length },
+          esperaSuperAdmin: e.estado === 'WAITING_APPROVAL' || (e.estado === 'REVISION_REQUIRED' && !!diag && diag.motivo === 'dependencia-aguarda-aprovacao'),
+          motivo: diag && typeof diag.motivo === 'string' ? diag.motivo.slice(0, 60) : null,
+        };
+      });
+      return { itens, proximo: itens.length === lim ? itens[itens.length - 1].id : null };
+    },
     // Primeira página (compatibilidade).
     async listar(ator, filtro = {}) { return (await this.listarPagina(ator, filtro)).itens; },
   };

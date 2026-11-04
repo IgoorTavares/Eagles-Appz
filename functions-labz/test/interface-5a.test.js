@@ -107,7 +107,8 @@ test('arquivos da interface: CSS isolado em .pg-labz, sem HTML montado com dados
   const seletores = [];
   semKeyframes.replace(/(^|\})\s*([^{}@]+?)\s*\{/g, (m, a, sel) => { seletores.push(...sel.split(',').map((x) => x.trim()).filter(Boolean)); return m; });
   assert.ok(seletores.length > 40);
-  const fora = seletores.filter((x) => !x.startsWith('.pg-labz'));
+  // I1: também valem as regras do tema escuro desta tela e a da barra de cima SÓ nesta página (body:has(main.pg-labz))
+  const fora = seletores.filter((x) => !x.startsWith('.pg-labz') && !x.startsWith('[data-theme="dark"] .pg-labz') && !x.startsWith('body:has(main.pg-labz) '));
   assert.deepEqual(fora, [], `seletores fora do módulo: ${fora.join(' | ')}`);
   const js = fs.readFileSync(path.join(UI, 'labz-ai.js'), 'utf8');
   assert.doesNotMatch(js, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/);

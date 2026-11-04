@@ -464,7 +464,10 @@ function criarMotor(deps) {
   }
 
   // ---------- Workflow Engine: uma rodada de uma execução ----------
-  async function rodar(id, token, sinal) {
+  // entreEtapas (Fase S3, opcional): parada SUAVE do worker (orçamento de tempo da Edge Function).
+  // Só é olhada ENTRE etapas e depois do 1º passo (sempre há progresso); nunca cancela uma chamada
+  // em curso (não desperdiça nem repete chamada ao modelo). A execução volta para a fila (READY).
+  async function rodar(id, token, sinal, entreEtapas) {
     for (let passo = 0; passo < MAX_PASSOS; passo++) {
       const exe = await ler(id);
       if (exe.estado !== 'RUNNING' || !exe.execucaoAtual || exe.execucaoAtual.token !== token) return { resultado: 'interrompida', estado: exe.estado };
@@ -488,6 +491,8 @@ function criarMotor(deps) {
         await execucoes.transicionar(ATOR_SISTEMA, id, 'REVISION_REQUIRED', { token, motivo: 'nenhuma etapa executável', extras: { diagnostico: { motivo: 'sem-etapa-executavel', em: relogio() } } });
         return { resultado: 'revisao' };
       }
+      // orçamento do worker acabou: para ANTES de começar outra etapa (a conclusão acima não espera)
+      if (passo > 0 && entreEtapas && entreEtapas.aborted) return liberar(id, token, null, 0);
       const r = await executarEtapa(exe, proxima, token, sinal);
       if (r) return r;
     }
@@ -496,7 +501,7 @@ function criarMotor(deps) {
   }
 
   // Assume uma execução READY (só um executor consegue) e roda.
-  async function processar(id, trabalhador, sinal) {
+  async function processar(id, trabalhador, sinal, entreEtapas) {
     const exe = await ler(id);
     if (exe.estado !== 'READY') return { resultado: 'ignorada', motivo: `estado ${exe.estado}` };
     const token = novoId('crc');
@@ -514,7 +519,7 @@ function criarMotor(deps) {
       throw e;
     }
     try {
-      return await rodar(id, token, sinal);
+      return await rodar(id, token, sinal, entreEtapas);
     } catch (e) {
       if (e && e.interrupcao) throw e;
       if (parou(e)) {
@@ -626,13 +631,14 @@ function criarMotor(deps) {
 
     // Executor: pega UM item da fila e processa. O executor automático local
     // (executor-local.js) chama isto em laço; sinal = parar o executor.
-    async trabalhar(trabalhador, { sinal } = {}) {
+    // entreEtapas (Fase S3): parada suave entre etapas (ver rodar).
+    async trabalhar(trabalhador, { sinal, entreEtapas } = {}) {
       if (sinal && sinal.aborted) return null;
       const item = await fila.reservar(trabalhador);
       if (!item) return null;
       let r;
       try {
-        r = await processar(item.execucaoId, trabalhador, sinal);
+        r = await processar(item.execucaoId, trabalhador, sinal, entreEtapas);
       } catch (e) {
         if (e && e.interrupcao) throw e; // simulação de queda: o item fica reservado até vencer
         await fila.falhar(item.id, trabalhador, msgCurta(e)).catch(() => {});

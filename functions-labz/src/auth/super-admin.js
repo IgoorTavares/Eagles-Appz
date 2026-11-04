@@ -11,6 +11,10 @@
 //   4. não está com a conta bloqueada por senhas erradas (tentativas_login).
 // A mensagem de recusa é sempre a mesma (não revela qual passo falhou);
 // o motivo fica só na auditoria.
+// Fase S2 (Supabase): de onde vem o PERFIL é injetável (deps.lerPerfil). No Firebase continua
+// usuarios/{uid}; no Supabase vem do banco DA LABZ AI (labz_usuarios/{uid}), que nunca tem
+// dados do CRM/ERP. O bloqueio por senhas erradas (tentativas_login) é do Firebase do
+// Eagles Labz: no Supabase fica desligado (deps.verificarBloqueio === false).
 const { erro } = require('../nucleo/erros');
 
 const MENSAGEM_NEGADO = 'Acesso exclusivo do Super Admin autorizado.';
@@ -20,7 +24,7 @@ function lerListaUids(valor) {
   return String(valor || '').split(',').map((u) => u.trim()).filter(Boolean);
 }
 
-// deps: { banco, uidsAutorizados (lista ou "a,b"), auditoria? }
+// deps: { banco, uidsAutorizados (lista ou "a,b"), auditoria?, lerPerfil?(uid), verificarBloqueio? }
 async function exigirSuperAdmin(auth, deps) {
   const negar = async (motivo, uid) => {
     if (deps.auditoria) await deps.auditoria.registrar('auth.acesso_negado', uid ? { uid } : null, 'labz', { motivo });
@@ -34,7 +38,7 @@ async function exigirSuperAdmin(auth, deps) {
   const autorizados = lerListaUids(deps.uidsAutorizados);
   if (!autorizados.length) return negar('lista-de-autorizados-vazia', uid);
 
-  const usuario = await deps.banco.obter(`usuarios/${uid}`);
+  const usuario = deps.lerPerfil ? await deps.lerPerfil(uid) : await deps.banco.obter(`usuarios/${uid}`);
   if (!usuario || usuario.role !== 'SuperAdmin') return negar('nao-e-super-admin', uid);
   if (!autorizados.includes(uid)) return negar('fora-da-lista-de-autorizados', uid);
   // A mesma pessoa precisa estar também na lista do banco, que é a que as
@@ -43,7 +47,7 @@ async function exigirSuperAdmin(auth, deps) {
   const acesso = await deps.banco.obter('labz_config/acesso');
   if (!acesso || !Array.isArray(acesso.uids) || !acesso.uids.includes(uid)) return negar('fora-da-lista-do-banco', uid);
 
-  if (token.email) {
+  if (token.email && deps.verificarBloqueio !== false) {
     const tent = await deps.banco.obter(`tentativas_login/${token.email}`);
     if (tent && Number(tent.falhas) >= 5) return negar('conta-bloqueada', uid);
   }

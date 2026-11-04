@@ -219,17 +219,24 @@ test('Git: arquivos de backup ficam fora do repositório; as ferramentas ficam d
 });
 
 // ---------- Etapa 12.5: teste de restauração no computador do Igor ----------
-test('senha no terminal: colar (tudo de uma vez, com o Enter) funciona; apagar, cancelar e teclas de controle', async () => {
+test('senha no terminal: colar (tudo de uma vez, com o Enter) funciona; apagar, cancelar, teclas de controle e sequências do terminal', async () => {
   const { processarTeclas } = await import('../supabase/backup/restaurar-local.mjs');
-  assert.deepEqual(processarTeclas('', 'frase secreta com ç e 🚀\r'), { senha: 'frase secreta com ç e 🚀', fim: 'ok' }, 'colar: chega num pedaço só');
-  assert.deepEqual(processarTeclas('', 'abc\n'), { senha: 'abc', fim: 'ok' });
+  const so = (r) => ({ senha: r.senha, fim: r.fim });
+  assert.deepEqual(so(processarTeclas('', 'frase secreta com ç e 🚀\r')), { senha: 'frase secreta com ç e 🚀', fim: 'ok' }, 'colar: chega num pedaço só');
+  assert.deepEqual(so(processarTeclas('', 'abc\n')), { senha: 'abc', fim: 'ok' });
   let r = processarTeclas('', 'ab');
   r = processarTeclas(r.senha, 'c');
-  assert.deepEqual(r, { senha: 'abc', fim: null }, 'digitar: um pedaço por tecla');
-  assert.deepEqual(processarTeclas('abc', '\u007f\u007fx\r'), { senha: 'ax', fim: 'ok' }, 'apagar (backspace)');
-  assert.deepEqual(processarTeclas('a🚀', '\u007f\r'), { senha: 'a', fim: 'ok' }, 'apagar um emoji inteiro');
-  assert.deepEqual(processarTeclas('abc', 'x\u0003y'), { senha: '', fim: 'cancelado' }, 'Ctrl+C cancela e descarta');
-  assert.deepEqual(processarTeclas('', '\u001b[A\tz\r'), { senha: '[Az', fim: 'ok' }, 'teclas de controle (Esc, Tab) não entram');
+  assert.deepEqual(so(r), { senha: 'abc', fim: null }, 'digitar: um pedaço por tecla');
+  assert.deepEqual(so(processarTeclas('abc', '\u007f\u007fx\r')), { senha: 'ax', fim: 'ok' }, 'apagar (backspace)');
+  assert.deepEqual(so(processarTeclas('a🚀', '\u007f\r')), { senha: 'a', fim: 'ok' }, 'apagar um emoji inteiro');
+  assert.deepEqual(so(processarTeclas('abc', 'x\u0003y')), { senha: '', fim: 'cancelado' }, 'Ctrl+C cancela e descarta');
+  assert.deepEqual(so(processarTeclas('', '\u001b[A\tz\r')), { senha: 'z', fim: 'ok' }, 'seta (ESC [ A) e Tab não entram');
+  // Windows Terminal: tecla "solta" e foco da janela chegam como sequências ESC [ ... (sem Enter de verdade)
+  const w = processarTeclas('', '\u001b[13;28;13;1;0;1_\u001b[I\u001b[O');
+  assert.deepEqual(so(w), { senha: '', fim: null }, 'sequências do terminal não terminam o pedido nem entram na senha');
+  assert.equal(w.descartadas, 3);
+  assert.deepEqual(so(processarTeclas('', '\u001b[200~minha senha\u001b[201~\r')), { senha: 'minha senha', fim: 'ok' }, 'colagem com marcadores do terminal');
+  assert.deepEqual(so(processarTeclas('', '\u001bOAq\r')), { senha: 'q', fim: 'ok' }, 'ESC O A (SS3) descartado');
 });
 
 test('comando guiado: só arquivo cifrado, nunca liga a um Supabase remoto, confere antes de subir o banco e apaga no fim', async () => {
@@ -239,6 +246,10 @@ test('comando guiado: só arquivo cifrado, nunca liga a um Supabase remoto, conf
   assert.throws(() => argumentos(['x', '--tarefa', 'a;b']), /inválido/);
   assert.throws(() => argumentos(['x', '--db', 'postgresql://remoto']), /desconhecida/, 'não há como apontar para outro banco');
   assert.match(CLI_VERSAO, /^\d+\.\d+\.\d+$/, 'Supabase CLI com versão fixa');
+  const { linhaDeComando } = await import('../supabase/backup/teste-restauracao.mjs');
+  assert.equal(linhaDeComando('npx', ['--yes', 'supabase@2.122.0', 'start', '-x', 'a,b']), 'npx --yes supabase@2.122.0 start -x a,b');
+  assert.equal(linhaDeComando('C:\\Program Files\\sb.exe', ['status']), '"C:\\Program Files\\sb.exe" status', 'caminho com espaço vai entre aspas');
+  assert.doesNotMatch(ler('teste-restauracao.mjs').replace(/\/\/.*$/gm, ''), /spawnSync\([^)]*,\s*\[[^\]]*\],\s*\{[^}]*shell:\s*(true|process)/, 'nada de lista de argumentos com shell (aviso DEP0190 do Node)');
   const fonte = ler('teste-restauracao.mjs');
   assert.doesNotMatch(fonte.replace(/\/\/.*$/gm, ''), /--linked|--db-url|'link'|'push'|'login'|'deploy'|SUPABASE_ACCESS_TOKEN/, 'nenhum comando remoto do Supabase CLI');
   assert.ok(fonte.indexOf('await abrirBackup(') < fonte.indexOf('if (!subirComRepeticao('), 'o backup é aberto e conferido ANTES de subir o banco');

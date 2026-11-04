@@ -100,20 +100,34 @@ try {
   } finally { fs.rmSync(ref, { force: true }); }
 
   // 5. senha COLADA num terminal de verdade (tudo de uma vez, com o Enter no fim)
-  // Como uma pessoa: espera aparecer "Senha do backup:" e só então cola (tudo de uma vez, com o Enter no fim).
-  // (Colar ANTES do pedido faz o terminal mostrar o texto: por isso o roteiro manda esperar o pedido.)
-  const pty = (senha) => new Promise((resolve) => {
+  // Como uma pessoa: espera aparecer "Senha do backup" e só então cola (tudo de uma vez, com o Enter no fim).
+  // `lixo`: o que o terminal manda sozinho logo depois do pedido (achado no Windows do Igor: o pedido
+  // terminou antes de ele colar). Tem de ser ignorado; e há até 3 tentativas.
+  const pty = (tentativas, { lixo = null } = {}) => new Promise((resolve) => {
     const p = spawn('script', ['-qec', `${process.execPath} ${path.join(PASTA, 'restaurar-local.mjs')} ${cifrado} --so-conferir`, '/dev/null'], { env: { ...process.env, LABZ_BACKUP_SENHA: '' } });
     let out = '';
-    let colou = false;
-    const t = setTimeout(() => p.kill(), 60000);
-    p.stdout.on('data', (d) => { out += d; if (!colou && out.includes('Senha do backup:')) { colou = true; p.stdin.write(`${senha}\r`); } });
+    let pedidos = 0;
+    const t = setTimeout(() => p.kill(), 90000);
+    p.stdout.on('data', (d) => {
+      out += d;
+      const n = (out.match(/Senha do backup/g) || []).length;
+      while (pedidos < n) {
+        const senha = tentativas[pedidos];
+        if (pedidos === 0 && lixo) setTimeout(() => p.stdin.write(lixo), 50);
+        if (senha !== undefined) setTimeout(() => p.stdin.write(`${senha}\r`), 900);
+        pedidos++;
+      }
+    });
     p.on('close', (status) => { clearTimeout(t); resolve({ status, stdout: out }); });
   });
-  const p1 = await pty(SENHA);
+  const p1 = await pty([SENHA]);
   conferir(p1.status === 0 && /Backup íntegro/.test(p1.stdout) && !p1.stdout.includes(SENHA), 'terminal: senha colada de uma vez (depois do pedido) → abre, e a senha não aparece na tela');
-  const p2 = await pty('senha-errada-colada');
-  conferir(p2.status === 1 && /senha está errada/.test(p2.stdout) && !p2.stdout.includes('senha-errada-colada'), 'terminal: senha errada colada → não abre (e também não aparece)');
+  const p3 = await pty([SENHA], { lixo: '\u001b[13;28;13;1;0;1_\r' });
+  conferir(p3.status === 0 && /Backup íntegro/.test(p3.stdout) && !/tentativa 2/.test(p3.stdout), 'terminal: o que o terminal manda sozinho logo após o pedido é ignorado (o caso do Windows)');
+  const p4 = await pty(['senha-errada-colada', SENHA]);
+  conferir(p4.status === 0 && /tentativa 2 de 3/.test(p4.stdout) && /Backup íntegro/.test(p4.stdout) && !p4.stdout.includes('senha-errada-colada'), 'terminal: errou a 1ª vez → pede de novo e abre na 2ª');
+  const p2 = await pty(['errada-1', 'errada-2', 'errada-3']);
+  conferir(p2.status === 1 && /senha está errada/.test(p2.stdout) && /tentativa 3 de 3/.test(p2.stdout) && !p2.stdout.includes('errada-1'), 'terminal: 3 senhas erradas → não abre (e nenhuma aparece)');
 
   // 6. a conferência pega dados estragados de propósito (com --manter, para mexer no banco local)
   const m = orquestrar([cifrado, '--tarefa', tarefa, '--entregas', String(nEntregas), '--manter'], { SUPABASE_CLI: CLI, LABZ_BACKUP_SENHA: SENHA });

@@ -54,10 +54,20 @@ export function subirComRepeticao(rodar, { tentativas = 3, pausaMs = 15000 } = {
   }
   return false;
 }
+// No Windows, "npx" é um .cmd e só roda pelo cmd.exe. Para não cair no aviso DEP0190 do Node (lista de
+// argumentos com shell), a linha é montada aqui. Os argumentos são sempre FIXOS deste arquivo (nunca
+// vêm do usuário); o que tiver espaço ou aspas vai entre aspas.
+export function linhaDeComando(cmd, args) {
+  return [cmd, ...args].map((a) => (/[\s"]/.test(a) ? `"${String(a).replace(/"/g, '""')}"` : a)).join(' ');
+}
+function rodar(cmd, args, opcoes) {
+  if (process.platform === 'win32') return spawnSync(linhaDeComando(cmd, args), { ...opcoes, shell: true });
+  return spawnSync(cmd, args, opcoes);
+}
 function supabase(args, { mostrar = true } = {}) {
   const viaEnv = process.env.SUPABASE_CLI;
   const [cmd, base] = viaEnv ? [viaEnv, []] : ['npx', ['--yes', `supabase@${CLI_VERSAO}`]];
-  return spawnSync(cmd, [...base, ...args], { cwd: RAIZ, encoding: 'utf8', stdio: mostrar ? 'inherit' : ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32' });
+  return rodar(cmd, [...base, ...args], { cwd: RAIZ, encoding: 'utf8', stdio: mostrar ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
 }
 
 async function principal() {
@@ -70,12 +80,12 @@ async function principal() {
   const aberto = N.abrirArquivo(fs.readFileSync(a.arquivo, 'utf8'));
   if (aberto.tipo !== 'cifrado') throw new RecusaLocal('RECUSADO: este teste só aceita o backup CIFRADO (.cifrado.json).');
   if (fs.existsSync(path.join(RAIZ, 'supabase', '.temp', 'project-ref'))) throw new RecusaLocal('RECUSADO: esta pasta está ligada a um projeto Supabase remoto (supabase/.temp/project-ref). Use uma cópia limpa do projeto.');
-  const docker = spawnSync('docker', ['info'], { stdio: 'ignore', shell: process.platform === 'win32' });
+  const docker = rodar('docker', ['info'], { stdio: 'ignore' });
   if (docker.status !== 0) throw new Error('O Docker não está pronto. Abra o Docker Desktop, espere aparecer "Engine running" e rode de novo.');
   const referencia = JSON.parse(fs.readFileSync(a.referencia, 'utf8'));
   console.log('ok     backup cifrado · projeto sem ligação remota · Docker pronto');
 
-  titulo(2, 'Abrir e conferir o backup (a senha não aparece na tela; pode colar e apertar Enter)');
+  titulo(2, 'Abrir e conferir o backup (espere o pedido; a senha não aparece na tela; cole e aperte Enter; 3 tentativas)');
   const b = await abrirBackup(a.arquivo);
   console.log(`ok     backup íntegro: ${b.conferencia.total} documentos · impressão digital ${b.conferencia.sha256}`);
 

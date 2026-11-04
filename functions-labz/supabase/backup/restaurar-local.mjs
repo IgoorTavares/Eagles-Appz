@@ -35,26 +35,42 @@ function argumentos(argv) {
 
 // O que chega do teclado vem em PEDAÇOS, e um pedaço pode trazer várias teclas: colar a senha
 // (do gerenciador de senhas) chega de uma vez só, já com o Enter no fim. Por isso, tecla por tecla.
+// Sequências de controle que o próprio terminal manda (ESC [ ... ; no Windows Terminal, inclusive teclas
+// "soltas" e foco da janela) são descartadas inteiras: nunca entram na senha nem a encerram.
 export function processarTeclas(atual, pedaco) {
   let s = Array.from(atual);
-  for (const ch of String(pedaco)) {
-    if (ch === '\r' || ch === '\n' || ch === '\u0004') return { senha: s.join(''), fim: 'ok' };
-    if (ch === '\u0003') return { senha: '', fim: 'cancelado' };
+  const t = Array.from(String(pedaco));
+  let descartadas = 0;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (ch === '\u001b') { // ESC: pula a sequência inteira (CSI "ESC [ ... final" ou SS3 "ESC O x")
+      descartadas++;
+      if (t[i + 1] === '[') { i += 2; while (i < t.length && !(t[i] >= '@' && t[i] <= '~')) i++; } else if (t[i + 1] === 'O') i += 2; else i += 1;
+      continue;
+    }
+    if (ch === '\r' || ch === '\n' || ch === '\u0004') return { senha: s.join(''), fim: 'ok', descartadas };
+    if (ch === '\u0003') return { senha: '', fim: 'cancelado', descartadas };
     if (ch === '\u007f' || ch === '\b') s = s.slice(0, -1);
-    else if (ch >= ' ') s.push(ch); // outras teclas de controle (setas etc.) não entram na senha
+    else if (ch >= ' ') s.push(ch); // outras teclas de controle (Tab etc.) não entram na senha
   }
-  return { senha: s.join(''), fim: null };
+  return { senha: s.join(''), fim: null, descartadas };
 }
+
+// Tempo em que qualquer coisa que chegar é ignorada: restos do Enter que iniciou o comando ou
+// respostas automáticas do terminal (no Windows, o pedido chegou a terminar sozinho antes de colar).
+export const IGNORAR_INICIO_MS = 400;
 
 function lerSenhaEscondida(pergunta) {
   return new Promise((resolve, reject) => {
     if (!process.stdin.isTTY) { reject(new Error('Arquivo cifrado: rode num terminal para digitar a senha (ou defina LABZ_BACKUP_SENHA).')); return; }
     process.stdout.write(pergunta);
     let s = '';
+    const inicio = Date.now();
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
     const aoDigitar = (pedaco) => {
+      if (Date.now() - inicio < IGNORAR_INICIO_MS) return; // nenhuma pessoa cola tão rápido: é resto do terminal
       const r = processarTeclas(s, pedaco);
       s = r.senha;
       if (r.fim === 'ok') { encerrar(); resolve(s); } else if (r.fim === 'cancelado') { encerrar(); reject(new Error('Cancelado.')); }
@@ -64,12 +80,36 @@ function lerSenhaEscondida(pergunta) {
   });
 }
 
+export const TENTATIVAS_SENHA = 3;
+
 export async function abrirBackup(arquivo, senha) {
   const aberto = N.abrirArquivo(fs.readFileSync(arquivo, 'utf8'));
   if (aberto.tipo === 'cifrado') {
-    const s = senha != null ? senha : (process.env.LABZ_BACKUP_SENHA || await lerSenhaEscondida('Senha do backup: '));
-    const { doc, conferencia } = await N.decifrar(aberto.envelope, s);
-    return { doc, conferencia, cifrado: true };
+    const fixa = senha != null ? senha : process.env.LABZ_BACKUP_SENHA || null;
+    if (fixa) {
+      const { doc, conferencia } = await N.decifrar(aberto.envelope, fixa);
+      return { doc, conferencia, cifrado: true };
+    }
+    // Digitada: até 3 tentativas (um Enter vazio não conta). O programa nunca termina sem a pessoa ter colado.
+    let erroFinal;
+    for (let n = 1, vazias = 0; n <= TENTATIVAS_SENHA;) {
+      const s = await lerSenhaEscondida(n === 1 ? 'Senha do backup: ' : `Senha do backup (tentativa ${n} de ${TENTATIVAS_SENHA}): `);
+      if (!s) {
+        if (++vazias > 5) throw new N.ErroBackup('senha-errada', 'Nenhuma senha foi digitada.');
+        console.log('       Nada foi digitado. Cole a senha e aperte Enter.');
+        continue;
+      }
+      try {
+        const { doc, conferencia } = await N.decifrar(aberto.envelope, s);
+        return { doc, conferencia, cifrado: true };
+      } catch (e) {
+        if (e.codigo !== 'senha-errada') throw e;
+        erroFinal = e;
+        if (n < TENTATIVAS_SENHA) console.log('       Não abriu: senha errada (ou colada pela metade). Tente de novo.');
+        n++;
+      }
+    }
+    throw erroFinal;
   }
   const conferencia = await N.conferir(aberto.doc);
   if (!conferencia.ok) throw new N.ErroBackup('nao-integro', `O arquivo NÃO passou na conferência: ${conferencia.problemas.map((p) => p.mensagem).join(' | ')}`);

@@ -394,7 +394,7 @@ test('pacote do Deno: atualizado, determinístico, sem Firebase Admin, e as fun�
   const api = fs.readFileSync(path.join(raiz, 'labz-api', 'index.ts'), 'utf8');
   const wk = fs.readFileSync(path.join(raiz, 'labz-worker', 'index.ts'), 'utf8');
   const envs = (s) => [...s.matchAll(/env\('([A-Z_]+)'/g)].map((m) => m[1]).sort();
-  assert.deepEqual([...new Set(envs(api))], ['LABZ_DB_URL', 'LABZ_FIREBASE_PROJETO', 'LABZ_ORIGENS', 'LABZ_SUPERADMIN_UIDS']);
+  assert.deepEqual([...new Set(envs(api))], ['LABZ_DB_URL', 'LABZ_FIREBASE_API_KEY', 'LABZ_FIREBASE_PROJETO', 'LABZ_ORIGENS', 'LABZ_SUPERADMIN_UIDS']); // v4: + a apiKey PÚBLICA do Firebase
   assert.deepEqual([...new Set(envs(wk))], ['LABZ_DB_URL', 'LABZ_WORKER_SEGREDO']);
   assert.ok(!/obterChaves|criarTransporte|SERVICE_ROLE|service_role/.test(api + wk), 'nenhuma chave de teste nem chave de administrador do Supabase');
   const cfg = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'config.toml'), 'utf8');

@@ -454,6 +454,30 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
     - navegador **20/20** (+ teste do gateway bloqueado; menu ligado por padrão só para o Super Admin; as 37 páginas sem erro novo);
     - montador **26/26** (+ teste: só os 4 arquivos; referência a arquivo interno na tela barrada; sem um deles, a montagem falha).
   - **Ordem obrigatória para publicar (I4, com autorização):** merge do PR 15 → desligar o Verify JWT da `labz-api` → publicar o site pelo "Site seguro". Se o site for publicado com a trava ligada, a tela do Super Admin só mostra "servidor ainda bloqueado" (nada quebra para os outros usuários).
+- **LABZ AI — I4-A (preparação e validação final; 04/11/2026; NADA publicado, sem merge, Verify JWT ligado; I4-B **não** autorizada):**
+  - Decisões do Igor:
+    - **D-a:** proteção de contas aprovada, com a `labz-api` v4 como candidata;
+    - **D-b:** risco da cota aceito, com monitoramento e contenção;
+    - **Verify JWT:** opção A planejada, mas **não** desligar agora.
+  - GitHub do `2628d99` (I3) verde. PR 15 continua rascunho. Nenhum workflow publica sozinho: o `pages-seguro.yml` só publica com `workflow_dispatch` + "PUBLICAR" + `main` (num push só confere); a Guarda do Pages só lê.
+  - Única publicação pelo Site seguro até hoje: 31/10 (`4975a89`, arquivos da v154).
+  - API v4:
+    - `montarApi` com `config.firebaseApiKey` embrulha o `autenticar` em `comConferenciaDeConta`;
+    - com `exigirContaAtiva`, sem a chave a função não liga;
+    - `index.ts` lê `LABZ_FIREBASE_API_KEY` (apiKey **pública**) e usa `buscarConta` com `redirect: 'error'`;
+    - pacote `labz-b49c379e0336.mjs` nas duas pastas; o worker não muda e não precisa ser republicado.
+  - Zips em rascunho: `labz-api-v4.zip` e `labz-api-v3.zip`. A v3 é **idêntica** à publicada: `index.ts` `c879da4b…` e `labz-01711dac8a7e.mjs` `01711dac…`, conferidos com `get_edge_function`.
+  - Testes:
+    - `test/conta-ativa.test.js` 7/7: v4 sem chave não liga; conta desativada, sessão revogada, Google fora/erro e chave recusada → 401 **sem tocar o banco**; intruso = 0 consultas;
+    - `test/borda-postgres.test.js` (PostgreSQL): conta ativa 200, resultado guardado, desativada com login novo 401 sem gravar;
+    - `npm test` 389 (377 aprovados, 12 só PostgreSQL); PostgreSQL local 389/390. O teste 62 (migração) falha só no banco do Supabase local, porque o `postgres` dele não é superusuário; falha também sem as mudanças da I4-A, e no GitHub passa.
+  - Linha de base da produção (19:54 UTC, só leitura):
+    - 46 documentos, sha256 `d2f9b06f…57496`, igual ao primeiro backup; última gravação em 03/11 às 18:49;
+    - cron 1440/0 em 24 h; 0 acionamentos; último HTTP nº 7; Vault com 2 nomes; interruptor ligado; banco 12 MB;
+    - funções: `labz-api` v3 com Verify JWT ligado e `labz-worker` v1 desligado;
+    - **0 chamadas às funções em 24 h**.
+  - Roteiros no `functions-labz/README.md` (seção I4-A): teste **só de leitura** da conta secundária no console (`accounts:lookup`, sem mostrar e-mail/UID), teste controlado de desativação D0–D4 (**não** executado), níveis N1–N3 de acompanhamento e volta atrás R1–R5.
+  - Pendente do Igor: o backup novo cifrado (o esperado é igual ao de 03/11) e o teste só de leitura no console.
   - Achado antes do T2 (corrigido e publicado na `labz-api` v3): recusas de login gravavam um evento no banco e logins do Firebase fora da lista gravavam contador e auditoria, ou seja, sem ser Super Admin dava para encher o banco. Agora: lista do servidor conferida antes de qualquer acesso ao banco; recusas só no log da função (`src/borda/registro-recusas.js`, 20 por minuto); `criarAcessoSupabase` recusa a opção `auditoria`.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.

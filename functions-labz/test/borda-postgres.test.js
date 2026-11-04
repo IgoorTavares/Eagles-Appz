@@ -139,6 +139,27 @@ test('S5B Etapa 6 no PostgreSQL: recusas (sem login, token falso, login válido 
   assert.ok(recusas.length === 100 && !JSON.stringify(recusas).includes('eyJ'));
 });
 
+test('API v4 no PostgreSQL: com a conta ativa o Super Admin entra (200); a mesma conta desativada é recusada (401) sem mudar o banco', { skip: pular }, async () => {
+  await preparar();
+  await admin.unsafe(`insert into labz.docs (caminho, colecao, id, dados) values ('labz_usuarios/sa-v4', 'labz_usuarios', 'sa-v4', '{"role":"SuperAdmin"}'::json) on conflict (caminho) do nothing`);
+  const acesso = (await admin`select dados::text as d from labz.docs where caminho = 'labz_config/acesso'`)[0];
+  const uids = acesso ? JSON.parse(acesso.d).uids : [];
+  const json = JSON.stringify({ uids: [...new Set([...uids, 'sa-v4'])] });
+  await admin.unsafe(`insert into labz.docs (caminho, colecao, id, dados) values ('labz_config/acesso', 'labz_config', 'acesso', '${json}'::json) on conflict (caminho) do update set dados = excluded.dados`);
+  const conta = { disabled: false };
+  const buscarConta = async (url, op) => { const sub = JSON.parse(Buffer.from(JSON.parse(op.body).idToken.split('.')[1], 'base64url').toString()).sub; return { ok: true, status: 200, json: async () => ({ users: [{ localId: sub, disabled: conta.disabled, validSince: '0' }] }) }; };
+  const { handler, contaAtiva } = montarApi({ sql: app, config: { uidsSuperAdmin: 'sa-v4', projetoFirebase: PROJETO, origens: 'https://eagleslabz.com.br', firebaseApiKey: 'chave-publica-ficticia-de-teste-0000', exigirContaAtiva: true }, obterChaves, buscarConta });
+  assert.equal(contaAtiva, true);
+  const pedir = async (carga = {}) => (await handler(new Request('http://local/labz-api', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${emitir(Object.assign({ sub: 'sa-v4' }, carga))}` }, body: '{"acao":"catalogo.agentes"}' }))).status;
+  assert.equal(await pedir(), 200, 'conta ativa: entra');
+  assert.equal(await pedir(), 200, 'o mesmo login de novo: usa o resultado guardado (5 min)');
+  conta.disabled = true;
+  const estado = async () => (await admin`select count(*)::int as n, coalesce(max(atualizado_em)::text, '') as u from labz.docs`)[0];
+  const antes = await estado();
+  assert.equal(await pedir({ iat: Math.floor(Date.now() / 1000) - 90 }), 401, 'a mesma conta desativada, com um login novo (outro token, sem o guardado de 5 min)');
+  assert.deepEqual(await estado(), antes, 'a recusa não grava nada');
+});
+
 test('S5B Etapa 6 no PostgreSQL (worker): chamadas sem acionamento válido não mudam NADA no banco', { skip: pular }, async () => {
   await preparar();
   const { handler } = montarWorker({ sql: app, config: { segredoWorker: SEGREDO } });

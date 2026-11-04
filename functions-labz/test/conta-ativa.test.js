@@ -102,12 +102,71 @@ test('na porta HTTP: só quem está na lista do servidor gera consulta ao Google
   assert.deepEqual(recusas, [{ motivo: 'conta-desativada' }], 'só o motivo vai para o log (nada de token, e-mail ou UID)');
 });
 
-test('isolamento do repositório: a proteção NÃO está ligada na labz-api publicada (o pacote das Edge Functions não muda)', () => {
+// "banco" que acusa qualquer uso: prova que as recusas acontecem ANTES de qualquer acesso ao banco.
+// Na montagem, o banco só monta o NOME da tabela (sql('labz.docs')), sem consultar; depois de travar(),
+// qualquer uso (consulta, transação) fica anotado e falha.
+function sqlProibido() {
+  const usado = [];
+  let travado = false;
+  const f = new Proxy(function () {}, {
+    apply: () => { if (travado) { usado.push('consulta'); throw new Error('banco tocado'); } return {}; },
+    get: (_, k) => (k === 'usado' ? usado : k === 'travar' ? () => { travado = true; } : (...a) => { usado.push(String(k)); throw new Error('banco tocado'); }),
+  });
+  return f;
+}
+
+test('API v4 (montarApi de verdade): sem a apiKey pública a função NÃO liga (falha fechada na partida)', () => {
+  const { montarApi } = require('../src/borda/montagem');
+  const base = { uidsSuperAdmin: 'sa', projetoFirebase: PROJETO, exigirContaAtiva: true };
+  assert.throws(() => montarApi({ sql: sqlProibido(), config: base, obterChaves }), /LABZ_FIREBASE_API_KEY/);
+  assert.throws(() => montarApi({ sql: sqlProibido(), config: Object.assign({}, base, { firebaseApiKey: 'x' }), obterChaves, buscarConta: async () => ({}) }), /apiKey/);
+  const ok = montarApi({ sql: sqlProibido(), config: Object.assign({}, base, { firebaseApiKey: CHAVE_PUBLICA }), obterChaves, buscarConta: async () => ({}) });
+  assert.equal(ok.contaAtiva, true);
+  assert.equal(montarApi({ sql: sqlProibido(), config: { uidsSuperAdmin: 'sa', projetoFirebase: PROJETO }, obterChaves }).contaAtiva, false, 'sem exigir (testes antigos): continua como a v3');
+});
+
+test('API v4 (montarApi de verdade): conta desativada, sessão revogada, Google fora do ar ou com a chave recusada → 401 SEM tocar o banco; intruso nunca gera consulta', async () => {
+  const { montarApi } = require('../src/borda/montagem');
+  const contas = { sa: {} };
+  const modo = { atual: 'ok' };
+  const g = googleFalso(contas, modo);
+  let chaveRecusada = false;
+  const buscarConta = async (url, op) => (chaveRecusada ? { ok: false, status: 400, json: async () => ({ error: { message: 'API key not valid. Please pass a valid API key.' } }) } : g.buscar(url, op));
+  const recusas = [];
+  const sql = sqlProibido();
+  const { handler } = montarApi({ sql, config: { uidsSuperAdmin: 'sa', projetoFirebase: PROJETO, origens: ORIGEM, firebaseApiKey: CHAVE_PUBLICA, exigirContaAtiva: true }, obterChaves, buscarConta, registrarRecusa: (r) => recusas.push(r) });
+  sql.travar();
+  const pedir = async (tk) => { const r = await handler(new Request('http://localhost/functions/v1/labz-api', { method: 'POST', headers: { 'content-type': 'application/json', origin: ORIGEM, authorization: `Bearer ${tk}` }, body: '{"acao":"catalogo.agentes"}' })); return { status: r.status, corpo: await r.json() }; };
+  const t0 = agora();
+  contas.sa.disabled = true;
+  assert.equal((await pedir(emitir({ sub: 'sa' }))).status, 401, 'conta desativada');
+  contas.sa.disabled = false; contas.sa.validSince = t0 - 5;
+  assert.equal((await pedir(emitir({ sub: 'sa', auth_time: t0 - 600 }))).status, 401, 'sessão revogada depois do login');
+  contas.sa.validSince = 0;
+  for (const m of ['fora', 'erro500']) { modo.atual = m; assert.equal((await pedir(emitir({ sub: 'sa' }))).status, 401, `Google ${m}`); }
+  modo.atual = 'ok'; chaveRecusada = true;
+  assert.equal((await pedir(emitir({ sub: 'sa' }))).status, 401, 'chave pública recusada pelo Google (configuração errada) → ninguém entra');
+  chaveRecusada = false;
+  const antes = g.chamadas.length;
+  for (let i = 0; i < 10; i++) assert.equal((await pedir(emitir({ sub: `intruso${i}` }))).status, 403);
+  assert.equal(g.chamadas.length, antes, 'intruso: 0 consultas ao Google');
+  const [c1, c2, a1] = emitir({ sub: 'sa' }).split('.');
+  const r401 = await pedir(`${c1}.${c2}.${a1[0] === 'A' ? 'B' : 'A'}${a1.slice(1)}`); // assinatura estragada (no começo: a última letra do base64 pode não mudar nada)
+  assert.equal(r401.status, 401);
+  assert.deepEqual(sql.usado, [], 'nenhuma dessas recusas encostou no banco');
+  assert.ok(recusas.every((r) => r.etapa === 'token' || r.etapa === 'lista-servidor'));
+  assert.ok(recusas.some((r) => r.motivo === 'conta-desativada') && recusas.some((r) => r.motivo === 'sessao-revogada') && recusas.some((r) => r.motivo === 'conta-indisponivel'));
+  assert.ok(!JSON.stringify(recusas).includes('eyJ'));
+});
+
+test('pacote das Edge Functions (v4): a conferência de conta entra no pacote e a labz-api exige a apiKey pública', () => {
   const { gerar } = require('../supabase/empacotar');
-  const g = gerar();
-  assert.ok(!g.nomes.includes('src/auth/conta-ativa.js'), 'o módulo não entra no pacote enquanto não for ligado (com autorização)');
+  assert.ok(gerar().nomes.includes('src/auth/conta-ativa.js'));
   const fs = require('node:fs');
   const path = require('node:path');
   const api = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'labz-api', 'index.ts'), 'utf8');
-  assert.doesNotMatch(api, /conta-ativa|identitytoolkit|LABZ_FIREBASE_API_KEY/);
+  assert.match(api, /firebaseApiKey: env\('LABZ_FIREBASE_API_KEY'\),\n\s+exigirContaAtiva: true,/);
+  assert.match(api, /buscarConta: \(url: string, op: RequestInit\) => fetch\(url, \{ \.\.\.op, redirect: 'error' \}\)/);
+  const wk = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'labz-worker', 'index.ts'), 'utf8');
+  assert.doesNotMatch(wk, /LABZ_FIREBASE_API_KEY|conta/, 'o worker não usa login (nada muda nele)');
 });

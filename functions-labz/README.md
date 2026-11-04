@@ -439,6 +439,71 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - O menu foi ligado (`LABZ_AI_MENU_ATIVO = true`, só para o Super Admin), e o nome da página está escrito por inteiro (o conferidor checa o link).
 - Enquanto o Verify JWT estiver ligado na produção, a tela mostra "servidor ainda bloqueado" e não insiste.
 
+### I4-A — API v4 e roteiros da publicação (preparados; NADA publicado)
+
+**API v4** (`supabase/functions/labz-api`, pacote `labz-b49c379e0336.mjs`):
+- A conferência de conta ativa (`src/auth/conta-ativa.js`) passa a valer no `montarApi`.
+- O `index.ts` lê `LABZ_FIREBASE_API_KEY`, a apiKey **pública** do `firebase-config.js`. Com `exigirContaAtiva`, sem a chave a função **não liga** (falha fechada).
+- Na produção continua a v3 (`labz-01711dac8a7e.mjs`), e o zip de volta é idêntico ao publicado (SHA-256 conferido).
+- O worker não muda e não precisa de nova publicação.
+
+**Teste só de leitura com a conta secundária** (no console do navegador, em `eagleslabz.com.br`, logado com a conta **secundária**). Ele não mostra e-mail nem UID, e não muda nada:
+
+```
+(async () => {
+  const u = firebase.auth().currentUser; if (!u) { console.log('Entre com a conta secundária primeiro.'); return; }
+  const url = 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(firebase.app().options.apiKey);
+  const tk = await u.getIdToken();
+  const carga = JSON.parse(atob(tk.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+  const pedir = (idToken, endereco = url) => fetch(endereco, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken }) });
+  const t0 = performance.now(); const r = await pedir(tk); const ms = Math.round(performance.now() - t0); const j = await r.json();
+  const c = j.users && j.users[0];
+  const r2 = await pedir('token.invalido.teste'); const j2 = await r2.json();
+  const r3 = await pedir(tk, 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=chave-errada-de-teste'); const j3 = await r3.json();
+  const erro = (x) => String((x.error && x.error.message) || '').split(/[ :]/)[0];
+  console.table({
+    'L1 resposta': r.status, 'L2 uma conta': !!j.users && j.users.length === 1, 'L3 mesma conta do login': !!c && c.localId === carga.sub,
+    'L4 desativada': c ? !!c.disabled : 'sem conta', 'L5 sessão válida (validSince <= login)': c ? Number(c.validSince || 0) <= carga.auth_time : 'sem conta',
+    'L6 tempo (ms)': ms, 'L7 token inválido': `${r2.status} ${erro(j2)}`, 'L8 chave errada': `${r3.status} ${erro(j3).slice(0, 20)}`,
+  });
+})();
+```
+
+Resultado esperado:
+- L1 `200`
+- L2 e L3 `true`
+- L4 `false`
+- L5 `true`
+- L6 abaixo de cerca de 500
+- L7 `400 INVALID_ID_TOKEN`
+- L8 `400` (chave recusada; a v4 trata isso como "ninguém entra")
+
+**Teste controlado de desativação** (com a conta **secundária**; **só com autorização do Igor**, porque muda o Firebase):
+1. **D0:** numa janela anônima, logado com a conta secundária, rodar o teste acima. O esperado é L4 `false`.
+2. **D1:** Firebase Console → Authentication → Users → conta secundária → **Disable account**. Anotar o horário.
+3. **D2:** na **mesma janela** (o login antigo continua guardado nela), rodar o teste de novo. O esperado é L1 `400` com `USER_DISABLED`, ou L4 `true`. Os dois a v4 recusa (testado).
+4. **D3:** Firebase Console → **Enable account**. Anotar o horário.
+5. **D4:** entrar de novo e rodar o teste. O esperado é igual ao D0.
+
+Se a reativação falhar, a conta continua existindo e o Igor reativa pelo mesmo menu. Nada no CRM/ERP é apagado.
+
+**Acompanhamento contra abuso da cota grátis** (500 mil chamadas por mês; recusas também contam; o pré-voo `OPTIONS` não conta):
+- **Linha de base (04/11/2026):** 0 chamadas às funções em 24 h.
+- **Uso esperado:** com a tela aberta, cerca de 2 pedidos por minuto (painéis a cada 30 s) e até cerca de 20 por minuto enquanto uma tarefa anda. Com 1 a 2 horas de uso por dia, dá cerca de 10 a 20 mil por mês (2% a 4% da cota).
+- **Consulta só de leitura** (pela conexão Claude/Supabase, `query_logs`): `select log_attributes['function_id'] as funcao, log_attributes['response.status_code'] as status, count() as n from logs where source = 'function_edge_logs' group by funcao, status`.
+- **Níveis:**
+  - **N1 (aviso):** mais de 2 mil chamadas por dia ou mais de 500 recusas por hora. Avisar o Igor.
+  - **N2 (contenção):** mais de 15 mil por dia. Publicar a função com outro nome e trocar o `LABZ_API_URL`.
+  - **N3 (parar):** acima de 50% da cota. Pausar o projeto da LABZ AI (isso para a contagem na hora).
+- O CRM/ERP não é afetado em nenhum nível.
+
+**Volta atrás:**
+- **(R1)** Religar o Verify JWT da `labz-api`.
+- **(R2)** Publicar `labz-api-v3.zip` (idêntico ao que está publicado hoje).
+- **(R3)** `LABZ_AI_MENU_ATIVO = false` + publicar o site.
+- **(R4)** Um PR que desfaz o merge (revert) + publicar o site (v154).
+- **(R5)** Desligar o interruptor do worker.
+
 ## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
 
 - **Projeto:** exclusivo da LABZ AI, na organização do Igor, no plano Free.

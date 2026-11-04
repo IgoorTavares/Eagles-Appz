@@ -9,6 +9,7 @@ const { criarLabz } = require('../servicos');
 const { criarApi } = require('../api/labz-api');
 const { criarVerificadorFirebase, criarChavesGoogle } = require('../auth/token-firebase');
 const { criarAcessoSupabase, opcoesApiSupabase } = require('../auth/acesso-supabase');
+const { criarConferidorConta, comConferenciaDeConta } = require('../auth/conta-ativa');
 const { criarLimitador } = require('./limitador');
 const { criarWorker } = require('./worker');
 const { criarVerificadorAcionamento, consumirPostgres } = require('./acionamento');
@@ -27,21 +28,31 @@ function lista(v) {
 }
 
 // Configuração da API (labz-api)
-function montarApi({ sql, config = {}, buscar, obterChaves, relogio, ia, opcoes, registrarErro, registrarRecusa } = {}) {
+// Conta ativa (v4): com config.firebaseApiKey (a apiKey PÚBLICA do Firebase), cada login de quem está na lista do
+// servidor é conferido no Firebase Auth (conta desativada / sessão revogada). Com config.exigirContaAtiva, a
+// falta da chave impede a função de ligar (falha fechada: sem a conferência, ninguém entra).
+function montarApi({ sql, config = {}, buscar, buscarConta, obterChaves, relogio, ia, opcoes, registrarErro, registrarRecusa } = {}) {
   if (!sql) throw new Error('montarApi: falta o cliente sql');
   if (!lista(config.uidsSuperAdmin).length) throw new Error('montarApi: falta a lista de UIDs do Super Admin (LABZ_SUPERADMIN_UIDS)');
+  if (config.exigirContaAtiva && !config.firebaseApiKey) throw new Error('montarApi: falta a apiKey pública do Firebase (LABZ_FIREBASE_API_KEY) para conferir contas desativadas');
   const banco = criarBancoPostgres({ sql });
   const servicos = criarLabz({ banco, relogio, ia: ia || iaSimulada(), opcoes });
   const chaves = obterChaves || criarChavesGoogle({ buscar }); // buscar = fetch (só o index.ts liga a rede)
   const verificador = criarVerificadorFirebase({ projetoId: config.projetoFirebase, obterChaves: chaves });
   // recusas de login: só no log, nunca no banco (S5B, Etapa 6)
-  const autenticar = criarAcessoSupabase({ verificador, aoRecusar: ({ motivo }) => registrarRecusa && registrarRecusa({ etapa: 'token', motivo }) });
+  const aoRecusar = ({ motivo }) => registrarRecusa && registrarRecusa({ etapa: 'token', motivo });
   const uidsServidor = new Set(lista(config.uidsSuperAdmin));
+  const uidPermitido = (uid) => uidsServidor.has(uid);
+  let autenticar = criarAcessoSupabase({ verificador, aoRecusar });
+  if (config.firebaseApiKey) {
+    const conferirConta = criarConferidorConta({ apiKey: config.firebaseApiKey, buscar: buscarConta || buscar });
+    autenticar = comConferenciaDeConta(autenticar, { conferirConta, uidPermitido, aoRecusar });
+  }
   const api = criarApi(Object.assign({ servicos, banco, uidsAutorizados: () => config.uidsSuperAdmin, lerSegredo: () => '' }, opcoesApiSupabase(banco)));
   const limitador = criarLimitador({ banco, relogio, limites: config.limites });
   const origens = config.origens ? lista(config.origens) : ORIGENS_PADRAO;
-  const handler = criarHandlerApi({ api, autenticar, limitador, uidPermitido: (uid) => uidsServidor.has(uid), origens, registrarErro, registrarRecusa });
-  return { handler, servicos, banco };
+  const handler = criarHandlerApi({ api, autenticar, limitador, uidPermitido, origens, registrarErro, registrarRecusa });
+  return { handler, servicos, banco, contaAtiva: !!config.firebaseApiKey };
 }
 
 // Configuração do worker (labz-worker)

@@ -447,24 +447,42 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
 - Na produção continua a v3 (`labz-01711dac8a7e.mjs`), e o zip de volta é idêntico ao publicado (SHA-256 conferido).
 - O worker não muda e não precisa de nova publicação.
 
-**Teste só de leitura com a conta secundária** (no console do navegador, em `eagleslabz.com.br`, logado com a conta **secundária**). Ele não mostra e-mail nem UID, e não muda nada:
+**Teste só de leitura com a conta secundária** (no console do navegador, em `eagleslabz.com.br`, logado com a conta **secundária**):
+- só faz consultas `accounts:lookup` (ler a própria conta) ao Firebase Auth;
+- não chama a LABZ AI, não grava nada no navegador e não mostra e-mail, UID nem o login;
+- o login real só vai para o Google na consulta L1–L6.
 
 ```
 (async () => {
-  const u = firebase.auth().currentUser; if (!u) { console.log('Entre com a conta secundária primeiro.'); return; }
-  const url = 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(firebase.app().options.apiKey);
-  const tk = await u.getIdToken();
+  // 1) o login da conta que está aberta nesta aba (só leitura; nada é gravado)
+  const u = firebase.auth().currentUser;
+  if (!u) { console.log('Entre com a conta secundária primeiro.'); return; }
+  const chavePublica = firebase.app().options.apiKey; // a mesma do firebase-config.js (pública)
+  const url = (chave) => 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(chave);
+  const consultar = async (idToken, chave) => {
+    const r = await fetch(url(chave), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken }) });
+    return { status: r.status, j: await r.json().catch(() => ({})) };
+  };
+  const erro = (j) => String((j.error && j.error.message) || '').split(/[ :]/)[0];
+  const tk = await u.getIdToken(); // não é mostrado nem guardado
   const carga = JSON.parse(atob(tk.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-  const pedir = (idToken, endereco = url) => fetch(endereco, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken }) });
-  const t0 = performance.now(); const r = await pedir(tk); const ms = Math.round(performance.now() - t0); const j = await r.json();
-  const c = j.users && j.users[0];
-  const r2 = await pedir('token.invalido.teste'); const j2 = await r2.json();
-  const r3 = await pedir(tk, 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=chave-errada-de-teste'); const j3 = await r3.json();
-  const erro = (x) => String((x.error && x.error.message) || '').split(/[ :]/)[0];
+  // 2) a consulta que a API v4 vai fazer (L1–L6)
+  const t0 = performance.now();
+  const a = await consultar(tk, chavePublica);
+  const ms = Math.round(performance.now() - t0);
+  const c = a.j.users && a.j.users[0];
+  // 3) os dois casos de erro, com um login FALSO (o real não é enviado de novo)
+  const b = await consultar('login.falso.teste', chavePublica);
+  const d = await consultar('login.falso.teste', 'chave-errada-de-teste');
   console.table({
-    'L1 resposta': r.status, 'L2 uma conta': !!j.users && j.users.length === 1, 'L3 mesma conta do login': !!c && c.localId === carga.sub,
-    'L4 desativada': c ? !!c.disabled : 'sem conta', 'L5 sessão válida (validSince <= login)': c ? Number(c.validSince || 0) <= carga.auth_time : 'sem conta',
-    'L6 tempo (ms)': ms, 'L7 token inválido': `${r2.status} ${erro(j2)}`, 'L8 chave errada': `${r3.status} ${erro(j3).slice(0, 20)}`,
+    'L1 resposta': a.status,
+    'L2 uma conta': !!a.j.users && a.j.users.length === 1,
+    'L3 mesma conta do login': !!c && c.localId === carga.sub,
+    'L4 desativada': c ? !!c.disabled : 'sem conta',
+    'L5 sessão válida (validSince <= login)': c ? Number(c.validSince || 0) <= carga.auth_time : 'sem conta',
+    'L6 tempo (ms)': ms,
+    'L7 login falso': `${b.status} ${erro(b.j)}`,
+    'L8 chave errada': `${d.status} ${erro(d.j).slice(0, 20)}`,
   });
 })();
 ```
@@ -487,22 +505,53 @@ Resultado esperado:
 
 Se a reativação falhar, a conta continua existindo e o Igor reativa pelo mesmo menu. Nada no CRM/ERP é apagado.
 
-**Acompanhamento contra abuso da cota grátis** (500 mil chamadas por mês; recusas também contam; o pré-voo `OPTIONS` não conta):
-- **Linha de base (04/11/2026):** 0 chamadas às funções em 24 h.
-- **Uso esperado:** com a tela aberta, cerca de 2 pedidos por minuto (painéis a cada 30 s) e até cerca de 20 por minuto enquanto uma tarefa anda. Com 1 a 2 horas de uso por dia, dá cerca de 10 a 20 mil por mês (2% a 4% da cota).
-- **Consulta só de leitura** (pela conexão Claude/Supabase, `query_logs`): `select log_attributes['function_id'] as funcao, log_attributes['response.status_code'] as status, count() as n from logs where source = 'function_edge_logs' group by funcao, status`.
-- **Níveis:**
-  - **N1 (aviso):** mais de 2 mil chamadas por dia ou mais de 500 recusas por hora. Avisar o Igor.
-  - **N2 (contenção):** mais de 15 mil por dia. Publicar a função com outro nome e trocar o `LABZ_API_URL`.
-  - **N3 (parar):** acima de 50% da cota. Pausar o projeto da LABZ AI (isso para a contagem na hora).
-- O CRM/ERP não é afetado em nenhum nível.
+**Abuso da cota grátis: o que só OBSERVA × o que BLOQUEIA antes da função**
 
-**Volta atrás:**
-- **(R1)** Religar o Verify JWT da `labz-api`.
-- **(R2)** Publicar `labz-api-v3.zip` (idêntico ao que está publicado hoje).
-- **(R3)** `LABZ_AI_MENU_ATIVO = false` + publicar o site.
-- **(R4)** Um PR que desfaz o merge (revert) + publicar o site (v154).
-- **(R5)** Desligar o interruptor do worker.
+Fatos da documentação oficial:
+- 500 mil chamadas por mês;
+- as chamadas contam "independente do código de resposta";
+- o pré-voo `OPTIONS` não conta;
+- se a cota estourar, vem o aviso por e-mail, um período de tolerância e depois possíveis restrições (projeto pausado, banco só leitura ou erro 402);
+- não há cobrança.
+
+| Tipo | Medida | Impede a chamada de chegar ao CÓDIGO? | Impede que ela CONTE na cota? | Efeito colateral |
+|---|---|---|---|---|
+| Observa | consulta só de leitura dos registros (`query_logs`) + página de uso do Supabase + e-mail automático da cota | não | não | nenhum |
+| Reduz o estrago (dentro da função) | recusas antes do banco; intruso sem consulta ao Google; limite por UID (60/min, 20 tarefas/h) | não | não | nenhum (já ativo) |
+| **Bloqueia antes** | **B1: religar o Verify JWT** (o gateway recusa antes do código) | **sim** | **não garantido** (a documentação não diz se a recusa do gateway conta) | a tela da LABZ AI para |
+| **Bloqueia antes** | **B2: publicar a função com outro nome** e trocar o `LABZ_API_URL` (o endereço antigo passa a dar "não encontrado") | **sim** | provavelmente sim (não há função para chamar), a confirmar | o atacante pode achar o endereço novo (o site é público) |
+| **Bloqueia tudo** | **B3: pausar o projeto da LABZ AI** | **sim** | **sim** (a documentação diz que pausar para a contagem) | a LABZ AI para inteira até reativar (os dados ficam guardados) |
+
+No plano grátis **não existe** limite por IP, firewall de aplicação (WAF) nem domínio próprio para as funções. A restrição de rede do Supabase vale só para o **banco**, não para as funções. O CRM/ERP (Firebase) não é afetado por nenhuma dessas medidas.
+
+- **Linha de base (04/11/2026):** 0 chamadas às funções em 24 h.
+- **Uso esperado:** com 1 a 2 horas de uso por dia, cerca de 10 a 20 mil por mês (2% a 4% da cota).
+- **Consulta de acompanhamento:** `select log_attributes['function_id'] as funcao, log_attributes['response.status_code'] as status, count() as n from logs where source = 'function_edge_logs' group by funcao, status`.
+- **Níveis:**
+  - **N1 (aviso):** mais de 2 mil chamadas por dia ou mais de 500 recusas por hora. Avisar o Igor e acompanhar.
+  - **N2:** mais de 15 mil por dia → **B2**.
+  - **N3:** mais de 50% da cota → **B3**. O B1 pode ser usado na hora como primeira resposta, sabendo que talvez não proteja a cota.
+
+**Ordem da publicação (I4-B) e o que fazer quando algo falha:**
+
+| # | Passo | Se falhar | Volta |
+|---|---|---|---|
+| 0 | Backup novo (Igor) + teste L1–L8 | parar; nada foi mudado | — |
+| 1 | Merge do PR 15 (nada é publicado) | GitHub vermelho na `main` → parar e corrigir num PR; o site e as funções continuam como estão | revert do merge (R4, sem publicar) |
+| 2 | `LABZ_FIREBASE_API_KEY` + publicar a **v4**, com o **Verify JWT ainda ligado**. Prova de que ligou (como o T2 da Etapa 6): um pedido com a chave pública passa pelo gateway e o **código** responde 401; o registro mostra `booted` | a função não liga (BOOT_ERROR) ou o SHA-256 diverge → **R2** (v3). Com a trava ligada, ninguém de fora chegava ao código | R2 |
+| 3 | (opcional, com autorização) D0–D4 | resultado diferente → R2; reativar a conta | R2 |
+| 4 | Desligar o Verify JWT da `labz-api` | qualquer recusa que vire 200, ou a conta secundária entrando → **R1** imediato | R1 (+ R2) |
+| 5 | Publicar o site (Site seguro, PUBLICAR) | a montagem falha → nada é publicado; o site publicado com erro → **R3** (esconder o menu) ou **R4** (v154) | R3/R4 |
+| 6 | Validar no site + 2 dias de acompanhamento | erro na tela da LABZ AI → R1/R3; erro no CRM/ERP → **R4** imediato | R1/R3/R4 |
+
+**Volta atrás** (cada uma independe das outras):
+- **R1:** religar o Verify JWT, no painel. Leva segundos. A tela mostra "servidor ainda bloqueado".
+- **R2:** publicar o `labz-api-v3.zip`, idêntico ao que está publicado hoje (SHA-256 conferido em 04/11).
+- **R3:** `LABZ_AI_MENU_ATIVO = false` + publicar o site.
+- **R4:** um PR que desfaz o merge (revert) + publicar o site. Volta a v154; o `sw.js` antigo faz os aparelhos trocarem o cache.
+- **R5:** desligar o interruptor do worker.
+
+A v155 e a v4 **não migram nem apagam dados** e não mudam as regras do Firebase. Nenhuma volta atrás exige recuperar backup.
 
 ## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
 

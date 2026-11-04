@@ -7,8 +7,9 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const PASTA_MIGRACOES = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'migrations');
+const PASTA_MIGRACOES = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 
 export function lerRetrato(texto) {
   let v = JSON.parse(String(texto).replace(/^﻿/, ''));
@@ -43,7 +44,7 @@ export function conferirMigracoesRepo(retrato) {
   });
 }
 
-const principal = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+const principal = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (principal) {
   const args = process.argv.slice(2);
   const repo = args.includes('--repo');

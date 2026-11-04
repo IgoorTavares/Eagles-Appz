@@ -667,3 +667,10 @@ aceita só esse documento, exatamente com esse valor, e o do backup entra no lug
 
 Ensaio com dados fictícios (o backend de verdade cria empresa, tarefa COMPLETED e 2 entregas):
 `SUPABASE_CLI=supabase npm run backup:ensaio-restauracao`.
+
+**No Windows (roteiro do Igor):** pasta curta para evitar caminhos longos (`C:\labz-teste`); usar
+`npm.cmd` no PowerShell (o `npm` sozinho pode ser bloqueado pela política de scripts do Windows);
+instalar com `npm.cmd ci --omit=dev --ignore-scripts` (só o necessário, cerca de 70 MB, sem rodar
+scripts de instalação). Antes do backup real, ensaiar com o **backup de exemplo** (dados fictícios):
+`supabase/backup/exemplo/backup-de-exemplo-ficticio.json`, senha pública `exemplo-ficticio-labz-2026`,
+`--tarefa exe_45fb2d9e4a4d459e9091 --entregas 2` (46 documentos; um teste confere que ele abre e está íntegro).

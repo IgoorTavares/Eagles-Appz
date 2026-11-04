@@ -4,9 +4,10 @@
 // O retrato da produção sai da MESMA consulta (retrato-estrutura.sql), pela conexão Claude/Supabase.
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { conectarLocal, urlLocal } from './local.mjs';
 
-const SQL = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'retrato-estrutura.sql'), 'utf8');
+const SQL = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'retrato-estrutura.sql'), 'utf8');
 
 export async function retratoLocal(url) {
   const sql = conectarLocal(url);
@@ -17,7 +18,7 @@ export async function retratoLocal(url) {
   }
 }
 
-const principal = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+const principal = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (principal) {
   const args = process.argv.slice(2);
   const i = args.indexOf('--db');

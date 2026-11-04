@@ -270,3 +270,20 @@ test('conferência da restauração: só leitura e só resultados (nunca o conte
   assert.match(fonte, /export const imprimir = \(r\) => r\.forEach\(\(x\) => console\.log\(`\$\{x\.ok \? 'ok    ' : 'FALHOU'\} \$\{x\.nome\}/);
   assert.doesNotMatch(fonte, /item\([^)]*\b(e|exe|v|c)\.(texto|dados|nome|objetivo)\b/, 'nenhum campo de conteúdo vai para o relatório');
 });
+
+test('Windows: nenhum script do backup monta caminho com URL.pathname (no Windows vira "/C:/..." e quebra com espaços)', () => {
+  for (const f of fs.readdirSync(PASTA).filter((x) => /\.(mjs|js)$/.test(x))) {
+    assert.doesNotMatch(fs.readFileSync(path.join(PASTA, f), 'utf8'), /new URL\(import\.meta\.url\)\.pathname/, f);
+  }
+});
+
+test('backup de EXEMPLO (dados fictícios, senha pública) para o ensaio no computador do Igor: abre, está íntegro e tem a tarefa com 2 entregas', async () => {
+  const arq = path.join(PASTA, 'exemplo', 'backup-de-exemplo-ficticio.json');
+  assert.ok(spawnSync('git', ['check-ignore', '-q', arq], { cwd: REPO }).status !== 0, 'o exemplo fica no Git (é fictício)');
+  const { doc, conferencia } = await N.decifrar(N.abrirArquivo(fs.readFileSync(arq, 'utf8')).envelope, 'exemplo-ficticio-labz-2026');
+  assert.equal(conferencia.total, 46);
+  const tarefa = doc.linhas.find((l) => l[0] === 'labz_tarefas/exe_45fb2d9e4a4d459e9091');
+  assert.equal(JSON.parse(tarefa[4]).estado, 'COMPLETED');
+  assert.equal(doc.linhas.filter((l) => l[1] === 'labz_entregas' && JSON.parse(l[4]).execucaoId === 'exe_45fb2d9e4a4d459e9091').length, 2);
+  assert.ok(!JSON.stringify(doc).includes('eagleslabz.com.br/') && doc.linhas.every((l) => !/@[a-z0-9-]+\.(com|br)/i.test(l[4])), 'sem e-mails ou dados reais');
+});

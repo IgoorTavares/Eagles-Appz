@@ -12,12 +12,13 @@
 //     não chama o worker).
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { conectarLocal, exigirBancoLocal, urlLocal, RecusaLocal } from './local.mjs';
 
 const require = createRequire(import.meta.url);
 const N = require('./nucleo.js');
-const PASTA = path.dirname(new URL(import.meta.url).pathname);
+const PASTA = path.dirname(fileURLToPath(import.meta.url));
 const IMPRESSAO_SQL = fs.readFileSync(path.join(PASTA, 'impressao-digital.sql'), 'utf8');
 
 function argumentos(argv) {
@@ -103,7 +104,7 @@ export async function restaurar({ doc, conferencia }, url) {
   }
 }
 
-const principal = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+const principal = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (principal) {
   (async () => {
     const a = argumentos(process.argv.slice(2));

@@ -14,7 +14,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { RAIZ, conectarLocal, urlLocal } from './local.mjs';
 import { conferirRestauracao } from './conferir-restauracao.mjs';
-import { SERVICOS_DESLIGADOS, subirComRepeticao } from './teste-restauracao.mjs';
+import { SERVICOS_DESLIGADOS, subirComRepeticao, prepararRedeLocal, REDE_LOCAL } from './teste-restauracao.mjs';
 
 const require = createRequire(import.meta.url);
 const N = require('./nucleo.js');
@@ -37,7 +37,8 @@ const csvCampo = (s) => `"${String(s).replace(/"/g, '""')}"`;
 
 try {
   // 1. banco local do zero + dados fictícios criados pelo backend de verdade
-  if (!subirComRepeticao((args) => cli(args).status === 0) || cli(['db', 'reset']).status !== 0) throw new Error('Supabase local não subiu');
+  prepararRedeLocal();
+  if (!subirComRepeticao((args) => cli(args).status === 0) || cli(['db', 'reset', '--network-id', REDE_LOCAL]).status !== 0) throw new Error('Supabase local não subiu');
   const url = urlLocal();
   const sql = conectarLocal(url, { max: 10 });
   let tarefa;
@@ -154,7 +155,7 @@ try {
     conferir(ruim.some((x) => !x.ok && /quantidade de entregas/.test(x.nome)), 'quantidade de entregas diferente da esperada → acusada');
   } finally {
     await s2.end({ timeout: 2 });
-    cli(['stop', '--no-backup']);
+    cli(['stop', '--no-backup', '--network-id', REDE_LOCAL]);
   }
 } catch (e) {
   falhas++;

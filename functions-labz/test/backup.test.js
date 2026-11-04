@@ -254,7 +254,7 @@ test('comando guiado: só arquivo cifrado, nunca liga a um Supabase remoto, conf
   assert.doesNotMatch(fonte.replace(/\/\/.*$/gm, ''), /--linked|--db-url|'link'|'push'|'login'|'deploy'|SUPABASE_ACCESS_TOKEN/, 'nenhum comando remoto do Supabase CLI');
   assert.ok(fonte.indexOf('await abrirBackup(') < fonte.indexOf('if (!subirComRepeticao('), 'o backup é aberto e conferido ANTES de subir o banco');
   assert.ok(fonte.indexOf('exigirBancoLocal(url)') < fonte.indexOf('await restaurar('), 'trava de banco local antes de restaurar');
-  assert.match(fonte, /supabase\(\['stop', '--no-backup'\]\)/, 'no fim apaga os dados locais');
+  assert.match(fonte, /supabase\(\['stop', '--no-backup', '--network-id', REDE_LOCAL\]\)/, 'no fim apaga os dados locais');
   assert.match(fonte, /\} finally \{\s+if \(subiu && !a\.manter\)/, 'apaga mesmo se algo falhar no meio');
   // arquivo sem senha e arquivo inexistente: recusados antes de tocar no Docker ou em qualquer banco
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'labz-125-'));
@@ -297,4 +297,18 @@ test('backup de EXEMPLO (dados fictícios, senha pública) para o ensaio no comp
   assert.equal(JSON.parse(tarefa[4]).estado, 'COMPLETED');
   assert.equal(doc.linhas.filter((l) => l[1] === 'labz_entregas' && JSON.parse(l[4]).execucaoId === 'exe_45fb2d9e4a4d459e9091').length, 2);
   assert.ok(!JSON.stringify(doc).includes('eagleslabz.com.br/') && doc.linhas.every((l) => !/@[a-z0-9-]+\.(com|br)/i.test(l[4])), 'sem e-mails ou dados reais');
+});
+
+test('banco local preso a 127.0.0.1: rede própria, conferência das portas ANTES de restaurar e peças conferidas no início', async () => {
+  const { portasAbertasParaRede, REDE_LOCAL, SERVICOS_DESLIGADOS } = await import('../supabase/backup/teste-restauracao.mjs');
+  assert.deepEqual(portasAbertasParaRede('supabase_db_labz-local|127.0.0.1:54322->5432/tcp\n'), []);
+  assert.deepEqual(portasAbertasParaRede('supabase_db_labz-local|0.0.0.0:54322->5432/tcp, [::]:54322->5432/tcp\n'), ['supabase_db_labz-local 0.0.0.0:54322', 'supabase_db_labz-local [::]:54322']);
+  assert.deepEqual(portasAbertasParaRede('x|8001/tcp, 3000/tcp\r\ny|192.168.0.5:54321->8000/tcp'), ['y 192.168.0.5:54321'], 'porta não publicada não conta; IP da rede conta');
+  assert.match(SERVICOS_DESLIGADOS, /kong/); assert.match(SERVICOS_DESLIGADOS, /postgrest/);
+  const fonte = ler('teste-restauracao.mjs');
+  assert.match(fonte, /com\.docker\.network\.bridge\.host_binding_ipv4=127\.0\.0\.1/);
+  for (const cmd of ["'start', '--network-id', REDE_LOCAL", "'db', 'reset', '--network-id', REDE_LOCAL", "'stop', '--no-backup', '--network-id', REDE_LOCAL"]) assert.ok(fonte.includes(cmd), cmd);
+  assert.ok(fonte.indexOf('portasAbertasParaRede(ps.stdout)') < fonte.indexOf('await restaurar('), 'portas conferidas antes de restaurar');
+  assert.ok(fonte.indexOf("require.resolve('postgres')") < fonte.indexOf('await abrirBackup('), 'peças conferidas antes de pedir a senha');
+  assert.equal(REDE_LOCAL, 'labz-restauracao-local');
 });

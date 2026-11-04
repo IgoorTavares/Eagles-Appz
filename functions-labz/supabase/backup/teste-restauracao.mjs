@@ -23,7 +23,10 @@ const require = createRequire(import.meta.url);
 const N = require('./nucleo.js');
 const PASTA = path.dirname(fileURLToPath(import.meta.url));
 export const CLI_VERSAO = '2.122.0'; // a mesma versão usada nos ensaios
-export const SERVICOS_DESLIGADOS = 'gotrue,realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor,edge-runtime';
+export const SERVICOS_DESLIGADOS = 'gotrue,realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor,edge-runtime,kong,postgrest';
+// Rede própria do Docker em que as portas só abrem para ESTE computador (127.0.0.1). Sem ela, o Supabase
+// local abre o banco em 0.0.0.0, ou seja, para a rede (o Wi-Fi), com a senha padrão "postgres".
+export const REDE_LOCAL = 'labz-restauracao-local';
 const REFERENCIA_PADRAO = path.join(PASTA, 'retratos', 'producao-2026-11-03.json');
 
 export function argumentos(argv) {
@@ -49,7 +52,7 @@ const pausar = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0,
 // pode responder "not ready". Tenta até 3 vezes, com pausa, antes de desistir.
 export function subirComRepeticao(rodar, { tentativas = 3, pausaMs = 15000 } = {}) {
   for (let i = 1; i <= tentativas; i++) {
-    if (rodar(['start', '-x', SERVICOS_DESLIGADOS])) return true;
+    if (rodar(['start', '--network-id', REDE_LOCAL, '-x', SERVICOS_DESLIGADOS])) return true;
     if (i < tentativas) { console.log(`       o banco local ainda não estava pronto; nova tentativa em ${pausaMs / 1000} s (${i + 1}/${tentativas})...`); pausar(pausaMs); }
   }
   return false;
@@ -64,6 +67,31 @@ function rodar(cmd, args, opcoes) {
   if (process.platform === 'win32') return spawnSync(linhaDeComando(cmd, args), { ...opcoes, shell: true });
   return spawnSync(cmd, args, opcoes);
 }
+// Cria (ou recria) a rede do teste com as portas presas a 127.0.0.1.
+export function prepararRedeLocal(executar = (a) => rodar('docker', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })) {
+  const v = executar(['network', 'inspect', REDE_LOCAL, '--format', '{{json .Options}}']);
+  if (v.status === 0) {
+    let op = {};
+    try { op = JSON.parse(String(v.stdout).trim() || '{}') || {}; } catch (e) { op = {}; }
+    if (op['com.docker.network.bridge.host_binding_ipv4'] === '127.0.0.1') return;
+    executar(['network', 'rm', REDE_LOCAL]);
+  }
+  const c = executar(['network', 'create', '-o', 'com.docker.network.bridge.host_binding_ipv4=127.0.0.1', REDE_LOCAL]);
+  if (c.status !== 0) throw new Error('Não consegui criar a rede local do Docker (feche outros testes abertos e tente de novo).');
+}
+
+// Lê a saída de "docker ps --format {{.Names}}|{{.Ports}}" e devolve as portas abertas para FORA deste computador.
+export function portasAbertasParaRede(texto) {
+  const abertas = [];
+  for (const linha of String(texto).split(/\r?\n/).filter(Boolean)) {
+    const [nome, portas = ''] = linha.split('|');
+    for (const m of portas.matchAll(/([0-9.]+|\[[0-9a-f:]*\]):(\d+)->/gi)) {
+      if (m[1] !== '127.0.0.1' && m[1] !== '[::1]') abertas.push(`${nome} ${m[1]}:${m[2]}`);
+    }
+  }
+  return abertas;
+}
+
 function supabase(args, { mostrar = true } = {}) {
   const viaEnv = process.env.SUPABASE_CLI;
   const [cmd, base] = viaEnv ? [viaEnv, []] : ['npx', ['--yes', `supabase@${CLI_VERSAO}`]];
@@ -82,6 +110,7 @@ async function principal() {
   if (fs.existsSync(path.join(RAIZ, 'supabase', '.temp', 'project-ref'))) throw new RecusaLocal('RECUSADO: esta pasta está ligada a um projeto Supabase remoto (supabase/.temp/project-ref). Use uma cópia limpa do projeto.');
   const docker = rodar('docker', ['info'], { stdio: 'ignore' });
   if (docker.status !== 0) throw new Error('O Docker não está pronto. Abra o Docker Desktop, espere aparecer "Engine running" e rode de novo.');
+  try { require.resolve('postgres'); } catch (e) { throw new Error('Faltam as peças do projeto nesta pasta. Rode antes: npm.cmd ci --omit=dev --ignore-scripts'); }
   const referencia = JSON.parse(fs.readFileSync(a.referencia, 'utf8'));
   console.log('ok     backup cifrado · projeto sem ligação remota · Docker pronto');
 
@@ -93,11 +122,18 @@ async function principal() {
   try {
     titulo(3, 'Subir o Supabase LOCAL e montar o banco só com as 4 migrações (a 1ª vez baixa cerca de 2 GB)');
     subiu = true;
+    prepararRedeLocal();
     if (!subirComRepeticao((args) => supabase(args).status === 0)) throw new Error('O Supabase local não subiu (veja a mensagem acima). Confira se o Docker Desktop está aberto e tente de novo.');
-    if (supabase(['db', 'reset']).status !== 0) throw new Error('Não consegui remontar o banco local (veja a mensagem acima).');
+    if (supabase(['db', 'reset', '--network-id', REDE_LOCAL]).status !== 0) throw new Error('Não consegui remontar o banco local (veja a mensagem acima).');
     const st = supabase(['status', '-o', 'json'], { mostrar: false });
     const url = JSON.parse(st.stdout).DB_URL;
     exigirBancoLocal(url);
+    const ps = rodar('docker', ['ps', '--filter', 'name=_labz-local', '--format', '{{.Names}}|{{.Ports}}'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const abertas = portasAbertasParaRede(ps.stdout);
+    if (ps.status !== 0 || !/127\.0\.0\.1:\d+->5432/.test(ps.stdout) || abertas.length) {
+      throw new RecusaLocal(`RECUSADO: o banco local ficou aberto para a rede (${abertas.join(', ') || 'não confirmado'}). Nada foi restaurado.`);
+    }
+    console.log('ok     o banco local só aceita conexões deste computador (127.0.0.1)');
     console.log('ok     banco LOCAL pronto (127.0.0.1), montado do zero pelas migrações');
 
     titulo(4, 'Pausar o relógio automático LOCAL durante o teste');
@@ -121,9 +157,10 @@ async function principal() {
   } finally {
     if (subiu && !a.manter) {
       titulo(7, 'Desligar o Supabase local e APAGAR os dados restaurados deste computador');
-      const p = supabase(['stop', '--no-backup']);
+      const p = supabase(['stop', '--no-backup', '--network-id', REDE_LOCAL]);
+      rodar('docker', ['network', 'rm', REDE_LOCAL], { stdio: 'ignore' });
       console.log(p.status === 0 ? 'ok     banco local apagado (o arquivo cifrado continua guardado com você)' : 'ATENÇÃO: não consegui desligar; rode: npx supabase stop --no-backup');
-    } else if (subiu) console.log('\n[7/7] --manter: o banco local continua ligado. Para apagar: npx supabase stop --no-backup');
+    } else if (subiu) console.log('\n[7/7] --manter: o banco local continua ligado. Para apagar: npx.cmd supabase@2.122.0 stop --no-backup');
   }
 }
 

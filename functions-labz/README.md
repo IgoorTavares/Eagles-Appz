@@ -674,3 +674,7 @@ instalar com `npm.cmd ci --omit=dev --ignore-scripts` (só o necessário, cerca 
 scripts de instalação). Antes do backup real, ensaiar com o **backup de exemplo** (dados fictícios):
 `supabase/backup/exemplo/backup-de-exemplo-ficticio.json`, senha pública `exemplo-ficticio-labz-2026`,
 `--tarefa exe_45fb2d9e4a4d459e9091 --entregas 2` (46 documentos; um teste confere que ele abre e está íntegro).
+
+O Supabase local, por padrão, abre o banco em `0.0.0.0` (para a rede) com a senha `postgres`. O comando
+guiado usa uma rede própria do Docker (`labz-restauracao-local`, portas presas a `127.0.0.1`), desliga os
+serviços que não usa e **recusa restaurar** se alguma porta estiver aberta para fora (`docker ps`).

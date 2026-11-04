@@ -637,9 +637,8 @@
       if (negado(e)) {
         // a tela pode ter achado que era Super Admin; quem decide é o servidor
         $('labz-conteudo').hidden = true;
-        const s = $('labz-sem-permissao');
-        s.hidden = false;
-        s.textContent = 'A LABZ AI é exclusiva do Super Admin autorizado. O servidor recusou este acesso.';
+        $('labz-sem-permissao').hidden = false;
+        $('lz-recusa-texto').textContent = 'A LABZ AI é exclusiva do Super Admin autorizado. O servidor recusou este acesso.';
         return;
       }
       desligarTela(modo === 'https' ? `O servidor da LABZ AI não respondeu: ${e.message} Nada foi alterado.` : `A demonstração não respondeu: ${e.message}`);

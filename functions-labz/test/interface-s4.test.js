@@ -62,9 +62,15 @@ test('tela (S4): modo https com o token do Firebase, sem credencial no navegador
 
 test('CRM/ERP: o menu "LABZ AI" está preparado, mas DESLIGADO, e só existiria para o Super Admin', () => {
   const s = ler(path.join(RAIZ, 'script.js'));
-  assert.match(s, /^const LABZ_AI_MENU_ATIVO = false;$/m);
+  assert.match(s, /^let LABZ_AI_MENU_ATIVO = false;$/m);
+  // I1 (D2): item do MENU PRINCIPAL, só para o Super Admin, sem atalho no menu do perfil
+  assert.match(s, /function labzMenuLiberado\(\) \{\n  return LABZ_AI_MENU_ATIVO === true && typeof USUARIO_ROLE !== 'undefined' && USUARIO_ROLE === 'SuperAdmin';\n\}/);
+  assert.match(s, /\{ key: 'labz-ai', href: LABZ_AI_PAGINA, label: 'LABZ AI', soSuperAdmin: true \},\n\];/);
+  assert.match(s, /function itemVisivelNoPlano\(item\) \{\n  if \(item\.soSuperAdmin\) return labzMenuLiberado\(\);/);
   assert.match(s, /function aplicarGatingPorRole\(\) \{[\s\S]*?labzMenuAplicar\(\);\n\}/);
-  assert.match(s, /if \(!ativo \|\| USUARIO_ROLE !== 'SuperAdmin' \|\| !menu\)/);
+  const atalho = /function labzMenuAplicar\(\) \{[\s\S]*?\n\}/.exec(s)[0];
+  assert.match(atalho, /if \(!labzMenuLiberado\(\) \|\| !painel\)/);
+  assert.doesNotMatch(atalho, /profile-menu/, 'nada no menu do perfil');
   // a mudança no script.js é só esta (nada mais do CRM/ERP mudou na S4)
   for (const f of fs.readdirSync(RAIZ).filter((x) => x.endsWith('.html'))) assert.doesNotMatch(ler(path.join(RAIZ, f)), /labz-ai|labz-config/, `${f} não aponta para a LABZ AI`);
 });

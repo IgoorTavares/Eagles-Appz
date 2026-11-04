@@ -53,29 +53,79 @@ test('todas as páginas do Eagles Labz: nenhum erro de JavaScript novo com o scr
   } finally { await sNovo.fechar(); await sAntes.fechar(); }
 });
 
-test('menu: o atalho "LABZ AI" não aparece para ninguém (desligado); ligado, só para o Super Admin', { timeout: 120000 }, async () => {
+// I1 (D2 do Igor): "LABZ AI" é um item do MENU PRINCIPAL (barra de cima; no celular, a gaveta lateral
+// da barra de cima, a do ERP ou a do CRM), só para o Super Admin, e sem atalho repetido no menu do perfil.
+const LINK = 'a[href="labz-ai.html"]';
+const ligar = (pagina) => pagina.evaluate(() => { LABZ_AI_MENU_ATIVO = true; renderTopbar(PAGINA_ATIVA_KEY); labzMenuAplicar(); });
+const PAPEIS = [['SuperAdmin', true], ['Diretor', false], ['Administrativo', false], ['Financeiro', false]];
+const comoPapel = (role) => ({ role, uid: role === 'SuperAdmin' ? 'sa' : 'd1', tenantId: role === 'SuperAdmin' ? null : 't1' });
+async function abrirLogado(s, pg, role, viewport) {
+  const r = await novaPagina(nav, { teste: comoPapel(role), viewport });
+  await r.pagina.goto(`${s.site}/${pg}`);
+  await r.pagina.waitForFunction(() => typeof labzMenuAplicar === 'function' && typeof USUARIO_ROLE !== 'undefined' && USUARIO_ROLE !== null, null, { timeout: 20000 });
+  await r.pagina.waitForTimeout(500);
+  return r;
+}
+
+test('menu principal (computador): "LABZ AI" desligado para todos; ligado, só o Super Admin vê, e nunca no menu do perfil', { timeout: 120000 }, async () => {
   const s = await criarServidoresTeste();
   try {
-    for (const [role, deveria] of [['SuperAdmin', true], ['Diretor', false], ['Administrativo', false], ['Financeiro', false]]) {
-      const { pagina, contexto } = await novaPagina(nav, { teste: { role, uid: role === 'SuperAdmin' ? 'sa' : 'd1', tenantId: role === 'SuperAdmin' ? null : 't1' } });
+    for (const [role, deveria] of PAPEIS) {
+      const { pagina, contexto } = await abrirLogado(s, 'index.html', role);
       try {
-        await pagina.goto(`${s.site}/index.html`);
-        await pagina.waitForFunction(() => typeof labzMenuAplicar === 'function' && typeof USUARIO_ROLE !== 'undefined' && USUARIO_ROLE !== null, null, { timeout: 20000 });
-        await pagina.waitForTimeout(500);
-        assert.equal(await pagina.evaluate(() => LABZ_AI_MENU_ATIVO), false);
-        assert.equal(await pagina.locator('#labz-ai-menu-link').count(), 0, `${role}: desligado, não aparece`);
-        const r = await pagina.evaluate(() => labzMenuAplicar(true)); // simula a publicação autorizada
-        assert.equal(r, deveria, role);
-        assert.equal(await pagina.locator('#labz-ai-menu-link').count(), deveria ? 1 : 0, role);
+        assert.equal(await pagina.evaluate(() => LABZ_AI_MENU_ATIVO), false, 'desligado até a publicação autorizada');
+        assert.equal(await pagina.locator(`#topbar-nav ${LINK}`).count(), 0, `${role}: desligado, não aparece`);
+        await ligar(pagina);
+        assert.equal(await pagina.locator(`#topbar-nav ${LINK}`).count(), deveria ? 1 : 0, role);
+        assert.equal(await pagina.locator(`#profile-menu ${LINK}`).count(), 0, `${role}: sem atalho repetido no perfil`);
+        assert.equal(await pagina.locator('#labz-ai-crm-link').count(), 0, 'fora do CRM não há item extra');
         if (deveria) {
-          assert.equal(await pagina.getAttribute('#labz-ai-menu-link', 'href'), 'labz-ai.html');
-          assert.equal(await pagina.evaluate(() => document.querySelector('#labz-ai-menu-link').previousElementSibling.getAttribute('href')), 'empresas.html');
-          assert.equal(await pagina.evaluate(() => labzMenuAplicar(true)), true);
-          assert.equal(await pagina.locator('#labz-ai-menu-link').count(), 1, 'não duplica');
-          await pagina.evaluate(() => labzMenuAplicar(false));
-          assert.equal(await pagina.locator('#labz-ai-menu-link').count(), 0, 'desligar remove');
+          assert.equal((await pagina.textContent(`#topbar-nav ${LINK}`)).trim(), 'LABZ AI');
+          await pagina.evaluate(() => renderTopbar(PAGINA_ATIVA_KEY));
+          assert.equal(await pagina.locator(`#topbar-nav ${LINK}`).count(), 1, 'não duplica');
+          await pagina.evaluate(() => { LABZ_AI_MENU_ATIVO = false; renderTopbar(PAGINA_ATIVA_KEY); });
+          assert.equal(await pagina.locator(`#topbar-nav ${LINK}`).count(), 0, 'desligar tira do menu');
         }
       } finally { await contexto.close(); }
     }
   } finally { await s.fechar(); }
+});
+
+test('menu no celular: gaveta do ERP e gaveta do CRM mostram "LABZ AI" só para o Super Admin (e o item do CRM só no celular)', { timeout: 180000 }, async () => {
+  const s = await criarServidoresTeste();
+  try {
+    for (const [role, deveria] of PAPEIS) {
+      // ERP (Painel): a gaveta é montada a partir do mesmo menu principal
+      let r = await abrirLogado(s, 'index.html', role, { width: 390, height: 844 });
+      try {
+        await ligar(r.pagina);
+        await r.pagina.evaluate(() => erpRenderMobile());
+        assert.equal(await r.pagina.locator(`#erp-gaveta ${LINK}`).count(), deveria ? 1 : 0, `ERP ${role}`);
+      } finally { await r.contexto.close(); }
+      // CRM: a gaveta é a barra lateral do próprio CRM
+      for (const [largura, visivel] of [[390, true], [1280, false]]) {
+        r = await abrirLogado(s, 'crm.html', role, { width: largura, height: 844 });
+        try {
+          await ligar(r.pagina);
+          assert.equal(await r.pagina.locator('#labz-ai-crm-link').count(), deveria ? 1 : 0, `CRM ${role} ${largura}px`);
+          if (deveria) {
+            assert.equal(await r.pagina.getAttribute('#labz-ai-crm-link', 'href'), 'labz-ai.html');
+            assert.equal(await r.pagina.$eval('#labz-ai-crm-link', (a) => !a.hidden), visivel, `CRM ${largura}px: ${visivel ? 'aparece' : 'só na barra de cima'}`);
+            await r.pagina.evaluate(() => labzMenuAplicar());
+            assert.equal(await r.pagina.locator('#labz-ai-crm-link').count(), 1, 'não duplica');
+          }
+        } finally { await r.contexto.close(); }
+      }
+    }
+  } finally { await s.fechar(); }
+});
+
+test('na própria página da LABZ AI o item do menu fica marcado como a página atual', { timeout: 60000 }, async () => {
+  const s = await criarServidoresTeste();
+  const { pagina, contexto } = await abrirLogado(s, 'labz-ai.html', 'SuperAdmin');
+  try {
+    await ligar(pagina);
+    assert.equal(await pagina.evaluate(() => PAGINA_ATIVA_KEY), 'labz-ai');
+    assert.match(await pagina.getAttribute(`#topbar-nav ${LINK}`, 'class'), /\bactive\b/);
+  } finally { await contexto.close(); await s.fechar(); }
 });

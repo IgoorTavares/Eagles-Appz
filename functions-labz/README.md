@@ -389,6 +389,13 @@ Nenhuma chamada real a OpenAI, Anthropic ou Google; nenhuma chave; nada agendado
   escondida, Diretor/equipe sem chamada, tela "enganada" recusada pelo servidor, token vencido, servidor desligado, XSS,
   isolamento por cliente, 1280/768/375/320 px, demonstração; regressão de todas as páginas do CRM/ERP e do menu).
 
+### I1 — a tela dentro do Eagles Labz (só código; nada publicado)
+
+- **Menu:** item "LABZ AI" no menu principal (`NAV_ITEMS`, `soSuperAdmin`), só para o Super Admin. Aparece na barra de cima, nas gavetas do celular (barra de cima e ERP) e na barra lateral do CRM (só no celular). Fica **desligado** (`LABZ_AI_MENU_ATIVO = false`) até a publicação autorizada.
+- **Visual:** "Mesa de Operação Premium", só em `.pg-labz`. Ordem: resumo → decisões + nova tarefa → equipe → histórico. No celular, as decisões e a nova tarefa vêm primeiro.
+- **Recusa:** quem não é Super Admin vê "Área exclusiva do Super Admin", e a página não chama o servidor.
+- **CSP da página:** só o Firebase (login), as fontes e o Supabase da LABZ AI. Qualquer outro endereço é bloqueado pelo navegador. Ao trocar de projeto do Supabase, atualize o `connect-src` (um teste confere).
+
 ## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
 
 - **Projeto:** exclusivo da LABZ AI, na organização do Igor, no plano Free.

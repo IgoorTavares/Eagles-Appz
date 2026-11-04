@@ -379,6 +379,33 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
   - Menu: no computador o menu do Eagles Labz é a barra de cima (`NAV_ITEMS`/`renderTopbar`), que no celular vira a gaveta do botão MENU; só o CRM tem barra lateral própria. O atalho da S4 (`labzMenuAplicar`, desligado) fica no menu do perfil.
   - Produção conferida só por leitura: `labz-api` v3 (Verify JWT ligado) e `labz-worker` v1 (desligado). O pacote do repositório é o mesmo publicado (`labz-01711dac8a7e.mjs`, sem diferença ao reempacotar). A branch está 37 commits à frente da `main`, sem conflito; publicar exige antes o merge do PR 15.
   - Verify JWT: o gateway só aceita JWT do Supabase, então o login do Firebase é recusado antes do código. Opções: A) desligar e deixar as travas do código (recomendada); B) cadastrar o Firebase como "Third-Party Auth" no Supabase e manter ligado (precisa de teste, muda a configuração de Auth); C) mandar a chave anon como JWT (sem proteção real; descartada).
+- **LABZ AI — I1 (construção da interface no código do Eagles Labz; 04/11/2026; nada publicado; I2–I4 **não** autorizadas):**
+  - Decisões do Igor: D1 opção A só como candidata para os testes da I2 (Verify JWT **continua ligado**); D2 item no menu principal, só para o Super Admin, **sem** atalho no menu do perfil; D3 reaproveitar a S4 (indicadores, 8 agentes, aprovações, histórico, entregas e criação de tarefas simuladas); D4 merge do PR 15 só na I4, com autorização.
+  - Menu (`script.js`):
+    - item `{ key: 'labz-ai', soSuperAdmin: true }` no fim de `NAV_ITEMS`;
+    - `itemVisivelNoPlano` chama `labzMenuLiberado()` (flag `LABZ_AI_MENU_ATIVO` **false** + `USUARIO_ROLE === 'SuperAdmin'`);
+    - aparece na barra de cima, na gaveta da barra de cima (celular) e na gaveta do ERP (`erpMobItens`, ícone `brilho`);
+    - no CRM, `labzMenuAplicar()` põe `#labz-ai-crm-link` logo abaixo do menu do CRM, visível só até 860 px;
+    - o atalho antigo do menu do perfil foi removido;
+    - `LABZ_AI_PAGINA` continua montado em partes até a I3.
+  - Página (`functions-labz/demo/ui/labz-ai.html/.css`):
+    - visual "Mesa de Operação Premium" (tokens `--mn-*`, painéis de uma camada, resumo em faixa), com regras só em `.pg-labz` e `body:has(main.pg-labz)`;
+    - ordem: resumo → "Esperando você" + "Nova tarefa" (lado a lado no computador, no topo no celular) → Equipe (organograma + agente) → Histórico;
+    - no celular, os 6 especialistas ficam numa grade de 2 colunas;
+    - recusa nova ("Área exclusiva do Super Admin", com "Voltar ao Painel"; nenhuma chamada);
+    - `initPaginaComum('labz-ai')`, para o item do menu ficar marcado.
+  - CSP só na página (meta):
+    - `default-src 'none'`, `object-src`/`base-uri`/`form-action 'none'`;
+    - `script-src 'self' https://www.gstatic.com 'unsafe-inline'` (exigido pelos `onclick` do menu comum);
+    - `connect-src` só com `'self'`, os 5 endereços do Firebase e `https://ducvpgrtsguaxqhnnupd.supabase.co`;
+    - `img-src 'self' data: blob:`, `frame-src` com o authDomain, e `referrer no-referrer`;
+    - o servidor de teste troca o endereço do Supabase pelo da API local (só no teste).
+  - Achado registrado (não corrigido fora da página): entre 361 e 420 px a palavra "LABZ" da barra de cima passa da tela em todas as páginas internas. Corrigido só na LABZ AI; nas outras fica para uma etapa própria.
+  - Testes:
+    - navegador `npm run test:ui` **17/17**. Novos: CSP estática, CSP no navegador (tela sem bloqueio; fetch e script de fora bloqueados), ordem dos blocos por largura, recusa com 0 pedidos e 0 bloqueios, menu no computador, gavetas ERP/CRM e página atual marcada;
+    - `npm test` 372 (360 aprovados, 12 só PostgreSQL); publicação segura 25/25;
+    - barra de cima com o item ligado sem estourar em 861/1024/1280/1440 px;
+    - 2 mutações (menu sem o filtro de Super Admin; CSP com curinga) detectadas.
   - Achado antes do T2 (corrigido e publicado na `labz-api` v3): recusas de login gravavam um evento no banco e logins do Firebase fora da lista gravavam contador e auditoria, ou seja, sem ser Super Admin dava para encher o banco. Agora: lista do servidor conferida antes de qualquer acesso ao banco; recusas só no log da função (`src/borda/registro-recusas.js`, 20 por minuto); `criarAcessoSupabase` recusa a opção `auditoria`.
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.

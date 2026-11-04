@@ -1208,27 +1208,37 @@ function aplicarGatingPorRole() {
   labzMenuAplicar();
 }
 
-// LABZ AI (Fase S4): atalho "LABZ AI" no menu do perfil, logo abaixo de "Empresas (Super Admin)".
-// DESLIGADO (false) até o Igor autorizar a publicação da tela da LABZ AI. Mesmo ligado, só aparece
-// para o Super Admin — e o menu NÃO é a proteção: o servidor da LABZ AI confere tudo a cada pedido.
-const LABZ_AI_MENU_ATIVO = false;
+// LABZ AI (I1): item "LABZ AI" no MENU PRINCIPAL (barra de cima no computador; no celular, a gaveta
+// lateral: a da barra de cima, a do ERP ou a do CRM). Só aparece para o Super Admin, e só depois que a
+// publicação for autorizada: até lá fica DESLIGADO (false). O menu NÃO é a proteção: o servidor da
+// LABZ AI confere tudo a cada pedido, e a própria página recusa quem não é Super Admin sem chamar nada.
+let LABZ_AI_MENU_ATIVO = false;
 // O nome da página é montado em partes DE PROPÓSITO: enquanto a tela não é publicada, o conferidor do
-// "Site seguro" não deve tratar este atalho desligado como uma página do site. Ao publicar (com
+// "Site seguro" não deve tratar este item desligado como uma página do site. Ao publicar (com
 // autorização), volte a escrever o nome da página por inteiro para o conferidor passar a checá-lo.
 const LABZ_AI_PAGINA = ['labz-ai', 'html'].join('.');
-function labzMenuAplicar(ativo = LABZ_AI_MENU_ATIVO) {
-  const menu = document.getElementById('profile-menu');
-  const existente = document.getElementById('labz-ai-menu-link');
-  if (!ativo || USUARIO_ROLE !== 'SuperAdmin' || !menu) { if (existente) existente.remove(); return false; }
+function labzMenuLiberado() {
+  return LABZ_AI_MENU_ATIVO === true && typeof USUARIO_ROLE !== 'undefined' && USUARIO_ROLE === 'SuperAdmin';
+}
+// No CRM a gaveta do celular é a barra lateral do próprio CRM (sem links de páginas): lá o item entra
+// logo abaixo do menu do CRM e só aparece no celular (no computador já está na barra de cima).
+function labzMenuAplicar() {
+  const painel = document.getElementById('crm-sidebar-painel');
+  const existente = document.getElementById('labz-ai-crm-link');
+  if (!labzMenuLiberado() || !painel) { if (existente) existente.remove(); return false; }
   if (existente) return true;
+  const nav = painel.querySelector('nav');
   const a = document.createElement('a');
-  a.id = 'labz-ai-menu-link';
+  a.id = 'labz-ai-crm-link';
+  a.className = 'mn-nav-item labz-ai-crm-link';
   a.href = LABZ_AI_PAGINA;
-  a.setAttribute('data-somente-superadmin', '');
-  a.insertAdjacentHTML('afterbegin', '<svg class="icone-menu" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M12 3v4"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M9 17h6"/></svg>');
-  a.append(' LABZ AI (Super Admin)');
-  const empresas = menu.querySelector('a[href="empresas.html"]');
-  if (empresas) empresas.insertAdjacentElement('afterend', a); else menu.append(a);
+  a.style.cssText = 'justify-content:flex-start; gap:9px; margin-top:6px;';
+  a.insertAdjacentHTML('afterbegin', ic('brilho', 'ic-herda'));
+  a.append(' LABZ AI');
+  const soNoCelular = () => { a.hidden = !(window.matchMedia && window.matchMedia('(max-width: 860px)').matches); };
+  soNoCelular();
+  if (window.matchMedia) { try { window.matchMedia('(max-width: 860px)').addEventListener('change', soNoCelular); } catch (e) { /* navegador antigo */ } }
+  if (nav) nav.insertAdjacentElement('afterend', a); else painel.append(a);
   return true;
 }
 
@@ -1400,6 +1410,8 @@ const NAV_ITEMS = [
   },
   { key: 'financeiro', href: 'financeiro.html', label: 'Financeiro', plano: 'erp' },
   { key: 'crm', href: 'crm.html', label: 'CRM', plano: 'crm' },
+  // LABZ AI (I1): módulo independente do CRM/ERP, só para o Super Admin (ver labzMenuLiberado)
+  { key: 'labz-ai', href: LABZ_AI_PAGINA, label: 'LABZ AI', soSuperAdmin: true },
 ];
 
 // Um item aparece se: não tem plano marcado (sempre visível), a empresa
@@ -11618,7 +11630,7 @@ async function sisMontarParaEmpresa(tenantId, versao) {
 // =====================================================================
 const ERP_MOB_ICONES = { painel: 'quadro', 'meu-negocio': 'grafico', cadastros: 'pessoas', vendas: 'carrinho', estoque: 'estoque', financeiro: 'dinheiro', crm: 'conversa',
   produtos: 'pacote', 'clientes-fornecedores': 'pessoas', vendedores: 'usuario', funcionarios: 'usuario', 'pedidos-venda': 'documento', 'objetos-postagem': 'enviar', contratos: 'prancheta', 'nfse-externo': 'abrir',
-  'estoque-posicao': 'estoque', 'lancamentos-estoque': 'repetir', 'conferencia-estoque': 'aprovado', 'pedido-compras': 'carrinho', 'notas-fiscais-entrada': 'documento', 'fornecedores-atalho': 'pessoas' };
+  'labz-ai': 'brilho', 'estoque-posicao': 'estoque', 'lancamentos-estoque': 'repetir', 'conferencia-estoque': 'aprovado', 'pedido-compras': 'carrinho', 'notas-fiscais-entrada': 'documento', 'fornecedores-atalho': 'pessoas' };
 function planoTemCrm() { return !TENANT_PLANO || TENANT_PLANO !== 'erp'; }
 function erpEhCelular() { return window.matchMedia && window.matchMedia('(max-width: 860px)').matches; }
 function erpMobItens() {
@@ -13893,6 +13905,7 @@ function crmUsaDadosDoErp() {
 }
 
 function itemVisivelNoPlano(item) {
+  if (item.soSuperAdmin) return labzMenuLiberado();
   if (!item.plano) return true;
   if (!TENANT_PLANO) return true;
   if (TENANT_PLANO === 'ambos') return true;

@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- I1: política de segurança SÓ desta página (o resto do site não muda). Limita com quem a página pode
+     falar e de onde pode carregar código: o login (Firebase), as fontes e o servidor da LABZ AI (Supabase).
+     O 'unsafe-inline' em script-src é exigido pelos botões do menu comum (onclick no script.js). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://www.gstatic.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebaseinstallations.googleapis.com https://www.googleapis.com https://ducvpgrtsguaxqhnnupd.supabase.co; frame-src https://labz-18246.firebaseapp.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
 <title>LABZ AI · Eagles Labz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -79,13 +84,17 @@
 <div class="app">
 <main class="main pg-labz" id="labz-main">
 
-<div id="labz-sem-permissao" class="panel" hidden>
-  <p style="margin:0;">A LABZ AI é exclusiva do Super Admin.</p>
-</div>
+<section id="labz-sem-permissao" class="panel lz-recusa" hidden aria-labelledby="lz-recusa-titulo">
+  <span class="lz-recusa-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+  <h1 id="lz-recusa-titulo">Área exclusiva do Super Admin</h1>
+  <p id="lz-recusa-texto">A LABZ AI é exclusiva do Super Admin. Nenhum dado foi consultado.</p>
+  <a class="btn" href="index.html">Voltar ao Painel</a>
+</section>
 
 <div id="labz-conteudo" hidden>
   <div class="page-header lz-cabeca">
     <div>
+      <span class="lz-sobre">Módulo independente · só para o Super Admin</span>
       <h1>LABZ AI</h1>
       <p>Sua equipe de agentes especializados. Você decide; os agentes propõem e executam.</p>
     </div>
@@ -96,47 +105,50 @@
 
   <div class="lz-resumo" id="lz-resumo" aria-label="Resumo das tarefas"></div>
 
-  <section class="panel lz-pendencias-painel" aria-labelledby="lz-pend-titulo">
-    <div class="panel-title"><h2 id="lz-pend-titulo">Esperando você</h2><span>Só o Super Admin decide</span></div>
-    <div id="lz-pendencias" aria-live="polite"></div>
-  </section>
+  <!-- primeiro o que pede decisão e a criação de tarefas (no celular, logo no topo) -->
+  <div class="lz-mesa">
+    <section class="panel lz-pendencias-painel" aria-labelledby="lz-pend-titulo">
+      <div class="panel-title"><h2 id="lz-pend-titulo">Esperando você</h2><span>Só o Super Admin decide</span></div>
+      <div id="lz-pendencias" aria-live="polite"></div>
+    </section>
+
+    <section class="panel lz-tarefa" aria-labelledby="lz-tarefa-titulo">
+      <div class="panel-title"><h2 id="lz-tarefa-titulo">Nova tarefa</h2><span>Agentes simulados: nenhum modelo de IA real, nenhuma publicação, nenhum custo</span></div>
+      <form id="lz-form" novalidate>
+        <div class="form-grid">
+          <div class="field full">
+            <label for="lz-objetivo">O que você precisa?</label>
+            <textarea id="lz-objetivo" rows="3" minlength="5" maxlength="4000" required placeholder="Ex.: Campanha completa com diretrizes de marca, carrosséis, roteiro de Reels, legendas e anúncios"></textarea>
+          </div>
+          <div class="field">
+            <label for="lz-empresa">Cliente (quando houver)</label>
+            <select id="lz-empresa"><option value="">Sem cliente (tarefa interna)</option></select>
+          </div>
+          <div class="field">
+            <span class="lz-exemplos-rotulo" id="lz-exemplos-rotulo">Exemplos rápidos</span>
+            <div class="lz-exemplos" id="lz-exemplos" role="group" aria-labelledby="lz-exemplos-rotulo"></div>
+          </div>
+        </div>
+        <div class="lz-acoes-form"><button type="submit" class="btn btn-primary" id="lz-iniciar">Iniciar tarefa (simulada)</button></div>
+      </form>
+
+      <div class="lz-execucao" id="lz-execucao" hidden>
+        <div class="lz-execucao-cabeca"><h3>Etapas da tarefa <span class="lz-execucao-id" id="lz-execucao-id"></span></h3><span class="lz-estado" id="lz-estado" role="status"></span></div>
+        <div class="lz-progresso"><progress id="lz-progresso" max="1" value="0" aria-labelledby="lz-progresso-texto"></progress><span id="lz-progresso-texto" class="lz-nota"></span></div>
+        <ol class="lz-etapas" id="lz-etapas"></ol>
+        <div id="lz-decisoes" aria-live="polite"></div>
+        <div class="lz-resultado" id="lz-resultado" aria-live="polite"></div>
+      </div>
+    </section>
+  </div>
 
   <div class="lz-grade">
     <section class="panel" aria-labelledby="lz-org-titulo">
-      <div class="panel-title"><h2 id="lz-org-titulo">Organograma</h2><span>Selecione um agente para ver os detalhes</span></div>
+      <div class="panel-title"><h2 id="lz-org-titulo">Equipe</h2><span>Organograma dos 8 agentes · toque num agente para ver os detalhes</span></div>
       <div class="lz-org" id="lz-org"></div>
     </section>
     <aside class="panel lz-agente" id="lz-agente" aria-live="polite" aria-label="Detalhes do agente selecionado"></aside>
   </div>
-
-  <section class="panel lz-tarefa" aria-labelledby="lz-tarefa-titulo">
-    <div class="panel-title"><h2 id="lz-tarefa-titulo">Nova tarefa</h2><span>Agentes simulados: nenhum modelo de IA real, nenhuma publicação, nenhum custo</span></div>
-    <form id="lz-form" novalidate>
-      <div class="form-grid">
-        <div class="field full">
-          <label for="lz-objetivo">O que você precisa?</label>
-          <textarea id="lz-objetivo" rows="3" minlength="5" maxlength="4000" required placeholder="Ex.: Campanha completa com diretrizes de marca, carrosséis, roteiro de Reels, legendas e anúncios"></textarea>
-        </div>
-        <div class="field">
-          <label for="lz-empresa">Cliente (quando houver)</label>
-          <select id="lz-empresa"><option value="">Sem cliente (tarefa interna)</option></select>
-        </div>
-        <div class="field">
-          <span class="lz-exemplos-rotulo" id="lz-exemplos-rotulo">Exemplos rápidos</span>
-          <div class="lz-exemplos" id="lz-exemplos" role="group" aria-labelledby="lz-exemplos-rotulo"></div>
-        </div>
-      </div>
-      <div class="lz-acoes-form"><button type="submit" class="btn btn-primary" id="lz-iniciar">Iniciar tarefa (simulada)</button></div>
-    </form>
-
-    <div class="lz-execucao" id="lz-execucao" hidden>
-      <div class="lz-execucao-cabeca"><h3>Etapas da tarefa <span class="lz-execucao-id" id="lz-execucao-id"></span></h3><span class="lz-estado" id="lz-estado" role="status"></span></div>
-      <div class="lz-progresso"><progress id="lz-progresso" max="1" value="0" aria-labelledby="lz-progresso-texto"></progress><span id="lz-progresso-texto" class="lz-nota"></span></div>
-      <ol class="lz-etapas" id="lz-etapas"></ol>
-      <div id="lz-decisoes" aria-live="polite"></div>
-      <div class="lz-resultado" id="lz-resultado" aria-live="polite"></div>
-    </div>
-  </section>
 
   <section class="panel lz-historico" aria-labelledby="lz-hist-titulo">
     <div class="panel-title"><h2 id="lz-hist-titulo">Histórico</h2><span>Tarefas e entregas, das mais novas para as mais antigas</span></div>
@@ -160,7 +172,7 @@
 <script src="script.js"></script>
 <script src="labz-ai.js"></script>
 <script>
-initPaginaComum('');
+initPaginaComum('labz-ai');
 protegerPagina(function () {
   labzIniciar();
 });

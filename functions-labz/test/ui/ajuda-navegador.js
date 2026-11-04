@@ -19,7 +19,12 @@ async function novaPagina(navegador, { teste = {}, viewport = { width: 1280, hei
   const erros = [];
   const pagina = await contexto.newPage();
   pagina.on('pageerror', (e) => erros.push(String(e && e.message)));
-  await pagina.addInitScript((t) => { window.__TESTE = t; }, teste);
+  await pagina.addInitScript((t) => {
+    window.__TESTE = t;
+    // I1: tudo o que a política de segurança da página (CSP) bloquear fica anotado aqui
+    window.__cspViolacoes = [];
+    document.addEventListener('securitypolicyviolation', (e) => window.__cspViolacoes.push(`${e.effectiveDirective || e.violatedDirective} ${e.blockedURI}`));
+  }, teste);
   await contexto.route(/^https?:\/\/(?!127\.0\.0\.1)/, (rota) => {
     const u = rota.request().url();
     if (!semFirebase && /gstatic\.com\/firebasejs\/.*firebase-app-compat\.js$/.test(u)) return rota.fulfill({ status: 200, contentType: 'text/javascript', body: FALSO });

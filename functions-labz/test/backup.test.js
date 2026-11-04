@@ -328,3 +328,16 @@ test('tranca do banco local: senha aleatória para todos os usuários, conferida
   assert.match(fonte, /'docker', \['exec', '-i', 'supabase_db_labz-local', 'psql'/, 'a senha nova vai pela entrada do psql (não fica na linha de comando)');
   assert.match(fonte, /crypto\.randomBytes\(24\)\.toString\('hex'\)/);
 });
+
+test('Windows: o teste só roda com a regra do Firewall que bloqueia a porta do banco local (conferida no início e antes de restaurar)', async () => {
+  const { REGRA_FIREWALL, PS_CONFERIR_FIREWALL, firewallBloqueiaPorta } = await import('../supabase/backup/teste-restauracao.mjs');
+  assert.match(PS_CONFERIR_FIREWALL, /Get-NetFirewallRule -DisplayName 'LABZ teste restauracao - bloquear 54322'/);
+  for (const t of ["\\$_.Enabled -eq 'True'", "\\$_.Direction -eq 'Inbound'", "\\$_.Action -eq 'Block'", "\\$_.Protocol -eq 'TCP'", "LocalPort -eq '54322'"]) assert.match(PS_CONFERIR_FIREWALL, new RegExp(t), t);
+  assert.equal(firewallBloqueiaPorta(() => ({ status: 0 })), true);
+  for (const st of [1, 2, 3, null]) assert.equal(firewallBloqueiaPorta(() => ({ status: st })), false, `saída ${st} = sem bloqueio`);
+  const fonte = ler('teste-restauracao.mjs');
+  const i = (t) => { const n = fonte.indexOf(t); assert.ok(n > 0, t); return n; };
+  assert.ok(i("process.platform === 'win32' && !firewallBloqueiaPorta()") < i('await abrirBackup('), 'no Windows, sem a regra, para antes de pedir a senha');
+  assert.ok(i('sem bloqueio de firewall. Nada foi restaurado.') < i('await restaurar('), 'porta aberta sem firewall = recusa antes de restaurar');
+  assert.equal(REGRA_FIREWALL, 'LABZ teste restauracao - bloquear 54322');
+});

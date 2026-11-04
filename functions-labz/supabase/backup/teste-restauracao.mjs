@@ -116,6 +116,19 @@ export function urlComSenha(url, senha) {
   return u.toString();
 }
 
+// Windows: o Docker Desktop publica a porta do banco em 0.0.0.0 (para a rede) mesmo com a rede própria.
+// Exigência do Igor (12.5): outros aparelhos não podem nem CONECTAR. Por isso, no Windows, o teste só
+// roda com uma regra do Firewall do Windows que BLOQUEIA a entrada na porta 54322 (o próprio computador
+// continua usando, pela volta interna "loopback", que o firewall não filtra). A regra é criada e apagada
+// pelo Igor (PowerShell como administrador); aqui só é CONFERIDA.
+export const REGRA_FIREWALL = 'LABZ teste restauracao - bloquear 54322';
+export const PORTA_BANCO_LOCAL = 54322;
+export const PS_CONFERIR_FIREWALL = `$r = Get-NetFirewallRule -DisplayName '${REGRA_FIREWALL}' -ErrorAction SilentlyContinue | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' }; if (-not $r) { exit 2 }; $p = $r | Get-NetFirewallPortFilter | Where-Object { $_.Protocol -eq 'TCP' -and [string]$_.LocalPort -eq '${PORTA_BANCO_LOCAL}' }; if ($p) { exit 0 } else { exit 3 }`;
+export function firewallBloqueiaPorta(executar = (cmd, args) => spawnSync(cmd, args, { stdio: 'ignore' })) {
+  const r = executar('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', PS_CONFERIR_FIREWALL]);
+  return r.status === 0;
+}
+
 function supabase(args, { mostrar = true } = {}) {
   const viaEnv = process.env.SUPABASE_CLI;
   const [cmd, base] = viaEnv ? [viaEnv, []] : ['npx', ['--yes', `supabase@${CLI_VERSAO}`]];
@@ -135,6 +148,9 @@ async function principal() {
   const docker = rodar('docker', ['info'], { stdio: 'ignore' });
   if (docker.status !== 0) throw new Error('O Docker não está pronto. Abra o Docker Desktop, espere aparecer "Engine running" e rode de novo.');
   try { require.resolve('postgres'); } catch (e) { throw new Error('Faltam as peças do projeto nesta pasta. Rode antes: npm.cmd ci --omit=dev --ignore-scripts'); }
+  if (process.platform === 'win32' && !firewallBloqueiaPorta()) {
+    throw new RecusaLocal(`RECUSADO: falta a regra do Firewall do Windows "${REGRA_FIREWALL}" (bloqueio de entrada na porta ${PORTA_BANCO_LOCAL}). Crie a regra (PowerShell como administrador) e rode de novo. Nada foi aberto nem restaurado.`);
+  }
   const referencia = JSON.parse(fs.readFileSync(a.referencia, 'utf8'));
   console.log('ok     backup cifrado · projeto sem ligação remota · Docker pronto');
 
@@ -166,10 +182,12 @@ async function principal() {
     const abertas = portasAbertasParaRede(ps.stdout);
     if (ps.status === 0 && /127\.0\.0\.1:\d+->5432/.test(ps.stdout) && !abertas.length) {
       console.log('ok     o banco local só aceita conexões deste computador (127.0.0.1)');
+    } else if (process.platform === 'win32' && firewallBloqueiaPorta()) {
+      console.log(`ok     o Docker abriu a porta para a rede (${abertas.join(', ') || 'não confirmado'}), mas o Firewall do Windows bloqueia a entrada de outros aparelhos (regra "${REGRA_FIREWALL}") e o banco está trancado`);
     } else {
-      console.log(`AVISO  a porta do banco local ficou visível na rede (${abertas.join(', ') || 'não confirmado'}), mas ele está trancado com a senha aleatória acima: ninguém de fora consegue entrar.`);
+      throw new RecusaLocal(`RECUSADO: a porta do banco local ficou aberta para a rede (${abertas.join(', ') || 'não confirmado'}) sem bloqueio de firewall. Nada foi restaurado.`);
     }
-    console.log('ok     banco LOCAL pronto (127.0.0.1), montado do zero pelas migrações');
+    console.log('ok     banco LOCAL pronto, montado do zero pelas migrações');
 
     titulo(4, 'Pausar o relógio automático LOCAL durante o teste');
     const sql = conectarLocal(url);

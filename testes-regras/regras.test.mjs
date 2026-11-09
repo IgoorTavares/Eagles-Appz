@@ -246,8 +246,8 @@ test('LABZ AI: sem a lista de autorizados, nem o Super Admin lê', async () => {
   await assertFails(getDoc(doc(db('sa'), 'labz_empresas/e1')));
 });
 
-// ---------- v156: anotações e contatos dos negócios (um documento por item) ----------
-test('v156: anotações e contatos dos negócios — mesmas permissões das outras listas do CRM', async () => {
+// ---------- v157: anotações e contatos dos negócios (um documento por item) ----------
+test('v157: anotações e contatos dos negócios — mesmas permissões das outras listas do CRM', async () => {
   for (const col of ['crm_negocio_anotacoes', 'crm_negocio_contatos']) {
     // quem opera grava e lê; o Diretor também
     await assertSucceeds(setDoc(doc(db('a1'), `tenants/t1/${col}/x1`), { negocioId: 'n', texto: 'ok' }));
@@ -272,7 +272,7 @@ test('v156: anotações e contatos dos negócios — mesmas permissões das outr
   await assertFails(setDoc(doc(db('d1'), 'tenants/t1/crm_negocio_outros/x'), { a: 1 }));
   await assertFails(getDoc(doc(db('d1'), 'tenants/t1/crm_negocio_outros/x')));
 });
-test('v156: itens já copiados (dados/{chave}_importados) e reserva do link do portal seguem a regra comum de dados', async () => {
+test('v157: itens já copiados (dados/{chave}_importados) e reserva do link do portal seguem a regra comum de dados', async () => {
   for (const k of ['tenants/t1/dados/eagles_crm_negocio_anotacoes_v1_importados', 'tenants/t1/dados/eagles_portal_links_v1__r_0123456789abcdef']) {
     await assertSucceeds(setDoc(doc(db('a1'), k), { ids: ['a'] }));
     await assertSucceeds(getDoc(doc(db('f1'), k)));

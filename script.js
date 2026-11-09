@@ -779,11 +779,11 @@ const CHAVES_COLECAO = {
   // listas do CRM (mesma proteção: duas pessoas salvando juntas não se apagam)
   eagles_crm_clientes_v1: 'crm_clientes', eagles_crm_negocios_v1: 'crm_negocios', eagles_crm_contratos_v1: 'crm_contratos',
   eagles_servicos_v1: 'crm_servicos', eagles_crm_tarefas_v1: 'crm_tarefas_dia', eagles_crm_lembretes_v1: 'crm_lembretes',
-  // v156: anotações e contatos dos negócios (várias pessoas anotam ao mesmo tempo)
+  // v157: anotações e contatos dos negócios (várias pessoas anotam ao mesmo tempo)
   eagles_crm_negocio_anotacoes_v1: 'crm_negocio_anotacoes', eagles_crm_negocio_contatos_v1: 'crm_negocio_contatos',
 };
 // Listas que passaram para "um documento por item" quando já estavam em uso
-// (v156). Durante a troca de versão, um aparelho com a versão ANTIGA ainda
+// (v157). Durante a troca de versão, um aparelho com a versão ANTIGA ainda
 // aberto continua gravando a lista inteira em dados/{chave}. A "ponte" copia
 // para a coleção tudo o que aparece nessa lista antiga e ainda não foi
 // copiado — uma vez só por item: os itens já copiados ficam anotados em
@@ -916,7 +916,7 @@ async function colGetForcePonte(key, fallback) {
 }
 // VOLTAR ATRÁS (só se o Igor decidir voltar para a v155): grava na lista
 // antiga tudo o que está hoje na coleção + o que ainda não foi copiado, para a
-// versão antiga enxergar as anotações/contatos criados na v156. Só o Diretor
+// versão antiga enxergar as anotações/contatos criados na v157. Só o Diretor
 // ou o Super Admin; roda pelo console do navegador, com o sistema aberto:
 //   await ponteVoltarParaListaAntiga('eagles_crm_negocio_anotacoes_v1')
 // Não apaga a coleção nem a lista de importados.
@@ -4506,7 +4506,7 @@ function htmlAbaContatosNegocio() {
     </div>`;
 }
 
-// contatos e anotações dos negócios: um documento por item (v156, CHAVES_COLECAO)
+// contatos e anotações dos negócios: um documento por item (v157, CHAVES_COLECAO)
 function crmNegocioIniciarSubcolecoes() {
   cloudWatch(CRM_NEGOCIO_CONTATOS_KEY, [], (data) => { CRM_NEGOCIO_CONTATOS_DATA = data; CRM_NEGOCIO_SUBCOLECOES_CARREGADAS = true; });
   cloudWatch(CRM_NEGOCIO_ANOTACOES_KEY, [], (data) => { CRM_NEGOCIO_ANOTACOES_DATA = data; });
@@ -10074,7 +10074,7 @@ function portalTokenNovo() { return 'pt' + Math.random().toString(36).slice(2, 1
 function portalNomeIgual(a, b) { return ttSemAcento(String(a || '').trim()).replace(/\s+/g, ' ') === ttSemAcento(String(b || '').trim()).replace(/\s+/g, ' '); }
 function portalChave(nome) { if (!nome) return ''; if (PORTAL_LINKS[nome]) return nome; return Object.keys(PORTAL_LINKS).find((k) => portalNomeIgual(k, nome)) || String(nome).trim(); }
 function portalLinkCliente(nome) { nome = portalChave(nome); const t = PORTAL_LINKS[nome]; return t ? location.origin + location.pathname.replace(/[^/]*$/, '') + 'portal.html?p=' + encodeURIComponent(t) : ''; }
-// ---------- links do portal sem perda (v156) ----------
+// ---------- links do portal sem perda (v157) ----------
 // Antes, o mapa "cliente → código do link" era gravado INTEIRO a cada link
 // novo: duas pessoas criando links ao mesmo tempo, um link sumia; e as duas
 // podiam criar códigos diferentes para o mesmo cliente. Agora:
@@ -10114,7 +10114,7 @@ async function portalGarantirToken(nome) {
     return PORTAL_LINKS[nome];
   }
   portalSemInternet();
-  // 1) link que já está no mapa do servidor (inclusive os de antes da v156)
+  // 1) link que já está no mapa do servidor (inclusive os de antes da v157)
   const mapa = portalMapaDoDoc(await cloudComPrazo(caminhoTenantDoc(PORTAL_LINKS_KEY).get({ source: 'server' }), PORTAL_TX_PRAZO_MS));
   const achado = portalAcharNome(mapa, nome);
   if (achado) { PORTAL_LINKS = Object.assign({}, PORTAL_LINKS, { [achado]: mapa[achado] }); portalVistoGuardar(achado, mapa[achado], false); return mapa[achado]; }
@@ -10196,7 +10196,7 @@ function portalNovoLink(nome) {
 // Um aparelho ainda com a versão antiga (até a v155) grava o mapa INTEIRO e
 // pode, sem querer, apagar o link de um cliente ou devolver um código já
 // trocado. Esta versão lembra os links que viu e confere: se o cliente tem
-// reserva, o código certo é o da reserva; se não tem (link de antes da v156),
+// reserva, o código certo é o da reserva; se não tem (link de antes da v157),
 // vale o link que continua publicado. Link trocado de propósito ("link novo")
 // tem o retrato público apagado antes — esse não volta.
 const PORTAL_VISTOS = {}; // nome normalizado -> { nome, token, meu }
@@ -10256,7 +10256,7 @@ async function portalConferirPerdas(mapa) {
           if (feito) console.warn('[EaglesLabz] Link do portal de "' + v.nome + '" devolvido conforme a reserva (uma versão antiga do sistema tinha apagado/trocado sem querer).');
           continue;
         }
-        // link de antes da v156 (sem reserva): vale o que continua publicado
+        // link de antes da v157 (sem reserva): vale o que continua publicado
         const vistoPublicado = await portalPublicoExiste(v.token);
         const devolver = vistoPublicado ? (atual ? !(await portalPublicoExiste(atual)) : true) : (!atual && v.meu);
         if (!devolver) { if (atual) PORTAL_VISTOS[k] = { nome: achado, token: atual, meu: false }; else delete PORTAL_VISTOS[k]; continue; }
@@ -23652,7 +23652,7 @@ function bkpFecharLembrete(indo) {
 
 const CHATBOT_KB = [
   // ---------- Visão geral do sistema ----------
-  { padroes: ['duas pessoas ao mesmo tempo', 'anotacao sumiu', 'anotação sumiu', 'minha anotacao sumiu', 'contato sumiu', 'link do portal sumiu', 'salvei e sumiu'], resposta: 'Desde a v156 (09/11/2026), anotações e contatos dos negócios são guardados um por um: várias pessoas podem anotar ao mesmo tempo e tudo fica salvo. Os links do portal também: quem pede o link de um cliente que já tem link recebe o mesmo. Se alguém da equipe ainda estiver com o sistema aberto desde antes da atualização, peça para recarregar a página (F5).' },
+  { padroes: ['duas pessoas ao mesmo tempo', 'anotacao sumiu', 'anotação sumiu', 'minha anotacao sumiu', 'contato sumiu', 'link do portal sumiu', 'salvei e sumiu'], resposta: 'Desde a v157 (09/11/2026), anotações e contatos dos negócios são guardados um por um: várias pessoas podem anotar ao mesmo tempo e tudo fica salvo. Os links do portal também: quem pede o link de um cliente que já tem link recebe o mesmo. Se alguém da equipe ainda estiver com o sistema aberto desde antes da atualização, peça para recarregar a página (F5).' },
   { padroes: ['o que é esse sistema', 'como funciona o sistema', 'pra que serve', 'o que da pra fazer aqui'], resposta: 'O Eagles Labz é um sistema de gestão (ERP): cadastro de clientes/fornecedores/produtos, controle de vendas (pedidos), estoque, financeiro mês a mês, e dashboards pra acompanhar como o negócio está indo. Cada empresa que usa o sistema tem os próprios dados, totalmente separados de qualquer outra.' },
   { padroes: ['por onde eu começo', 'primeiro passo', 'como comecar', 'sou novo aqui'], resposta: 'Sugestão de ordem: 1) Meu Perfil → preencha os dados da sua empresa. 2) Cadastros → cadastre seus produtos e seus clientes/fornecedores. 3) Vendas → registre seus pedidos. 4) Financeiro → acompanhe receitas e despesas do mês. O Painel e o Meu Negócio vão se preenchendo sozinhos conforme você usa o resto.' },
   { padroes: ['diferenca entre painel e financeiro', 'painel ou financeiro'], resposta: 'O Painel é só pra CONSULTA — um resumo rápido do mês. Pra editar qualquer valor (lançar receita, pagamento, etc.), você precisa ir na aba Financeiro mesmo.' },

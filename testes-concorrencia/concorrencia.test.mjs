@@ -1,16 +1,16 @@
 // =====================================================================
-// v156 — várias pessoas usando o sistema ao mesmo tempo, sem perder dados.
+// v157 — várias pessoas usando o sistema ao mesmo tempo, sem perder dados.
 // Roda SÓ no simulador do Firebase (nada de produção):
 //   cd testes-concorrencia && npm install && npm run simulador
 // Precisa de Java e do Chromium do Playwright.
 //
 // O que é conferido:
 //  1. a v155 (antes) perde anotações e links (prova do problema);
-//  2. a v156 não perde nada com 2 (CRM inteiro), 20, 30 e 50 pessoas;
+//  2. a v157 não perde nada com 2 (CRM inteiro), 20, 30 e 50 pessoas;
 //  3. o valor inicial não apaga dado real;
 //  4. a cópia da lista antiga (migração) é completa, não altera a lista
 //     antiga, roda uma vez só e não estraga nada se as regras faltarem;
-//  5. v155 e v156 abertas juntas durante a troca;
+//  5. v155 e v157 abertas juntas durante a troca;
 //  6. sem internet e reconexão;
 //  7. permissões e isolamento entre empresas.
 // =====================================================================
@@ -113,7 +113,7 @@ test('1. ANTES (v155): a perda acontece (prova do problema)', async (t) => {
 });
 
 // =====================================================================
-test('2. v156 · 2 pessoas no CRM inteiro (crm.html, telas reais)', async (t) => {
+test('2. v157 · 2 pessoas no CRM inteiro (crm.html, telas reais)', async (t) => {
   const emp = await empresaNova();
   const ps = await abrir(await pessoas(emp, 2), { pagina: 'crm.html', chaves: [NOTAS, CONTATOS, LINKS, 'eagles_crm_negocios_v1'] });
   await A.aoMesmoTempo(ps, acaoNota, (i) => ({ texto: `nota-${i}` }));
@@ -126,7 +126,7 @@ test('2. v156 · 2 pessoas no CRM inteiro (crm.html, telas reais)', async (t) =>
   const links = await linksDb(emp);
   const naTela = await Promise.all(ps.map((p) => notasNaPagina(p, 'nota-')));
   const erros = ps.flatMap((p) => p.erros);
-  anotar(t, `v156 · 2 pessoas (crm.html) · anotações ${notas.length}/2 · contatos ${conts.length}/2 · links ${contar(links)}/3 · mesmo cliente: ${new Set(tokMesmo).size} código · na tela: ${naTela.join(',')}`);
+  anotar(t, `v157 · 2 pessoas (crm.html) · anotações ${notas.length}/2 · contatos ${conts.length}/2 · links ${contar(links)}/3 · mesmo cliente: ${new Set(tokMesmo).size} código · na tela: ${naTela.join(',')}`);
   await fechar(ps);
   assert.equal(notas.length, 2); assert.equal(conts.length, 2);
   assert.deepEqual(naTela, [2, 2]);
@@ -138,7 +138,7 @@ test('2. v156 · 2 pessoas no CRM inteiro (crm.html, telas reais)', async (t) =>
 
 // =====================================================================
 for (const N of [20, 30, 50]) {
-  test(`3. v156 · ${N} pessoas ao mesmo tempo: anotações, contatos e links`, async (t) => {
+  test(`3. v157 · ${N} pessoas ao mesmo tempo: anotações, contatos e links`, async (t) => {
     const emp = await empresaNova();
     const t0 = Date.now();
     const ps = await abrir(await pessoas(emp, N));
@@ -163,7 +163,7 @@ for (const N of [20, 30, 50]) {
     const chavesSeven = Object.keys(linksFim).filter((k) => /^s[eé]ven$/i.test(k.trim()));
     const avisos = (await Promise.all(ps.map((p) => p.page.evaluate(() => window.__AVISOS)))).flat();
     const avisosOutros = avisos.filter((m) => !/Link do portal/.test(m));
-    anotar(t, `v156 · ${N} pessoas · abriram em ${(tAbrir / 1000).toFixed(1)} s · anotações ${notas.length}/${N} · contatos ${conts.length}/${N} · todas as telas com ${N}: ${telas ? 'sim' : 'NÃO'} · links clientes diferentes ${contar(linksDif)}/${N} (códigos distintos ${new Set(tokDif).size}) · mesmo cliente: ${new Set(tokMesmo).size} código, ${chavesSeven.length} registro · avisos "tente de novo" do link (prazo do simulador): ${avisosLink1}+${avisosLink2}, resolvidos ao repetir`);
+    anotar(t, `v157 · ${N} pessoas · abriram em ${(tAbrir / 1000).toFixed(1)} s · anotações ${notas.length}/${N} · contatos ${conts.length}/${N} · todas as telas com ${N}: ${telas ? 'sim' : 'NÃO'} · links clientes diferentes ${contar(linksDif)}/${N} (códigos distintos ${new Set(tokDif).size}) · mesmo cliente: ${new Set(tokMesmo).size} código, ${chavesSeven.length} registro · avisos "tente de novo" do link (prazo do simulador): ${avisosLink1}+${avisosLink2}, resolvidos ao repetir`);
     if (avisos.length) anotar(t, 'detalhe dos avisos: ' + JSON.stringify(ps.flatMap((p) => p.consoleErros.filter((m) => /Portal|transa|aborted|prazo/i.test(m)))).slice(0, 1500));
     await fechar(ps);
     assert.equal(notas.length, N); assert.equal(conts.length, N);
@@ -200,7 +200,7 @@ test('4. valor inicial não apaga dado real (aparelho que abre sem o documento)'
     const links = await linksDb(emp);
     const modelos = await legadoDb(emp, 'eagles_kanban_modelos_v1');
     resultado[versao] = { links, modelos };
-    anotar(t, `valor inicial · ${versao === 'antiga' ? 'v155' : 'v156'} · links depois da reconexão: ${JSON.stringify(links)} · modelos: ${JSON.stringify(modelos)}`);
+    anotar(t, `valor inicial · ${versao === 'antiga' ? 'v155' : 'v157'} · links depois da reconexão: ${JSON.stringify(links)} · modelos: ${JSON.stringify(modelos)}`);
     await fechar([x]);
   }
   assert.deepEqual(resultado.antiga.links, {}, 'a v155 apagava o dado real com o valor inicial');
@@ -217,7 +217,7 @@ test('4. valor inicial não apaga dado real (aparelho que abre sem o documento)'
   await Promise.all(ps.map((p) => p.page.evaluate(() => cloudWatch('eagles_conteudos_modelos_v1', [{ id: 'padrao' }], () => {}))));
   await A.pausa(4000);
   const cnt = await legadoDb(emp, 'eagles_conteudos_modelos_v1');
-  anotar(t, `valor inicial · v156 · 20 telas abrindo durante o 1º salvamento: ${JSON.stringify(cnt)}`);
+  anotar(t, `valor inicial · v157 · 20 telas abrindo durante o 1º salvamento: ${JSON.stringify(cnt)}`);
   await fechar(ps);
   assert.deepEqual(cnt, [{ id: 'real', nome: 'gravado durante a abertura' }]);
 });
@@ -301,7 +301,7 @@ test('5b. migração sem as regras novas publicadas: nada é apagado nem sobresc
 });
 
 // =====================================================================
-test('6. convivência: v155 e v156 abertas juntas durante a troca', async (t) => {
+test('6. convivência: v155 e v157 abertas juntas durante a troca', async (t) => {
   const emp = await empresaNova();
   const { notas } = legadoDeExemplo();
   await A.gravar(`tenants/${emp}/dados/${NOTAS}`, { valor: notas.slice(0, 10) });
@@ -314,7 +314,7 @@ test('6. convivência: v155 e v156 abertas juntas durante a troca', async (t) =>
   const mix = col.filter((x) => x.texto.startsWith('mix-')).map((x) => x.texto);
   anotar(t, `convivência · 1 antigo + 19 novos · ficaram ${mix.length}/20 (o do aparelho antigo: ${mix.includes('mix-0') ? 'sim' : 'NÃO'})`);
   assert.equal(mix.length, 20);
-  // o aparelho antigo exclui uma anotação: na v156 ela continua (lado seguro, nada some)
+  // o aparelho antigo exclui uma anotação: na v157 ela continua (lado seguro, nada some)
   await ps[0].page.evaluate(() => excluirAnotacaoNegocio('na_old1'));
   await A.pausa(3000);
   assert.ok((await notasDb(emp)).some((x) => x.id === 'na_old1'));
@@ -347,7 +347,7 @@ test('6b. convivência: aparelho antigo com a lista de links desatualizada não 
   await antigo.page.evaluate(() => { portalGarantirToken('Caniballs'); });
   await antigo.page.evaluate(() => firestoreDb.enableNetwork());
   const fim = await A.esperar(async () => { const l = await linksDb(emp); return l.Seven && l.Caniballs ? l : null; }, 30000, 300) || await linksDb(emp);
-  anotar(t, `convivência · links · antigo desatualizado gravou a lista inteira · Seven ${fim.Seven === tokSeven ? 'mantida (devolvida pela v156)' : 'PERDIDA'} · Caniballs ${fim.Caniballs ? 'mantida' : 'PERDIDA'}`);
+  anotar(t, `convivência · links · antigo desatualizado gravou a lista inteira · Seven ${fim.Seven === tokSeven ? 'mantida (devolvida pela v157)' : 'PERDIDA'} · Caniballs ${fim.Caniballs ? 'mantida' : 'PERDIDA'}`);
   assert.equal(fim.Seven, tokSeven); assert.ok(fim.Caniballs);
 
   // link trocado ("link novo") pelo novo; o antigo, desatualizado, devolve o código velho
@@ -439,7 +439,7 @@ test('9. voltar atrás (reversão para a v155) sem perder nada', async (t) => {
   const [dir] = await pessoas(emp, 1, 'Diretor', 'D');
   const [x] = await abrir([dir]);
   await esperarContagem(() => notasDb(emp), 20, 60000);
-  await x.page.evaluate(() => { DETALHE_NEGOCIO_ID = 'n1'; document.getElementById('nova-anotacao-negocio').value = 'criada na v156'; adicionarAnotacaoNegocio(); });
+  await x.page.evaluate(() => { DETALHE_NEGOCIO_ID = 'n1'; document.getElementById('nova-anotacao-negocio').value = 'criada na v157'; adicionarAnotacaoNegocio(); });
   await esperarContagem(() => notasDb(emp), 21, 30000);
   const n = await x.page.evaluate(() => ponteVoltarParaListaAntiga('eagles_crm_negocio_anotacoes_v1'));
   await fechar([x]);
@@ -447,7 +447,7 @@ test('9. voltar atrás (reversão para a v155) sem perder nada', async (t) => {
   const [p] = await pessoas(emp, 1, 'Administrativo', 'V');
   const [velho] = await abrir([p], { versao: 'antiga', chaves: [NOTAS] });
   const tela = await velho.page.evaluate(() => CRM_NEGOCIO_ANOTACOES_DATA.map((a) => a.texto));
-  anotar(t, `reversão · ${n} itens devolvidos à lista antiga · a v155 vê ${tela.length} (inclui a criada na v156: ${tela.includes('criada na v156') ? 'sim' : 'NÃO'})`);
+  anotar(t, `reversão · ${n} itens devolvidos à lista antiga · a v155 vê ${tela.length} (inclui a criada na v157: ${tela.includes('criada na v157') ? 'sim' : 'NÃO'})`);
   await fechar([velho]);
-  assert.equal(n, 21); assert.equal(tela.length, 21); assert.ok(tela.includes('criada na v156'));
+  assert.equal(n, 21); assert.equal(tela.length, 21); assert.ok(tela.includes('criada na v157'));
 });

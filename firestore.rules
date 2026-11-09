@@ -357,7 +357,7 @@ service cloud.firestore {
 
       // Cadastros do ERP e listas do CRM: um documento por item (antes era uma
       // lista inteira dentro de dados/{chave}; duas gravações juntas se apagavam).
-      // v156: + anotações e contatos dos negócios (mesmas permissões das outras
+      // v157: + anotações e contatos dos negócios (mesmas permissões das outras
       // listas do CRM: membros leem, só quem opera grava).
       match /{colecaoErp}/{itemId} {
         allow read: if (colecaoErp in ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes', 'crm_negocio_anotacoes', 'crm_negocio_contatos']) &&

@@ -553,6 +553,63 @@ No plano grátis **não existe** limite por IP, firewall de aplicação (WAF) ne
 
 A v155 e a v4 **não migram nem apagam dados** e não mudam as regras do Firebase. Nenhuma volta atrás exige recuperar backup.
 
+### I4-B — publicação controlada da v155 (09/11/2026; PUBLICADA E EM VALIDAÇÃO FINAL)
+
+A I4-B **ainda não está encerrada formalmente**. Faltam: a confirmação formal do Igor sobre a autoria das 2 tarefas simuladas, o teste no celular e o backup pós-publicação.
+
+**Estado em produção:**
+
+| Peça | Estado |
+|---|---|
+| Site | v155 (`eagles-cache-v155`), merge `a340d03`, publicado pelo "Site seguro" (execução `42669718957`, 59 arquivos) |
+| `labz-api` | v4 (`index.ts` `c174f95c…`, `labz-b49c379e0336.mjs` `b49c379e…`; versão 5 do painel), **Verify JWT desligado**, conferência de conta ativa ligada (`LABZ_FIREBASE_API_KEY`, Digest `9cc0bb78…`) |
+| `labz-worker` | sem mudança (`7339613a…`), Verify JWT desligado desde a Etapa 10 |
+| Interruptor do worker | ligado |
+| Firebase, regras e CRM/ERP | sem mudança |
+
+**Testes de autenticação (console do site, 09/11):** sem login 401; Super Admin 200 (8 agentes); outra conta 403 (`lista-servidor/fora-da-lista`, antes do banco e do Google).
+
+**Monitoramento N1 — primeira leitura (09/11, ~18:20 UTC, janela de 24 h, só leitura):**
+
+| Medida | Valor | Limite N1 |
+|---|---|---|
+| Chamadas cobradas (`labz-api` + `labz-worker`) | ~110 (~0,02% da cota mensal) | 2 mil/dia |
+| Respostas 200 | 94, todas do Super Admin | — |
+| Recusas (401/403/429) | 7 / 1 / 0 | 500/hora |
+| Erros 500 | 4, só entre 17:34 e 17:49 (segredos digitados errado; nenhum depois) | qualquer um novo → investigar |
+| Cron | 1440 tiques, 0 falhas | 1 falha → investigar |
+| Acionamentos | 4, todos consumidos uma vez pelo worker | algum não consumido → investigar |
+| Banco | 199 documentos, 13 MB | 400 MB → planejar |
+
+Consultas de acompanhamento (só leitura, pela conexão Claude/Supabase):
+- chamadas por função e status: `select if(event_message like '%labz-worker%','worker','api') f, splitByString(' | ', event_message)[1] metodo, splitByString(' | ', event_message)[2] status, count(*) n from logs where source='function_edge_logs' group by f, metodo, status`;
+- motivos das recusas: `select extract(event_message, '"etapa":"([a-z-]+)"') etapa, extract(event_message, '"motivo":"([a-z-]+)"') motivo, count(*) n from logs where source='function_logs' and event_message like '%labz-api.recusa%' group by etapa, motivo`;
+- autoria das ações (sem mostrar UID): agrupar `labz_eventos` pelo autor, trocando o UID do Super Admin por "SUPER ADMIN" e qualquer outro UID por "OUTRO UID FIREBASE" (só `labz-sistema` e "SUPER ADMIN" são esperados).
+
+**Resposta a incidentes** (do mais rápido ao mais amplo; cada passo com aviso ao Igor):
+
+| Sinal | Primeira resposta | Depois |
+|---|---|---|
+| 200 para quem não é o Super Admin, ou autor "OUTRO UID FIREBASE" na auditoria | **R1** (religar o Verify JWT da `labz-api`) na hora | investigar pelos registros; se for a conta do Super Admin comprometida: trocar a senha no Firebase, revogar as sessões e tirar o UID do `LABZ_SUPERADMIN_UIDS` |
+| Tarefa ou ação que o Igor não reconhece | R1 + **R5** (interruptor do worker desligado) | preservar os registros; nada é apagado sem autorização |
+| Erros 500 novos | ler o registro da função | segredo errado → corrigir pelo Digest; código → **R2** (v3) |
+| Chamadas acima de N1/N2/N3 | ver os níveis acima (B1/B2/B3) | — |
+| Erro no CRM/ERP | **R4** (revert + publicar a v154) | — |
+
+**Lição da I4-B:** um segredo salvo vazio, com espaço/Enter ou digitado errado faz a v4 recusar tudo (500 ao ligar, ou 401 `conta-indisponivel`). Antes de testar, conferir o **Digest** no painel: o SHA-256 do valor certo é calculado fora do painel e comparado só pelo começo.
+
+**Tarefas simuladas criadas na validação:** 2 (18:04 e 18:12 UTC, conta Super Admin, botão "Nova tarefa"), COMPLETED, 9 entregas no total, só o modelo simulado (custo 0). Preservadas para auditoria.
+
+**Backup pós-publicação (D5) — procedimento** (feito e conferido só pelo Igor; nada passa pelo chat):
+
+1. **Antes:** fechar a tela da LABZ AI em todos os aparelhos (ela atualiza o contador de uso e muda a impressão digital). O Claude lê, só pelo cabeçalho, o total e a impressão esperados (`impressao-digital.sql`).
+2. **Exportação integral:** no SQL Editor do Supabase, rodar `supabase/backup/exportar-dados.sql` e baixar o resultado como CSV, direto no computador.
+3. **Verificação de integridade:** abrir `supabase/backup/labz-backup.html` (offline), escolher o CSV e conferir "Íntegro ✅", o total e a impressão digital (iguais aos do passo 1).
+4. **Criptografia:** na mesma página, a senha de sempre (gerenciador de senhas) → "Criptografar, conferir e baixar" (AES-256-GCM, PBKDF2-SHA256 600 mil). A página reabre a cópia antes de entregar.
+5. **Armazenamento:** guardar o `.cifrado.json` no computador e na pasta privada do Google Drive. Nunca no GitHub nem no chat.
+6. **Limpeza:** apagar o CSV (e qualquer `.aberto.json`) e esvaziar a lixeira.
+7. **Depois:** o Claude confere de novo, só pelo cabeçalho, que o banco não mudou durante a exportação. Guardar o primeiro backup (03/11) e os 3 mais recentes.
+
 ## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
 
 - **Projeto:** exclusivo da LABZ AI, na organização do Igor, no plano Free.

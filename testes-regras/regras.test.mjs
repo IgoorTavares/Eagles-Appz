@@ -245,3 +245,41 @@ test('LABZ AI: sem a lista de autorizados, nem o Super Admin lê', async () => {
   await env.withSecurityRulesDisabled(async (ctx) => { await deleteDoc(doc(ctx.firestore(), 'labz_config/acesso')); });
   await assertFails(getDoc(doc(db('sa'), 'labz_empresas/e1')));
 });
+
+// ---------- v156: anotações e contatos dos negócios (um documento por item) ----------
+test('v156: anotações e contatos dos negócios — mesmas permissões das outras listas do CRM', async () => {
+  for (const col of ['crm_negocio_anotacoes', 'crm_negocio_contatos']) {
+    // quem opera grava e lê; o Diretor também
+    await assertSucceeds(setDoc(doc(db('a1'), `tenants/t1/${col}/x1`), { negocioId: 'n', texto: 'ok' }));
+    await assertSucceeds(updateDoc(doc(db('d1'), `tenants/t1/${col}/x1`), { texto: 'editado' }));
+    await assertSucceeds(getDocs(collection(db('a1'), `tenants/t1/${col}`)));
+    // o Financeiro lê, mas não grava nem apaga
+    await assertSucceeds(getDoc(doc(db('f1'), `tenants/t1/${col}/x1`)));
+    await assertFails(setDoc(doc(db('f1'), `tenants/t1/${col}/x2`), { texto: 'não' }));
+    await assertFails(deleteDoc(doc(db('f1'), `tenants/t1/${col}/x1`)));
+    // login de Cliente, outra empresa e quem não está logado: nada
+    await assertFails(getDoc(doc(db('c1'), `tenants/t1/${col}/x1`)));
+    await assertFails(getDocs(collection(db('d2'), `tenants/t1/${col}`)));
+    await assertFails(setDoc(doc(db('d2'), `tenants/t1/${col}/x3`), { texto: 'invasor' }));
+    await assertFails(getDoc(doc(db(), `tenants/t1/${col}/x1`)));
+    // empresa suspensa: nem o Diretor dela
+    await assertFails(setDoc(doc(db('d3'), `tenants/t3/${col}/x1`), { texto: 'suspensa' }));
+    // o Super Admin lê
+    await assertSucceeds(getDoc(doc(db('sa'), `tenants/t1/${col}/x1`)));
+    await assertSucceeds(deleteDoc(doc(db('a1'), `tenants/t1/${col}/x1`)));
+  }
+  // a lista não virou "qualquer coleção": um nome parecido continua fechado
+  await assertFails(setDoc(doc(db('d1'), 'tenants/t1/crm_negocio_outros/x'), { a: 1 }));
+  await assertFails(getDoc(doc(db('d1'), 'tenants/t1/crm_negocio_outros/x')));
+});
+test('v156: itens já copiados (dados/{chave}_importados) e reserva do link do portal seguem a regra comum de dados', async () => {
+  for (const k of ['tenants/t1/dados/eagles_crm_negocio_anotacoes_v1_importados', 'tenants/t1/dados/eagles_portal_links_v1__r_0123456789abcdef']) {
+    await assertSucceeds(setDoc(doc(db('a1'), k), { ids: ['a'] }));
+    await assertSucceeds(getDoc(doc(db('f1'), k)));
+    await assertFails(setDoc(doc(db('f1'), k), { ids: [] }));
+    await assertFails(getDoc(doc(db('d2'), k)));
+    await assertFails(setDoc(doc(db('d2'), k), { ids: [] }));
+    await assertFails(getDoc(doc(db('c1'), k)));
+    await assertFails(setDoc(doc(db(), k), { ids: [] }));
+  }
+});

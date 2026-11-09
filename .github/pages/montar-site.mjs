@@ -44,7 +44,7 @@ export const DOMINIO = 'eagleslabz.com.br';
 
 // nunca podem aparecer no artefato (segunda trava, além da lista de permitidos)
 export const PROIBIDOS = [
-  /^functions(-labz)?(\/|$)/, /^testes-regras(\/|$)/, /^\.github(\/|$)/, /^\.git(\/|$)/, /(^|\/)node_modules(\/|$)/,
+  /^functions(-labz)?(\/|$)/, /^testes-(regras|concorrencia)(\/|$)/, /^\.github(\/|$)/, /^\.git(\/|$)/, /(^|\/)node_modules(\/|$)/,
   /^firestore\./, /^firebase\.json$/, /^package(-lock)?\.json$/, /\.md$/i, /(^|\/)\.env/, /(^|\/)\.secret/,
   /\.(pem|key|p12|log|zip|map)$/i, /(^|\/)_(t|x)_[^/]*\.html$/, /(^|\/)_a[^/]*_[^/]*\.html$/, /(^|\/)\./,
   /(^|\/)(scratch|rascunho|tmp|temp)(\/|$)/i,

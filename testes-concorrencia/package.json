@@ -1,0 +1,19 @@
+{
+  "name": "eagles-labz-testes-concorrencia",
+  "private": true,
+  "description": "Testes de várias pessoas usando o sistema ao mesmo tempo (navegadores reais + simulador do Firebase com as regras reais)",
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-timeout=900000 *.test.mjs",
+    "simulador": "firebase emulators:exec --only firestore,auth --project demo-eagles --config firebase.teste.json \"npm test\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "3.0.4",
+    "chart.js": "4.4.4",
+    "firebase": "10.12.2",
+    "html2canvas": "1.4.1",
+    "jspdf": "2.5.1",
+    "playwright": "1.63.0",
+    "qrcode-generator": "1.4.4"
+  }
+}

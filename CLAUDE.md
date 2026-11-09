@@ -1,6 +1,7 @@
 # Eagles Labz — ERP + CRM (white label)
 
 Documento de passagem para o Claude Code. Versão publicada: **v154 — Estabilidade e correções funcionais** (cache `eagles-cache-v154` no `sw.js`), integrada na `main` pelo merge `0f3d208` (PR 9) e publicada no GitHub Pages em 23/10/2026.
+**v156 — Multiusuário (preparada em 09/11/2026 na branch `claude/gracious-edison-173kia`; NÃO publicada, sem merge; muda o `firestore.rules`: publicar as regras ANTES dos arquivos).** Ver item 10.
 Próxima etapa: ainda não definida. Cada nova etapa (planejamento, implementação, commit, push, merge e publicação) depende de autorização explícita do Igor.
 A v142 foi uma entrega externa, fora deste repositório (ver item 10).
 O dono do projeto (Igor) **não é programador**: explique tudo em português simples, sem jargão, e diga
@@ -37,7 +38,8 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
   `pagina.html` (Link da Bio, formulários, captura e agendamento), `proposta.html`, `briefing.html`, `planos.html`, `site.html`,
   `privacidade.html`, `termos.html`, `dpa.html` (acordo LGPD) e `suporte.html`.
 - `firestore.rules`: as regras do banco (**é aqui que mora a segurança**). `firestore.indexes.json` e `firebase.json` completam a configuração do Firebase.
-- `testes-regras/`: 26 testes das regras (19 originais + 7 da LABZ AI Fase 1), rodando no simulador do Firebase. `.github/workflows/regras.yml` roda esses testes no GitHub a cada envio.
+- `testes-regras/`: 28 testes das regras (19 originais + 7 da LABZ AI Fase 1 + 2 da v156), rodando no simulador do Firebase. `.github/workflows/regras.yml` roda esses testes no GitHub a cada envio.
+- `testes-concorrencia/` (v156): várias pessoas ao mesmo tempo com navegadores reais (Playwright) + simulador (Firestore + Auth) e o `firestore.rules` real; compara com a v155 (`a340d03`). `npm run simulador` (Java + Chromium). `.github/workflows/concorrencia.yml` roda no GitHub. Ver o `README.md` da pasta (inclui a auditoria das outras listas).
 - `functions-labz/`: backend da **LABZ AI** (Fase 1, fundação; ainda não publicado, sem dependências). Testes com `cd functions-labz && npm test`; `.github/workflows/labz.yml` roda no GitHub. Ver o `README.md` da pasta.
 - `firebase-config.js`: a configuração pública do Firebase (a apiKey do Firebase é pública por natureza; não é segredo).
 
@@ -48,7 +50,9 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
   - Chaves listadas em **`CHAVES_COLECAO`** → **um documento por item** numa subcoleção, com gravação só do que mudou e migração automática da lista antiga.
     São elas: os cadastros do ERP (`erp_produtos`, `erp_pedidos_venda`, `erp_clientes_fornecedores`, `erp_contratos`, `erp_pedido_compras`,
     `erp_notas_entrada`, `erp_mov_estoque`, `erp_vendedores`, `erp_funcionarios`, `erp_objetos_postagem`, `erp_conferencia_estoque`)
-    e as listas do CRM (`crm_clientes`, `crm_negocios`, `crm_contratos`, `crm_servicos`, `crm_tarefas_dia`, `crm_lembretes`).
+    e as listas do CRM (`crm_clientes`, `crm_negocios`, `crm_contratos`, `crm_servicos`, `crm_tarefas_dia`, `crm_lembretes`, e desde a v156 `crm_negocio_anotacoes` e `crm_negocio_contatos`).
+  - `CHAVES_COLECAO_PONTE` (v156): chaves que viraram coleção já em uso. A "ponte" (`colWatchPonte`, `ponteImportar`) copia da lista antiga o que ainda não foi copiado (ids em `dados/{chave}_importados`), nunca altera a lista antiga e convive com aparelhos na versão antiga. Volta atrás: `ponteVoltarParaListaAntiga(chave)` no console (Diretor).
+  - Chave comum sem documento: o valor inicial é gravado só se o documento continuar não existindo (`cloudCriarSeAusente`, transação; v156). `cloudTransacao` = transação com novas tentativas e prazo.
 - Outras subcoleções da empresa: `kanban_tarefas`, `kanban_projetos`, `fin_lancamentos`, `fin_recorrencias`, `fin_meta`, `conteudos`,
   `agenda`, `portal`, `portal_pedidos`, `vagas`, `meta_agendados`. A conexão da Meta fica em `meta_privado/conexao` (só o servidor lê).
 - Coleções públicas (lidas pelas páginas sem login, sempre por um código/token): `propostas_publicas`, `briefings_publicos`,
@@ -165,6 +169,14 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
   - F8: zoom liberado (sem `user-scalable=no`/`maximum-scale` nas 29 páginas; `bloquearZoomMobile` removida, inclusive a chamada no `login.html`). No celular (até 860px), campos com `calc(16px) !important` (o `calc` impede que "Tamanho da fonte" diminua). O total do pedido continua com 20px.
   - `firestore.rules` e a estrutura do banco não mudaram.
 - Planejamento seguinte (cada etapa depende da aprovação do Igor): Conteúdos, Agenda e as outras seções do CRM; os agentes de IA; e só então a expansão do limite de usuários. `vendas.html` e `assinatura.html` (quebradas, sem links) e `funil-vendas.html` (funciona, sem link no menu) **não foram apagadas**; o Igor decide depois.
+- **v156 — Multiusuário** (preparada em 09/11/2026, autorizada pelo Igor: implementação local, commit e envio só para a branch `claude/gracious-edison-173kia`; sem PR, merge ou publicação; cache `eagles-cache-v156`):
+  - Problema medido (teste local de 09/11): chaves fora do `CHAVES_COLECAO` regravam a lista inteira; com a v155, 2 pessoas anotando juntas → 1 de 2; 20 → 1 de 20 (anotações e links do portal). E cada tela que abria sem o documento gravava o valor inicial por cima.
+  - P1: anotações e contatos dos negócios em `CHAVES_COLECAO` (`crm_negocio_anotacoes`, `crm_negocio_contatos`) com a ponte da lista antiga (item 4). `crmNegocioIniciarSubcolecoes` (antes as duas linhas no início do CRM). Backup (`BKP_SUBCOLECOES`) e contagem de uso (`USO_SUBS`) incluem as duas.
+  - P2: links do portal: reserva por cliente (`dados/eagles_portal_links_v1__r_<hash do nome normalizado>`, transação) + gravação só do campo do cliente no mapa (`portalGravarNoMapa`); mesma grafia/acentos/maiúsculas → mesmo código; "link novo" (`portalTrocarToken`) apaga o retrato público antes e só troca se ainda for o código antigo; `portalConferirPerdas` devolve links apagados/trocados por aparelhos antigos. `portalGarantirToken` e `portalCopiarLink` agora são assíncronas; sem internet avisam e não criam (o envio para aprovação cai no link avulso, como quando os links não tinham carregado).
+  - P3: `cloudCriarSeAusente` no lugar do `set` do valor inicial.
+  - `firestore.rules`: só acrescenta `crm_negocio_anotacoes` e `crm_negocio_contatos` à lista das coleções do CRM (mesmas permissões). Reservas e `_importados` ficam em `dados/` (regra comum). **Publicar as regras antes dos arquivos.**
+  - Testes: `testes-concorrencia` 13/13 (v155 perde; v156 sem perda com 2 no `crm.html` e 20/30/50 na página leve; valor inicial; migração; arquivos antes das regras; convivência v155+v156; sem internet; permissões e isolamento; volta atrás); regras 28/28.
+  - Auditoria das outras listas (sem mudança): risco médio em `eagles_portal_clientes_v1`, `eagles_atend_programadas_v1` e históricos de IA; o resto baixo (configurações/modelos). Tabela no `testes-concorrencia/README.md`.
 - Testes das regras (`testes-regras/`): são **19** testes. De 15/10/2026 até a v154, 4 falhavam (7, 9, 10 e 18) por causa do arquivo de teste, não das regras: o login simulado não trazia e-mail (a regra `contaLivre` lê `request.auth.token.email`, que todo login real por e-mail e senha tem) e o teste 18 abria a mesma conexão simulada duas vezes. A correção, só em `regras.test.mjs` (commit `8df9b96`, aprovada pelo Igor), está na `main` desde a v154: 19/19 no GitHub Actions (execuções 40013279193 na branch e 40013814313 na `main`). `firestore.rules` não mudou.
 - **LABZ AI — Fase 1 (Fundação)**, branch local `claude/labz-ai-fase1` (a partir da `main` v154; não publicada; autorizada pelo Igor em 29/10/2026):
   - Ferramenta exclusiva do Super Admin, **independente** do CRM/ERP (não substitui os agentes atuais). Backend em `functions-labz/` (Node puro, sem dependências): contratos, 8 agentes, ferramentas (nenhuma disponível ainda), memória em 5 escopos (global, agente, cliente, tarefa, desempenho) com versões, aprovação, rollback e arquivo, correções → propostas de aprendizado, Context Builder, skills privadas versionadas, cadastro próprio de empresas (vínculo opcional com tenant ou cliente do CRM) e `exigirSuperAdmin` (role exato + lista de UIDs + conta não bloqueada).

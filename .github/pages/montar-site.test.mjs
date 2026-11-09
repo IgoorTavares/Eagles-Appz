@@ -44,7 +44,7 @@ test('todas as páginas .html da raiz estão no site (nenhuma rota some)', () =>
 test('nenhum arquivo interno entra no artefato', () => {
   const saida = path.join(tmp(), '_site');
   const r = montar({ raiz: RAIZ, saida });
-  const internos = ['functions', 'functions-labz', 'testes-regras', '.github', 'CLAUDE.md', 'firestore.rules', 'firestore.indexes.json', 'firebase.json', 'package.json', 'package-lock.json'];
+  const internos = ['functions', 'functions-labz', 'testes-regras', 'testes-concorrencia', '.github', 'CLAUDE.md', 'firestore.rules', 'firestore.indexes.json', 'firebase.json', 'package.json', 'package-lock.json'];
   for (const i of internos) assert.ok(!fs.existsSync(path.join(saida, i)), `${i} não pode estar no site`);
   assert.ok(r.arquivos.every((f) => !/\.md$|^functions|^testes|^\.|firestore|firebase\.json|package/.test(f)));
 });
@@ -73,7 +73,7 @@ test('manifesto (início, ícones e atalho), CNAME e caminhos relativos/absoluto
 });
 
 test('arquivo interno colocado no artefato é barrado (functions-labz, CLAUDE.md, .env)', () => {
-  for (const intruso of ['functions-labz/index.js', 'functions/index.js', 'CLAUDE.md', '.env', 'testes-regras/x.mjs', 'firestore.rules']) {
+  for (const intruso of ['functions-labz/index.js', 'functions/index.js', 'CLAUDE.md', '.env', 'testes-regras/x.mjs', 'testes-concorrencia/ambiente.mjs', 'firestore.rules']) {
     const saida = path.join(tmp(), '_site');
     assert.equal(montar({ raiz: RAIZ, saida }).ok, true);
     fs.mkdirSync(path.dirname(path.join(saida, intruso)), { recursive: true });

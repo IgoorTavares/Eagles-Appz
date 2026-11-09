@@ -299,6 +299,154 @@ automático de tarefas; acesso de outros usuários; plano pago do Supabase; mode
 
 ## 12. Pendências antes de começar
 
-1. **Backup pós-publicação da I4-B** (Igor) e o encerramento formal da I4-B.
-2. Decisão do Igor sobre esta versão 2 do plano.
+1. **Backup pós-publicação da I4-B** (Igor) e o encerramento formal da I4-B — **obrigatório antes de ativar qualquer
+   modelo real**.
+2. Versão 2 aprovada pelo Igor como base de trabalho (commit `a7fdba8`); complementos da seção 13 aguardam análise.
 3. R0 (conta, limite e retenção) — só depois da autorização.
+
+## 13. Complementos antes da R1 (pedidos pelo Igor na aprovação condicional da versão 2)
+
+### 13.1 Modelos Anthropic previstos: nomes, IDs e preços oficiais
+
+Fonte: páginas oficiais da Anthropic, lidas em **09/11/2026**:
+`https://platform.claude.com/docs/en/about-claude/pricing` (tabelas de preço, cache, lote e contexto longo),
+`https://platform.claude.com/docs/en/about-claude/models/overview` e as páginas de cada modelo
+(`.../models/opus-5-5/overview`, `.../models/sonnet-5-5/overview`, `.../models/haiku-5-5/overview`).
+O endereço antigo `docs.claude.com/.../pricing` redireciona para a página acima.
+
+| Nome | ID exato na API | Entrada | Saída | Gravação de cache (5 min) | Leitura de cache | Lote (entrada / saída) | Contexto | Saída máx. | Lê imagem | Gera imagem |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Claude Haiku 5.5 (pedido ≤ 100 mil tokens) | `claude-haiku-5-5` | US$ 0,10 | US$ 0,50 | US$ 0,125 | US$ 0,01 | US$ 0,05 / 0,25 | 1 milhão | 128 mil | sim | não |
+| Claude Haiku 5.5 (pedido > 100 mil tokens) | `claude-haiku-5-5` | US$ 0,50 | US$ 2,50 | US$ 0,625 | US$ 0,05 | US$ 0,25 / 1,25 | | | | |
+| Claude Sonnet 5.5 | `claude-sonnet-5-5` | US$ 2 | US$ 10 | US$ 2,50 | US$ 0,10 | US$ 1 / 5 | 1 milhão | 128 mil | sim | não |
+| Claude Opus 5.5 | `claude-opus-5-5` | US$ 4 | US$ 20 | US$ 5 | US$ 0,20 | US$ 2 / 10 | 1 milhão | 128 mil | sim | não |
+
+(US$ por milhão de tokens.) Observações da mesma fonte:
+- O lote dá 50% de desconto em entrada e saída.
+- Só o Haiku 5.5 cobra mais por pedido longo (acima de 100 mil tokens, contando cache); os outros cobram igual em todo o
+  contexto de 1 milhão.
+- Página do Sonnet 5.5: "Setting `temperature`, `top_p`, or `top_k` returns a 400 error." Página do Haiku 5.5: "Omit
+  `temperature`, `top_p`, and `top_k`." As páginas não dão data nem versão da API para essa regra.
+- Existem também modelos Fable (5.1 e 5.2), mais caros; **não** previstos nesta fase.
+
+**Regra:** os preços são cadastrados pelo Super Admin com **fonte e data** (`custos.definirPreco` ganha os campos
+`fonte` e `conferidoEm`, na R1). Preço com mais de 30 dias sem nova conferência gera aviso; a conferência é refeita
+obrigatoriamente na R2 (dia da publicação) e antes de cada etapa que liga um agente.
+
+### 13.2 Validar modelo indisponível ou incompatível antes de qualquer chamada paga
+
+Na R2 (e a cada mudança de configuração), uma **verificação sem custo** roda antes de ligar um agente:
+
+1. **O modelo existe e está liberado para a conta:** consulta à lista de modelos da API (`GET /v1/models/{id}`), que não
+   gera texto e não cobra tokens (conferir na documentação no dia). Resposta 404 → configuração recusada.
+2. **Lista do sistema:** só os 3 IDs da seção 13.1 são aceitos nesta fase (lista fechada no código); qualquer outro é
+   recusado antes de chegar ao provedor.
+3. **Compatibilidade:** a resposta da lista de modelos traz o contexto máximo (`max_input_tokens`), a saída máxima
+   (`max_tokens`) e os recursos (`capabilities`). Recusar se: o teto de saída configurado para o agente for maior que o do
+   modelo; o agente precisar de "imagem de entrada" e o modelo não tiver; o agente precisar de "imagem de saída" (Claude
+   não gera imagem).
+4. **Formato do pedido:** a contagem de tokens da API (`POST /v1/messages/count_tokens`, sem custo segundo a documentação;
+   conferir no dia) com o pedido de verdade montado pelo adaptador confere o formato **e** devolve a entrada exata, usada
+   na reserva (seção 13.5).
+5. **Na hora da chamada:** se mesmo assim o provedor responder 404 (modelo retirado) ou 400 de parâmetro, **não repetir**:
+   o agente volta sozinho para `simulado`, a etapa vai para decisão do Super Admin e o aviso aparece no painel.
+
+Resultado da verificação gravado no evento `modelo.verificado` (só ID, recursos e data; nunca a chave).
+
+### 13.3 Testes de proteção de dados pessoais e isolamento entre empresas
+
+Todos sem rede: o transporte de teste **captura o corpo exato** que iria ao provedor, e os testes olham esse corpo.
+
+**Dados pessoais (D5):**
+- briefing e memórias com CPF (com e sem pontuação), CNPJ, e-mail, telefone (fixo, celular, com +55 e DDD), CEP e
+  endereço → o corpo capturado **não contém nenhum**; contém as marcas (`[e-mail removido]`); o evento registra só a
+  quantidade removida;
+- dado pessoal escondido em campos diferentes (título, objetivo, briefing, memória aprovada, documento de dependência);
+- texto que não é dado pessoal (CNPJ de empresa autorizado como profissional, números de campanha) passa conforme a
+  regra decidida na R0;
+- nenhum texto de prompt aparece em eventos, erros ou registros (só números e IDs);
+- mutação: tirar o filtro → os testes falham.
+
+**Isolamento entre empresas:**
+- empresa A com memórias marcadas (`MARCA-A-7Q3`) e empresa B; tarefa de B → o corpo capturado **nunca** contém a marca de A,
+  em nenhum agente, inclusive na consolidação e nos documentos compartilhados entre etapas;
+- tarefa sem empresa → nenhuma memória de cliente;
+- memória Global com nome de empresa ou dado de cliente → bloqueada antes de existir (trava da 3B);
+- empresa arquivada → nenhum contexto, nenhuma chamada;
+- cursor de busca de A usado numa tarefa de B → recusado;
+- proposta de memória feita numa tarefa de A → só pode ir para o escopo de A;
+- mutação: trocar o filtro da empresa no contexto → os testes falham.
+
+### 13.4 Política de contabilização de custos
+
+Princípio: **na dúvida, conta o máximo**. Custo desconhecido nunca vira zero (regra da 4B).
+
+| Situação | O que o sistema registra | Observação |
+|---|---|---|
+| Sucesso (resposta completa) | custo real = tokens informados pelo provedor × preço cadastrado (entrada, gravação e leitura de cache, saída) | a sobra da reserva é devolvida |
+| Recusa do modelo (`refusal`) ou resposta cortada (`max_tokens`) | custo real pelo uso informado | o provedor cobra essas respostas |
+| Resposta fora do formato (sistema recusa) | custo real | a revisão interna é outra chamada, com reserva própria |
+| Erro 400/401/403/404/413 antes de gerar | 0, **registrado como tentativa** | o pedido não foi processado |
+| 429 (limite do provedor) | 0, registrado como tentativa | |
+| 500/529 com resposta de erro | 0 só se o provedor mandou um corpo de erro; senão vira "desconhecido" | |
+| Tempo-limite, queda de conexão, fluxo interrompido, worker caiu depois de enviar | **resultado desconhecido: conta a reserva inteira** (o máximo possível) como "custo provável" | nunca repete a mesma tentativa sozinho (seção 6.2) |
+| Fluxo interrompido com uso parcial recebido | o maior entre o uso recebido e a reserva inteira | conservador |
+| Cada repetição automática | custo próprio, somado | no máximo 3 chamadas pagas por etapa |
+| Lote enviado e sem resultado em 24 h | reserva inteira mantida até a resposta ou a expiração do lote | |
+
+**Conciliação:** toda semana (e no fim da R3, R4 e R5), comparar o total do sistema com o total do painel da Anthropic.
+Diferença maior que 5% → parar os agentes reais e investigar. Os "custos prováveis" são ajustados só com o número do
+painel do provedor, registrado pelo Super Admin com data.
+
+### 13.5 Testes que provam que os limites funcionam sem depender de estimativa
+
+**A reserva é um teto real, não um palpite:** entrada = contagem exata da API (13.2, passo 4), cobrada pelo preço mais alto
+possível (gravação de cache); saída = o teto `max_tokens` enviado na chamada, que o provedor **não ultrapassa** (o pensamento
+do modelo conta dentro desse teto). Assim, o custo máximo de cada chamada é conhecido antes dela.
+
+Testes (sem rede, com preços e usos fixos e conhecidos):
+1. **Conta exata:** uso informado fixo (ex.: 1.000 de entrada, 500 de saída) × preço fixo → o consumo registrado é
+   exatamente o valor esperado, até o centavo do centavo.
+2. **Limite barra antes do transporte:** limite diário menor que a reserva da próxima chamada → o transporte de teste
+   **não é chamado nenhuma vez** (contador de chamadas = 0) e a etapa vai para decisão.
+3. **Limite exato:** limite igual à soma de 2 reservas → passam 2 chamadas, a 3ª é barrada.
+4. **Concorrência no PostgreSQL:** dois workers reservando ao mesmo tempo com saldo para um só → só um passa (transação
+   serializável).
+5. **Resultado desconhecido:** chamada que "cai" depois de enviar → a reserva inteira fica contada e a chamada seguinte é
+   barrada se o saldo acabou.
+6. **Sem preço cadastrado** → 0 chamadas; **preço vencido** (mais de 30 dias) → aviso.
+7. **Virada de dia e de mês** (relógio de teste) → o limite do dia novo começa zerado; o do mês continua.
+8. **Limite por tarefa, por agente, por empresa e por provedor**, cada um isolado.
+9. **Repetições** somam: 3 tentativas com erro 529 → 0 de custo (corpo de erro recebido) e 3 tentativas registradas;
+   3 com queda de conexão → 3 reservas inteiras contadas.
+10. **Na R3 (com autorização), prova real:** limite do sistema no dia **menor que uma chamada** → o painel da Anthropic
+    mostra 0 chamadas naquele dia; depois, limite de 1 chamada → o painel mostra 1.
+
+### 13.6 O modo simulado continua disponível
+
+- **Padrão:** todo agente nasce e volta para `uso: "simulado"`; o transporte padrão é o **bloqueado**.
+- A **demonstração local** (`npm run demo`) e **todos os testes** continuam usando só o simulado.
+- **Por agente:** dá para ter o Roteirista real e os outros simulados na mesma tarefa.
+- **Rótulo:** cada entrega guarda a origem (`simulado` ou o ID do modelo real); a tela mostra o selo SIMULAÇÃO quando for
+  simulado. Nunca há mistura sem aviso.
+- **Provedor desligado ou fora do ar:** as etapas de agentes reais ficam "aguardando provedor"; o Super Admin pode escolher
+  refazer como simulado (com o selo). O sistema **não troca sozinho** de real para simulado no meio de uma tarefa.
+- Teste novo: com todos os provedores desligados, a tarefa simulada de ponta a ponta continua igual à da Etapa 11.
+
+### 13.7 Achados do teste de carga (09/11/2026, só local) que entram na R1
+
+Teste com o código real da `labz-api`/`labz-worker` e um PostgreSQL local (20 Super Admins de teste ao mesmo tempo,
+4 workers em paralelo, depois 6.000 pedidos com 300 simultâneos). A sobrecarga passou sem nenhuma falha de servidor.
+Dois defeitos precisam ser corrigidos **antes** de ligar modelos pagos:
+
+1. **Tarefa criada pela metade (órfã).** `execucoes.pedido` faz duas transações separadas (criar e planejar). Com muitas
+   criações ao mesmo tempo, o PostgreSQL recusa a segunda por conflito de serialização ("could not serialize access")
+   mais de 12 vezes seguidas; a API responde "erro interno" (10 de 40 pedidos no teste), mas a tarefa **fica criada**
+   (CREATED/PLANNING), sem item na fila, e o monitor não a recupera. Correção proposta: criar e planejar numa transação
+   só (ou planejar pela fila, com recuperação de tarefas sem item na fila), mais espera crescente nas repetições; teste
+   de carga com 20 criações simultâneas = 0 órfãs.
+2. **Etapa refeita depois de um worker parado.** Uma tarefa ficou com o crachá preso; o monitor a recuperou sozinho
+   depois de 5 minutos sem sinal de vida (correto), mas a etapa interrompida foi **refeita** (2 tentativas). Com modelo
+   pago, isso seria cobrado duas vezes. A seção 6.2 (registro "chamada em andamento" + resultado desconhecido conta a
+   reserva inteira + sem nova chamada automática para a mesma tentativa) resolve; teste: worker parado no meio da
+   chamada → 0 chamadas repetidas ao provedor.

@@ -6607,6 +6607,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '09/11/2026 · Pedido de venda no celular', itens: [
+    { titulo: 'Produto achado pelo nome ou pelo código', badges: ['corrigido'], texto: 'No pedido de venda, o produto agora é encontrado pelo nome, pelo código (SKU) ou pelo GTIN, sem diferença de maiúsculas, acentos e espaços — no celular o teclado punha maiúscula ou espaço no fim e o produto não era reconhecido, deixando o preço em R$ 0,00. Também dá para digitar o código no campo "Código", e as sugestões mostram o código e o preço.' },
+  ] },
   { data: '04/11/2026 · LABZ AI (Super Admin)', itens: [
     { titulo: 'LABZ AI no menu do Super Admin', badges: ['novo'], texto: 'O Super Admin ganhou o item "LABZ AI" no menu principal (no celular, na gaveta do menu): a equipe de agentes especializados, com o que espera a sua decisão, nova tarefa, organograma, histórico e entregas. Nesta versão os agentes são simulados: nenhum modelo de IA pago é usado e nada é publicado. Diretores, equipe e clientes não veem nada novo.' },
   ] },
@@ -26637,8 +26640,7 @@ function initPedidosVendaExtra() {
   });
   cloudWatch('eagles_produtos_v1', produtosSeed(), (data) => {
     CADASTROS_DATA['produto'] = data;
-    const dl = document.getElementById('pv-lista-produtos');
-    if (dl) dl.innerHTML = data.map((p) => `<option value="${escapeHtml(p.nome)}">`).join('');
+    pvPreencherListaProdutos(data);
   });
   // precisamos do ciclo financeiro carregado ANTES de permitir "Lançar",
   // senão salvar um mês novo poderia sobrescrever a nuvem com dados vazios.
@@ -26750,8 +26752,8 @@ function renderItensPedidoForm() {
     const precoTotal = precoUn * Number(item.quantidade || 0);
     return `<tr>
       <td class="ped-item-n" style="color:var(--text-soft); font-size:12px;">${idx + 1}</td>
-      <td data-label="Descrição"><input type="text" aria-label="Descrição do item ${idx + 1}" value="${escapeHtml(item.descricao)}" list="pv-lista-produtos" oninput="atualizarItemPedido(${idx},'descricao',this.value)" placeholder="Pesquise por código, descrição ou GTIN"><span class="est-item-slot">${typeof estHtmlDisponivelItem === 'function' ? estHtmlDisponivelItem(item) : ''}</span></td>
-      <td data-label="Código" style="width:90px;"><input type="text" aria-label="Código do item ${idx + 1}" value="${escapeHtml(item.codigo)}" oninput="atualizarItemPedido(${idx},'codigo',this.value)"></td>
+      <td data-label="Descrição"><input type="text" aria-label="Descrição do item ${idx + 1}" value="${escapeHtml(item.descricao)}" list="pv-lista-produtos" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" oninput="atualizarItemPedido(${idx},'descricao',this.value)" onchange="pvConfirmarProdutoItem(${idx},this.value)" placeholder="Pesquise por código, descrição ou GTIN"><span class="est-item-slot">${typeof estHtmlDisponivelItem === 'function' ? estHtmlDisponivelItem(item) : ''}</span></td>
+      <td data-label="Código" style="width:90px;"><input type="text" aria-label="Código do item ${idx + 1}" value="${escapeHtml(item.codigo)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" oninput="atualizarItemPedido(${idx},'codigo',this.value)" onchange="pvConfirmarProdutoItem(${idx},this.value)"></td>
       <td data-label="Un" style="width:60px;"><input type="text" aria-label="Unidade do item ${idx + 1}" value="${escapeHtml(item.unidade)}" oninput="atualizarItemPedido(${idx},'unidade',this.value)"></td>
       <td data-label="Quantidade" style="width:80px;"><input type="number" aria-label="Quantidade do item ${idx + 1}" value="${item.quantidade}" min="0" oninput="atualizarItemPedido(${idx},'quantidade',this.value)"></td>
       <td data-label="Preço lista" style="width:100px;"><input type="number" aria-label="Preço de lista do item ${idx + 1}" value="${item.precoLista}" min="0" step="0.01" oninput="atualizarItemPedido(${idx},'precoLista',this.value)"></td>
@@ -26767,17 +26769,9 @@ function atualizarItemPedido(idx, campo, valor) {
   const numericos = ['quantidade', 'precoLista', 'descontoPct'];
   PEDIDO_FORM_ITENS[idx][campo] = numericos.includes(campo) ? Number(valor) : valor;
 
-  if (campo === 'descricao') {
-    const produto = (CADASTROS_DATA['produto'] || []).find((p) => p.nome === valor);
-    if (produto) {
-      PEDIDO_FORM_ITENS[idx].produtoId = produto.id;
-      PEDIDO_FORM_ITENS[idx].precoLista = Number(produto.precoVenda || 0);
-      PEDIDO_FORM_ITENS[idx].codigo = produto.sku || '';
-      PEDIDO_FORM_ITENS[idx].unidade = produto.unidade || 'UN';
-      renderItensPedidoForm();
-      recalcularTotaisPedido();
-      return;
-    }
+  if (campo === 'descricao' || campo === 'codigo') {
+    const produto = pvAcharProduto(valor, false);
+    if (produto && produto.id !== PEDIDO_FORM_ITENS[idx].produtoId) { pvAplicarProdutoNoItem(idx, produto); return; }
   }
 
   const item = PEDIDO_FORM_ITENS[idx];
@@ -26789,10 +26783,57 @@ function atualizarItemPedido(idx, campo, valor) {
     row.querySelector('.pv-item-preco-un').textContent = formatMoney(precoUn);
     row.querySelector('.pv-item-preco-total').textContent = formatMoney(precoTotal);
     const slot = row.querySelector('.est-item-slot');
-    if (campo === 'descricao' && !(CADASTROS_DATA['produto'] || []).some((p) => p.nome === valor)) delete PEDIDO_FORM_ITENS[idx].produtoId;
+    if (campo === 'descricao' && !pvAcharProduto(valor, false)) delete PEDIDO_FORM_ITENS[idx].produtoId;
     if (slot && typeof estHtmlDisponivelItem === 'function') slot.innerHTML = estHtmlDisponivelItem(item);
   }
   recalcularTotaisPedido();
+}
+
+// Pedido de venda: acha o produto pelo nome, pelo código (SKU) ou pelo GTIN/EAN, sem diferença de
+// maiúsculas, acentos e espaços (no celular o teclado põe maiúscula e espaço no fim). Com "solto"
+// (quando a pessoa sai do campo), aceita também um pedaço do nome ou do código, desde que só um
+// produto combine.
+function pvNormTexto(s) { return String(s === undefined || s === null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+function pvChavesProduto(p) { return [p.nome, p.sku, p.gtinEan, p.gtinEanTributario].map(pvNormTexto).filter(Boolean); }
+function pvAcharProduto(texto, solto) {
+  const t = pvNormTexto(texto);
+  if (!t) return null;
+  const lista = (CADASTROS_DATA['produto'] || []).filter((p) => p && typeof p === 'object');
+  const exatos = lista.filter((p) => pvChavesProduto(p).includes(t));
+  if (exatos.length === 1) return exatos[0];
+  if (exatos.length > 1) { const porNome = exatos.filter((p) => pvNormTexto(p.nome) === t); return porNome.length === 1 ? porNome[0] : null; }
+  if (!solto || t.length < 2) return null;
+  const parciais = lista.filter((p) => pvChavesProduto(p).some((c) => c.includes(t)));
+  return parciais.length === 1 ? parciais[0] : null;
+}
+function pvPrecoProduto(p) { const n = typeof estNum === 'function' ? estNum(p.precoVenda) : Number(p.precoVenda); return n > 0 ? n : 0; }
+function pvAplicarProdutoNoItem(idx, produto) {
+  const it = PEDIDO_FORM_ITENS[idx];
+  if (!it || !produto) return;
+  it.produtoId = produto.id;
+  it.descricao = produto.nome || it.descricao;
+  it.precoLista = pvPrecoProduto(produto);
+  it.codigo = produto.sku || '';
+  it.unidade = produto.unidade || 'UN';
+  renderItensPedidoForm();
+  recalcularTotaisPedido();
+}
+// ao sair do campo (ou escolher uma sugestão): tenta de novo, aceitando um pedaço do nome ou do código
+function pvConfirmarProdutoItem(idx, valor) {
+  const it = PEDIDO_FORM_ITENS[idx];
+  if (!it || !String(valor || '').trim()) return;
+  const produto = pvAcharProduto(valor, true);
+  if (produto && produto.id !== it.produtoId) pvAplicarProdutoNoItem(idx, produto);
+}
+// sugestões: o nome (com o código e o preço ao lado) e também o código, para achar digitando o SKU
+function pvPreencherListaProdutos(data) {
+  const dl = document.getElementById('pv-lista-produtos');
+  if (!dl) return;
+  const lista = Array.isArray(data) ? data : [];
+  dl.innerHTML = lista.map((p) => {
+    const extra = `${p.sku ? 'Cód. ' + p.sku + ' · ' : ''}${formatMoney(pvPrecoProduto(p))}`;
+    return `<option value="${escapeHtml(p.nome || '')}" label="${escapeHtml(extra)}"></option>${p.sku && pvNormTexto(p.sku) !== pvNormTexto(p.nome) ? `<option value="${escapeHtml(p.sku)}" label="${escapeHtml(p.nome || '')}"></option>` : ''}`;
+  }).join('');
 }
 
 function adicionarItemPedido() {

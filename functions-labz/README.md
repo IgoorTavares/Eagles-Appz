@@ -555,7 +555,7 @@ A v155 e a v4 **não migram nem apagam dados** e não mudam as regras do Firebas
 
 ### I4-B — publicação controlada da v155 (09/11/2026; PUBLICADA E EM VALIDAÇÃO FINAL)
 
-A I4-B **ainda não está encerrada formalmente**. Faltam: a confirmação formal do Igor sobre a autoria das 2 tarefas simuladas, o teste no celular e o backup pós-publicação.
+A I4-B **ainda não está encerrada formalmente**. Confirmados pelo Igor: autoria das 2 tarefas simuladas (foi ele), teste no celular (aprovado) e monitoramento (aprovado). **Falta só o backup pós-publicação.**
 
 **Estado em produção:**
 
@@ -598,7 +598,9 @@ Consultas de acompanhamento (só leitura, pela conexão Claude/Supabase):
 
 **Lição da I4-B:** um segredo salvo vazio, com espaço/Enter ou digitado errado faz a v4 recusar tudo (500 ao ligar, ou 401 `conta-indisponivel`). Antes de testar, conferir o **Digest** no painel: o SHA-256 do valor certo é calculado fora do painel e comparado só pelo começo.
 
-**Tarefas simuladas criadas na validação:** 2 (18:04 e 18:12 UTC, conta Super Admin, botão "Nova tarefa"), COMPLETED, 9 entregas no total, só o modelo simulado (custo 0). Preservadas para auditoria.
+**Validação manual (Igor):** 7 de 7 aprovados (Atualizações v155, menu do Super Admin, painel com 8 agentes e histórico, celular, outra conta sem menu, acesso direto recusado, CRM/ERP normal).
+
+**Tarefas simuladas criadas na validação:** 2 (18:04 e 18:12 UTC, botão "Nova tarefa"; **autoria confirmada pelo Igor**), COMPLETED, 9 entregas no total, só o modelo simulado (custo 0). Preservadas para auditoria.
 
 **Backup pós-publicação (D5) — procedimento** (feito e conferido só pelo Igor; nada passa pelo chat):
 
@@ -609,6 +611,20 @@ Consultas de acompanhamento (só leitura, pela conexão Claude/Supabase):
 5. **Armazenamento:** guardar o `.cifrado.json` no computador e na pasta privada do Google Drive. Nunca no GitHub nem no chat.
 6. **Limpeza:** apagar o CSV (e qualquer `.aberto.json`) e esvaziar a lixeira.
 7. **Depois:** o Claude confere de novo, só pelo cabeçalho, que o banco não mudou durante a exportação. Guardar o primeiro backup (03/11) e os 3 mais recentes.
+
+**Encerramento técnico da I4-B (preparado; aguarda o backup e a autorização do Igor):**
+
+| Item | Situação |
+|---|---|
+| Site v155 publicado (merge `a340d03`, 59 arquivos, `eagles-cache-v155`) | concluído |
+| `labz-api` v4 publicada e conferida (SHA-256) | concluído |
+| Verify JWT desligado só na `labz-api`; testes 401/200/403 | concluído |
+| Validação manual (7 itens, inclusive o celular) | concluído |
+| Monitoramento pós-publicação (só leitura) | concluído e aprovado |
+| Autoria das 2 tarefas simuladas | confirmada pelo Igor |
+| Backup pós-publicação (D5) | **pendente (Igor)** |
+| Conferência final do banco depois do backup (só cabeçalho) | depois do backup |
+| Registro "I4-B ENCERRADA" no `CLAUDE.md` | depois da autorização |
 
 ## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
 

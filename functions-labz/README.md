@@ -553,9 +553,9 @@ No plano grátis **não existe** limite por IP, firewall de aplicação (WAF) ne
 
 A v155 e a v4 **não migram nem apagam dados** e não mudam as regras do Firebase. Nenhuma volta atrás exige recuperar backup.
 
-### I4-B — publicação controlada da v155 (09/11/2026; PUBLICADA E EM VALIDAÇÃO FINAL)
+### I4-B — publicação controlada da v155 (09/11/2026; ENCERRADA em 10/11/2026)
 
-A I4-B **ainda não está encerrada formalmente**. Confirmados pelo Igor: autoria das 2 tarefas simuladas (foi ele), teste no celular (aprovado) e monitoramento (aprovado). **Falta só o backup pós-publicação.**
+Confirmados pelo Igor: autoria das 2 tarefas simuladas (foi ele), teste no celular (aprovado), monitoramento (aprovado) e backup pós-publicação (10/11/2026). **I4-B encerrada em 10/11/2026** por autorização expressa do Igor. Próximo backup: depois de qualquer mudança importante ou até **24/11/2026**.
 
 **Estado em produção:**
 
@@ -612,7 +612,7 @@ Consultas de acompanhamento (só leitura, pela conexão Claude/Supabase):
 6. **Limpeza:** apagar o CSV (e qualquer `.aberto.json`) e esvaziar a lixeira.
 7. **Depois:** o Claude confere de novo, só pelo cabeçalho, que o banco não mudou durante a exportação. Guardar o primeiro backup (03/11) e os 3 mais recentes.
 
-**Encerramento técnico da I4-B (preparado; aguarda o backup e a autorização do Igor):**
+**Encerramento técnico da I4-B (concluído em 10/11/2026):**
 
 | Item | Situação |
 |---|---|
@@ -622,9 +622,9 @@ Consultas de acompanhamento (só leitura, pela conexão Claude/Supabase):
 | Validação manual (7 itens, inclusive o celular) | concluído |
 | Monitoramento pós-publicação (só leitura) | concluído e aprovado |
 | Autoria das 2 tarefas simuladas | confirmada pelo Igor |
-| Backup pós-publicação (D5) | **pendente (Igor)** |
-| Conferência final do banco depois do backup (só cabeçalho) | depois do backup |
-| Registro "I4-B ENCERRADA" no `CLAUDE.md` | depois da autorização |
+| Backup pós-publicação (D5) | concluído pelo Igor em 10/11/2026 (199 documentos, `89bc8d79…17288a35`, "Íntegro ✅", cifrado, computador + Drive) |
+| Conferência final do banco depois do backup (só cabeçalho) | concluída: mesmo total e mesma impressão |
+| Registro "I4-B ENCERRADA" no `CLAUDE.md` | feito (10/11/2026) |
 
 ## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
 

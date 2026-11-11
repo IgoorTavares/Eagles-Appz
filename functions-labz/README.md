@@ -626,6 +626,31 @@ Consultas de acompanhamento (só leitura, pela conexão Claude/Supabase):
 | Conferência final do banco depois do backup (só cabeçalho) | concluída: mesmo total e mesma impressão |
 | Registro "I4-B ENCERRADA" no `CLAUDE.md` | feito (10/11/2026) |
 
+## R1 — agentes reais preparados, tudo LOCAL e SIMULADO (10/11/2026; nada publicado; commit na branch autorizado em 11/11/2026)
+
+Autorizada pelo Igor em 10/11/2026, só no ambiente local (plano `LABZ-PLANO-AGENTES-REAIS.md`, versão 2, seção 13). Decisões D1–D6 definitivas: Anthropic; US$ 10/mês; piloto Roteirista; conta da API com o Igor; **nenhum dado pessoal de cliente vai ao provedor**; lote quando couber (R5). Nenhuma chave real, nenhuma chamada paga, nenhuma rede nos testes, nada mudou no Firebase ou no Supabase de produção.
+
+| Parte | Onde | O que faz |
+|---|---|---|
+| Adaptador da Anthropic | `src/ia/provedores/anthropic.js` | sem `temperature`/`top_p`/`top_k`; esforço em `output_config.effort` (low/medium/high); saída estruturada (`output_config.format`, esquema gerado por `src/ia/esquema-json.js`); instruções com `cache_control`; sem prefill e sem ferramenta forçada; recusa guarda só a categoria; uso de cache separado; `request-id`; 529 = sobrecarga; 404/modelo retirado = `modelo-indisponivel`; contagem de tokens e consulta do modelo (sem custo) |
+| Lista fechada de modelos | `src/ia/modelos-anthropic.js` | só `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5` (conferidos em 09/11/2026); confere imagem, teto de saída e esforço. **Sem preços no código** (teste da 4B) |
+| Verificação sem custo | `src/ia/verificacao-modelos.js` | `GET /v1/models/{id}`: modelo existe, teto de saída e leitura de imagem; evento `modelo.verificado` só com ID e números |
+| Transporte real TRANCADO | `src/ia/transporte.js` (`criarTransporteReal`) | 5 travas, nessa ordem, antes de qualquer rede: autorização (`true` de verdade), provedor da lista, rota da lista, interruptor `labz_config/provedores`, chave no servidor. Endereço oficial fixo, `redirect: 'error'`, a chave só no cabeçalho. **Não está ligado em nenhuma função** (o `index.ts` não mudou); `USO_REAL_AUTORIZADO` continua `false` |
+| Dados pessoais (D5) | `src/ia/dados-pessoais.js` | antes de sair para um provedor de verdade: e-mail, CPF, telefone, CEP e endereço viram marcas; só a contagem fica registrada (`origem.removidosD5`). CNPJ, valores e datas ficam |
+| Registro de chamadas pagas | `src/ia/registro-chamadas.js` | `labz_tarefas/{exe}/labz_chamadas/{etapa}`: chave `exe:etapa:n` gravada ANTES de chamar; estados em-andamento/concluída/inválida/erro/desconhecido; no máximo 3 por etapa; chamada desconhecida ou abandonada bloqueia até o Super Admin retomar |
+| Resultado desconhecido | `src/motor/motor.js` | sem resposta do provedor que cobra (tempo esgotado, queda, worker caiu): **não repete sozinho**, conta a reserva inteira como "custo provável" e vai para decisão |
+| Custos | `src/motor/consumo.js` | custo real por tipo de token (entrada, gravação e leitura de cache, saída) e faixa de pedido longo; reserva = teto real; preço da Anthropic exige o preço de cache; preço com mais de 30 dias avisa; **sem preço cadastrado, a Anthropic não é chamada**; **limite do mês** (`mensal: { tokensMes, custoMes }`, proposta US$ 9) somado em `labz_consumo/mes-AAAA-MM` |
+| Tarefas pela metade | `src/motor/motor.js`, `src/execucao/servico.js`, `src/motor/monitor-fila.js`, `src/armazenamento/banco-postgres.js` | falha inesperada no pedido encerra a tarefa; o monitor encerra órfãs com mais de 10 min; espera crescente com sorteio nas novas tentativas do PostgreSQL |
+
+**Testes:** `test/r1-agentes-reais.test.js` (21): formato do pedido, classificação de erros, lista fechada, verificação sem custo, as 5 travas do transporte (0 acessos à rede), tarefa inteira com o transporte trancado, D5 (13 tipos de dado), isolamento entre empresas (a memória de outra empresa nunca sai), resultado desconhecido (1 chamada, reserva contada, retomar libera), worker caído, máximo de 3 chamadas (529 = custo 0), conta exata, faixa longa, cache, preço vencido, limite menor que a reserva (0 chamadas), limite exato, concorrência, virada de dia e de mês, limites por tarefa/agente/empresa/provedor, modo simulado e tarefas órfãs.
+- `npm test` 411 (398 aprovados, 13 só PostgreSQL); PostgreSQL local 410/411 (o 62 falha só na imagem do Supabase local, como antes; passa no GitHub); interface 20/20; montador do site 26/26.
+- Teste de carga (fase 1, 20 Super Admins ao mesmo tempo, PostgreSQL local), 3 vezes: 400/400 respostas 200, 40/40 tarefas, 0 erros internos, **0 tarefas pela metade**.
+- Mutações: sem o filtro D5, desconhecido tratado como conhecido, sem limite do mês, trava aceitando `'true'` em texto e chamada sem preço → **todas detectadas**.
+- **Não executados localmente:** simulador do Firebase (`npm run test:emulador`, precisa de Java) e Deno (`npm run test:deno`, Deno ausente na sessão); ficam para o GitHub Actions. O teste 62 do PostgreSQL local falha só na imagem do Supabase (o `postgres` dela não é superusuário), como antes da R1.
+- Pacote das Edge Functions refeito localmente (`labz-ad650613edbc.mjs`); **não publicado** (a produção continua com `labz-b49c379e0336.mjs`).
+
+**Limitações e o que fica para a R2 (cada passo com autorização):** conferir de novo na documentação oficial, no dia, a versão da API, `output_config` e a contagem de tokens; ligar o transporte real no `index.ts` (fetch, segredo da chave, interruptor) com tudo desligado; cadastrar os preços oficiais e os limites (dia, mês, tarefa, agente, empresa); a filtragem D5 é uma rede de segurança (a regra continua sendo não pôr dado pessoal no briefing nem nas memórias) e não reconhece nome de pessoa; o limite do mês soma as reservas abertas só do dia atual (reservas vencem em 10 min).
+
 ## Fase S5B — roteiro de ativação gradual no Supabase (preparado; NADA executado no remoto)
 
 - **Projeto:** exclusivo da LABZ AI, na organização do Igor, no plano Free.

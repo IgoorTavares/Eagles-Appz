@@ -15,6 +15,7 @@ const { relogioPadrao } = require('../nucleo/ids');
 const { AGENTES, obterAgente } = require('../agentes/catalogo');
 const { RECURSOS_MODELO } = require('../contratos/agente');
 const { TODOS_PROVEDORES, PROVEDOR_SIMULADO, ErroProvedor } = require('./contrato');
+const { problemasDoModeloAnthropic, ESFORCOS_DA_FASE } = require('./modelos-anthropic');
 
 // Trava da fase: muda só com autorização do Igor (Fase 6), junto com o transporte real.
 const USO_REAL_AUTORIZADO = false;
@@ -32,7 +33,8 @@ const ESQUEMA_CONFIG = {
     // abaixo do limite de sinal de vida do monitor (5 min), para uma chamada viva nunca parecer travada
     timeoutMs: { tipo: 'inteiro', min: 1000, max: 240000 },
     maxTokensSaida: { tipo: 'inteiro', min: 16, max: 64000 },
-    temperatura: { tipo: 'numero', min: 0, max: 2 },
+    temperatura: { tipo: 'numero', min: 0, max: 2 }, // não vai para a Anthropic (os modelos atuais recusam)
+    esforco: { tipo: 'texto', valores: ESFORCOS_DA_FASE }, // R1: nível de esforço (Anthropic: output_config.effort)
   },
 };
 
@@ -49,6 +51,8 @@ function problemasDaConfig(agente, config) {
   if (config.uso === 'real' && !USO_REAL_AUTORIZADO) p.push('uso "real" não está autorizado nesta fase (modelos reais desligados)');
   const faltam = agente.modelo.recursosNecessarios.filter((r) => !config.recursosDoModelo.includes(r));
   if (faltam.length) p.push(`o modelo não declara recursos de que o agente precisa: ${faltam.join(', ')}`);
+  // R1: Anthropic só com os modelos da lista fechada, compatíveis com o agente (imagem, teto, esforço)
+  if (config.provedor === 'anthropic') p.push(...problemasDoModeloAnthropic(config.modelo, { recursos: agente.modelo.recursosNecessarios, maxTokensSaida: config.maxTokensSaida, esforco: config.esforco }));
   return p;
 }
 

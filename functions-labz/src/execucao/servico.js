@@ -83,7 +83,9 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
     ATOR_SISTEMA,
     transicionar,
 
-    async criar(ator, dados) {
+    // interno (R1): { origem: 'pedido' } marca a execução criada pelo pedido automático (o monitor
+    // encerra a que ficar presa no meio da criação; uma criada à mão pode esperar o planejamento manual)
+    async criar(ator, dados, interno = {}) {
       exigirAtor(ator);
       const d = Object.assign({ empresaId: null, agenteId: null }, dados);
       garantir(ESQUEMA_NOVA_EXECUCAO, d, 'Execução');
@@ -98,6 +100,7 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
         criadoEm: agora, criadoPor: ator.uid, atualizadoEm: agora, ultimoBatimento: null,
         limites: d.limites || null, execucaoAtual: null, diagnostico: null,
       };
+      if (interno.origem === 'pedido') doc.origem = 'pedido';
       await banco.gravar(caminhos.tarefa(id), doc);
       await auditoria.registrar('execucao.criada', ator, caminhos.tarefa(id), { modo: d.modo, empresaId: d.empresaId });
       return Object.assign({ id }, doc);
@@ -108,6 +111,26 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
       const e = await ler(id);
       if (e.estado !== 'RUNNING') throw erro('precondicao', 'Só execução em andamento manda sinal de vida');
       await banco.atualizar(caminhos.tarefa(id), { ultimoBatimento: relogio() });
+    },
+
+    // R1 (plano, 13.7): execução presa NO MEIO DA CRIAÇÃO (o pedido caiu entre criar e planejar, por
+    // exemplo por conflito no banco). CREATED vinda do pedido automático ou PLANNING, paradas há mais de
+    // limiteMs: são encerradas (CANCELLED / FAILED) com diagnóstico, sem chamar nenhum modelo de novo.
+    async encerrarOrfas(limiteMs) {
+      const corte = Date.parse(relogio()) - limiteMs;
+      const feitas = [];
+      for (const [estado, para] of [['CREATED', 'CANCELLED'], ['PLANNING', 'FAILED']]) {
+        const pagina = await banco.consultar(caminhos.colecoes.tarefas, { onde: [{ campo: 'estado', op: '==', valor: estado }], ordenar: { campo: 'id', direcao: 'asc' }, limite: PAGINA });
+        for (const e of pagina) {
+          if (estado === 'CREATED' && e.origem !== 'pedido') continue;
+          if (!e.atualizadoEm || Date.parse(e.atualizadoEm) >= corte) continue;
+          try {
+            await transicionar(ATOR_SISTEMA, e.id, para, { versaoEsperada: e.versao, motivo: 'criação interrompida', extras: { diagnostico: { motivo: 'criacao-interrompida', estado, em: relogio() } } });
+            feitas.push({ id: e.id, de: estado, para });
+          } catch (x) { /* outro processo mexeu: fica para a próxima varredura */ }
+        }
+      }
+      return feitas;
     },
 
     // F6 (Fase 3E): lê só as RUNNING, por páginas (até 10 páginas de 100 por chamada).

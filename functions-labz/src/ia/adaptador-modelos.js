@@ -12,6 +12,9 @@ const { adaptadorDoProvedor } = require('./provedores');
 const { ErroProvedor } = require('./contrato');
 const { montarSolicitacao } = require('./prompt');
 const { limparCredenciais } = require('./credenciais');
+const { removerDadosPessoais } = require('./dados-pessoais');
+const { esquemaDaResposta } = require('./esquema-json');
+const { PROVEDOR_SIMULADO } = require('./contrato');
 
 const tokensDe = (t) => Math.ceil(String(t || '').length / 4); // estimativa (não é contagem do provedor)
 const REF_MEMORIA = /^memoria:[a-z]+:([A-Za-z0-9_-]{1,80})@v\d+$/;
@@ -58,12 +61,35 @@ function saidaDeExecucao(obj, pedido, provedor, uso) {
   return saida;
 }
 
-// opcoes: { configModelos, transporte, limitador?, timeoutPadraoMs? }
-function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPadraoMs }) {
-  if (!transporte || !['simulado', 'bloqueado'].includes(transporte.tipo)) throw new Error('Fase 4B: só o transporte simulado ou o bloqueado são aceitos');
+// opcoes: { configModelos, transporte, limitador?, timeoutPadraoMs?, contarEntrada? }
+//  contarEntrada (R1): antes de cada chamada, conta a entrada EXATA pela API do provedor (sem custo),
+//  para a reserva ser um teto real. Com o transporte REAL é obrigatório (sem contagem, não chama).
+function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPadraoMs, contarEntrada = false }) {
+  if (!transporte || !['simulado', 'bloqueado', 'real'].includes(transporte.tipo)) throw new Error('Transporte desconhecido (aceitos: simulado, bloqueado, real)');
+  const real = transporte.tipo === 'real';
+  const contar = real || contarEntrada === true;
 
+  // R1 (D5): o que vai para um provedor de verdade passa pelo filtro de dados pessoais. Só a
+  // CONTAGEM do que foi removido é guardada. O provedor simulado não sai da máquina.
   async function solicitacao(pedido, cfg) {
-    return montarSolicitacao({ ctx: pedido.contexto, modo: pedido.modo, maxEtapas: pedido.maxEtapas || 8, documento: pedido.documento, documentosRecebidos: pedido.documentosRecebidos });
+    const s = await montarSolicitacao({ ctx: pedido.contexto, modo: pedido.modo, maxEtapas: pedido.maxEtapas || 8, documento: pedido.documento, documentosRecebidos: pedido.documentosRecebidos });
+    if (cfg.provedor === PROVEDOR_SIMULADO) return Object.assign({}, s, { removidosD5: 0 });
+    const a = removerDadosPessoais(s.sistema);
+    const b = removerDadosPessoais(s.dados);
+    return Object.assign({}, s, { sistema: a.texto, dados: b.texto, removidosD5: a.total + b.total });
+  }
+  // requisição neutra → formato do provedor (esforço e, com documento, saída estruturada)
+  function neutra(cfg, s, pedido) {
+    const esquemaJson = cfg.provedor === 'anthropic' && pedido.documento ? esquemaDaResposta(pedido.documento, { consolidar: pedido.modo === 'consolidar' }) : undefined;
+    return { modelo: cfg.modelo, sistema: s.sistema, dados: s.dados, maxTokensSaida: cfg.maxTokensSaida, temperatura: cfg.temperatura, esforco: cfg.esforco, esquemaJson: esquemaJson || undefined, formatoJson: true };
+  }
+  // contagem exata da entrada (sem custo); null quando o provedor não tem contagem
+  async function contarTokens(cfg, prov, s, pedido) {
+    if (!prov.montarContagem) return null;
+    const req = prov.montarContagem(neutra(cfg, s, pedido));
+    const resp = await chamar(cfg, req, Object.assign({}, pedido, { modo: 'contagem' }));
+    if (!resp || resp.status !== 200) throw prov.classificarErro(resp || { status: 500 });
+    return prov.normalizarContagem(resp.corpo);
   }
 
   // Chamada com timeout e cancelamento (o sinal do executor e o do relógio).
@@ -95,7 +121,14 @@ function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPa
     async preparar(pedido) {
       const cfg = await configModelos.resolver(pedido.agenteId);
       const s = await solicitacao(pedido, cfg);
-      return { provedor: cfg.provedor, modelo: cfg.modelo, maxTokensSaida: cfg.maxTokensSaida, estimativaEntrada: tokensDe(s.sistema) + tokensDe(s.dados) };
+      const prov = adaptadorDoProvedor(cfg.provedor);
+      let entrada = tokensDe(s.sistema) + tokensDe(s.dados);
+      let fonteEntrada = 'estimativa';
+      if (contar && cfg.provedor !== PROVEDOR_SIMULADO && prov) {
+        const n = await contarTokens(cfg, prov, s, pedido);
+        if (n !== null) { entrada = n; fonteEntrada = 'contagem-do-provedor'; } else if (real) throw new ErroProvedor('configuracao-invalida', `${cfg.provedor}: sem contagem exata de tokens; chamada real recusada`, { provedor: cfg.provedor });
+      }
+      return { provedor: cfg.provedor, modelo: cfg.modelo, maxTokensSaida: cfg.maxTokensSaida, estimativaEntrada: entrada, fonteEntrada };
     },
 
     // pedido: { agenteId, etapaId, modo, tentativa, contexto, textoContexto, fontes, sinal?, objetivo?, maxEtapas? }
@@ -105,27 +138,33 @@ function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPa
       const prov = adaptadorDoProvedor(cfg.provedor);
       if (!prov) throw new ErroProvedor('configuracao-invalida', 'Provedor desconhecido');
       const s = await solicitacao(pedido, cfg);
-      const req = prov.montarRequisicao({ modelo: cfg.modelo, sistema: s.sistema, dados: s.dados, maxTokensSaida: cfg.maxTokensSaida, temperatura: cfg.temperatura, formatoJson: true });
+      const req = prov.montarRequisicao(neutra(cfg, s, pedido));
       if (limitador) limitador.consumir(cfg.provedor);
       const resp = await chamar(cfg, req, pedido);
-      if (!resp || resp.status !== 200) throw prov.classificarErro(resp || { status: 500 });
-      const norm = prov.normalizarResposta(resp.corpo);
+      if (!resp || resp.status !== 200) {
+        const e = prov.classificarErro(resp || { status: 500 });
+        // R1: o provedor RESPONDEU (com status de erro): o pedido foi recusado, resultado conhecido
+        e.comCorpo = !!resp;
+        throw e;
+      }
+      const norm = prov.normalizarResposta(resp.corpo, resp.cabecalhos || {});
       const uso = norm.uso;
-      if (norm.fim === 'incompleta') throw new ErroProvedor('resposta-incompleta', `${cfg.provedor}: resposta cortada (${norm.motivoFimOriginal || 'limite'})`, { provedor: cfg.provedor, uso });
-      if (norm.fim === 'recusada' || norm.fim === 'filtrada') throw new ErroProvedor('recusada', `${cfg.provedor}: o modelo recusou ou o conteúdo foi filtrado`, { provedor: cfg.provedor, uso });
+      if (norm.fim === 'incompleta') throw new ErroProvedor('resposta-incompleta', `${cfg.provedor}: resposta cortada (${norm.motivoFimOriginal || 'limite'})`, { provedor: cfg.provedor, uso, comCorpo: true });
+      if (norm.fim === 'recusada' || norm.fim === 'filtrada') throw new ErroProvedor('recusada', `${cfg.provedor}: o modelo recusou ou o conteúdo foi filtrado`, { provedor: cfg.provedor, uso, comCorpo: true, categoria: norm.categoriaRecusa || undefined });
       const obj = lerJson(norm.texto, cfg.provedor, uso);
       // uso: o informado pelo provedor; se não veio, ESTIMADO (e marcado como tal; nunca zero)
       const usoFinal = uso
-        ? { tokensEntrada: uso.tokensEntrada, tokensSaida: uso.tokensSaida, fonte: transporte.tipo === 'simulado' ? 'provedor-simulado' : 'provedor' }
+        ? Object.assign({ tokensEntrada: uso.tokensEntrada, tokensSaida: uso.tokensSaida, fonte: transporte.tipo === 'simulado' ? 'provedor-simulado' : 'provedor' }, uso.cacheEscrita !== undefined ? { cacheEscrita: uso.cacheEscrita, cacheLeitura: uso.cacheLeitura } : {})
         : { tokensEntrada: tokensDe(s.sistema) + tokensDe(s.dados), tokensSaida: tokensDe(norm.texto), fonte: 'estimado' };
-      const origem = { provedor: cfg.provedor, modelo: cfg.modelo, uso: cfg.uso, transporte: transporte.tipo, fonteUso: usoFinal.fonte, configuracao: cfg.origem };
+      const origem = { provedor: cfg.provedor, modelo: cfg.modelo, uso: cfg.uso, transporte: transporte.tipo, fonteUso: usoFinal.fonte, configuracao: cfg.origem, removidosD5: s.removidosD5 || 0, requestId: norm.requestId || null };
+      const usoSaida = Object.assign({ tokensEntrada: usoFinal.tokensEntrada, tokensSaida: usoFinal.tokensSaida, fonte: usoFinal.fonte }, usoFinal.cacheEscrita !== undefined ? { cacheEscrita: usoFinal.cacheEscrita, cacheLeitura: usoFinal.cacheLeitura } : {});
       const base = { simulado: true, agenteId: pedido.agenteId, etapaId: pedido.etapaId };
       if (pedido.modo === 'planejar') {
-        return Object.assign(base, { formato: 'plano', plano: obj, uso: { tokensEntrada: usoFinal.tokensEntrada, tokensSaida: usoFinal.tokensSaida, fonte: usoFinal.fonte }, origem });
+        return Object.assign(base, { formato: 'plano', plano: obj, uso: usoSaida, origem });
       }
       const sx = saidaDeExecucao(obj, pedido, cfg.provedor, uso);
       origem.camposIgnorados = sx.ignorados.length;
-      const saida = Object.assign(base, { formato: pedido.documento ? 'documento' : 'texto', referencias: sx.referencias, acoes: sx.acoes, uso: { tokensEntrada: usoFinal.tokensEntrada, tokensSaida: usoFinal.tokensSaida, fonte: usoFinal.fonte }, origem });
+      const saida = Object.assign(base, { formato: pedido.documento ? 'documento' : 'texto', referencias: sx.referencias, acoes: sx.acoes, uso: usoSaida, origem });
       if (pedido.documento) saida.documento = sx.documento; else saida.texto = sx.texto;
       if (sx.revisoes) saida.revisoes = sx.revisoes;
       return saida;

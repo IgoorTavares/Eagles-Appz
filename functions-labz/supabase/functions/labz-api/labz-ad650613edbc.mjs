@@ -1,5 +1,5 @@
 // LABZ AI — pacote das Edge Functions (GERADO por supabase/empacotar.js; não edite à mão).
-// Módulos: 89 · postgres 3.4.9 · nativos: node:buffer, node:crypto, node:fs, node:net, node:os, node:perf_hooks, node:process, node:stream, node:timers, node:tls
+// Módulos: 94 · postgres 3.4.9 · nativos: node:buffer, node:crypto, node:fs, node:net, node:os, node:perf_hooks, node:process, node:stream, node:timers, node:tls
 /* eslint-disable */
 import * as __n0 from "node:buffer";
 import * as __n1 from "node:crypto";
@@ -3487,7 +3487,9 @@ function criarBancoPostgres({ sql, schema = 'labz', tentativas = 12, preparar } 
         } catch (e) {
           if (REPETIVEIS.has(e && e.code) && i < tentativas) {
             est.repeticoes++;
-            await espera(Math.floor(Math.random() * (8 + i * 12)));
+            // R1 (13.7): espera crescente com sorteio (25 ms, 50 ms… até 800 ms): com muitas transações ao
+            // mesmo tempo, a espera curta de antes esgotava as tentativas e deixava tarefas pela metade
+            await espera(Math.floor(Math.min(25 * 2 ** i, 800) * (0.5 + Math.random())));
             continue;
           }
           throw e;
@@ -3538,7 +3540,7 @@ const C = {
 // Subcoleções da LABZ AI (Fase 3E: com o prefixo labz_, para que índices e
 // isenções do Firestore, que valem por NOME de coleção, nunca alcancem o CRM/ERP).
 // Fase 4C.1: versoes de entrega têm nome próprio (as isenções de labz_versoes foram pensadas para memórias)
-const SUB = Object.freeze({ memorias: 'labz_memorias', desempenho: 'labz_desempenho', versoes: 'labz_versoes', aprovacoes: 'labz_aprovacoes', resultados: 'labz_resultados', versoesEntrega: 'labz_versoes_entrega', conteudos: 'labz_conteudos' });
+const SUB = Object.freeze({ memorias: 'labz_memorias', desempenho: 'labz_desempenho', versoes: 'labz_versoes', aprovacoes: 'labz_aprovacoes', resultados: 'labz_resultados', versoesEntrega: 'labz_versoes_entrega', conteudos: 'labz_conteudos', chamadas: 'labz_chamadas' });
 
 const caminhos = {
   colecoes: C,
@@ -3558,6 +3560,8 @@ const caminhos = {
   // Fase 4A: pedidos de aprovação e resultados de cada etapa, DENTRO da execução
   aprovacoesExecucao: (execucaoId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.aprovacoes}`,
   aprovacaoExecucao: (execucaoId, id) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.aprovacoes}/${seg(id, 'aprovacaoId')}`,
+  // R1: registro das chamadas pagas de uma etapa (ou do planejamento)
+  chamadasEtapa: (execucaoId, etapaId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.chamadas}/${seg(etapaId, 'etapaId')}`,
   resultadoEtapa: (execucaoId, etapaId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.resultados}/${seg(etapaId, 'etapaId')}`,
   // Fase 4B: resultado preservado de uma tentativa revisada (n = número da revisão)
   resultadoRevisao: (execucaoId, etapaId, n) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.resultados}/${seg(`${etapaId}_rev${n}`, 'etapaId')}`,
@@ -6824,7 +6828,9 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
     ATOR_SISTEMA,
     transicionar,
 
-    async criar(ator, dados) {
+    // interno (R1): { origem: 'pedido' } marca a execução criada pelo pedido automático (o monitor
+    // encerra a que ficar presa no meio da criação; uma criada à mão pode esperar o planejamento manual)
+    async criar(ator, dados, interno = {}) {
       exigirAtor(ator);
       const d = Object.assign({ empresaId: null, agenteId: null }, dados);
       garantir(ESQUEMA_NOVA_EXECUCAO, d, 'Execução');
@@ -6839,6 +6845,7 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
         criadoEm: agora, criadoPor: ator.uid, atualizadoEm: agora, ultimoBatimento: null,
         limites: d.limites || null, execucaoAtual: null, diagnostico: null,
       };
+      if (interno.origem === 'pedido') doc.origem = 'pedido';
       await banco.gravar(caminhos.tarefa(id), doc);
       await auditoria.registrar('execucao.criada', ator, caminhos.tarefa(id), { modo: d.modo, empresaId: d.empresaId });
       return Object.assign({ id }, doc);
@@ -6849,6 +6856,26 @@ function criarExecucoes({ banco, auditoria, empresas, fila, relogio = relogioPad
       const e = await ler(id);
       if (e.estado !== 'RUNNING') throw erro('precondicao', 'Só execução em andamento manda sinal de vida');
       await banco.atualizar(caminhos.tarefa(id), { ultimoBatimento: relogio() });
+    },
+
+    // R1 (plano, 13.7): execução presa NO MEIO DA CRIAÇÃO (o pedido caiu entre criar e planejar, por
+    // exemplo por conflito no banco). CREATED vinda do pedido automático ou PLANNING, paradas há mais de
+    // limiteMs: são encerradas (CANCELLED / FAILED) com diagnóstico, sem chamar nenhum modelo de novo.
+    async encerrarOrfas(limiteMs) {
+      const corte = Date.parse(relogio()) - limiteMs;
+      const feitas = [];
+      for (const [estado, para] of [['CREATED', 'CANCELLED'], ['PLANNING', 'FAILED']]) {
+        const pagina = await banco.consultar(caminhos.colecoes.tarefas, { onde: [{ campo: 'estado', op: '==', valor: estado }], ordenar: { campo: 'id', direcao: 'asc' }, limite: PAGINA });
+        for (const e of pagina) {
+          if (estado === 'CREATED' && e.origem !== 'pedido') continue;
+          if (!e.atualizadoEm || Date.parse(e.atualizadoEm) >= corte) continue;
+          try {
+            await transicionar(ATOR_SISTEMA, e.id, para, { versaoEsperada: e.versao, motivo: 'criação interrompida', extras: { diagnostico: { motivo: 'criacao-interrompida', estado, em: relogio() } } });
+            feitas.push({ id: e.id, de: estado, para });
+          } catch (x) { /* outro processo mexeu: fica para a próxima varredura */ }
+        }
+      }
+      return feitas;
     },
 
     // F6 (Fase 3E): lê só as RUNNING, por páginas (até 10 páginas de 100 por chamada).
@@ -7022,7 +7049,7 @@ function verificarUsoFerramenta(agenteId, ferramentaId, operacao, catalogos = {}
 module.exports = { verificarUsoFerramenta };
 
 } };
-__defs["src/ia/adaptador-modelos.js"] = { deps: {"./contrato":"src/ia/contrato.js","./credenciais":"src/ia/credenciais.js","./prompt":"src/ia/prompt.js","./provedores":"src/ia/provedores/index.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+__defs["src/ia/adaptador-modelos.js"] = { deps: {"./contrato":"src/ia/contrato.js","./credenciais":"src/ia/credenciais.js","./dados-pessoais":"src/ia/dados-pessoais.js","./esquema-json":"src/ia/esquema-json.js","./prompt":"src/ia/prompt.js","./provedores":"src/ia/provedores/index.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
 // Fase 4B: ponte entre o MOTOR (mesma interface do adaptador simulado da 4A:
 // executar(pedido) → saída) e os provedores de IA. Por agente:
 //   configuração (config-modelos) → solicitação segura (prompt.js) →
@@ -7037,6 +7064,9 @@ const { adaptadorDoProvedor } = require('./provedores');
 const { ErroProvedor } = require('./contrato');
 const { montarSolicitacao } = require('./prompt');
 const { limparCredenciais } = require('./credenciais');
+const { removerDadosPessoais } = require('./dados-pessoais');
+const { esquemaDaResposta } = require('./esquema-json');
+const { PROVEDOR_SIMULADO } = require('./contrato');
 
 const tokensDe = (t) => Math.ceil(String(t || '').length / 4); // estimativa (não é contagem do provedor)
 const REF_MEMORIA = /^memoria:[a-z]+:([A-Za-z0-9_-]{1,80})@v\d+$/;
@@ -7083,12 +7113,35 @@ function saidaDeExecucao(obj, pedido, provedor, uso) {
   return saida;
 }
 
-// opcoes: { configModelos, transporte, limitador?, timeoutPadraoMs? }
-function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPadraoMs }) {
-  if (!transporte || !['simulado', 'bloqueado'].includes(transporte.tipo)) throw new Error('Fase 4B: só o transporte simulado ou o bloqueado são aceitos');
+// opcoes: { configModelos, transporte, limitador?, timeoutPadraoMs?, contarEntrada? }
+//  contarEntrada (R1): antes de cada chamada, conta a entrada EXATA pela API do provedor (sem custo),
+//  para a reserva ser um teto real. Com o transporte REAL é obrigatório (sem contagem, não chama).
+function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPadraoMs, contarEntrada = false }) {
+  if (!transporte || !['simulado', 'bloqueado', 'real'].includes(transporte.tipo)) throw new Error('Transporte desconhecido (aceitos: simulado, bloqueado, real)');
+  const real = transporte.tipo === 'real';
+  const contar = real || contarEntrada === true;
 
+  // R1 (D5): o que vai para um provedor de verdade passa pelo filtro de dados pessoais. Só a
+  // CONTAGEM do que foi removido é guardada. O provedor simulado não sai da máquina.
   async function solicitacao(pedido, cfg) {
-    return montarSolicitacao({ ctx: pedido.contexto, modo: pedido.modo, maxEtapas: pedido.maxEtapas || 8, documento: pedido.documento, documentosRecebidos: pedido.documentosRecebidos });
+    const s = await montarSolicitacao({ ctx: pedido.contexto, modo: pedido.modo, maxEtapas: pedido.maxEtapas || 8, documento: pedido.documento, documentosRecebidos: pedido.documentosRecebidos });
+    if (cfg.provedor === PROVEDOR_SIMULADO) return Object.assign({}, s, { removidosD5: 0 });
+    const a = removerDadosPessoais(s.sistema);
+    const b = removerDadosPessoais(s.dados);
+    return Object.assign({}, s, { sistema: a.texto, dados: b.texto, removidosD5: a.total + b.total });
+  }
+  // requisição neutra → formato do provedor (esforço e, com documento, saída estruturada)
+  function neutra(cfg, s, pedido) {
+    const esquemaJson = cfg.provedor === 'anthropic' && pedido.documento ? esquemaDaResposta(pedido.documento, { consolidar: pedido.modo === 'consolidar' }) : undefined;
+    return { modelo: cfg.modelo, sistema: s.sistema, dados: s.dados, maxTokensSaida: cfg.maxTokensSaida, temperatura: cfg.temperatura, esforco: cfg.esforco, esquemaJson: esquemaJson || undefined, formatoJson: true };
+  }
+  // contagem exata da entrada (sem custo); null quando o provedor não tem contagem
+  async function contarTokens(cfg, prov, s, pedido) {
+    if (!prov.montarContagem) return null;
+    const req = prov.montarContagem(neutra(cfg, s, pedido));
+    const resp = await chamar(cfg, req, Object.assign({}, pedido, { modo: 'contagem' }));
+    if (!resp || resp.status !== 200) throw prov.classificarErro(resp || { status: 500 });
+    return prov.normalizarContagem(resp.corpo);
   }
 
   // Chamada com timeout e cancelamento (o sinal do executor e o do relógio).
@@ -7120,7 +7173,14 @@ function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPa
     async preparar(pedido) {
       const cfg = await configModelos.resolver(pedido.agenteId);
       const s = await solicitacao(pedido, cfg);
-      return { provedor: cfg.provedor, modelo: cfg.modelo, maxTokensSaida: cfg.maxTokensSaida, estimativaEntrada: tokensDe(s.sistema) + tokensDe(s.dados) };
+      const prov = adaptadorDoProvedor(cfg.provedor);
+      let entrada = tokensDe(s.sistema) + tokensDe(s.dados);
+      let fonteEntrada = 'estimativa';
+      if (contar && cfg.provedor !== PROVEDOR_SIMULADO && prov) {
+        const n = await contarTokens(cfg, prov, s, pedido);
+        if (n !== null) { entrada = n; fonteEntrada = 'contagem-do-provedor'; } else if (real) throw new ErroProvedor('configuracao-invalida', `${cfg.provedor}: sem contagem exata de tokens; chamada real recusada`, { provedor: cfg.provedor });
+      }
+      return { provedor: cfg.provedor, modelo: cfg.modelo, maxTokensSaida: cfg.maxTokensSaida, estimativaEntrada: entrada, fonteEntrada };
     },
 
     // pedido: { agenteId, etapaId, modo, tentativa, contexto, textoContexto, fontes, sinal?, objetivo?, maxEtapas? }
@@ -7130,27 +7190,33 @@ function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPa
       const prov = adaptadorDoProvedor(cfg.provedor);
       if (!prov) throw new ErroProvedor('configuracao-invalida', 'Provedor desconhecido');
       const s = await solicitacao(pedido, cfg);
-      const req = prov.montarRequisicao({ modelo: cfg.modelo, sistema: s.sistema, dados: s.dados, maxTokensSaida: cfg.maxTokensSaida, temperatura: cfg.temperatura, formatoJson: true });
+      const req = prov.montarRequisicao(neutra(cfg, s, pedido));
       if (limitador) limitador.consumir(cfg.provedor);
       const resp = await chamar(cfg, req, pedido);
-      if (!resp || resp.status !== 200) throw prov.classificarErro(resp || { status: 500 });
-      const norm = prov.normalizarResposta(resp.corpo);
+      if (!resp || resp.status !== 200) {
+        const e = prov.classificarErro(resp || { status: 500 });
+        // R1: o provedor RESPONDEU (com status de erro): o pedido foi recusado, resultado conhecido
+        e.comCorpo = !!resp;
+        throw e;
+      }
+      const norm = prov.normalizarResposta(resp.corpo, resp.cabecalhos || {});
       const uso = norm.uso;
-      if (norm.fim === 'incompleta') throw new ErroProvedor('resposta-incompleta', `${cfg.provedor}: resposta cortada (${norm.motivoFimOriginal || 'limite'})`, { provedor: cfg.provedor, uso });
-      if (norm.fim === 'recusada' || norm.fim === 'filtrada') throw new ErroProvedor('recusada', `${cfg.provedor}: o modelo recusou ou o conteúdo foi filtrado`, { provedor: cfg.provedor, uso });
+      if (norm.fim === 'incompleta') throw new ErroProvedor('resposta-incompleta', `${cfg.provedor}: resposta cortada (${norm.motivoFimOriginal || 'limite'})`, { provedor: cfg.provedor, uso, comCorpo: true });
+      if (norm.fim === 'recusada' || norm.fim === 'filtrada') throw new ErroProvedor('recusada', `${cfg.provedor}: o modelo recusou ou o conteúdo foi filtrado`, { provedor: cfg.provedor, uso, comCorpo: true, categoria: norm.categoriaRecusa || undefined });
       const obj = lerJson(norm.texto, cfg.provedor, uso);
       // uso: o informado pelo provedor; se não veio, ESTIMADO (e marcado como tal; nunca zero)
       const usoFinal = uso
-        ? { tokensEntrada: uso.tokensEntrada, tokensSaida: uso.tokensSaida, fonte: transporte.tipo === 'simulado' ? 'provedor-simulado' : 'provedor' }
+        ? Object.assign({ tokensEntrada: uso.tokensEntrada, tokensSaida: uso.tokensSaida, fonte: transporte.tipo === 'simulado' ? 'provedor-simulado' : 'provedor' }, uso.cacheEscrita !== undefined ? { cacheEscrita: uso.cacheEscrita, cacheLeitura: uso.cacheLeitura } : {})
         : { tokensEntrada: tokensDe(s.sistema) + tokensDe(s.dados), tokensSaida: tokensDe(norm.texto), fonte: 'estimado' };
-      const origem = { provedor: cfg.provedor, modelo: cfg.modelo, uso: cfg.uso, transporte: transporte.tipo, fonteUso: usoFinal.fonte, configuracao: cfg.origem };
+      const origem = { provedor: cfg.provedor, modelo: cfg.modelo, uso: cfg.uso, transporte: transporte.tipo, fonteUso: usoFinal.fonte, configuracao: cfg.origem, removidosD5: s.removidosD5 || 0, requestId: norm.requestId || null };
+      const usoSaida = Object.assign({ tokensEntrada: usoFinal.tokensEntrada, tokensSaida: usoFinal.tokensSaida, fonte: usoFinal.fonte }, usoFinal.cacheEscrita !== undefined ? { cacheEscrita: usoFinal.cacheEscrita, cacheLeitura: usoFinal.cacheLeitura } : {});
       const base = { simulado: true, agenteId: pedido.agenteId, etapaId: pedido.etapaId };
       if (pedido.modo === 'planejar') {
-        return Object.assign(base, { formato: 'plano', plano: obj, uso: { tokensEntrada: usoFinal.tokensEntrada, tokensSaida: usoFinal.tokensSaida, fonte: usoFinal.fonte }, origem });
+        return Object.assign(base, { formato: 'plano', plano: obj, uso: usoSaida, origem });
       }
       const sx = saidaDeExecucao(obj, pedido, cfg.provedor, uso);
       origem.camposIgnorados = sx.ignorados.length;
-      const saida = Object.assign(base, { formato: pedido.documento ? 'documento' : 'texto', referencias: sx.referencias, acoes: sx.acoes, uso: { tokensEntrada: usoFinal.tokensEntrada, tokensSaida: usoFinal.tokensSaida, fonte: usoFinal.fonte }, origem });
+      const saida = Object.assign(base, { formato: pedido.documento ? 'documento' : 'texto', referencias: sx.referencias, acoes: sx.acoes, uso: usoSaida, origem });
       if (pedido.documento) saida.documento = sx.documento; else saida.texto = sx.texto;
       if (sx.revisoes) saida.revisoes = sx.revisoes;
       return saida;
@@ -7161,7 +7227,7 @@ function criarAdaptadorModelos({ configModelos, transporte, limitador, timeoutPa
 module.exports = { criarAdaptadorModelos, idDaReferencia, lerJson };
 
 } };
-__defs["src/ia/config-modelos.js"] = { deps: {"../agentes/catalogo":"src/agentes/catalogo.js","../armazenamento/caminhos":"src/armazenamento/caminhos.js","../auth/super-admin":"src/auth/super-admin.js","../contratos/agente":"src/contratos/agente.js","../nucleo/erros":"src/nucleo/erros.js","../nucleo/ids":"src/nucleo/ids.js","../nucleo/validador":"src/nucleo/validador.js","./contrato":"src/ia/contrato.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+__defs["src/ia/config-modelos.js"] = { deps: {"../agentes/catalogo":"src/agentes/catalogo.js","../armazenamento/caminhos":"src/armazenamento/caminhos.js","../auth/super-admin":"src/auth/super-admin.js","../contratos/agente":"src/contratos/agente.js","../nucleo/erros":"src/nucleo/erros.js","../nucleo/ids":"src/nucleo/ids.js","../nucleo/validador":"src/nucleo/validador.js","./contrato":"src/ia/contrato.js","./modelos-anthropic":"src/ia/modelos-anthropic.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
 // Fase 4B: provedor e modelo de CADA agente, configurados pelo Super Admin e
 // guardados em labz_agentes/{agenteId}.configModelo (fora do repositório).
 //  - Nenhum modelo é fixado no código: o nome do modelo é texto do Super Admin.
@@ -7179,6 +7245,7 @@ const { relogioPadrao } = require('../nucleo/ids');
 const { AGENTES, obterAgente } = require('../agentes/catalogo');
 const { RECURSOS_MODELO } = require('../contratos/agente');
 const { TODOS_PROVEDORES, PROVEDOR_SIMULADO, ErroProvedor } = require('./contrato');
+const { problemasDoModeloAnthropic, ESFORCOS_DA_FASE } = require('./modelos-anthropic');
 
 // Trava da fase: muda só com autorização do Igor (Fase 6), junto com o transporte real.
 const USO_REAL_AUTORIZADO = false;
@@ -7196,7 +7263,8 @@ const ESQUEMA_CONFIG = {
     // abaixo do limite de sinal de vida do monitor (5 min), para uma chamada viva nunca parecer travada
     timeoutMs: { tipo: 'inteiro', min: 1000, max: 240000 },
     maxTokensSaida: { tipo: 'inteiro', min: 16, max: 64000 },
-    temperatura: { tipo: 'numero', min: 0, max: 2 },
+    temperatura: { tipo: 'numero', min: 0, max: 2 }, // não vai para a Anthropic (os modelos atuais recusam)
+    esforco: { tipo: 'texto', valores: ESFORCOS_DA_FASE }, // R1: nível de esforço (Anthropic: output_config.effort)
   },
 };
 
@@ -7213,6 +7281,8 @@ function problemasDaConfig(agente, config) {
   if (config.uso === 'real' && !USO_REAL_AUTORIZADO) p.push('uso "real" não está autorizado nesta fase (modelos reais desligados)');
   const faltam = agente.modelo.recursosNecessarios.filter((r) => !config.recursosDoModelo.includes(r));
   if (faltam.length) p.push(`o modelo não declara recursos de que o agente precisa: ${faltam.join(', ')}`);
+  // R1: Anthropic só com os modelos da lista fechada, compatíveis com o agente (imagem, teto, esforço)
+  if (config.provedor === 'anthropic') p.push(...problemasDoModeloAnthropic(config.modelo, { recursos: agente.modelo.recursosNecessarios, maxTokensSaida: config.maxTokensSaida, esforco: config.esforco }));
   return p;
 }
 
@@ -7302,7 +7372,7 @@ const TODOS_PROVEDORES = [...PROVEDORES, PROVEDOR_SIMULADO];
 // instruções de sistema, o modo JSON, os nomes do uso e os motivos de fim mudam.
 const RECURSOS_PROVEDOR = Object.freeze({
   openai: Object.freeze({ instrucoesDeSistema: 'mensagem role=system', saidaJson: 'response_format json_object', usoInformado: 'usage.prompt_tokens / completion_tokens', cancelamento: 'só do lado do cliente (abortar a requisição)', limiteRequisicoes: 'HTTP 429 + retry-after' }),
-  anthropic: Object.freeze({ instrucoesDeSistema: 'campo system', saidaJson: 'por instrução no sistema (sem modo JSON assumido)', usoInformado: 'usage.input_tokens / output_tokens', cancelamento: 'só do lado do cliente (abortar a requisição)', limiteRequisicoes: 'HTTP 429 + retry-after; 529 = sobrecarga' }),
+  anthropic: Object.freeze({ instrucoesDeSistema: 'campo system (com cache)', saidaJson: 'output_config.format (esquema JSON) quando há esquema; senão por instrução no sistema', usoInformado: 'usage.input_tokens / output_tokens / cache_creation_input_tokens / cache_read_input_tokens', cancelamento: 'só do lado do cliente (abortar a requisição)', limiteRequisicoes: 'HTTP 429 + retry-after; 529 = sobrecarga' }),
   google: Object.freeze({ instrucoesDeSistema: 'systemInstruction', saidaJson: 'generationConfig.responseMimeType application/json', usoInformado: 'usageMetadata.promptTokenCount / candidatesTokenCount', cancelamento: 'só do lado do cliente (abortar a requisição)', limiteRequisicoes: 'HTTP 429 RESOURCE_EXHAUSTED' }),
   simulado: Object.freeze({ instrucoesDeSistema: 'campo sistema', saidaJson: 'sempre JSON', usoInformado: 'uso.entrada / saida (simulado)', cancelamento: 'simulado', limiteRequisicoes: 'simulado' }),
 });
@@ -7315,7 +7385,7 @@ const FINS = ['completa', 'incompleta', 'recusada', 'filtrada'];
 // Erros: tipo estável. Transitórios podem ser tentados de novo (com espera);
 // "revisáveis" são respostas que chegaram mas não servem (vão para o controle de
 // qualidade/revisão); os demais são definitivos.
-const TIPOS_ERRO = ['timeout', 'limite-requisicoes', 'indisponivel', 'cancelado', 'credencial', 'requisicao-invalida', 'resposta-malformada', 'resposta-incompleta', 'recusada', 'configuracao-invalida', 'nao-autorizado'];
+const TIPOS_ERRO = ['timeout', 'limite-requisicoes', 'indisponivel', 'cancelado', 'credencial', 'requisicao-invalida', 'resposta-malformada', 'resposta-incompleta', 'recusada', 'configuracao-invalida', 'nao-autorizado', 'modelo-indisponivel'];
 const TRANSITORIOS = ['timeout', 'limite-requisicoes', 'indisponivel'];
 const REVISAVEIS = ['resposta-malformada', 'resposta-incompleta', 'recusada'];
 
@@ -7328,6 +7398,10 @@ class ErroProvedor extends Error {
     this.status = extras.status || null;
     this.esperaMs = Number.isFinite(extras.esperaMs) && extras.esperaMs > 0 ? Math.min(extras.esperaMs, 60 * 60 * 1000) : null;
     this.uso = extras.uso || null; // uso informado mesmo numa resposta que não serve (custo!)
+    // R1: o provedor RESPONDEU com um corpo de erro (o pedido foi recusado, sem cobrança)? Sem corpo
+    // (queda de conexão, tempo esgotado) o resultado é DESCONHECIDO: pode ter sido processado e cobrado.
+    this.comCorpo = extras.comCorpo === true;
+    this.categoria = typeof extras.categoria === 'string' ? extras.categoria.slice(0, 40) : null;
     this.transitorio = TRANSITORIOS.includes(this.tipo);
     this.revisavel = REVISAVEIS.includes(this.tipo);
     this.cancelado = this.tipo === 'cancelado';
@@ -7386,6 +7460,138 @@ const contemCredencial = (texto) => limparCredenciais(texto) !== String(texto ==
 const mensagemSegura = (texto, max = 200) => limparCredenciais(texto).slice(0, max);
 
 module.exports = { limparCredenciais, contemCredencial, mensagemSegura, MARCA_CREDENCIAL: MARCA };
+
+} };
+__defs["src/ia/dados-pessoais.js"] = { deps: {}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+// R1 (decisão D5 do Igor): NENHUM dado pessoal de cliente vai para um provedor de IA.
+// Antes de qualquer chamada a um provedor de verdade, o texto que sai da máquina (instruções,
+// briefing, memórias, documentos recebidos) passa por aqui: CPF, e-mail, telefone, CEP e
+// endereço viram marcas ("[e-mail removido]"). Só a CONTAGEM do que foi removido é registrada.
+// CNPJ não é dado pessoal (é da empresa): continua, como informação profissional.
+// É uma rede de segurança: a regra é não colocar dado pessoal no briefing nem nas memórias.
+const REGRAS = [
+  // e-mail (qualquer um: mesmo o "profissional" pode ser de uma pessoa)
+  ['email', /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[e-mail removido]'],
+  // CPF com ou sem pontuação (000.000.000-00 ou 00000000000), sem engolir um CNPJ (14 dígitos)
+  // (o ponto final da frase logo depois do CPF não impede a remoção)
+  ['cpf', /(?<![\d/-]|\d\.)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/-]|\.\d)/g, '[CPF removido]'],
+  // CEP (00000-000 ou 00.000-000)
+  ['cep', /(?<!\d)\d{2}\.?\d{3}-\d{3}(?!\d)/g, '[CEP removido]'],
+  // telefone brasileiro: +55, DDD entre parênteses ou não, fixo (8) ou celular (9 dígitos)
+  ['telefone', /(?<![\d])(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?(?:9[\s.-]?)?\d{4}[\s.-]?\d{4}(?!\d)/g, '[telefone removido]'],
+  // endereço: logradouro + nome + número ("Rua das Flores, 123", "Av. Brasil 4500")
+  ['endereco', /\b(?:rua|r\.|avenida|av\.?|travessa|tv\.|alameda|al\.|rodovia|estrada|praça|praca|largo)\s+[^\n,;]{2,60}?,?\s*(?:n[ºo°.]?\s*)?\d{1,6}\b/gi, '[endereço removido]'],
+];
+
+function removerDadosPessoais(texto) {
+  let t = String(texto === undefined || texto === null ? '' : texto);
+  const removidos = {};
+  for (const [nome, re, marca] of REGRAS) {
+    t = t.replace(re, (m) => {
+      // telefone: sequências curtas de dígitos que não parecem telefone (ex.: anos, valores) ficam
+      if (nome === 'telefone' && m.replace(/\D/g, '').length < 8) return m;
+      removidos[nome] = (removidos[nome] || 0) + 1;
+      return marca;
+    });
+  }
+  const total = Object.values(removidos).reduce((a, b) => a + b, 0);
+  return { texto: t, removidos, total };
+}
+
+module.exports = { removerDadosPessoais };
+
+} };
+__defs["src/ia/esquema-json.js"] = { deps: {"../contratos/documentos":"src/contratos/documentos.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+// R1 (plano, seção 5, item 3): converte o esquema FECHADO dos documentos (nucleo/validador.js) em
+// esquema JSON, para a saída estruturada do provedor (Anthropic: output_config.format). Usa só as
+// palavras mais básicas (type, properties, required, additionalProperties, enum, items): limites de
+// tamanho e padrões continuam sendo conferidos pelo BACKEND (validarDocumento), que é quem decide.
+const { obterDocumento } = require('../contratos/documentos');
+
+const TIPOS = { texto: 'string', numero: 'number', inteiro: 'integer', booleano: 'boolean', lista: 'array', objeto: 'object' };
+
+function paraJsonSchema(e) {
+  if (!e || !e.tipo || e.tipo === 'qualquer') return {};
+  const out = {};
+  if (TIPOS[e.tipo]) out.type = e.nulo ? [TIPOS[e.tipo], 'null'] : TIPOS[e.tipo];
+  if (Array.isArray(e.valores)) out.enum = e.valores.slice();
+  if (e.tipo === 'lista' && e.itens) out.items = paraJsonSchema(e.itens);
+  if (e.tipo === 'objeto') {
+    const campos = e.campos || {};
+    out.properties = {};
+    Object.entries(campos).forEach(([k, v]) => { out.properties[k] = paraJsonSchema(v); });
+    const obrig = Object.entries(campos).filter(([, v]) => v && v.obrigatorio).map(([k]) => k);
+    if (obrig.length) out.required = obrig;
+    if (e.extras === false) out.additionalProperties = false;
+  }
+  return out;
+}
+
+// Esquema da RESPOSTA inteira de uma etapa com documento: { documento, referencias, acoes[, revisoes] }.
+function esquemaDaResposta(tipoDocumento, { consolidar = false } = {}) {
+  const d = obterDocumento(tipoDocumento);
+  if (!d) return null;
+  const props = {
+    documento: paraJsonSchema(d.esquema),
+    referencias: { type: 'array', items: { type: 'string' } },
+    acoes: { type: 'array', items: { type: 'object' } },
+  };
+  if (consolidar) props.revisoes = { type: 'array', items: { type: 'object' } };
+  return { type: 'object', properties: props, required: ['documento'], additionalProperties: false };
+}
+
+module.exports = { paraJsonSchema, esquemaDaResposta };
+
+} };
+__defs["src/ia/modelos-anthropic.js"] = { deps: {}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+// R1 (plano dos agentes reais, seções 4 e 13.1): LISTA FECHADA dos modelos da Anthropic previstos
+// nesta fase, com os dados conferidos na documentação oficial em 09/11/2026:
+//   https://platform.claude.com/docs/en/about-claude/pricing
+//   https://platform.claude.com/docs/en/about-claude/models/overview (+ a página de cada modelo)
+// Qualquer outro ID é recusado ANTES de chegar ao provedor (configuração e verificação).
+//
+// PREÇOS NÃO FICAM NO CÓDIGO (regra da Fase 4B, conferida por teste): o preço que vale é o cadastrado
+// pelo Super Admin (custos.definirPreco), com fonte e data. Os valores oficiais de 09/11/2026 estão no
+// plano (LABZ-PLANO-AGENTES-REAIS.md, seção 13.1) e nos dados dos testes.
+const FONTE_OFICIAL = 'https://platform.claude.com/docs/en/about-claude/pricing';
+const CONFERIDO_EM = '2026-11-09';
+
+const MODELOS = Object.freeze({
+  'claude-haiku-5-5': Object.freeze({
+    nome: 'Claude Haiku 5.5', nivel: 1,
+    contexto: 1000000, saidaMaxima: 128000, leImagem: true, geraImagem: false,
+    esforcos: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']),
+  }),
+  'claude-sonnet-5-5': Object.freeze({
+    nome: 'Claude Sonnet 5.5', nivel: 2,
+    contexto: 1000000, saidaMaxima: 128000, leImagem: true, geraImagem: false,
+    esforcos: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']),
+  }),
+  'claude-opus-5-5': Object.freeze({
+    nome: 'Claude Opus 5.5', nivel: 3,
+    contexto: 1000000, saidaMaxima: 128000, leImagem: true, geraImagem: false,
+    esforcos: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']),
+  }),
+});
+const IDS_PERMITIDOS = Object.freeze(Object.keys(MODELOS));
+// Nesta fase o esforço fica entre low e high (xhigh/max só com nova decisão: gastam mais).
+const ESFORCOS_DA_FASE = Object.freeze(['low', 'medium', 'high']);
+
+const modeloAnthropic = (id) => (Object.prototype.hasOwnProperty.call(MODELOS, id) ? MODELOS[id] : null);
+
+// Problemas de compatibilidade (vazio = compatível). recursos: os do agente (RECURSOS_MODELO).
+function problemasDoModeloAnthropic(id, { recursos = [], maxTokensSaida, esforco } = {}) {
+  const m = modeloAnthropic(id);
+  if (!m) return [`modelo "${String(id).slice(0, 60)}" fora da lista fechada desta fase (${IDS_PERMITIDOS.join(', ')})`];
+  const p = [];
+  if (recursos.includes('imagem-saida') && !m.geraImagem) p.push(`${m.nome} não gera imagem (o agente precisa de imagem-saida: caminho de imagens separado, etapa R6)`);
+  if (recursos.includes('imagem-entrada') && !m.leImagem) p.push(`${m.nome} não lê imagem`);
+  if (maxTokensSaida !== undefined && maxTokensSaida > m.saidaMaxima) p.push(`teto de saída ${maxTokensSaida} acima do máximo do modelo (${m.saidaMaxima})`);
+  if (esforco !== undefined && !ESFORCOS_DA_FASE.includes(esforco)) p.push(`esforço "${esforco}" fora do permitido nesta fase (${ESFORCOS_DA_FASE.join(', ')})`);
+  return p;
+}
+
+module.exports = { MODELOS_ANTHROPIC: MODELOS, IDS_ANTHROPIC_PERMITIDOS: IDS_PERMITIDOS, ESFORCOS_DA_FASE, FONTE_OFICIAL_ANTHROPIC: FONTE_OFICIAL, CONFERIDO_EM_ANTHROPIC: CONFERIDO_EM, modeloAnthropic, problemasDoModeloAnthropic };
 
 } };
 __defs["src/ia/prompt.js"] = { deps: {"../agentes/catalogo":"src/agentes/catalogo.js","../contratos/documentos":"src/contratos/documentos.js","../memoria/contexto":"src/memoria/contexto.js","./credenciais":"src/ia/credenciais.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
@@ -7501,44 +7707,104 @@ module.exports = { montarSolicitacao, SECOES_DADOS, formatoDocumento };
 
 } };
 __defs["src/ia/provedores/anthropic.js"] = { deps: {"../contrato":"src/ia/contrato.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
-// Adaptador da Anthropic (formato Messages). SÓ o contrato (ver openai.js).
-// Diferenças: instruções de sistema no campo "system"; max_tokens obrigatório;
-// sem modo JSON assumido (o formato é pedido nas instruções); 529 = sobrecarga.
+// Adaptador da Anthropic (API Messages). R1: atualizado para os modelos atuais (plano, seção 5).
+//  - SEM temperature/top_p/top_k: os modelos atuais recusam (400). A "temperatura" do contrato comum
+//    é ignorada aqui de propósito (um teste garante que nunca vai no corpo).
+//  - esforço em output_config.effort (low/medium/high); o pensamento fica no modo adaptativo padrão
+//    (nada de thinking "disabled" nem orçamento de pensamento: dão 400 nesses modelos).
+//  - saída estruturada por output_config.format (esquema JSON) quando a etapa pede um documento.
+//  - sem "prefill" e sem forçar ferramenta (tool_choice any/tool dá 400).
+//  - instruções fixas no campo system com cache_control (cache de prompt).
+//  - recusa (stop_reason "refusal") → fim "recusada" guardando SÓ a categoria (stop_details.category).
+//  - uso: entrada, gravação e leitura de cache e saída, separados (cada um com o seu preço).
+//  - cabeçalhos: anthropic-version fixo; a chave (x-api-key) é posta pelo TRANSPORTE, nunca aqui.
+//  - também monta as chamadas SEM CUSTO: consulta do modelo (GET /v1/models/{id}) e contagem de
+//    tokens (POST /v1/messages/count_tokens), usadas antes de qualquer chamada paga (seção 13.2).
+// Conferir a página oficial da API antes de ligar (R2): nomes de campos e versão podem mudar.
 const { ErroProvedor, usoInformado, classificarStatus } = require('../contrato');
 
 const id = 'anthropic';
-const FIM = { end_turn: 'completa', stop_sequence: 'completa', max_tokens: 'incompleta', refusal: 'recusada' };
+const VERSAO_API = '2023-06-01';
+const FIM = { end_turn: 'completa', stop_sequence: 'completa', max_tokens: 'incompleta', refusal: 'recusada', pause_turn: 'incompleta', tool_use: 'incompleta' };
+const ESFORCO_PADRAO = 'medium';
 
-function montarRequisicao(s) {
+function cabecalhos() { return { 'content-type': 'application/json', 'anthropic-version': VERSAO_API }; }
+
+function corpoBase(s) {
   const corpo = {
     model: s.modelo,
-    system: s.sistema,
-    messages: [{ role: 'user', content: s.dados }],
-    max_tokens: s.maxTokensSaida,
+    system: [{ type: 'text', text: String(s.sistema || ''), cache_control: { type: 'ephemeral' } }],
+    messages: [{ role: 'user', content: String(s.dados || '') }],
   };
-  if (s.temperatura !== undefined) corpo.temperature = Math.min(s.temperatura, 1); // a faixa da Anthropic é 0–1
-  return { provedor: id, metodo: 'POST', rota: '/v1/messages', corpo };
+  const output = { effort: s.esforco || ESFORCO_PADRAO };
+  if (s.esquemaJson) output.format = { type: 'json_schema', schema: s.esquemaJson };
+  corpo.output_config = output;
+  return corpo;
 }
 
-function normalizarResposta(corpo) {
+// s: { modelo, sistema, dados, maxTokensSaida, esforco?, esquemaJson?, temperatura? (ignorada) }
+function montarRequisicao(s) {
+  const corpo = Object.assign(corpoBase(s), { max_tokens: s.maxTokensSaida });
+  return { provedor: id, metodo: 'POST', rota: '/v1/messages', cabecalhos: cabecalhos(), corpo };
+}
+
+// Contagem exata da entrada (sem custo, segundo a documentação): mesmo corpo, sem max_tokens.
+function montarContagem(s) {
+  return { provedor: id, metodo: 'POST', rota: '/v1/messages/count_tokens', cabecalhos: cabecalhos(), corpo: corpoBase(s) };
+}
+function normalizarContagem(corpo) {
+  const n = corpo && corpo.input_tokens;
+  if (!Number.isInteger(n) || n < 0) throw new ErroProvedor('resposta-malformada', 'anthropic: contagem de tokens sem input_tokens', { provedor: id });
+  return n;
+}
+
+// Consulta do modelo (sem custo): existe e está liberado para a conta? Limites e recursos.
+function montarConsultaModelo(modelo) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(String(modelo))) throw new ErroProvedor('configuracao-invalida', 'anthropic: ID de modelo inválido', { provedor: id });
+  return { provedor: id, metodo: 'GET', rota: `/v1/models/${modelo}`, cabecalhos: cabecalhos(), corpo: null };
+}
+function normalizarModelo(corpo) {
+  if (!corpo || typeof corpo.id !== 'string') throw new ErroProvedor('resposta-malformada', 'anthropic: consulta de modelo sem id', { provedor: id });
+  return {
+    id: corpo.id,
+    maxEntrada: Number.isInteger(corpo.max_input_tokens) ? corpo.max_input_tokens : null,
+    maxSaida: Number.isInteger(corpo.max_tokens) ? corpo.max_tokens : null,
+    capacidades: corpo.capabilities && typeof corpo.capabilities === 'object' ? corpo.capabilities : null,
+  };
+}
+
+function normalizarResposta(corpo, cab) {
   if (!corpo || !Array.isArray(corpo.content)) throw new ErroProvedor('resposta-malformada', 'anthropic: resposta sem content', { provedor: id });
   const u = corpo.usage || {};
   const uso = usoInformado(u.input_tokens, u.output_tokens);
+  if (uso && (Number.isInteger(u.cache_creation_input_tokens) || Number.isInteger(u.cache_read_input_tokens))) {
+    uso.cacheEscrita = Number.isInteger(u.cache_creation_input_tokens) ? u.cache_creation_input_tokens : 0;
+    uso.cacheLeitura = Number.isInteger(u.cache_read_input_tokens) ? u.cache_read_input_tokens : 0;
+  }
   const textos = corpo.content.filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text);
-  const fim = FIM[corpo.stop_reason] || 'incompleta'; // tool_use, pause_turn etc.: esta fase não usa ferramentas do provedor
+  const fim = FIM[corpo.stop_reason] || 'incompleta';
   if (!textos.length && fim === 'completa') throw new ErroProvedor('resposta-malformada', 'anthropic: nenhum bloco de texto', { provedor: id, uso });
-  return { provedor: id, modelo: corpo.model || null, idResposta: corpo.id || null, texto: textos.join(''), fim, motivoFimOriginal: corpo.stop_reason || null, uso };
+  const categoria = fim === 'recusada' && corpo.stop_details && typeof corpo.stop_details.category === 'string' ? corpo.stop_details.category.slice(0, 40) : null;
+  const requestId = cab && (cab['request-id'] || cab['Request-Id']) ? String(cab['request-id'] || cab['Request-Id']).slice(0, 80) : null;
+  return { provedor: id, modelo: corpo.model || null, idResposta: corpo.id || null, requestId, texto: textos.join(''), fim, motivoFimOriginal: corpo.stop_reason || null, categoriaRecusa: categoria, uso };
 }
 
-function classificarErro({ status, corpo, cabecalhos }) {
+function classificarErro({ status, corpo, cabecalhos: cab }) {
   const m = corpo && corpo.error && corpo.error.message;
-  if (status === 529) return new ErroProvedor('indisponivel', `anthropic: sobrecarga (${m || 'HTTP 529'})`, { provedor: id, status });
-  return classificarStatus(id, status, m, cabecalhos);
+  const tipo = corpo && corpo.error && corpo.error.type;
+  if (status === 529) return new ErroProvedor('indisponivel', `anthropic: sobrecarga (${m || 'HTTP 529'})`, { provedor: id, status, esperaMs: null, comCorpo: !!corpo });
+  // modelo inexistente ou retirado: definitivo (o agente volta para o simulado; nada de repetir)
+  if (status === 404 || (status === 400 && /model/i.test(String(m || '')) && /not.?found|does not exist|retired|deprecated/i.test(String(m || '')))) {
+    return new ErroProvedor('modelo-indisponivel', `anthropic: modelo indisponível (${m || `HTTP ${status}`})`, { provedor: id, status, comCorpo: !!corpo });
+  }
+  const e = classificarStatus(id, status, tipo ? `${tipo}: ${m || ''}` : m, cab);
+  e.comCorpo = !!corpo;
+  return e;
 }
 
-const extrairTextos = (req) => ({ sistema: req.corpo.system, dados: req.corpo.messages[0].content });
+const extrairTextos = (req) => ({ sistema: req.corpo.system.map((b) => b.text).join('\n'), dados: req.corpo.messages[0].content });
 
-module.exports = { id, montarRequisicao, normalizarResposta, classificarErro, extrairTextos };
+module.exports = { id, VERSAO_API, montarRequisicao, montarContagem, normalizarContagem, montarConsultaModelo, normalizarModelo, normalizarResposta, classificarErro, extrairTextos };
 
 } };
 __defs["src/ia/provedores/google.js"] = { deps: {"../contrato":"src/ia/contrato.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
@@ -7670,6 +7936,99 @@ const classificarErro = ({ status, corpo, cabecalhos }) => classificarStatus(id,
 const extrairTextos = (req) => ({ sistema: req.corpo.sistema, dados: req.corpo.dados });
 
 module.exports = { id, montarRequisicao, normalizarResposta, classificarErro, extrairTextos };
+
+} };
+__defs["src/ia/registro-chamadas.js"] = { deps: {"../armazenamento/caminhos":"src/armazenamento/caminhos.js","../nucleo/ids":"src/nucleo/ids.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+// R1 (plano, seções 6.2, 13.4 e 13.7): REGISTRO das chamadas a provedores que cobram.
+// Para cada etapa (e para o planejamento) há um documento com a lista das chamadas pagas:
+//   labz_tarefas/{execucao}/labz_chamadas/{etapa} = { chamadas: [{ n, chave, estado, ... }] }
+// A chave única de cada chamada é "execucao:etapa:n". Ela é gravada ANTES de chamar o provedor.
+// Estados: em-andamento → concluida | invalida (respondeu, mas a resposta não serviu) |
+//          erro (o provedor recusou o pedido com um corpo de erro: sem cobrança) |
+//          desconhecido (sem resposta: pode ter sido processada e cobrada).
+// Regras:
+//  - uma chamada "em-andamento" que ficou para trás (o worker caiu depois de enviar) ou
+//    "desconhecido" BLOQUEIA nova chamada daquela etapa, até o Super Admin decidir (retomar);
+//  - no máximo MAX_CHAMADAS_PAGAS por etapa (1 + 2 repetições), contando todas.
+// Só metadados (provedor, modelo, estado, tipo do erro, tokens, request-id); nunca texto.
+const { caminhos } = require('../armazenamento/caminhos');
+const { relogioPadrao } = require('../nucleo/ids');
+
+const MAX_CHAMADAS_PAGAS = 3;
+const PENDENTES = ['em-andamento', 'desconhecido'];
+
+function criarRegistroChamadas({ banco, relogio = relogioPadrao }) {
+  const caminho = (execId, etapaId) => caminhos.chamadasEtapa(execId, etapaId);
+  const aberta = (c) => PENDENTES.includes(c.estado) && !c.liberadaEm;
+
+  return {
+    MAX_CHAMADAS_PAGAS,
+
+    // Antes de chamar: grava "em-andamento" com a chave única, ou devolve o bloqueio.
+    // reserva: { dia, reservaId, tokens, custo } (para contar o custo provável se o worker cair)
+    async abrir({ execucaoId, etapaId, agenteId, provedor, modelo, reserva }) {
+      let r;
+      await banco.transacao(async (t) => {
+        const doc = (await t.obter(caminho(execucaoId, etapaId))) || { chamadas: [] };
+        const lista = Array.isArray(doc.chamadas) ? doc.chamadas : [];
+        const pendente = lista.find(aberta);
+        if (pendente) { r = { bloqueio: 'resultado-desconhecido', chamada: { n: pendente.n, estado: pendente.estado, chave: pendente.chave, reserva: pendente.reserva || null } }; return; }
+        const pagas = lista.filter((c) => !c.liberadaEm).length; // a decisão do Super Admin (retomar) zera a contagem
+        if (pagas >= MAX_CHAMADAS_PAGAS) { r = { bloqueio: 'limite-de-chamadas-pagas', feitas: pagas, limite: MAX_CHAMADAS_PAGAS }; return; }
+        const n = lista.length + 1;
+        const chave = `${execucaoId}:${etapaId}:${n}`;
+        const nova = { n, chave, estado: 'em-andamento', agenteId, provedor, modelo, inicio: relogio(), reserva: reserva ? { dia: reserva.dia, reservaId: reserva.reservaId, tokens: reserva.tokens || 0, custo: reserva.custo || null } : null };
+        await t.gravar(caminho(execucaoId, etapaId), { execucaoId, etapaId, chamadas: lista.concat([nova]) });
+        r = { n, chave };
+      });
+      return r;
+    },
+
+    // Depois da chamada: fecha a chamada n com o estado e os metadados (sem texto).
+    async fechar({ execucaoId, etapaId, n }, estado, extras = {}) {
+      await banco.transacao(async (t) => {
+        const doc = await t.obter(caminho(execucaoId, etapaId));
+        if (!doc || !Array.isArray(doc.chamadas)) return;
+        const chamadas = doc.chamadas.map((c) => (c.n === n ? Object.assign({}, c, {
+          estado, fim: relogio(), tipoErro: extras.tipoErro || null, tokens: Number.isInteger(extras.tokens) ? extras.tokens : null,
+          requestId: extras.requestId ? String(extras.requestId).slice(0, 80) : null, custo: extras.custo || null,
+        }) : c));
+        await t.gravar(caminho(execucaoId, etapaId), Object.assign({}, doc, { chamadas }));
+      });
+    },
+
+    // O Super Admin decidiu (retomar): as chamadas desconhecidas daquelas etapas deixam de bloquear e a
+    // contagem de chamadas pagas da etapa recomeça. O custo provável continua contado (nada é apagado).
+    async liberar(execucaoId, etapaIds, ator) {
+      let liberadas = 0;
+      for (const etapaId of etapaIds) {
+        await banco.transacao(async (t) => {
+          const doc = await t.obter(caminho(execucaoId, etapaId));
+          if (!doc || !Array.isArray(doc.chamadas) || !doc.chamadas.some((c) => !c.liberadaEm)) return;
+          const quem = ator && ator.uid ? ator.uid : null;
+          const chamadas = doc.chamadas.map((c) => {
+            if (c.liberadaEm) return c;
+            if (aberta(c)) { liberadas += 1; return Object.assign({}, c, { estado: 'desconhecido', liberadaEm: relogio(), liberadaPor: quem }); }
+            return Object.assign({}, c, { liberadaEm: relogio(), liberadaPor: quem });
+          });
+          await t.gravar(caminho(execucaoId, etapaId), Object.assign({}, doc, { chamadas }));
+        });
+      }
+      return liberadas;
+    },
+
+    async listar(execucaoId, etapaId) {
+      const doc = await banco.obter(caminho(execucaoId, etapaId));
+      return doc && Array.isArray(doc.chamadas) ? doc.chamadas : [];
+    },
+  };
+}
+
+// Resultado DESCONHECIDO: o pedido saiu e não houve resposta do provedor (nada de corpo de erro).
+// Tempo esgotado, queda de conexão, cancelamento no meio, fluxo cortado ou processo caído.
+const resultadoDesconhecido = (e) => !!(e && (e.interrupcao || ((e.tipo === 'timeout' || e.tipo === 'indisponivel' || e.tipo === 'cancelado') && !e.comCorpo)));
+
+module.exports = { criarRegistroChamadas, resultadoDesconhecido, MAX_CHAMADAS_PAGAS };
 
 } };
 __defs["src/ia/simulacao/documentos-simulados.js"] = { deps: {"../../contratos/documentos":"src/contratos/documentos.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
@@ -7847,6 +8206,17 @@ function escolher(roteiro, meta) {
 function criarModeloSimulado(roteiro = {}, opcoes = {}) {
   return async function responder({ provedor, requisicao, meta }) {
     const prov = adaptadorDoProvedor(provedor);
+    // R1: chamadas SEM CUSTO da Anthropic, simuladas: consulta do modelo e contagem de tokens
+    if (provedor === 'anthropic' && requisicao.metodo === 'GET' && /^\/v1\/models\//.test(requisicao.rota)) {
+      const idm = requisicao.rota.slice('/v1/models/'.length);
+      if (opcoes.modelosIndisponiveis && opcoes.modelosIndisponiveis.includes(idm)) return { status: 404, corpo: { type: 'error', error: { type: 'not_found_error', message: `model: ${idm} not found` } }, cabecalhos: {} };
+      const info = (opcoes.modelos && opcoes.modelos[idm]) || { max_input_tokens: 1000000, max_tokens: 128000, capabilities: { image_input: { supported: true } } };
+      return { status: 200, corpo: Object.assign({ id: idm, type: 'model' }, info), cabecalhos: {} };
+    }
+    if (provedor === 'anthropic' && /\/count_tokens$/.test(requisicao.rota)) {
+      const t = prov.extrairTextos(requisicao);
+      return { status: 200, corpo: { input_tokens: opcoes.contagemFixa || (tokensDe(t.sistema) + tokensDe(t.dados)) }, cabecalhos: {} };
+    }
     const { sistema, dados } = prov.extrairTextos(requisicao);
     const c = escolher(roteiro, meta);
     const modelo = requisicao.corpo.model || requisicao.corpo.modelo || (requisicao.rota.match(/models\/([^:]+):/) || [])[1] || null;
@@ -7856,6 +8226,7 @@ function criarModeloSimulado(roteiro = {}, opcoes = {}) {
     if (c === 'timeout') return { pendurar: true };
     if (c === '429') return erroHttp(429, 'Rate limit (simulado)', { 'retry-after': '2' });
     if (c === '500') return erroHttp(500, 'Erro interno (simulado)');
+    if (c === '529') return erroHttp(529, 'Overloaded (simulado)');
     if (c === '400') return erroHttp(400, 'Requisição inválida (simulado)');
     // 401 ecoa algo com cara de chave: o adaptador NÃO pode deixar isso chegar à auditoria
     // (montado em tempo de execução: é fictício, mas tem o FORMATO de uma chave)
@@ -7985,7 +8356,110 @@ function criarLimitador({ porJanela = 30, janelaMs = 60 * 1000, agoraMs = () => 
   };
 }
 
-module.exports = { criarTransporteBloqueado, criarTransporteSimulado, criarLimitador };
+// ---------- R1: transporte REAL (preparado, TRANCADO) ----------
+// Leva a requisição por HTTPS só para os endereços OFICIAIS (lista fechada) e só pelas rotas
+// conhecidas. Ordem das travas, TODAS antes de qualquer acesso à rede:
+//   1. autorização da fase (autorizado === true; na R1 é sempre false → recusa);
+//   2. provedor na lista fechada (nesta fase: só a Anthropic);
+//   3. rota permitida (mensagens, contagem de tokens, consulta de modelo);
+//   4. interruptor do provedor ligado (labz_config/provedores, lido por provedorLigado);
+//   5. chave configurada no segredo do servidor (nunca no banco, no navegador ou no chat).
+// A chave entra só no cabeçalho, aqui; nunca volta em erro, registro ou resposta.
+const ENDERECOS_OFICIAIS = Object.freeze({ anthropic: 'https://api.anthropic.com' });
+const ROTAS_PERMITIDAS = Object.freeze({ anthropic: [/^\/v1\/messages$/, /^\/v1\/messages\/count_tokens$/, /^\/v1\/models\/[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/] });
+const CABECALHO_CHAVE = Object.freeze({ anthropic: 'x-api-key' });
+
+// opcoes: { autorizado, buscar(url, init), chaveDoProvedor(provedor) → string, provedorLigado(provedor) → Promise<bool> }
+function criarTransporteReal({ autorizado = false, buscar, chaveDoProvedor, provedorLigado } = {}) {
+  const contagem = { tentativasBarradas: 0, enviadas: 0 };
+  return {
+    tipo: 'real',
+    contagem,
+    async enviar(provedor, requisicao, { sinal } = {}) {
+      const barrar = (tipo, msg) => { contagem.tentativasBarradas += 1; throw new ErroProvedor(tipo, msg, { provedor }); };
+      if (autorizado !== true) barrar('nao-autorizado', 'Chamadas reais aos provedores de IA não estão autorizadas nesta fase');
+      if (!Object.prototype.hasOwnProperty.call(ENDERECOS_OFICIAIS, provedor)) barrar('nao-autorizado', 'Provedor fora da lista fechada desta fase');
+      const rota = String(requisicao && requisicao.rota || '');
+      if (!ROTAS_PERMITIDAS[provedor].some((re) => re.test(rota))) barrar('nao-autorizado', 'Rota fora da lista permitida');
+      if (typeof provedorLigado !== 'function' || !(await provedorLigado(provedor))) barrar('nao-autorizado', `Provedor ${provedor} desligado no interruptor (labz_config/provedores)`);
+      const chave = typeof chaveDoProvedor === 'function' ? String(chaveDoProvedor(provedor) || '').trim() : '';
+      if (chave.length < 10) barrar('credencial', `Chave de ${provedor} não configurada no servidor`);
+      if (typeof buscar !== 'function') barrar('nao-autorizado', 'Transporte sem função de rede');
+      if (sinal && sinal.aborted) throw new ErroProvedor('cancelado', 'Chamada cancelada antes de sair', { provedor });
+      const cab = Object.assign({}, requisicao.cabecalhos || {}, { [CABECALHO_CHAVE[provedor]]: chave });
+      contagem.enviadas += 1;
+      let resp;
+      try {
+        resp = await buscar(ENDERECOS_OFICIAIS[provedor] + rota, { method: requisicao.metodo, headers: cab, body: requisicao.corpo === null || requisicao.corpo === undefined ? undefined : JSON.stringify(requisicao.corpo), redirect: 'error', signal: sinal });
+      } catch (e) {
+        if (sinal && sinal.aborted) throw new ErroProvedor('cancelado', 'Chamada abortada', { provedor });
+        // sem resposta: o pedido pode ter sido processado (e cobrado) → resultado DESCONHECIDO (comCorpo: false)
+        throw new ErroProvedor('indisponivel', `${provedor}: falha de rede`, { provedor });
+      }
+      const cabecalhos = {};
+      if (resp.headers && typeof resp.headers.forEach === 'function') resp.headers.forEach((v, k) => { cabecalhos[String(k).toLowerCase()] = v; });
+      let corpo = null;
+      try { corpo = await resp.json(); } catch (e) { corpo = null; }
+      return { status: resp.status, corpo, cabecalhos };
+    },
+  };
+}
+
+module.exports = { criarTransporteBloqueado, criarTransporteSimulado, criarLimitador, criarTransporteReal, ENDERECOS_OFICIAIS };
+
+} };
+__defs["src/ia/verificacao-modelos.js"] = { deps: {"../agentes/catalogo":"src/agentes/catalogo.js","../armazenamento/caminhos":"src/armazenamento/caminhos.js","../auth/super-admin":"src/auth/super-admin.js","./config-modelos":"src/ia/config-modelos.js","./contrato":"src/ia/contrato.js","./provedores":"src/ia/provedores/index.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+// R1 (plano, seção 13.2): VERIFICAÇÃO SEM CUSTO do modelo de um agente, antes de qualquer chamada paga.
+//  1. lista fechada + compatibilidade com o agente (config-modelos / modelos-anthropic);
+//  2. o modelo existe e está liberado para a conta: consulta GET /v1/models/{id} (não gera texto);
+//  3. limites informados pelo provedor: teto de saída configurado ≤ o do modelo; leitura de imagem
+//     quando o agente precisa.
+// O resultado vai para a auditoria (evento modelo.verificado) só com ID, recursos e data — nunca chave.
+// Na R1 só roda com o transporte simulado; com o real, depende da autorização (transporte trancado).
+const { caminhos } = require('../armazenamento/caminhos');
+const { ATOR_SISTEMA } = require('../auth/super-admin');
+const { obterAgente } = require('../agentes/catalogo');
+const { adaptadorDoProvedor } = require('./provedores');
+const { problemasDaConfig } = require('./config-modelos');
+const { ErroProvedor, PROVEDOR_SIMULADO } = require('./contrato');
+
+function criarVerificacaoModelos({ banco, auditoria, transporte }) {
+  return {
+    // → { ok, agenteId, provedor, modelo, problemas: [], limites? }
+    async verificar(agenteId) {
+      const agente = obterAgente(agenteId);
+      if (!agente) return { ok: false, agenteId, problemas: ['agente desconhecido'] };
+      const doc = await banco.obter(caminhos.agente(agenteId));
+      const cfg = doc && doc.configModelo;
+      if (!cfg || cfg.provedor === PROVEDOR_SIMULADO) return { ok: true, agenteId, provedor: PROVEDOR_SIMULADO, modelo: 'simulado', problemas: [], semCusto: true };
+      const problemas = problemasDaConfig(agente, cfg).filter((p) => !/uso "real" não está autorizado/.test(p));
+      const prov = adaptadorDoProvedor(cfg.provedor);
+      let limites = null;
+      if (!problemas.length && prov && prov.montarConsultaModelo) {
+        try {
+          const resp = await transporte.enviar(cfg.provedor, prov.montarConsultaModelo(cfg.modelo), { meta: { agenteId, modo: 'verificacao' } });
+          if (!resp || resp.status !== 200) {
+            const e = prov.classificarErro(resp || { status: 500 });
+            problemas.push(e.tipo === 'modelo-indisponivel' ? `modelo ${cfg.modelo} indisponível para a conta` : `consulta do modelo falhou (${e.tipo})`);
+          } else {
+            limites = prov.normalizarModelo(resp.corpo);
+            if (limites.id !== cfg.modelo) problemas.push('o provedor respondeu por outro modelo');
+            if (limites.maxSaida !== null && cfg.maxTokensSaida && cfg.maxTokensSaida > limites.maxSaida) problemas.push(`teto de saída ${cfg.maxTokensSaida} acima do informado pelo provedor (${limites.maxSaida})`);
+            const img = limites.capacidades && limites.capacidades.image_input;
+            if (agente.modelo.recursosNecessarios.includes('imagem-entrada') && img && img.supported === false) problemas.push('o provedor informa que o modelo não lê imagem');
+          }
+        } catch (e) {
+          problemas.push(e instanceof ErroProvedor ? `consulta do modelo bloqueada (${e.tipo})` : 'consulta do modelo falhou');
+        }
+      } else if (!prov) problemas.push('provedor desconhecido');
+      const r = { ok: problemas.length === 0, agenteId, provedor: cfg.provedor, modelo: cfg.modelo, problemas, limites };
+      await auditoria.registrar('modelo.verificado', ATOR_SISTEMA, caminhos.agente(agenteId), { ok: r.ok, provedor: cfg.provedor, modelo: String(cfg.modelo).slice(0, 60), problemas: problemas.length });
+      return r;
+    },
+  };
+}
+
+module.exports = { criarVerificacaoModelos };
 
 } };
 __defs["src/memoria/auditor.js"] = { deps: {"../nucleo/ids":"src/nucleo/ids.js","./verificacoes":"src/memoria/verificacoes.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
@@ -9701,8 +10175,13 @@ const { novoId, relogioPadrao } = require('../nucleo/ids');
 const { TODOS_PROVEDORES, PROVEDOR_SIMULADO } = require('../ia/contrato');
 
 const RESERVA_MS = 10 * 60 * 1000;
+// R1: provedores que COBRAM nesta fase (os da lista fechada do transporte real). Sem preço cadastrado,
+// a chamada não sai (plano, seção 6.1: "sem preço cadastrado ou sem saldo, não chama").
+const PROVEDORES_COBRADOS = Object.freeze(['anthropic']);
 const PADRAO_LIMITES = Object.freeze({
   global: { tokensDia: 2000000, custoDia: null },
+  // R1 (D2: US$ 10/mês na conta do provedor): limite do MÊS (UTC), só global. Proposta: custoMes 9.
+  mensal: { tokensMes: null, custoMes: null },
   porAgente: { tokensDia: null, custoDia: null },
   porEmpresa: { tokensDia: null, custoDia: null },
   porProvedor: { tokensDia: null, custoDia: null },
@@ -9710,11 +10189,23 @@ const PADRAO_LIMITES = Object.freeze({
 });
 const LIMITE = { tipo: 'objeto', extras: false, campos: { tokensDia: { tipo: 'inteiro', nulo: true, min: 1, max: 1e9 }, custoDia: { tipo: 'numero', nulo: true, min: 0, max: 1e7 } } };
 const MAPA = { tipo: 'objeto' }; // chaves conferidas à parte
+const LIMITE_MES = { tipo: 'objeto', extras: false, campos: { tokensMes: { tipo: 'inteiro', nulo: true, min: 1, max: 1e10 }, custoMes: { tipo: 'numero', nulo: true, min: 0, max: 1e8 } } };
 const ESQUEMA_LIMITES = {
   tipo: 'objeto', obrigatorio: true, extras: false,
   campos: {
-    global: LIMITE, porAgente: LIMITE, porEmpresa: LIMITE, porProvedor: LIMITE,
+    global: LIMITE, mensal: LIMITE_MES, porAgente: LIMITE, porEmpresa: LIMITE, porProvedor: LIMITE,
     excecoes: { tipo: 'objeto', extras: false, campos: { agentes: MAPA, empresas: MAPA, provedores: MAPA } },
+  },
+};
+// R1: preço de cache (gravação e leitura) e faixa de pedido longo (ex.: Haiku acima de 100 mil tokens)
+const FAIXA = {
+  tipo: 'objeto', extras: false,
+  campos: {
+    acimaDeTokens: { tipo: 'inteiro', obrigatorio: true, min: 1, max: 1e8 },
+    entradaPorMilhao: { tipo: 'numero', obrigatorio: true, min: 0, max: 100000 },
+    saidaPorMilhao: { tipo: 'numero', obrigatorio: true, min: 0, max: 100000 },
+    cacheEscritaPorMilhao: { tipo: 'numero', min: 0, max: 100000 },
+    cacheLeituraPorMilhao: { tipo: 'numero', min: 0, max: 100000 },
   },
 };
 const PRECO = {
@@ -9722,6 +10213,9 @@ const PRECO = {
   campos: {
     entradaPorMilhao: { tipo: 'numero', obrigatorio: true, min: 0, max: 100000 },
     saidaPorMilhao: { tipo: 'numero', obrigatorio: true, min: 0, max: 100000 },
+    cacheEscritaPorMilhao: { tipo: 'numero', min: 0, max: 100000 },
+    cacheLeituraPorMilhao: { tipo: 'numero', min: 0, max: 100000 },
+    longo: FAIXA,
     moeda: { tipo: 'texto', obrigatorio: true, valores: ['USD', 'BRL'] },
     fonte: { tipo: 'texto', obrigatorio: true, min: 5, max: 300 }, // de onde o Super Admin tirou o preço
     conferidoEm: { tipo: 'texto', obrigatorio: true, padrao: /^\d{4}-\d{2}-\d{2}$/ },
@@ -9731,11 +10225,41 @@ const CHAVE_PRECO = /^(openai|anthropic|google)\/[A-Za-z0-9][A-Za-z0-9._-]{0,119
 const SEG = /^[A-Za-z0-9_-]{1,80}$/;
 
 const r6 = (n) => Math.round(n * 1e6) / 1e6;
-const vazioTotal = () => ({ tokens: 0, custo: 0, custoDesconhecido: 0, chamadas: 0, estimadas: 0 });
+const PRECO_VENCE_DIAS = 30; // R1: preço conferido há mais de 30 dias gera aviso (não bloqueia)
+
+// Faixa de preço que vale para um pedido com "promptTokens" de entrada (entrada + cache).
+function faixaDe(p, promptTokens) {
+  return p.longo && promptTokens > p.longo.acimaDeTokens ? Object.assign({}, p, p.longo) : p;
+}
+// Custo REAL de um uso informado (cada tipo de token com o seu preço). Sem preço de cache e com
+// tokens de cache → desconhecido (não inventa: a gravação de cache custa MAIS que a entrada).
+function custoDoUso(p, uso) {
+  const ce = uso.cacheEscrita || 0;
+  const cl = uso.cacheLeitura || 0;
+  const f = faixaDe(p, uso.tokensEntrada + ce + cl);
+  if ((ce && f.cacheEscritaPorMilhao === undefined) || (cl && f.cacheLeituraPorMilhao === undefined)) return null;
+  return r6((uso.tokensEntrada / 1e6) * f.entradaPorMilhao + (ce / 1e6) * (f.cacheEscritaPorMilhao || 0) + (cl / 1e6) * (f.cacheLeituraPorMilhao || 0) + (uso.tokensSaida / 1e6) * f.saidaPorMilhao);
+}
+// Custo MÁXIMO de uma chamada (para a reserva): toda a entrada pelo preço mais alto possível
+// (gravação de cache, se for mais cara) e a saída inteira até o teto (max_tokens, que o provedor
+// não ultrapassa). Com a entrada CONTADA pela API, é um teto real, não um palpite.
+function custoMaximo(p, tokensEntrada, tokensSaida) {
+  const f = faixaDe(p, tokensEntrada);
+  const precoEntrada = Math.max(f.entradaPorMilhao, f.cacheEscritaPorMilhao || 0);
+  return r6((tokensEntrada / 1e6) * precoEntrada + (tokensSaida / 1e6) * f.saidaPorMilhao);
+}
+const tokensDoUso = (uso) => uso.tokensEntrada + uso.tokensSaida + (uso.cacheEscrita || 0) + (uso.cacheLeitura || 0);
+const vazioTotal = () => ({ tokens: 0, custo: 0, custoDesconhecido: 0, chamadas: 0, estimadas: 0, provaveis: 0 });
 
 function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
   const dia = () => relogio().slice(0, 10);
   const docDia = (d) => `${caminhos.colecoes.consumo}/${d}`;
+  // R1: totais do mês (UTC) num documento à parte: labz_consumo/mes-AAAA-MM
+  const docMes = (d) => `${caminhos.colecoes.consumo}/mes-${d.slice(0, 7)}`;
+  async function somarMes(t, d, soma) {
+    const m = (await t.obter(docMes(d))) || {};
+    await t.gravar(docMes(d), Object.assign({}, m, { mes: d.slice(0, 7), global: soma(m.global) }));
+  }
 
   async function lerLimites(t) {
     const doc = await (t || banco).obter(caminhos.limitesConsumo());
@@ -9748,11 +10272,20 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
   const limiteDe = (lim, secao, excecao, chave) => Object.assign({}, lim[secao], (lim.excecoes[excecao] || {})[chave] || {});
 
   // Preço de um provedor/modelo, ou null (desconhecido). O simulado não tem cobrança.
-  function custoDe(precos, provedor, modelo, tokensEntrada, tokensSaida) {
+  //  modo 'maximo': o teto da chamada (reserva); modo 'uso': o custo do uso informado (liquidação).
+  function custoDe(precos, provedor, modelo, tokensEntrada, tokensSaida, { modo = 'maximo', uso = null } = {}) {
     if (provedor === PROVEDOR_SIMULADO) return { tipo: 'sem-cobranca', valor: 0, moeda: null };
     const p = precos[`${provedor}/${modelo}`];
     if (!p) return { tipo: 'desconhecido', valor: null, moeda: null };
-    return { tipo: 'estimado', valor: r6((tokensEntrada / 1e6) * p.entradaPorMilhao + (tokensSaida / 1e6) * p.saidaPorMilhao), moeda: p.moeda };
+    const valor = modo === 'uso' ? custoDoUso(p, uso || { tokensEntrada, tokensSaida }) : custoMaximo(p, tokensEntrada, tokensSaida);
+    if (valor === null) return { tipo: 'desconhecido', valor: null, moeda: null };
+    return { tipo: 'estimado', valor, moeda: p.moeda };
+  }
+  // R1: preço conferido há mais de 30 dias → aviso (a conferência é refeita antes de ligar um agente)
+  function precoVencido(precos, provedor, modelo) {
+    const p = precos[`${provedor}/${modelo}`];
+    if (!p || !p.conferidoEm) return false;
+    return Date.parse(relogio()) - Date.parse(`${p.conferidoEm}T00:00:00Z`) > PRECO_VENCE_DIAS * 24 * 3600 * 1000;
   }
 
   // Totais em aberto = consumido + reservas que ainda não venceram.
@@ -9787,6 +10320,17 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
         const precos = await lerPrecos(t);
         const custo = custoDe(precos, p.provedor, p.modelo, p.tokensEntrada, p.tokensSaida);
         const tot = totais(doc, agoraMs);
+        if (PROVEDORES_COBRADOS.includes(p.provedor) && custo.tipo === 'desconhecido') { r = { permitido: false, motivo: 'preco-nao-cadastrado', secao: 'provedor', chave: p.provedor }; return; }
+        // mês: consumido no mês + reservas em aberto de hoje + esta chamada
+        const mes = (await t.obter(docMes(d))) || {};
+        const totMes = Object.assign(vazioTotal(), mes.global);
+        const lm = lim.mensal || {};
+        const abertoHoje = { tokens: tot.global.tokens - Object.assign(vazioTotal(), doc.global).tokens, custo: r6(tot.global.custo - Object.assign(vazioTotal(), doc.global).custo) };
+        if (lm.tokensMes !== null && lm.tokensMes !== undefined && totMes.tokens + abertoHoje.tokens + tokens > lm.tokensMes) { r = { permitido: false, motivo: 'limite-mensal-de-tokens', secao: 'mensal', chave: d.slice(0, 7), consumo: totMes.tokens, estimativa: tokens, limite: lm.tokensMes }; return; }
+        if (lm.custoMes !== null && lm.custoMes !== undefined) {
+          if (custo.tipo === 'desconhecido') { r = { permitido: false, motivo: 'custo-desconhecido-com-limite-mensal', secao: 'mensal', chave: d.slice(0, 7), limite: lm.custoMes }; return; }
+          if (totMes.custo + abertoHoje.custo + custo.valor > lm.custoMes) { r = { permitido: false, motivo: 'limite-mensal-de-custo', secao: 'mensal', chave: d.slice(0, 7), consumo: totMes.custo, estimativa: custo.valor, limite: lm.custoMes }; return; }
+        }
         const checagens = [
           ['global', 'global', tot.global, lim.global],
           ['agente', p.agenteId, tot.agentes[p.agenteId] || vazioTotal(), limiteDe(lim, 'porAgente', 'agentes', p.agenteId)],
@@ -9805,9 +10349,10 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
         Object.entries(doc.reservas || {}).forEach(([k, v]) => { if (Date.parse(v.expiraEm) > agoraMs) reservas[k] = v; }); // limpa as vencidas
         reservas[reservaId] = { tokens, custo: custo.valor || 0, agenteId: p.agenteId, empresa, provedor: p.provedor, execucaoId: p.execucaoId, expiraEm: new Date(agoraMs + RESERVA_MS).toISOString() };
         await t.gravar(docDia(d), Object.assign({}, doc, { reservas, dia: d }));
-        r = { permitido: true, reservaId, dia: d, custo };
+        r = { permitido: true, reservaId, dia: d, custo, tokens, avisos: precoVencido(precos, p.provedor, p.modelo) ? ['preco-vencido'] : [] };
       });
       if (!r.permitido) await auditoria.registrar('custo.bloqueio_preventivo', null, caminhos.tarefa(p.execucaoId), { motivo: r.motivo, secao: r.secao, etapa: p.etapaId || null });
+      else if (r.avisos.length) await auditoria.registrar('custo.preco_vencido', null, caminhos.tarefa(p.execucaoId), { provedor: p.provedor, modelo: String(p.modelo).slice(0, 60) });
       return r;
     },
 
@@ -9823,8 +10368,8 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
         const novo = Object.assign({}, doc, { reservas, dia: reserva.dia });
         if (uso) {
           const precos = await lerPrecos(t);
-          const custo = custoDe(precos, p.provedor, p.modelo, uso.tokensEntrada, uso.tokensSaida);
-          const tokens = uso.tokensEntrada + uso.tokensSaida;
+          const custo = custoDe(precos, p.provedor, p.modelo, uso.tokensEntrada, uso.tokensSaida, { modo: 'uso', uso });
+          const tokens = tokensDoUso(uso);
           const empresa = p.empresaId || 'sem-empresa';
           const soma = (x) => {
             const v = Object.assign(vazioTotal(), x);
@@ -9837,9 +10382,47 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
           novo.agentes = Object.assign({}, doc.agentes, { [p.agenteId]: soma((doc.agentes || {})[p.agenteId]) });
           novo.empresas = Object.assign({}, doc.empresas, { [empresa]: soma((doc.empresas || {})[empresa]) });
           novo.provedores = Object.assign({}, doc.provedores, { [p.provedor]: soma((doc.provedores || {})[p.provedor]) });
+          await somarMes(t, reserva.dia, soma);
           out = { custo, tokens, reservaExistia: !!rs };
         } else out = { custo: null, tokens: 0, reservaExistia: !!rs };
         await t.gravar(docDia(reserva.dia), novo);
+      });
+      return out;
+    },
+
+    // R1 (plano, seção 13.4): resultado DESCONHECIDO (tempo esgotado, queda de conexão, fluxo
+    // interrompido, worker caiu depois de enviar): a chamada pode ter sido processada e cobrada.
+    // Conta a RESERVA INTEIRA (o máximo possível) como "custo provável"; se veio uso parcial,
+    // vale o maior dos dois. Nunca vira zero. Ajuste só pelo número do painel do provedor.
+    async liquidarDesconhecido(reserva, p, usoParcial) {
+      let out;
+      await banco.transacao(async (t) => {
+        const doc = (await t.obter(docDia(reserva.dia))) || {};
+        const reservas = Object.assign({}, doc.reservas || {});
+        const rs = reservas[reserva.reservaId];
+        delete reservas[reserva.reservaId];
+        const precos = await lerPrecos(t);
+        const tokensReserva = rs ? rs.tokens : (reserva.tokens || 0);
+        const custoReserva = rs ? (rs.custo || 0) : ((reserva.custo && reserva.custo.valor) || 0);
+        const parcial = usoParcial ? custoDe(precos, p.provedor, p.modelo, usoParcial.tokensEntrada, usoParcial.tokensSaida, { modo: 'uso', uso: usoParcial }) : null;
+        const tokens = Math.max(tokensReserva, usoParcial ? tokensDoUso(usoParcial) : 0);
+        const custoValor = Math.max(custoReserva, parcial && parcial.valor !== null ? parcial.valor : 0);
+        const conhecido = !!precos[`${p.provedor}/${p.modelo}`] || p.provedor === PROVEDOR_SIMULADO;
+        const empresa = p.empresaId || 'sem-empresa';
+        const soma = (x) => {
+          const v = Object.assign(vazioTotal(), x);
+          v.tokens += tokens; v.chamadas += 1; v.provaveis += 1;
+          if (!conhecido) v.custoDesconhecido += 1; else v.custo = r6(v.custo + custoValor);
+          return v;
+        };
+        const novo = Object.assign({}, doc, { reservas, dia: reserva.dia });
+        novo.global = soma(doc.global);
+        novo.agentes = Object.assign({}, doc.agentes, { [p.agenteId]: soma((doc.agentes || {})[p.agenteId]) });
+        novo.empresas = Object.assign({}, doc.empresas, { [empresa]: soma((doc.empresas || {})[empresa]) });
+        novo.provedores = Object.assign({}, doc.provedores, { [p.provedor]: soma((doc.provedores || {})[p.provedor]) });
+        await t.gravar(docDia(reserva.dia), novo);
+        await somarMes(t, reserva.dia, soma);
+        out = { custo: { tipo: conhecido ? 'provavel' : 'desconhecido', valor: conhecido ? custoValor : null, moeda: conhecido && precos[`${p.provedor}/${p.modelo}`] ? precos[`${p.provedor}/${p.modelo}`].moeda : null }, tokens, reservaExistia: !!rs };
       });
       return out;
     },
@@ -9865,6 +10448,8 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
       exigirAtor(ator);
       if (!CHAVE_PRECO.test(String(chave))) throw erro('invalido', 'Chave de preço inválida (use provedor/modelo)');
       garantir(PRECO, preco, 'Preço');
+      // R1: a Anthropic grava cache em toda chamada (instruções fixas): sem o preço do cache, o custo não fecha
+      if (String(chave).startsWith('anthropic/') && (preco.cacheEscritaPorMilhao === undefined || preco.cacheLeituraPorMilhao === undefined)) throw erro('invalido', 'Preço da Anthropic precisa dos preços de cache (gravação e leitura)');
       await banco.transacao(async (t) => {
         const doc = (await t.obter(caminhos.precosModelos())) || { itens: {} };
         const itens = Object.assign({}, doc.itens, { [chave]: Object.assign({}, preco, { definidoPor: ator.uid, definidoEm: relogio() }) });
@@ -9874,6 +10459,15 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
       return { chave, preco };
     },
 
+    // R1: totais do mês (AAAA-MM; padrão: o mês atual, UTC)
+    async doMes(ator, m) {
+      exigirAtor(ator);
+      const alvo = m || dia().slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(alvo)) throw erro('invalido', 'Mês inválido (AAAA-MM)');
+      const doc = (await banco.obter(`${caminhos.colecoes.consumo}/mes-${alvo}`)) || {};
+      return { mes: alvo, global: Object.assign(vazioTotal(), doc.global), custoConfirmado: null, cobrancaReal: false };
+    },
+
     async doDia(ator, d) {
       exigirAtor(ator);
       const alvo = d || dia();
@@ -9881,12 +10475,13 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
       const doc = (await banco.obter(docDia(alvo))) || {};
       const tot = totais(doc, Date.parse(relogio()));
       const reservasAbertas = Object.values(doc.reservas || {}).filter((r) => Date.parse(r.expiraEm) > Date.parse(relogio())).length;
-      return { dia: alvo, global: Object.assign(vazioTotal(), doc.global), agentes: doc.agentes || {}, empresas: doc.empresas || {}, provedores: doc.provedores || {}, emAberto: tot.global, reservasAbertas, custoConfirmado: null, cobrancaReal: false };
+      const mes = (await banco.obter(docMes(alvo))) || {};
+      return { dia: alvo, mes: { mes: alvo.slice(0, 7), global: Object.assign(vazioTotal(), mes.global) }, global: Object.assign(vazioTotal(), doc.global), agentes: doc.agentes || {}, empresas: doc.empresas || {}, provedores: doc.provedores || {}, emAberto: tot.global, reservasAbertas, custoConfirmado: null, cobrancaReal: false };
     },
   };
 }
 
-module.exports = { criarConsumo, PADRAO_LIMITES, RESERVA_MS, ESQUEMA_LIMITES };
+module.exports = { criarConsumo, PADRAO_LIMITES, PROVEDORES_COBRADOS, RESERVA_MS, ESQUEMA_LIMITES, PRECO_VENCE_DIAS, custoMaximo, custoDoUso };
 
 } };
 __defs["src/motor/custos.js"] = { deps: {}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
@@ -10105,7 +10700,7 @@ const { ATOR_SISTEMA } = require('../auth/super-admin');
 const { FINAIS } = require('../contratos/execucao');
 const { relogioPadrao } = require('../nucleo/ids');
 
-const PADRAO = { limiteBatimentoMs: 5 * 60 * 1000 };
+const PADRAO = { limiteBatimentoMs: 5 * 60 * 1000, limiteOrfaMs: 10 * 60 * 1000 };
 
 // retomadas (Fase 4C.2 passo 4, opcional): função do motor que tenta retomar as execuções paradas
 // aguardando a aprovação de um documento (o mesmo caminho da notificação; idempotente).
@@ -10125,11 +10720,13 @@ function criarMonitorFila({ banco, execucoes, fila, auditoria, relogio = relogio
           if (await fila.descartar(it.id, exe ? `execucao-${exe.estado}` : 'execucao-inexistente')) r.descartados.push(it.id);
         }
       }
+      // R1: execuções presas no meio da criação (pedido que caiu entre criar e planejar)
+      r.orfas = execucoes.encerrarOrfas ? await execucoes.encerrarOrfas(cfg.limiteOrfaMs) : [];
       r.retomadas = retomadas ? (await retomadas()).filter((x) => x.resultado === 'retomada-agendada').map((x) => x.id) : [];
-      if (r.recuperadas.length || r.encerradasPorVencimento.length || r.descartados.length || r.retomadas.length) {
+      if (r.recuperadas.length || r.encerradasPorVencimento.length || r.descartados.length || r.retomadas.length || r.orfas.length) {
         await auditoria.registrar('fila.monitor', ATOR_SISTEMA, caminhos.colecoes.fila, {
           recuperadas: r.recuperadas.length, paraFila: r.recuperadas.filter((x) => x.para === 'READY').length, falhas: r.recuperadas.filter((x) => x.para === 'FAILED').length,
-          reservasVencidas: r.reservasVencidas, encerradas: r.encerradasPorVencimento.length, descartados: r.descartados.length, retomadas: r.retomadas.length,
+          reservasVencidas: r.reservasVencidas, encerradas: r.encerradasPorVencimento.length, descartados: r.descartados.length, retomadas: r.retomadas.length, orfas: r.orfas.length,
         });
       }
       return r;
@@ -10140,7 +10737,7 @@ function criarMonitorFila({ banco, execucoes, fila, auditoria, relogio = relogio
 module.exports = { criarMonitorFila };
 
 } };
-__defs["src/motor/motor.js"] = { deps: {"../armazenamento/caminhos":"src/armazenamento/caminhos.js","../auth/super-admin":"src/auth/super-admin.js","../contratos/documentos":"src/contratos/documentos.js","../contratos/execucao":"src/contratos/execucao.js","../entregas/representacao":"src/entregas/representacao.js","../ia/credenciais":"src/ia/credenciais.js","../memoria/contexto":"src/memoria/contexto.js","../nucleo/erros":"src/nucleo/erros.js","../nucleo/ids":"src/nucleo/ids.js","../nucleo/validador":"src/nucleo/validador.js","./adaptador-simulado":"src/motor/adaptador-simulado.js","./custos":"src/motor/custos.js","./ferramentas-simuladas":"src/motor/ferramentas-simuladas.js","./planejador":"src/motor/planejador.js","./qualidade":"src/motor/qualidade.js","./risco":"src/motor/risco.js","./validar-plano":"src/motor/validar-plano.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+__defs["src/motor/motor.js"] = { deps: {"../armazenamento/caminhos":"src/armazenamento/caminhos.js","../auth/super-admin":"src/auth/super-admin.js","../contratos/documentos":"src/contratos/documentos.js","../contratos/execucao":"src/contratos/execucao.js","../entregas/representacao":"src/entregas/representacao.js","../ia/credenciais":"src/ia/credenciais.js","../ia/registro-chamadas":"src/ia/registro-chamadas.js","../memoria/contexto":"src/memoria/contexto.js","../nucleo/erros":"src/nucleo/erros.js","../nucleo/ids":"src/nucleo/ids.js","../nucleo/validador":"src/nucleo/validador.js","./adaptador-simulado":"src/motor/adaptador-simulado.js","./custos":"src/motor/custos.js","./ferramentas-simuladas":"src/motor/ferramentas-simuladas.js","./planejador":"src/motor/planejador.js","./qualidade":"src/motor/qualidade.js","./risco":"src/motor/risco.js","./validar-plano":"src/motor/validar-plano.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
 // Motor de execução da LABZ AI (Fase 4A): Workflow Engine + Agent Router +
 // Execution Monitor, sobre o que já existe (execuções e estados, fila
 // persistente, porta de memória, aprovações, auditoria). Nesta fase o agente é
@@ -10176,6 +10773,7 @@ __defs["src/motor/motor.js"] = { deps: {"../armazenamento/caminhos":"src/armazen
 //    tratados pelo tipo do erro do provedor.
 const { caminhos } = require('../armazenamento/caminhos');
 const { exigirAtor, ATOR_SISTEMA } = require('../auth/super-admin');
+const { criarRegistroChamadas, resultadoDesconhecido } = require('../ia/registro-chamadas');
 const { erro } = require('../nucleo/erros');
 const { garantir } = require('../nucleo/validador');
 const { novoId, relogioPadrao } = require('../nucleo/ids');
@@ -10200,7 +10798,8 @@ const RESERVA_SAIDA_TOKENS = 1000; // estimativa da resposta, para o limite de c
 const MAX_DADOS_ANTERIORES = 4000; // caracteres de cada resultado anterior levado como dado
 const MAX_PASSOS = 50; // trava contra laço infinito numa mesma rodada
 const MAX_REVISOES_INTERNAS = 2; // Fase 4B: revisões pedidas pela consolidação, por execução
-const MAX_TENTATIVAS_PLANEJAMENTO = 3; // Fase 4B: planos recusados antes de encerrar
+const MAX_TENTATIVAS_PLANEJAMENTO = 3;
+const NEGOCIO = ['precondicao', 'invalido', 'nao-encontrado', 'permissao-negada', 'conflito', 'transicao-invalida', 'limite-excedido']; // Fase 4B: planos recusados antes de encerrar
 const ESQUEMA_REVISAO = { tipo: 'objeto', obrigatorio: true, extras: false, campos: { etapaId: { tipo: 'texto', obrigatorio: true, padrao: /^[a-z0-9-]{1,30}$/ }, motivo: { tipo: 'texto', obrigatorio: true, min: 3, max: 500 } } };
 
 // deps: { banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador, consumo?, entregas?, executorFerramentas?, relogio? }
@@ -10210,6 +10809,10 @@ const ESQUEMA_REVISAO = { tipo: 'objeto', obrigatorio: true, extras: false, camp
 function criarMotor(deps) {
   const { banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador, consumo, entregas, compartilhamento } = deps;
   const relogio = deps.relogio || relogioPadrao;
+  // R1: registro das chamadas PAGAS (provedor que não é o simulado): chave única antes de chamar,
+  // resultado desconhecido nunca repete sozinho, no máximo 3 chamadas pagas por etapa.
+  const registro = criarRegistroChamadas({ banco, relogio });
+  const pago = (prep) => !!(prep && prep.provedor && prep.provedor !== 'simulado');
   const executor = deps.executorFerramentas || criarExecutorSimulado();
   const ev = (tipo, id, detalhes, ator = ATOR_SISTEMA) => auditoria.registrar(`execucao.${tipo}`, ator, caminhos.tarefa(id), detalhes);
   const msgCurta = (e) => mensagemSegura((e && e.message) || e, 200); // nunca leva credencial
@@ -10256,6 +10859,11 @@ function criarMotor(deps) {
     if (!res || !res.reserva) return { custo: null };
     return consumo.liquidar(res.reserva, res.p, uso);
   }
+  // R1: sem resposta do provedor → conta a reserva inteira como custo provável (nunca zero)
+  async function liquidarDesconhecido(res, usoParcial) {
+    if (!res || !res.reserva) return { custo: null };
+    return consumo.liquidarDesconhecido(res.reserva, res.p, usoParcial);
+  }
   const infoCusto = (agenteId, prep, liq) => ({ agenteId, provedor: prep.provedor, custo: liq && liq.custo ? liq.custo : null });
   const usoDoErro = (e) => (e && e.uso ? { tokensEntrada: e.uso.tokensEntrada, tokensSaida: e.uso.tokensSaida, fonte: 'provedor-simulado' } : null);
 
@@ -10291,10 +10899,28 @@ function criarMotor(deps) {
       if (!c.permitido) throw erro('precondicao', 'O planejamento passaria do limite de consumo desta execução', { motivo: c.motivo, limite: c.limite });
       const res = await reservarConsumo(exe, 'planejamento', '08-estrategista', prep);
       if (!res.permitido) throw erro('precondicao', 'Limite de consumo atingido: o planejamento não foi feito', { motivo: res.motivo, secao: res.secao, limite: res.limite });
+      let chamada = null;
+      if (pago(prep)) {
+        const r = await registro.abrir({ execucaoId: id, etapaId: 'planejamento', agenteId: '08-estrategista', provedor: prep.provedor, modelo: prep.modelo, reserva: res && res.reserva ? res.reserva : null });
+        if (r.bloqueio) {
+          await liquidarConsumo(res, null);
+          await ev('chamada_bloqueada', id, { etapa: 'planejamento', motivo: r.bloqueio }, ator);
+          throw erro('precondicao', 'O planejamento tem uma chamada paga com resultado desconhecido (ou chegou ao limite de chamadas): nada foi chamado de novo', { motivo: r.bloqueio });
+        }
+        chamada = { execucaoId: id, etapaId: 'planejamento', n: r.n };
+      }
       let saida;
       try {
         saida = await adaptador.executar(pedido);
       } catch (e) {
+        if (chamada && resultadoDesconhecido(e)) {
+          const liqD = await liquidarDesconhecido(res, usoDoErro(e));
+          await registro.fechar(chamada, 'desconhecido', { tipoErro: e.tipo || 'interrupcao', custo: liqD.custo });
+          await ev('chamada_resultado_desconhecido', id, { etapa: 'planejamento', tipo: e.tipo || null }, ator);
+          await execucoes.transicionar(ator, id, 'CANCELLED', { motivo: 'planejamento com resultado desconhecido (sem nova chamada automática)', extras: { diagnostico: { motivo: 'resultado-desconhecido', etapa: 'planejamento', tipo: e.tipo || null, em: relogio() } } }).catch(() => {});
+          throw erro('precondicao', 'O planejamento ficou sem resposta do provedor: a chamada não será repetida automaticamente', { motivo: 'resultado-desconhecido' });
+        }
+        if (chamada) await registro.fechar(chamada, e && e.revisavel ? 'invalida' : 'erro', { tipoErro: (e && e.tipo) || null });
         const liq = await liquidarConsumo(res, usoDoErro(e));
         const u = usoDoErro(e);
         await banco.atualizar(caminhos.tarefa(id), Object.assign({ tentativasPlanejamento: tentativa, diagnostico: { motivo: 'planejamento-falhou', tipo: e.tipo || null, detalhe: msgCurta(e), em: relogio() } }, u ? { custos: custos.somar(exe.custos, 'planejamento', u, infoCusto('08-estrategista', prep, liq)) } : {}));
@@ -10304,6 +10930,7 @@ function criarMotor(deps) {
       }
       const uso = saida && saida.uso && Number.isInteger(saida.uso.tokensEntrada) && Number.isInteger(saida.uso.tokensSaida) ? saida.uso : { tokensEntrada: prep.estimativaEntrada, tokensSaida: 0, fonte: 'estimado' };
       const liq = await liquidarConsumo(res, uso);
+      if (chamada) await registro.fechar(chamada, 'concluida', { tokens: uso.tokensEntrada + uso.tokensSaida, requestId: saida && saida.origem ? saida.origem.requestId : null, custo: liq.custo });
       custosPlano = custos.somar(exe.custos, 'planejamento', uso, infoCusto('08-estrategista', prep, liq));
       if (proposta !== undefined) { /* plano do Super Admin: já validado acima */ } else if (saida && Array.isArray(saida.plano)) proposta = saida.plano; // formato da 4A (lista de passos)
       else if (saida && saida.plano !== undefined) {
@@ -10453,14 +11080,45 @@ function criarMotor(deps) {
       return { resultado: 'bloqueada-por-custo' };
     }
 
+    // R1: chamada paga → chave única ANTES de chamar; chamada anterior sem resposta bloqueia
+    let chamada = null;
+    if (pago(prep)) {
+      const r = await registro.abrir({ execucaoId: id, etapaId: etapa.id, agenteId: etapa.agenteId, provedor: prep.provedor, modelo: prep.modelo, reserva: res && res.reserva ? res.reserva : null });
+      if (r.bloqueio) {
+        await liquidarConsumo(res, null); // nada foi chamado agora: a reserva NOVA volta
+        // chamada abandonada (o worker caiu depois de enviar): vira "desconhecido" e o custo provável é contado
+        if (r.chamada && r.chamada.estado === 'em-andamento') {
+          const liqD = r.chamada.reserva && consumo ? await consumo.liquidarDesconhecido(r.chamada.reserva, res.p) : { custo: null };
+          await registro.fechar({ execucaoId: id, etapaId: etapa.id, n: r.chamada.n }, 'desconhecido', { tipoErro: 'interrupcao', custo: liqD.custo });
+          await ev('chamada_resultado_desconhecido', id, { etapa: etapa.id, tipo: 'interrupcao' });
+        }
+        await comCracha(id, token, (x) => comEtapa(x, etapa.id, { status: 'pendente', tentativas: tentativa - 1, ultimoErro: r.bloqueio }));
+        await ev('chamada_bloqueada', id, { etapa: etapa.id, motivo: r.bloqueio });
+        await execucoes.transicionar(ATOR_SISTEMA, id, 'REVISION_REQUIRED', { token, motivo: r.bloqueio, extras: { diagnostico: { motivo: r.bloqueio, etapa: etapa.id, em: relogio() } } });
+        return { resultado: 'bloqueada-por-chamada', motivo: r.bloqueio };
+      }
+      chamada = { execucaoId: id, etapaId: etapa.id, n: r.n };
+    }
+
     let saida;
     let qProblemas = null;
     let usoFalha = null;
     try {
       saida = await adaptador.executar(pedido);
     } catch (e) {
-      if (e && e.interrupcao) throw e; // o processo "caiu": nada é limpo (a retomada cuida; a reserva de consumo vence sozinha)
+      if (e && e.interrupcao) throw e; // o processo "caiu": nada é limpo (a chamada fica "em-andamento" e bloqueia a repetição; a reserva vence sozinha)
       usoFalha = usoDoErro(e);
+      if (chamada && resultadoDesconhecido(e)) {
+        // R1: sem resposta do provedor: custo provável = reserva inteira; NUNCA repete sozinho
+        const liqD = await liquidarDesconhecido(res, usoFalha);
+        await registro.fechar(chamada, 'desconhecido', { tipoErro: e.tipo || null, custo: liqD.custo });
+        await comCracha(id, token, (x) => Object.assign(comEtapa(x, etapa.id, { status: 'pendente', ultimoErro: 'resultado-desconhecido' }), { custos: custos.somar(x.custos, etapa.id, { tokensEntrada: prep.estimativaEntrada, tokensSaida: prep.maxTokensSaida, fonte: 'provavel' }, infoCusto(etapa.agenteId, prep, liqD)) }));
+        await ev('chamada_resultado_desconhecido', id, { etapa: etapa.id, tipo: e.tipo || null });
+        await execucoes.transicionar(ATOR_SISTEMA, id, 'REVISION_REQUIRED', { token, motivo: 'resultado desconhecido de uma chamada paga', extras: { diagnostico: { motivo: 'resultado-desconhecido', etapa: etapa.id, tipo: e.tipo || null, em: relogio() } } });
+        return { resultado: 'resultado-desconhecido' };
+      }
+      if (chamada) await registro.fechar(chamada, e && e.revisavel ? 'invalida' : 'erro', { tipoErro: (e && e.tipo) || null });
+      if (chamada && e && e.tipo === 'modelo-indisponivel') await ev('modelo_indisponivel', id, { etapa: etapa.id, agente: etapa.agenteId, provedor: prep.provedor });
       const liq = await liquidarConsumo(res, usoFalha);
       if (usoFalha) await comCracha(id, token, (x) => ({ custos: custos.somar(x.custos, etapa.id, usoFalha, infoCusto(etapa.agenteId, prep, liq)) }));
       if (e && e.cancelado) return liberar(id, token, etapa.id, tentativa);
@@ -10485,6 +11143,7 @@ function criarMotor(deps) {
       const usoValido = saida && saida.uso && Number.isInteger(saida.uso.tokensEntrada) && Number.isInteger(saida.uso.tokensSaida);
       uso = usoValido ? saida.uso : { tokensEntrada: tokensDe(texto), tokensSaida: 0, fonte: 'estimado' };
       liq = await liquidarConsumo(res, uso);
+      if (chamada) await registro.fechar(chamada, 'concluida', { tokens: uso.tokensEntrada + uso.tokensSaida, requestId: saida && saida.origem ? saida.origem.requestId : null, custo: liq.custo });
     }
 
     // Fase 4C.2: na consolidação, as referências às entregas são do SISTEMA (as do modelo são descartadas)
@@ -10533,7 +11192,7 @@ function criarMotor(deps) {
       }
       await t.gravar(caminhos.resultadoEtapa(id, etapa.id), {
         simulado: true, agenteId: etapa.agenteId, etapaId: etapa.id, tentativa, texto: textoFinal, referencias: saida.referencias, criadoEm: relogio(), documento: etapa.documento || null,
-        origem: saida.origem ? { provedor: saida.origem.provedor, modelo: saida.origem.modelo, fonteUso: saida.origem.fonteUso } : null,
+        origem: saida.origem ? Object.assign({ provedor: saida.origem.provedor, modelo: saida.origem.modelo, fonteUso: saida.origem.fonteUso }, saida.origem.provedor !== 'simulado' ? { removidosD5: saida.origem.removidosD5 || 0, requestId: saida.origem.requestId || null } : {}) : null,
       });
       const resultado = {
         referencias: saida.referencias, fontes: ctx.fontes.map((f) => `${f.origem}:${f.escopo || '-'}:${f.id}@${f.versao}`), caracteres: textoFinal.length, simulado: true, documento: etapa.documento || null,
@@ -10800,8 +11459,20 @@ function criarMotor(deps) {
     // Fase 4B: o pedido do usuário vira uma execução orquestrada e o Estrategista planeja.
     async pedido(ator, { empresaId, objetivo, limites } = {}) {
       exigirAtor(ator);
-      const exe = await execucoes.criar(ator, Object.assign({ empresaId: empresaId || null, objetivo, modo: 'orquestrado' }, limites ? { limites } : {}));
-      return planejar(ator, exe.id);
+      const exe = await execucoes.criar(ator, Object.assign({ empresaId: empresaId || null, objetivo, modo: 'orquestrado' }, limites ? { limites } : {}), { origem: 'pedido' });
+      try {
+        return await planejar(ator, exe.id);
+      } catch (e) {
+        // R1 (plano, 13.7): falha INESPERADA no meio (ex.: conflito no banco) não deixa tarefa órfã.
+        // Erros de regra (limite, plano recusado...) já deixam a execução no estado certo.
+        if (!e || !NEGOCIO.includes(e.codigo)) {
+          const atual = await banco.obter(caminhos.tarefa(exe.id)).catch(() => null);
+          const para = atual && atual.estado === 'CREATED' ? 'CANCELLED' : atual && atual.estado === 'PLANNING' ? 'FAILED' : null;
+          if (para) await execucoes.transicionar(ATOR_SISTEMA, exe.id, para, { motivo: 'criação interrompida', extras: { diagnostico: { motivo: 'criacao-interrompida', em: relogio() } } }).catch(() => {}); // se falhar de novo, o monitor encerra
+          await ev('criacao_interrompida', exe.id, { estado: atual ? atual.estado : null }, ator).catch(() => {});
+        }
+        throw e;
+      }
     },
 
     // Super Admin decide um pedido; se não sobrou nenhum pendente, a execução volta para a fila.
@@ -10829,6 +11500,10 @@ function criarMotor(deps) {
       const extras = { etapas, diagnostico: null };
       if (rep && (rep.fixadas.length || rep.refeitas.length)) await ev('documentos_refixados', id, { fixadas: rep.fixadas.slice(0, 10), refeitas: rep.refeitas.slice(0, 10) }, ator);
       if (limites) extras.limites = Object.assign({}, exe.limites || {}, garantir(custos.ESQUEMA_LIMITES, limites, 'Limites'));
+      // R1: a decisão do Super Admin libera as chamadas pagas com resultado desconhecido das etapas
+      // que voltam a rodar (o custo provável continua contado) e recomeça a contagem de chamadas pagas
+      const liberadas = await registro.liberar(id, etapas.filter((x) => x.status !== 'concluida').map((x) => x.id), ator);
+      if (liberadas) await ev('chamadas_liberadas', id, { quantidade: liberadas }, ator);
       await ev('retomada', id, { limitesNovos: !!limites }, ator);
       return execucoes.transicionar(ator, id, 'READY', { motivo: 'retomada pelo Super Admin', extras });
     },
@@ -11528,7 +12203,7 @@ function chaveDoProvedor(lerSegredo, provedor) {
 module.exports = { SEGREDOS_PROVEDORES, SEGREDO_UIDS, statusProvedores, chaveDoProvedor };
 
 } };
-__defs["src/servicos.js"] = { deps: {"./agentes/memoria-agente":"src/agentes/memoria-agente.js","./auditoria/eventos":"src/auditoria/eventos.js","./empresas/servico":"src/empresas/servico.js","./entregas/compartilhamento":"src/entregas/compartilhamento.js","./entregas/registro":"src/entregas/registro.js","./execucao/fila":"src/execucao/fila.js","./execucao/preparacao":"src/execucao/preparacao.js","./execucao/servico":"src/execucao/servico.js","./ia/adaptador-modelos":"src/ia/adaptador-modelos.js","./ia/config-modelos":"src/ia/config-modelos.js","./memoria/auditor":"src/memoria/auditor.js","./memoria/contexto":"src/memoria/contexto.js","./memoria/correcoes":"src/memoria/correcoes.js","./memoria/recuperador":"src/memoria/recuperador.js","./memoria/registro":"src/memoria/registro.js","./motor/adaptador-simulado":"src/motor/adaptador-simulado.js","./motor/aprovacoes":"src/motor/aprovacoes.js","./motor/consumo":"src/motor/consumo.js","./motor/executor-local":"src/motor/executor-local.js","./motor/monitor-fila":"src/motor/monitor-fila.js","./motor/motor":"src/motor/motor.js","./motor/relatorio":"src/motor/relatorio.js","./skills/registro":"src/skills/registro.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
+__defs["src/servicos.js"] = { deps: {"./agentes/memoria-agente":"src/agentes/memoria-agente.js","./auditoria/eventos":"src/auditoria/eventos.js","./empresas/servico":"src/empresas/servico.js","./entregas/compartilhamento":"src/entregas/compartilhamento.js","./entregas/registro":"src/entregas/registro.js","./execucao/fila":"src/execucao/fila.js","./execucao/preparacao":"src/execucao/preparacao.js","./execucao/servico":"src/execucao/servico.js","./ia/adaptador-modelos":"src/ia/adaptador-modelos.js","./ia/config-modelos":"src/ia/config-modelos.js","./ia/verificacao-modelos":"src/ia/verificacao-modelos.js","./memoria/auditor":"src/memoria/auditor.js","./memoria/contexto":"src/memoria/contexto.js","./memoria/correcoes":"src/memoria/correcoes.js","./memoria/recuperador":"src/memoria/recuperador.js","./memoria/registro":"src/memoria/registro.js","./motor/adaptador-simulado":"src/motor/adaptador-simulado.js","./motor/aprovacoes":"src/motor/aprovacoes.js","./motor/consumo":"src/motor/consumo.js","./motor/executor-local":"src/motor/executor-local.js","./motor/monitor-fila":"src/motor/monitor-fila.js","./motor/motor":"src/motor/motor.js","./motor/relatorio":"src/motor/relatorio.js","./skills/registro":"src/skills/registro.js"}, fn: function (module, exports, require, Buffer, process, __filename, __dirname, global, setImmediate, clearImmediate) {
 // Monta todos os serviços da LABZ AI sobre um banco (em memória nos testes;
 // Firestore pelo adaptador banco-firestore no servidor e no emulador).
 const { criarAuditoria } = require('./auditoria/eventos');
@@ -11548,6 +12223,7 @@ const { criarMotor } = require('./motor/motor');
 const { criarAdaptadorSimulado } = require('./motor/adaptador-simulado');
 const { criarConfigModelos } = require('./ia/config-modelos');
 const { criarAdaptadorModelos } = require('./ia/adaptador-modelos');
+const { criarVerificacaoModelos } = require('./ia/verificacao-modelos');
 const { criarConsumo } = require('./motor/consumo');
 const { criarMonitorFila } = require('./motor/monitor-fila');
 const { criarExecutorLocal } = require('./motor/executor-local');
@@ -11578,14 +12254,16 @@ function criarLabz({ banco, relogio, adaptador, ia, opcoes = {} }) {
   const aprovacoes = criarAprovacoes({ banco, auditoria, relogio });
   const configModelos = criarConfigModelos({ banco, auditoria, relogio });
   const consumo = criarConsumo({ banco, auditoria, relogio });
-  const agente = adaptador || (ia ? criarAdaptadorModelos({ configModelos, transporte: ia.transporte, limitador: ia.limitador, timeoutPadraoMs: ia.timeoutMs }) : criarAdaptadorSimulado());
+  const agente = adaptador || (ia ? criarAdaptadorModelos({ configModelos, transporte: ia.transporte, limitador: ia.limitador, timeoutPadraoMs: ia.timeoutMs, contarEntrada: ia.contarEntrada }) : criarAdaptadorSimulado());
+  // R1: verificação sem custo do modelo de cada agente (uso interno; não sai pela API nesta etapa)
+  const verificacaoModelos = ia ? criarVerificacaoModelos({ banco, auditoria, transporte: ia.transporte }) : null;
   const entregas = criarEntregas({ banco, auditoria, relogio }); // Fase 4C.1
   const compartilhamento = criarCompartilhamento({ banco, entregas, relogio: relogio || (() => new Date().toISOString()) }); // Fase 4C.2 passo 3
   const motor = criarMotor({ banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador: agente, consumo, entregas, compartilhamento, relogio });
   const monitor = criarMonitorFila({ banco, execucoes, fila, auditoria, relogio, opcoes: opcoes.monitor, retomadas: () => motor.varrerRetomadas() });
   // executor automático LOCAL: uso interno (testes e emulador); não sai pela API e não é agendado
   const executorLocal = (o) => criarExecutorLocal({ motor, monitor, auditoria, opcoes: Object.assign({}, opcoes.executor, o) });
-  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente, entregas, compartilhamento, relatorios: criarRelatorios({ banco }) };
+  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente, verificacaoModelos, entregas, compartilhamento, relatorios: criarRelatorios({ banco }) };
 }
 
 module.exports = { criarLabz };
@@ -11703,4 +12381,4 @@ export const assinar = __m.assinar;
 export const criarRegistroRecusas = __m.criarRegistroRecusas;
 export const criarTransporteSimulado = __m.criarTransporteSimulado;
 export const criarModeloSimulado = __m.criarModeloSimulado;
-export const MODULOS = ["node_modules/postgres/cjs/src/bytes.js","node_modules/postgres/cjs/src/connection.js","node_modules/postgres/cjs/src/errors.js","node_modules/postgres/cjs/src/index.js","node_modules/postgres/cjs/src/large.js","node_modules/postgres/cjs/src/query.js","node_modules/postgres/cjs/src/queue.js","node_modules/postgres/cjs/src/result.js","node_modules/postgres/cjs/src/subscribe.js","node_modules/postgres/cjs/src/types.js","src/agentes/catalogo.js","src/agentes/memoria-agente.js","src/api/labz-api.js","src/armazenamento/banco-postgres.js","src/armazenamento/caminhos.js","src/armazenamento/postgres-migracao.js","src/auditoria/eventos.js","src/auth/acesso-supabase.js","src/auth/conta-ativa.js","src/auth/super-admin.js","src/auth/token-firebase.js","src/borda/acionamento.js","src/borda/http.js","src/borda/limitador.js","src/borda/montagem.js","src/borda/registro-recusas.js","src/borda/worker.js","src/contratos/agente.js","src/contratos/documentos.js","src/contratos/empresa.js","src/contratos/entrega.js","src/contratos/execucao.js","src/contratos/memoria.js","src/contratos/recuperacao.js","src/empresas/servico.js","src/entregas/armazenamento.js","src/entregas/compartilhamento.js","src/entregas/registro.js","src/entregas/representacao.js","src/execucao/fila.js","src/execucao/preparacao.js","src/execucao/servico.js","src/ferramentas/catalogo.js","src/ferramentas/permissoes.js","src/ia/adaptador-modelos.js","src/ia/config-modelos.js","src/ia/contrato.js","src/ia/credenciais.js","src/ia/prompt.js","src/ia/provedores/anthropic.js","src/ia/provedores/google.js","src/ia/provedores/index.js","src/ia/provedores/openai.js","src/ia/provedores/simulado.js","src/ia/simulacao/documentos-simulados.js","src/ia/simulacao/estrategista-simulado.js","src/ia/simulacao/modelo-simulado.js","src/ia/transporte.js","src/memoria/auditor.js","src/memoria/contexto.js","src/memoria/correcoes.js","src/memoria/indice.js","src/memoria/markdown.js","src/memoria/protecao-global.js","src/memoria/ranqueador.js","src/memoria/recuperador.js","src/memoria/registro.js","src/memoria/verificacoes.js","src/motor/adaptador-simulado.js","src/motor/aprovacoes.js","src/motor/consumo.js","src/motor/custos.js","src/motor/executor-local.js","src/motor/ferramentas-simuladas.js","src/motor/monitor-fila.js","src/motor/motor.js","src/motor/planejador.js","src/motor/qualidade.js","src/motor/relatorio.js","src/motor/risco.js","src/motor/validar-plano.js","src/nucleo/erros.js","src/nucleo/ids.js","src/nucleo/validador.js","src/nucleo/versionamento.js","src/segredos/provedores.js","src/servicos.js","src/skills/registro.js","supabase/entrada-borda.js"];
+export const MODULOS = ["node_modules/postgres/cjs/src/bytes.js","node_modules/postgres/cjs/src/connection.js","node_modules/postgres/cjs/src/errors.js","node_modules/postgres/cjs/src/index.js","node_modules/postgres/cjs/src/large.js","node_modules/postgres/cjs/src/query.js","node_modules/postgres/cjs/src/queue.js","node_modules/postgres/cjs/src/result.js","node_modules/postgres/cjs/src/subscribe.js","node_modules/postgres/cjs/src/types.js","src/agentes/catalogo.js","src/agentes/memoria-agente.js","src/api/labz-api.js","src/armazenamento/banco-postgres.js","src/armazenamento/caminhos.js","src/armazenamento/postgres-migracao.js","src/auditoria/eventos.js","src/auth/acesso-supabase.js","src/auth/conta-ativa.js","src/auth/super-admin.js","src/auth/token-firebase.js","src/borda/acionamento.js","src/borda/http.js","src/borda/limitador.js","src/borda/montagem.js","src/borda/registro-recusas.js","src/borda/worker.js","src/contratos/agente.js","src/contratos/documentos.js","src/contratos/empresa.js","src/contratos/entrega.js","src/contratos/execucao.js","src/contratos/memoria.js","src/contratos/recuperacao.js","src/empresas/servico.js","src/entregas/armazenamento.js","src/entregas/compartilhamento.js","src/entregas/registro.js","src/entregas/representacao.js","src/execucao/fila.js","src/execucao/preparacao.js","src/execucao/servico.js","src/ferramentas/catalogo.js","src/ferramentas/permissoes.js","src/ia/adaptador-modelos.js","src/ia/config-modelos.js","src/ia/contrato.js","src/ia/credenciais.js","src/ia/dados-pessoais.js","src/ia/esquema-json.js","src/ia/modelos-anthropic.js","src/ia/prompt.js","src/ia/provedores/anthropic.js","src/ia/provedores/google.js","src/ia/provedores/index.js","src/ia/provedores/openai.js","src/ia/provedores/simulado.js","src/ia/registro-chamadas.js","src/ia/simulacao/documentos-simulados.js","src/ia/simulacao/estrategista-simulado.js","src/ia/simulacao/modelo-simulado.js","src/ia/transporte.js","src/ia/verificacao-modelos.js","src/memoria/auditor.js","src/memoria/contexto.js","src/memoria/correcoes.js","src/memoria/indice.js","src/memoria/markdown.js","src/memoria/protecao-global.js","src/memoria/ranqueador.js","src/memoria/recuperador.js","src/memoria/registro.js","src/memoria/verificacoes.js","src/motor/adaptador-simulado.js","src/motor/aprovacoes.js","src/motor/consumo.js","src/motor/custos.js","src/motor/executor-local.js","src/motor/ferramentas-simuladas.js","src/motor/monitor-fila.js","src/motor/motor.js","src/motor/planejador.js","src/motor/qualidade.js","src/motor/relatorio.js","src/motor/risco.js","src/motor/validar-plano.js","src/nucleo/erros.js","src/nucleo/ids.js","src/nucleo/validador.js","src/nucleo/versionamento.js","src/segredos/provedores.js","src/servicos.js","src/skills/registro.js","supabase/entrada-borda.js"];

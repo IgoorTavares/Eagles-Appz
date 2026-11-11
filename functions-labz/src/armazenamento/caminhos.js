@@ -33,7 +33,7 @@ const C = {
 // Subcoleções da LABZ AI (Fase 3E: com o prefixo labz_, para que índices e
 // isenções do Firestore, que valem por NOME de coleção, nunca alcancem o CRM/ERP).
 // Fase 4C.1: versoes de entrega têm nome próprio (as isenções de labz_versoes foram pensadas para memórias)
-const SUB = Object.freeze({ memorias: 'labz_memorias', desempenho: 'labz_desempenho', versoes: 'labz_versoes', aprovacoes: 'labz_aprovacoes', resultados: 'labz_resultados', versoesEntrega: 'labz_versoes_entrega', conteudos: 'labz_conteudos' });
+const SUB = Object.freeze({ memorias: 'labz_memorias', desempenho: 'labz_desempenho', versoes: 'labz_versoes', aprovacoes: 'labz_aprovacoes', resultados: 'labz_resultados', versoesEntrega: 'labz_versoes_entrega', conteudos: 'labz_conteudos', chamadas: 'labz_chamadas' });
 
 const caminhos = {
   colecoes: C,
@@ -53,6 +53,8 @@ const caminhos = {
   // Fase 4A: pedidos de aprovação e resultados de cada etapa, DENTRO da execução
   aprovacoesExecucao: (execucaoId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.aprovacoes}`,
   aprovacaoExecucao: (execucaoId, id) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.aprovacoes}/${seg(id, 'aprovacaoId')}`,
+  // R1: registro das chamadas pagas de uma etapa (ou do planejamento)
+  chamadasEtapa: (execucaoId, etapaId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.chamadas}/${seg(etapaId, 'etapaId')}`,
   resultadoEtapa: (execucaoId, etapaId) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.resultados}/${seg(etapaId, 'etapaId')}`,
   // Fase 4B: resultado preservado de uma tentativa revisada (n = número da revisão)
   resultadoRevisao: (execucaoId, etapaId, n) => `${C.tarefas}/${seg(execucaoId, 'execucaoId')}/${SUB.resultados}/${seg(`${etapaId}_rev${n}`, 'etapaId')}`,

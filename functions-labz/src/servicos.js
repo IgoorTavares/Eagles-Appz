@@ -17,6 +17,7 @@ const { criarMotor } = require('./motor/motor');
 const { criarAdaptadorSimulado } = require('./motor/adaptador-simulado');
 const { criarConfigModelos } = require('./ia/config-modelos');
 const { criarAdaptadorModelos } = require('./ia/adaptador-modelos');
+const { criarVerificacaoModelos } = require('./ia/verificacao-modelos');
 const { criarConsumo } = require('./motor/consumo');
 const { criarMonitorFila } = require('./motor/monitor-fila');
 const { criarExecutorLocal } = require('./motor/executor-local');
@@ -47,14 +48,16 @@ function criarLabz({ banco, relogio, adaptador, ia, opcoes = {} }) {
   const aprovacoes = criarAprovacoes({ banco, auditoria, relogio });
   const configModelos = criarConfigModelos({ banco, auditoria, relogio });
   const consumo = criarConsumo({ banco, auditoria, relogio });
-  const agente = adaptador || (ia ? criarAdaptadorModelos({ configModelos, transporte: ia.transporte, limitador: ia.limitador, timeoutPadraoMs: ia.timeoutMs }) : criarAdaptadorSimulado());
+  const agente = adaptador || (ia ? criarAdaptadorModelos({ configModelos, transporte: ia.transporte, limitador: ia.limitador, timeoutPadraoMs: ia.timeoutMs, contarEntrada: ia.contarEntrada }) : criarAdaptadorSimulado());
+  // R1: verificação sem custo do modelo de cada agente (uso interno; não sai pela API nesta etapa)
+  const verificacaoModelos = ia ? criarVerificacaoModelos({ banco, auditoria, transporte: ia.transporte }) : null;
   const entregas = criarEntregas({ banco, auditoria, relogio }); // Fase 4C.1
   const compartilhamento = criarCompartilhamento({ banco, entregas, relogio: relogio || (() => new Date().toISOString()) }); // Fase 4C.2 passo 3
   const motor = criarMotor({ banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador: agente, consumo, entregas, compartilhamento, relogio });
   const monitor = criarMonitorFila({ banco, execucoes, fila, auditoria, relogio, opcoes: opcoes.monitor, retomadas: () => motor.varrerRetomadas() });
   // executor automático LOCAL: uso interno (testes e emulador); não sai pela API e não é agendado
   const executorLocal = (o) => criarExecutorLocal({ motor, monitor, auditoria, opcoes: Object.assign({}, opcoes.executor, o) });
-  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente, entregas, compartilhamento, relatorios: criarRelatorios({ banco }) };
+  return { banco, auditoria, empresas, memoria, recuperador, correcoes, skills, contexto, auditor, fila, execucoes, preparacao, portaMemoria, aprovacoes, motor, configModelos, consumo, monitor, executorLocal, adaptador: agente, verificacaoModelos, entregas, compartilhamento, relatorios: criarRelatorios({ banco }) };
 }
 
 module.exports = { criarLabz };

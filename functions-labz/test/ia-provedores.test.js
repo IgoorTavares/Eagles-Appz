@@ -10,11 +10,11 @@ const { criarModeloSimulado, transporteComModeloSimulado, corpoDe } = require('.
 const { criarAdaptadorModelos } = require('../src/ia/adaptador-modelos');
 const { problemasDaConfig, USO_REAL_AUTORIZADO } = require('../src/ia/config-modelos');
 const { AGENTES, obterAgente } = require('../src/agentes/catalogo');
-const { montarComEmpresas, rejeita } = require('./ajuda');
+const { montarComEmpresas, rejeita, precoFicticio } = require('./ajuda');
 const { caminhos } = require('../src/armazenamento/caminhos');
 
 const SOL = { modelo: 'modelo-de-teste', sistema: 'INSTRUCOES-DO-SISTEMA', dados: 'DADOS-DO-CLIENTE', maxTokensSaida: 500, temperatura: 0.3, formatoJson: true };
-const cfg = (provedor, extra) => Object.assign({ provedor, modelo: 'modelo-ficticio-1', uso: 'simulado', recursosDoModelo: ['texto', 'saida-estruturada', 'ferramentas', 'imagem-entrada', 'imagem-saida'] }, extra);
+const cfg = (provedor, extra) => Object.assign({ provedor, modelo: provedor === 'anthropic' ? 'claude-haiku-5-5' : 'modelo-ficticio-1', uso: 'simulado', recursosDoModelo: ['texto', 'saida-estruturada', 'ferramentas', 'imagem-entrada', 'imagem-saida'] }, extra);
 const comIa = (roteiro, extra = {}) => montarComEmpresas({ ia: Object.assign({ transporte: transporteComModeloSimulado(roteiro, extra.op) }, extra.ia) });
 async function rodarEspecialista(c, agenteId = '04-roteirista') {
   const exe = await c.execucoes.criar(c.ator, { empresaId: c.A.id, objetivo: 'Escrever a legenda do post', modo: 'especialista', agenteId });
@@ -29,7 +29,8 @@ test('contratos: cada provedor monta a requisição no próprio formato, sem cha
   const o = ADAPTADORES.openai.montarRequisicao(SOL);
   assert.deepStrictEqual([o.rota, o.corpo.messages[0].role, o.corpo.messages[1].role, o.corpo.response_format.type], ['/v1/chat/completions', 'system', 'user', 'json_object']);
   const a = ADAPTADORES.anthropic.montarRequisicao(SOL);
-  assert.deepStrictEqual([a.rota, a.corpo.system, a.corpo.messages.length, a.corpo.max_tokens], ['/v1/messages', 'INSTRUCOES-DO-SISTEMA', 1, 500]);
+  assert.deepStrictEqual([a.rota, a.corpo.system[0].text, a.corpo.messages.length, a.corpo.max_tokens], ['/v1/messages', 'INSTRUCOES-DO-SISTEMA', 1, 500]);
+  assert.ok(!('temperature' in a.corpo), 'R1: a Anthropic não recebe temperature (os modelos atuais recusam)');
   const g = ADAPTADORES.google.montarRequisicao(SOL);
   assert.deepStrictEqual([g.rota, g.corpo.systemInstruction.parts[0].text, g.corpo.generationConfig.responseMimeType], ['/v1beta/models/modelo-de-teste:generateContent', 'INSTRUCOES-DO-SISTEMA', 'application/json']);
   for (const [nome, ad] of Object.entries(ADAPTADORES)) {
@@ -90,9 +91,11 @@ test('configuração independente por agente: provedor e modelo de cada um; padr
   assert.strictEqual(lista.length, 8);
   assert.ok(lista.every((x) => x.situacao === 'simulado-padrao' && x.provedor === 'simulado'), 'sem configuração: nenhum modelo real habilitado');
   const escolhas = { '01-guia-marca': 'anthropic', '02-designer': 'google', '03-carrosseis': 'openai', '04-roteirista': 'anthropic', '05-dev-web': 'openai', '06-engenheiro': 'google', '07-trafego': 'openai', '08-estrategista': 'anthropic' };
-  for (const [ag, prov] of Object.entries(escolhas)) await c.configModelos.definir(c.ator, ag, cfg(prov, { modelo: `modelo-${ag}` }));
+  // R1: na Anthropic só os IDs da lista fechada (um por agente, para conferir que cada um guarda o seu)
+  const modeloDe = (ag, prov) => (prov === 'anthropic' ? { '01-guia-marca': 'claude-sonnet-5-5', '04-roteirista': 'claude-haiku-5-5', '08-estrategista': 'claude-opus-5-5' }[ag] : `modelo-${ag}`);
+  for (const [ag, prov] of Object.entries(escolhas)) await c.configModelos.definir(c.ator, ag, cfg(prov, { modelo: modeloDe(ag, prov) }));
   const depois = await c.configModelos.listar(c.ator);
-  depois.forEach((x) => assert.deepStrictEqual([x.situacao, x.provedor, x.modelo], ['configurado', escolhas[x.agenteId], `modelo-${x.agenteId}`]));
+  depois.forEach((x) => assert.deepStrictEqual([x.situacao, x.provedor, x.modelo], ['configurado', escolhas[x.agenteId], modeloDe(x.agenteId, escolhas[x.agenteId])]));
   // permissões continuam do catálogo (o modelo não muda nada)
   assert.deepStrictEqual(obterAgente('05-dev-web').ferramentas, AGENTES.find((a) => a.id === '05-dev-web').ferramentas);
   // inválidas
@@ -117,6 +120,7 @@ test('seleção independente: cada agente fala com o provedor configurado para E
   const transporte = transporteComModeloSimulado();
   const c = await montarComEmpresas({ ia: { transporte } });
   await c.configModelos.definir(c.ator, '01-guia-marca', cfg('anthropic'));
+  await precoFicticio(c);
   await c.configModelos.definir(c.ator, '04-roteirista', cfg('google'));
   await c.configModelos.definir(c.ator, '08-estrategista', cfg('openai'));
   const exe = await c.execucoes.criar(c.ator, { empresaId: c.A.id, objetivo: 'Campanha', modo: 'orquestrado' });
@@ -140,6 +144,7 @@ test('respostas válidas, malformadas, incompletas e recusadas passam pelo contr
   for (const p of ['openai', 'anthropic', 'google']) {
     const c = await comIa({ '04-roteirista': ['malformado', 'ok'] });
     await c.configModelos.definir(c.ator, '04-roteirista', cfg(p));
+    if (p === 'anthropic') await precoFicticio(c);
     const { r, exe } = await rodarEspecialista(c);
     assert.strictEqual(r.resultado, 'concluida', p);
     const e = await c.execucoes.obter(c.ator, exe.id);
@@ -149,6 +154,7 @@ test('respostas válidas, malformadas, incompletas e recusadas passam pelo contr
   for (const [comp, problema] of [['incompleto', 'resposta:resposta-incompleta'], ['recusa', 'resposta:recusada'], ['filtrado', 'resposta:recusada'], ['sem-texto', 'resposta:resposta-malformada'], ['corpo-quebrado', 'resposta:resposta-malformada']]) {
     const c = await comIa({ '04-roteirista': comp });
     await c.configModelos.definir(c.ator, '04-roteirista', cfg('anthropic'));
+    await precoFicticio(c);
     const { d } = await rodarEspecialista(c);
     assert.deepStrictEqual([d.estado, d.diagnostico.motivo, d.diagnostico.problemas[0]], ['REVISION_REQUIRED', 'qualidade-reprovada', problema], comp);
   }
@@ -187,12 +193,18 @@ test('falhas temporárias (429/500) tentam de novo com espera; definitivas (401/
   assert.deepStrictEqual([d3.estado, d3.diagnostico.motivo, d3.diagnostico.tipo], ['FAILED', 'tentativas-esgotadas', 'indisponivel']);
 });
 
-test('timeout e cancelamento: chamada pendurada vira timeout (nova tentativa); parar o executor cancela sem gastar tentativa', async () => {
+test('timeout e cancelamento: no simulado, timeout = nova tentativa e parar o executor não gasta tentativa; em provedor PAGO (R1), ficam como resultado desconhecido', async () => {
+  // provedor simulado (sem custo): o comportamento da 4B continua
   const c = await montarComEmpresas({ ia: { transporte: transporteComModeloSimulado({ '04-roteirista': ['timeout', 'ok'] }), timeoutMs: 30 } });
-  await c.configModelos.definir(c.ator, '04-roteirista', cfg('anthropic'));
   const { r, d } = await rodarEspecialista(c);
   assert.strictEqual(r.resultado, 'nova-tentativa');
   assert.ok(d.etapas[0].ultimoErro.includes('sem resposta'));
+  // R1: provedor que cobra (Anthropic): sem resposta = resultado DESCONHECIDO, sem repetir sozinho
+  const cp = await montarComEmpresas({ ia: { transporte: transporteComModeloSimulado({ '04-roteirista': ['timeout', 'ok'] }), timeoutMs: 30 } });
+  await cp.configModelos.definir(cp.ator, '04-roteirista', cfg('anthropic'));
+  await precoFicticio(cp);
+  const rp = await rodarEspecialista(cp);
+  assert.deepStrictEqual([rp.r.resultado, rp.d.estado, rp.d.diagnostico.motivo], ['resultado-desconhecido', 'REVISION_REQUIRED', 'resultado-desconhecido']);
 
   // cancelamento: o sinal do executor aborta a chamada pendurada
   let n = 0; // 1ª chamada fica pendurada; as seguintes respondem (a retomada não gasta tentativa, então o roteiro é por chamada)
@@ -229,8 +241,13 @@ test('limite local de requisições por provedor (simulado) e transporte bloquea
   const c2 = await montarComEmpresas({ ia: { transporte: criarTransporteBloqueado() } });
   const { d } = await rodarEspecialista(c2);
   assert.deepStrictEqual([d.estado, d.diagnostico.tipo], ['FAILED', 'nao-autorizado']);
-  // e o adaptador recusa qualquer transporte que não seja o simulado ou o bloqueado
-  assert.throws(() => criarAdaptadorModelos({ configModelos: c2.configModelos, transporte: { tipo: 'real', enviar: async () => ({}) } }), /só o transporte simulado/);
+  // R1: o transporte REAL existe, mas sem a autorização da fase recusa tudo ANTES da rede
+  const { criarTransporteReal } = require('../src/ia/transporte');
+  let redes = 0;
+  const real = criarTransporteReal({ autorizado: false, buscar: async () => { redes += 1; return {}; }, chaveDoProvedor: () => 'chave-ficticia-de-teste-000', provedorLigado: async () => true });
+  await assert.rejects(real.enviar('anthropic', { rota: '/v1/messages', metodo: 'POST', corpo: {} }), (e) => e.tipo === 'nao-autorizado');
+  assert.strictEqual(redes, 0, 'nenhuma ida à rede sem autorização');
+  assert.throws(() => criarAdaptadorModelos({ configModelos: c2.configModelos, transporte: { tipo: 'outro', enviar: async () => ({}) } }), /Transporte desconhecido/);
 });
 
 test('nenhuma chamada externa: nenhum módulo da IA usa rede (http, https, fetch, net)', () => {

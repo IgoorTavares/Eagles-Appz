@@ -73,4 +73,9 @@ async function executarComAprovacoes(ctx, execucaoId, { max = 10 } = {}) {
   return feitas;
 }
 
-module.exports = { montar, montarComEmpresas, memoriaAprovada, rejeita, relogioDeTeste, executarComAprovacoes };
+// R1: provedor que cobra (Anthropic) só chama com preço cadastrado. Preço FICTÍCIO de teste (nunca do código).
+async function precoFicticio(ctx, modelo = 'claude-haiku-5-5', extra = {}) {
+  return ctx.consumo.definirPreco(ctx.ator, `anthropic/${modelo}`, Object.assign({ entradaPorMilhao: 1, saidaPorMilhao: 5, cacheEscritaPorMilhao: 1.25, cacheLeituraPorMilhao: 0.1, moeda: 'USD', fonte: 'PREÇO FICTÍCIO DE TESTE', conferidoEm: '2026-11-01' }, extra));
+}
+
+module.exports = { precoFicticio, montar, montarComEmpresas, memoriaAprovada, rejeita, relogioDeTeste, executarComAprovacoes };

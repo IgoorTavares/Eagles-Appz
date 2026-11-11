@@ -167,7 +167,9 @@ function criarBancoPostgres({ sql, schema = 'labz', tentativas = 12, preparar } 
         } catch (e) {
           if (REPETIVEIS.has(e && e.code) && i < tentativas) {
             est.repeticoes++;
-            await espera(Math.floor(Math.random() * (8 + i * 12)));
+            // R1 (13.7): espera crescente com sorteio (25 ms, 50 ms… até 800 ms): com muitas transações ao
+            // mesmo tempo, a espera curta de antes esgotava as tentativas e deixava tarefas pela metade
+            await espera(Math.floor(Math.min(25 * 2 ** i, 800) * (0.5 + Math.random())));
             continue;
           }
           throw e;

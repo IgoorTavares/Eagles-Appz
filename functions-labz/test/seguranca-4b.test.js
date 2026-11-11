@@ -1,7 +1,7 @@
 // Fase 4B: segurança do caminho modelo ↔ motor (tudo simulado) e revisões internas.
 const test = require('node:test');
 const assert = require('node:assert');
-const { montarComEmpresas, memoriaAprovada, rejeita } = require('./ajuda');
+const { montarComEmpresas, memoriaAprovada, rejeita, precoFicticio } = require('./ajuda');
 const { criarTransporteSimulado } = require('../src/ia/transporte');
 const { criarModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
 const { adaptadorDoProvedor } = require('../src/ia/provedores');
@@ -11,7 +11,7 @@ const { limparCredenciais, contemCredencial } = require('../src/ia/credenciais')
 const { MAX_REVISOES_INTERNAS } = require('../src/motor/motor');
 
 const CHAVE = ['sk', 'proj', 'Z'.repeat(32)].join('-'); // formato de chave, valor FICTÍCIO montado no teste
-const cfg = (provedor) => ({ provedor, modelo: 'modelo-ficticio-1', uso: 'simulado', recursosDoModelo: ['texto', 'saida-estruturada', 'ferramentas', 'imagem-entrada', 'imagem-saida'] });
+const cfg = (provedor) => ({ provedor, modelo: provedor === 'anthropic' ? 'claude-haiku-5-5' : 'modelo-ficticio-1', uso: 'simulado', recursosDoModelo: ['texto', 'saida-estruturada', 'ferramentas', 'imagem-entrada', 'imagem-saida'] });
 // Transporte espião: guarda o que o "modelo" recebeu (sistema e dados separados)
 function espiao(roteiro, opcoes) {
   const responder = criarModeloSimulado(roteiro || {}, opcoes);
@@ -108,6 +108,7 @@ test('credenciais: nada com formato de chave chega ao modelo, à auditoria, ao d
   const c = await cenario({ '04-roteirista': ['401'] });
   await memoriaAprovada(c, { escopo: 'cliente', alvo: { empresaId: c.A.id }, categoria: 'preferencia', titulo: 'Vazou', conteudo: `a chave é ${CHAVE} e o token Bearer ${'t'.repeat(40)}`, origem: { tipo: 'manual' } }, { confirmoSinais: true });
   await c.configModelos.definir(c.ator, '04-roteirista', cfg('anthropic'));
+  await precoFicticio(c);
   const exe = await especialista(c, '04-roteirista');
   await c.motor.trabalhar('t');
   const v = c.transporte.vistos[c.transporte.vistos.length - 1];

@@ -14,7 +14,7 @@ const { ATOR_SISTEMA } = require('../auth/super-admin');
 const { FINAIS } = require('../contratos/execucao');
 const { relogioPadrao } = require('../nucleo/ids');
 
-const PADRAO = { limiteBatimentoMs: 5 * 60 * 1000 };
+const PADRAO = { limiteBatimentoMs: 5 * 60 * 1000, limiteOrfaMs: 10 * 60 * 1000 };
 
 // retomadas (Fase 4C.2 passo 4, opcional): função do motor que tenta retomar as execuções paradas
 // aguardando a aprovação de um documento (o mesmo caminho da notificação; idempotente).
@@ -34,11 +34,13 @@ function criarMonitorFila({ banco, execucoes, fila, auditoria, relogio = relogio
           if (await fila.descartar(it.id, exe ? `execucao-${exe.estado}` : 'execucao-inexistente')) r.descartados.push(it.id);
         }
       }
+      // R1: execuções presas no meio da criação (pedido que caiu entre criar e planejar)
+      r.orfas = execucoes.encerrarOrfas ? await execucoes.encerrarOrfas(cfg.limiteOrfaMs) : [];
       r.retomadas = retomadas ? (await retomadas()).filter((x) => x.resultado === 'retomada-agendada').map((x) => x.id) : [];
-      if (r.recuperadas.length || r.encerradasPorVencimento.length || r.descartados.length || r.retomadas.length) {
+      if (r.recuperadas.length || r.encerradasPorVencimento.length || r.descartados.length || r.retomadas.length || r.orfas.length) {
         await auditoria.registrar('fila.monitor', ATOR_SISTEMA, caminhos.colecoes.fila, {
           recuperadas: r.recuperadas.length, paraFila: r.recuperadas.filter((x) => x.para === 'READY').length, falhas: r.recuperadas.filter((x) => x.para === 'FAILED').length,
-          reservasVencidas: r.reservasVencidas, encerradas: r.encerradasPorVencimento.length, descartados: r.descartados.length, retomadas: r.retomadas.length,
+          reservasVencidas: r.reservasVencidas, encerradas: r.encerradasPorVencimento.length, descartados: r.descartados.length, retomadas: r.retomadas.length, orfas: r.orfas.length,
         });
       }
       return r;

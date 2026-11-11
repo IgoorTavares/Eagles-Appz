@@ -62,6 +62,17 @@ function escolher(roteiro, meta) {
 function criarModeloSimulado(roteiro = {}, opcoes = {}) {
   return async function responder({ provedor, requisicao, meta }) {
     const prov = adaptadorDoProvedor(provedor);
+    // R1: chamadas SEM CUSTO da Anthropic, simuladas: consulta do modelo e contagem de tokens
+    if (provedor === 'anthropic' && requisicao.metodo === 'GET' && /^\/v1\/models\//.test(requisicao.rota)) {
+      const idm = requisicao.rota.slice('/v1/models/'.length);
+      if (opcoes.modelosIndisponiveis && opcoes.modelosIndisponiveis.includes(idm)) return { status: 404, corpo: { type: 'error', error: { type: 'not_found_error', message: `model: ${idm} not found` } }, cabecalhos: {} };
+      const info = (opcoes.modelos && opcoes.modelos[idm]) || { max_input_tokens: 1000000, max_tokens: 128000, capabilities: { image_input: { supported: true } } };
+      return { status: 200, corpo: Object.assign({ id: idm, type: 'model' }, info), cabecalhos: {} };
+    }
+    if (provedor === 'anthropic' && /\/count_tokens$/.test(requisicao.rota)) {
+      const t = prov.extrairTextos(requisicao);
+      return { status: 200, corpo: { input_tokens: opcoes.contagemFixa || (tokensDe(t.sistema) + tokensDe(t.dados)) }, cabecalhos: {} };
+    }
     const { sistema, dados } = prov.extrairTextos(requisicao);
     const c = escolher(roteiro, meta);
     const modelo = requisicao.corpo.model || requisicao.corpo.modelo || (requisicao.rota.match(/models\/([^:]+):/) || [])[1] || null;
@@ -71,6 +82,7 @@ function criarModeloSimulado(roteiro = {}, opcoes = {}) {
     if (c === 'timeout') return { pendurar: true };
     if (c === '429') return erroHttp(429, 'Rate limit (simulado)', { 'retry-after': '2' });
     if (c === '500') return erroHttp(500, 'Erro interno (simulado)');
+    if (c === '529') return erroHttp(529, 'Overloaded (simulado)');
     if (c === '400') return erroHttp(400, 'Requisição inválida (simulado)');
     // 401 ecoa algo com cara de chave: o adaptador NÃO pode deixar isso chegar à auditoria
     // (montado em tempo de execução: é fictício, mas tem o FORMATO de uma chave)

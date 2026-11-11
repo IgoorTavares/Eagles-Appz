@@ -25,8 +25,13 @@ const { novoId, relogioPadrao } = require('../nucleo/ids');
 const { TODOS_PROVEDORES, PROVEDOR_SIMULADO } = require('../ia/contrato');
 
 const RESERVA_MS = 10 * 60 * 1000;
+// R1: provedores que COBRAM nesta fase (os da lista fechada do transporte real). Sem preço cadastrado,
+// a chamada não sai (plano, seção 6.1: "sem preço cadastrado ou sem saldo, não chama").
+const PROVEDORES_COBRADOS = Object.freeze(['anthropic']);
 const PADRAO_LIMITES = Object.freeze({
   global: { tokensDia: 2000000, custoDia: null },
+  // R1 (D2: US$ 10/mês na conta do provedor): limite do MÊS (UTC), só global. Proposta: custoMes 9.
+  mensal: { tokensMes: null, custoMes: null },
   porAgente: { tokensDia: null, custoDia: null },
   porEmpresa: { tokensDia: null, custoDia: null },
   porProvedor: { tokensDia: null, custoDia: null },
@@ -34,11 +39,23 @@ const PADRAO_LIMITES = Object.freeze({
 });
 const LIMITE = { tipo: 'objeto', extras: false, campos: { tokensDia: { tipo: 'inteiro', nulo: true, min: 1, max: 1e9 }, custoDia: { tipo: 'numero', nulo: true, min: 0, max: 1e7 } } };
 const MAPA = { tipo: 'objeto' }; // chaves conferidas à parte
+const LIMITE_MES = { tipo: 'objeto', extras: false, campos: { tokensMes: { tipo: 'inteiro', nulo: true, min: 1, max: 1e10 }, custoMes: { tipo: 'numero', nulo: true, min: 0, max: 1e8 } } };
 const ESQUEMA_LIMITES = {
   tipo: 'objeto', obrigatorio: true, extras: false,
   campos: {
-    global: LIMITE, porAgente: LIMITE, porEmpresa: LIMITE, porProvedor: LIMITE,
+    global: LIMITE, mensal: LIMITE_MES, porAgente: LIMITE, porEmpresa: LIMITE, porProvedor: LIMITE,
     excecoes: { tipo: 'objeto', extras: false, campos: { agentes: MAPA, empresas: MAPA, provedores: MAPA } },
+  },
+};
+// R1: preço de cache (gravação e leitura) e faixa de pedido longo (ex.: Haiku acima de 100 mil tokens)
+const FAIXA = {
+  tipo: 'objeto', extras: false,
+  campos: {
+    acimaDeTokens: { tipo: 'inteiro', obrigatorio: true, min: 1, max: 1e8 },
+    entradaPorMilhao: { tipo: 'numero', obrigatorio: true, min: 0, max: 100000 },
+    saidaPorMilhao: { tipo: 'numero', obrigatorio: true, min: 0, max: 100000 },
+    cacheEscritaPorMilhao: { tipo: 'numero', min: 0, max: 100000 },
+    cacheLeituraPorMilhao: { tipo: 'numero', min: 0, max: 100000 },
   },
 };
 const PRECO = {
@@ -46,6 +63,9 @@ const PRECO = {
   campos: {
     entradaPorMilhao: { tipo: 'numero', obrigatorio: true, min: 0, max: 100000 },
     saidaPorMilhao: { tipo: 'numero', obrigatorio: true, min: 0, max: 100000 },
+    cacheEscritaPorMilhao: { tipo: 'numero', min: 0, max: 100000 },
+    cacheLeituraPorMilhao: { tipo: 'numero', min: 0, max: 100000 },
+    longo: FAIXA,
     moeda: { tipo: 'texto', obrigatorio: true, valores: ['USD', 'BRL'] },
     fonte: { tipo: 'texto', obrigatorio: true, min: 5, max: 300 }, // de onde o Super Admin tirou o preço
     conferidoEm: { tipo: 'texto', obrigatorio: true, padrao: /^\d{4}-\d{2}-\d{2}$/ },
@@ -55,11 +75,41 @@ const CHAVE_PRECO = /^(openai|anthropic|google)\/[A-Za-z0-9][A-Za-z0-9._-]{0,119
 const SEG = /^[A-Za-z0-9_-]{1,80}$/;
 
 const r6 = (n) => Math.round(n * 1e6) / 1e6;
-const vazioTotal = () => ({ tokens: 0, custo: 0, custoDesconhecido: 0, chamadas: 0, estimadas: 0 });
+const PRECO_VENCE_DIAS = 30; // R1: preço conferido há mais de 30 dias gera aviso (não bloqueia)
+
+// Faixa de preço que vale para um pedido com "promptTokens" de entrada (entrada + cache).
+function faixaDe(p, promptTokens) {
+  return p.longo && promptTokens > p.longo.acimaDeTokens ? Object.assign({}, p, p.longo) : p;
+}
+// Custo REAL de um uso informado (cada tipo de token com o seu preço). Sem preço de cache e com
+// tokens de cache → desconhecido (não inventa: a gravação de cache custa MAIS que a entrada).
+function custoDoUso(p, uso) {
+  const ce = uso.cacheEscrita || 0;
+  const cl = uso.cacheLeitura || 0;
+  const f = faixaDe(p, uso.tokensEntrada + ce + cl);
+  if ((ce && f.cacheEscritaPorMilhao === undefined) || (cl && f.cacheLeituraPorMilhao === undefined)) return null;
+  return r6((uso.tokensEntrada / 1e6) * f.entradaPorMilhao + (ce / 1e6) * (f.cacheEscritaPorMilhao || 0) + (cl / 1e6) * (f.cacheLeituraPorMilhao || 0) + (uso.tokensSaida / 1e6) * f.saidaPorMilhao);
+}
+// Custo MÁXIMO de uma chamada (para a reserva): toda a entrada pelo preço mais alto possível
+// (gravação de cache, se for mais cara) e a saída inteira até o teto (max_tokens, que o provedor
+// não ultrapassa). Com a entrada CONTADA pela API, é um teto real, não um palpite.
+function custoMaximo(p, tokensEntrada, tokensSaida) {
+  const f = faixaDe(p, tokensEntrada);
+  const precoEntrada = Math.max(f.entradaPorMilhao, f.cacheEscritaPorMilhao || 0);
+  return r6((tokensEntrada / 1e6) * precoEntrada + (tokensSaida / 1e6) * f.saidaPorMilhao);
+}
+const tokensDoUso = (uso) => uso.tokensEntrada + uso.tokensSaida + (uso.cacheEscrita || 0) + (uso.cacheLeitura || 0);
+const vazioTotal = () => ({ tokens: 0, custo: 0, custoDesconhecido: 0, chamadas: 0, estimadas: 0, provaveis: 0 });
 
 function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
   const dia = () => relogio().slice(0, 10);
   const docDia = (d) => `${caminhos.colecoes.consumo}/${d}`;
+  // R1: totais do mês (UTC) num documento à parte: labz_consumo/mes-AAAA-MM
+  const docMes = (d) => `${caminhos.colecoes.consumo}/mes-${d.slice(0, 7)}`;
+  async function somarMes(t, d, soma) {
+    const m = (await t.obter(docMes(d))) || {};
+    await t.gravar(docMes(d), Object.assign({}, m, { mes: d.slice(0, 7), global: soma(m.global) }));
+  }
 
   async function lerLimites(t) {
     const doc = await (t || banco).obter(caminhos.limitesConsumo());
@@ -72,11 +122,20 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
   const limiteDe = (lim, secao, excecao, chave) => Object.assign({}, lim[secao], (lim.excecoes[excecao] || {})[chave] || {});
 
   // Preço de um provedor/modelo, ou null (desconhecido). O simulado não tem cobrança.
-  function custoDe(precos, provedor, modelo, tokensEntrada, tokensSaida) {
+  //  modo 'maximo': o teto da chamada (reserva); modo 'uso': o custo do uso informado (liquidação).
+  function custoDe(precos, provedor, modelo, tokensEntrada, tokensSaida, { modo = 'maximo', uso = null } = {}) {
     if (provedor === PROVEDOR_SIMULADO) return { tipo: 'sem-cobranca', valor: 0, moeda: null };
     const p = precos[`${provedor}/${modelo}`];
     if (!p) return { tipo: 'desconhecido', valor: null, moeda: null };
-    return { tipo: 'estimado', valor: r6((tokensEntrada / 1e6) * p.entradaPorMilhao + (tokensSaida / 1e6) * p.saidaPorMilhao), moeda: p.moeda };
+    const valor = modo === 'uso' ? custoDoUso(p, uso || { tokensEntrada, tokensSaida }) : custoMaximo(p, tokensEntrada, tokensSaida);
+    if (valor === null) return { tipo: 'desconhecido', valor: null, moeda: null };
+    return { tipo: 'estimado', valor, moeda: p.moeda };
+  }
+  // R1: preço conferido há mais de 30 dias → aviso (a conferência é refeita antes de ligar um agente)
+  function precoVencido(precos, provedor, modelo) {
+    const p = precos[`${provedor}/${modelo}`];
+    if (!p || !p.conferidoEm) return false;
+    return Date.parse(relogio()) - Date.parse(`${p.conferidoEm}T00:00:00Z`) > PRECO_VENCE_DIAS * 24 * 3600 * 1000;
   }
 
   // Totais em aberto = consumido + reservas que ainda não venceram.
@@ -111,6 +170,17 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
         const precos = await lerPrecos(t);
         const custo = custoDe(precos, p.provedor, p.modelo, p.tokensEntrada, p.tokensSaida);
         const tot = totais(doc, agoraMs);
+        if (PROVEDORES_COBRADOS.includes(p.provedor) && custo.tipo === 'desconhecido') { r = { permitido: false, motivo: 'preco-nao-cadastrado', secao: 'provedor', chave: p.provedor }; return; }
+        // mês: consumido no mês + reservas em aberto de hoje + esta chamada
+        const mes = (await t.obter(docMes(d))) || {};
+        const totMes = Object.assign(vazioTotal(), mes.global);
+        const lm = lim.mensal || {};
+        const abertoHoje = { tokens: tot.global.tokens - Object.assign(vazioTotal(), doc.global).tokens, custo: r6(tot.global.custo - Object.assign(vazioTotal(), doc.global).custo) };
+        if (lm.tokensMes !== null && lm.tokensMes !== undefined && totMes.tokens + abertoHoje.tokens + tokens > lm.tokensMes) { r = { permitido: false, motivo: 'limite-mensal-de-tokens', secao: 'mensal', chave: d.slice(0, 7), consumo: totMes.tokens, estimativa: tokens, limite: lm.tokensMes }; return; }
+        if (lm.custoMes !== null && lm.custoMes !== undefined) {
+          if (custo.tipo === 'desconhecido') { r = { permitido: false, motivo: 'custo-desconhecido-com-limite-mensal', secao: 'mensal', chave: d.slice(0, 7), limite: lm.custoMes }; return; }
+          if (totMes.custo + abertoHoje.custo + custo.valor > lm.custoMes) { r = { permitido: false, motivo: 'limite-mensal-de-custo', secao: 'mensal', chave: d.slice(0, 7), consumo: totMes.custo, estimativa: custo.valor, limite: lm.custoMes }; return; }
+        }
         const checagens = [
           ['global', 'global', tot.global, lim.global],
           ['agente', p.agenteId, tot.agentes[p.agenteId] || vazioTotal(), limiteDe(lim, 'porAgente', 'agentes', p.agenteId)],
@@ -129,9 +199,10 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
         Object.entries(doc.reservas || {}).forEach(([k, v]) => { if (Date.parse(v.expiraEm) > agoraMs) reservas[k] = v; }); // limpa as vencidas
         reservas[reservaId] = { tokens, custo: custo.valor || 0, agenteId: p.agenteId, empresa, provedor: p.provedor, execucaoId: p.execucaoId, expiraEm: new Date(agoraMs + RESERVA_MS).toISOString() };
         await t.gravar(docDia(d), Object.assign({}, doc, { reservas, dia: d }));
-        r = { permitido: true, reservaId, dia: d, custo };
+        r = { permitido: true, reservaId, dia: d, custo, tokens, avisos: precoVencido(precos, p.provedor, p.modelo) ? ['preco-vencido'] : [] };
       });
       if (!r.permitido) await auditoria.registrar('custo.bloqueio_preventivo', null, caminhos.tarefa(p.execucaoId), { motivo: r.motivo, secao: r.secao, etapa: p.etapaId || null });
+      else if (r.avisos.length) await auditoria.registrar('custo.preco_vencido', null, caminhos.tarefa(p.execucaoId), { provedor: p.provedor, modelo: String(p.modelo).slice(0, 60) });
       return r;
     },
 
@@ -147,8 +218,8 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
         const novo = Object.assign({}, doc, { reservas, dia: reserva.dia });
         if (uso) {
           const precos = await lerPrecos(t);
-          const custo = custoDe(precos, p.provedor, p.modelo, uso.tokensEntrada, uso.tokensSaida);
-          const tokens = uso.tokensEntrada + uso.tokensSaida;
+          const custo = custoDe(precos, p.provedor, p.modelo, uso.tokensEntrada, uso.tokensSaida, { modo: 'uso', uso });
+          const tokens = tokensDoUso(uso);
           const empresa = p.empresaId || 'sem-empresa';
           const soma = (x) => {
             const v = Object.assign(vazioTotal(), x);
@@ -161,9 +232,47 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
           novo.agentes = Object.assign({}, doc.agentes, { [p.agenteId]: soma((doc.agentes || {})[p.agenteId]) });
           novo.empresas = Object.assign({}, doc.empresas, { [empresa]: soma((doc.empresas || {})[empresa]) });
           novo.provedores = Object.assign({}, doc.provedores, { [p.provedor]: soma((doc.provedores || {})[p.provedor]) });
+          await somarMes(t, reserva.dia, soma);
           out = { custo, tokens, reservaExistia: !!rs };
         } else out = { custo: null, tokens: 0, reservaExistia: !!rs };
         await t.gravar(docDia(reserva.dia), novo);
+      });
+      return out;
+    },
+
+    // R1 (plano, seção 13.4): resultado DESCONHECIDO (tempo esgotado, queda de conexão, fluxo
+    // interrompido, worker caiu depois de enviar): a chamada pode ter sido processada e cobrada.
+    // Conta a RESERVA INTEIRA (o máximo possível) como "custo provável"; se veio uso parcial,
+    // vale o maior dos dois. Nunca vira zero. Ajuste só pelo número do painel do provedor.
+    async liquidarDesconhecido(reserva, p, usoParcial) {
+      let out;
+      await banco.transacao(async (t) => {
+        const doc = (await t.obter(docDia(reserva.dia))) || {};
+        const reservas = Object.assign({}, doc.reservas || {});
+        const rs = reservas[reserva.reservaId];
+        delete reservas[reserva.reservaId];
+        const precos = await lerPrecos(t);
+        const tokensReserva = rs ? rs.tokens : (reserva.tokens || 0);
+        const custoReserva = rs ? (rs.custo || 0) : ((reserva.custo && reserva.custo.valor) || 0);
+        const parcial = usoParcial ? custoDe(precos, p.provedor, p.modelo, usoParcial.tokensEntrada, usoParcial.tokensSaida, { modo: 'uso', uso: usoParcial }) : null;
+        const tokens = Math.max(tokensReserva, usoParcial ? tokensDoUso(usoParcial) : 0);
+        const custoValor = Math.max(custoReserva, parcial && parcial.valor !== null ? parcial.valor : 0);
+        const conhecido = !!precos[`${p.provedor}/${p.modelo}`] || p.provedor === PROVEDOR_SIMULADO;
+        const empresa = p.empresaId || 'sem-empresa';
+        const soma = (x) => {
+          const v = Object.assign(vazioTotal(), x);
+          v.tokens += tokens; v.chamadas += 1; v.provaveis += 1;
+          if (!conhecido) v.custoDesconhecido += 1; else v.custo = r6(v.custo + custoValor);
+          return v;
+        };
+        const novo = Object.assign({}, doc, { reservas, dia: reserva.dia });
+        novo.global = soma(doc.global);
+        novo.agentes = Object.assign({}, doc.agentes, { [p.agenteId]: soma((doc.agentes || {})[p.agenteId]) });
+        novo.empresas = Object.assign({}, doc.empresas, { [empresa]: soma((doc.empresas || {})[empresa]) });
+        novo.provedores = Object.assign({}, doc.provedores, { [p.provedor]: soma((doc.provedores || {})[p.provedor]) });
+        await t.gravar(docDia(reserva.dia), novo);
+        await somarMes(t, reserva.dia, soma);
+        out = { custo: { tipo: conhecido ? 'provavel' : 'desconhecido', valor: conhecido ? custoValor : null, moeda: conhecido && precos[`${p.provedor}/${p.modelo}`] ? precos[`${p.provedor}/${p.modelo}`].moeda : null }, tokens, reservaExistia: !!rs };
       });
       return out;
     },
@@ -189,6 +298,8 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
       exigirAtor(ator);
       if (!CHAVE_PRECO.test(String(chave))) throw erro('invalido', 'Chave de preço inválida (use provedor/modelo)');
       garantir(PRECO, preco, 'Preço');
+      // R1: a Anthropic grava cache em toda chamada (instruções fixas): sem o preço do cache, o custo não fecha
+      if (String(chave).startsWith('anthropic/') && (preco.cacheEscritaPorMilhao === undefined || preco.cacheLeituraPorMilhao === undefined)) throw erro('invalido', 'Preço da Anthropic precisa dos preços de cache (gravação e leitura)');
       await banco.transacao(async (t) => {
         const doc = (await t.obter(caminhos.precosModelos())) || { itens: {} };
         const itens = Object.assign({}, doc.itens, { [chave]: Object.assign({}, preco, { definidoPor: ator.uid, definidoEm: relogio() }) });
@@ -198,6 +309,15 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
       return { chave, preco };
     },
 
+    // R1: totais do mês (AAAA-MM; padrão: o mês atual, UTC)
+    async doMes(ator, m) {
+      exigirAtor(ator);
+      const alvo = m || dia().slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(alvo)) throw erro('invalido', 'Mês inválido (AAAA-MM)');
+      const doc = (await banco.obter(`${caminhos.colecoes.consumo}/mes-${alvo}`)) || {};
+      return { mes: alvo, global: Object.assign(vazioTotal(), doc.global), custoConfirmado: null, cobrancaReal: false };
+    },
+
     async doDia(ator, d) {
       exigirAtor(ator);
       const alvo = d || dia();
@@ -205,9 +325,10 @@ function criarConsumo({ banco, auditoria, relogio = relogioPadrao }) {
       const doc = (await banco.obter(docDia(alvo))) || {};
       const tot = totais(doc, Date.parse(relogio()));
       const reservasAbertas = Object.values(doc.reservas || {}).filter((r) => Date.parse(r.expiraEm) > Date.parse(relogio())).length;
-      return { dia: alvo, global: Object.assign(vazioTotal(), doc.global), agentes: doc.agentes || {}, empresas: doc.empresas || {}, provedores: doc.provedores || {}, emAberto: tot.global, reservasAbertas, custoConfirmado: null, cobrancaReal: false };
+      const mes = (await banco.obter(docMes(alvo))) || {};
+      return { dia: alvo, mes: { mes: alvo.slice(0, 7), global: Object.assign(vazioTotal(), mes.global) }, global: Object.assign(vazioTotal(), doc.global), agentes: doc.agentes || {}, empresas: doc.empresas || {}, provedores: doc.provedores || {}, emAberto: tot.global, reservasAbertas, custoConfirmado: null, cobrancaReal: false };
     },
   };
 }
 
-module.exports = { criarConsumo, PADRAO_LIMITES, RESERVA_MS, ESQUEMA_LIMITES };
+module.exports = { criarConsumo, PADRAO_LIMITES, PROVEDORES_COBRADOS, RESERVA_MS, ESQUEMA_LIMITES, PRECO_VENCE_DIAS, custoMaximo, custoDoUso };

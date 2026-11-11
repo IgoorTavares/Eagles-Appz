@@ -20,7 +20,7 @@ const TODOS_PROVEDORES = [...PROVEDORES, PROVEDOR_SIMULADO];
 // instruções de sistema, o modo JSON, os nomes do uso e os motivos de fim mudam.
 const RECURSOS_PROVEDOR = Object.freeze({
   openai: Object.freeze({ instrucoesDeSistema: 'mensagem role=system', saidaJson: 'response_format json_object', usoInformado: 'usage.prompt_tokens / completion_tokens', cancelamento: 'só do lado do cliente (abortar a requisição)', limiteRequisicoes: 'HTTP 429 + retry-after' }),
-  anthropic: Object.freeze({ instrucoesDeSistema: 'campo system', saidaJson: 'por instrução no sistema (sem modo JSON assumido)', usoInformado: 'usage.input_tokens / output_tokens', cancelamento: 'só do lado do cliente (abortar a requisição)', limiteRequisicoes: 'HTTP 429 + retry-after; 529 = sobrecarga' }),
+  anthropic: Object.freeze({ instrucoesDeSistema: 'campo system (com cache)', saidaJson: 'output_config.format (esquema JSON) quando há esquema; senão por instrução no sistema', usoInformado: 'usage.input_tokens / output_tokens / cache_creation_input_tokens / cache_read_input_tokens', cancelamento: 'só do lado do cliente (abortar a requisição)', limiteRequisicoes: 'HTTP 429 + retry-after; 529 = sobrecarga' }),
   google: Object.freeze({ instrucoesDeSistema: 'systemInstruction', saidaJson: 'generationConfig.responseMimeType application/json', usoInformado: 'usageMetadata.promptTokenCount / candidatesTokenCount', cancelamento: 'só do lado do cliente (abortar a requisição)', limiteRequisicoes: 'HTTP 429 RESOURCE_EXHAUSTED' }),
   simulado: Object.freeze({ instrucoesDeSistema: 'campo sistema', saidaJson: 'sempre JSON', usoInformado: 'uso.entrada / saida (simulado)', cancelamento: 'simulado', limiteRequisicoes: 'simulado' }),
 });
@@ -33,7 +33,7 @@ const FINS = ['completa', 'incompleta', 'recusada', 'filtrada'];
 // Erros: tipo estável. Transitórios podem ser tentados de novo (com espera);
 // "revisáveis" são respostas que chegaram mas não servem (vão para o controle de
 // qualidade/revisão); os demais são definitivos.
-const TIPOS_ERRO = ['timeout', 'limite-requisicoes', 'indisponivel', 'cancelado', 'credencial', 'requisicao-invalida', 'resposta-malformada', 'resposta-incompleta', 'recusada', 'configuracao-invalida', 'nao-autorizado'];
+const TIPOS_ERRO = ['timeout', 'limite-requisicoes', 'indisponivel', 'cancelado', 'credencial', 'requisicao-invalida', 'resposta-malformada', 'resposta-incompleta', 'recusada', 'configuracao-invalida', 'nao-autorizado', 'modelo-indisponivel'];
 const TRANSITORIOS = ['timeout', 'limite-requisicoes', 'indisponivel'];
 const REVISAVEIS = ['resposta-malformada', 'resposta-incompleta', 'recusada'];
 
@@ -46,6 +46,10 @@ class ErroProvedor extends Error {
     this.status = extras.status || null;
     this.esperaMs = Number.isFinite(extras.esperaMs) && extras.esperaMs > 0 ? Math.min(extras.esperaMs, 60 * 60 * 1000) : null;
     this.uso = extras.uso || null; // uso informado mesmo numa resposta que não serve (custo!)
+    // R1: o provedor RESPONDEU com um corpo de erro (o pedido foi recusado, sem cobrança)? Sem corpo
+    // (queda de conexão, tempo esgotado) o resultado é DESCONHECIDO: pode ter sido processado e cobrado.
+    this.comCorpo = extras.comCorpo === true;
+    this.categoria = typeof extras.categoria === 'string' ? extras.categoria.slice(0, 40) : null;
     this.transitorio = TRANSITORIOS.includes(this.tipo);
     this.revisavel = REVISAVEIS.includes(this.tipo);
     this.cancelado = this.tipo === 'cancelado';

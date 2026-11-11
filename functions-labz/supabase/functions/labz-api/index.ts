@@ -8,7 +8,7 @@
 //   LABZ_ORIGENS           (opcional) origens do navegador permitidas, separadas por vírgula
 //   LABZ_FIREBASE_API_KEY  (v4, OBRIGATÓRIO) a apiKey PÚBLICA do Firebase (a mesma do firebase-config.js; não é
 //                          segredo), para conferir conta desativada / sessão revogada. Sem ela, a função não liga.
-import { montarApi, postgres, criarRegistroRecusas } from './labz-b49c379e0336.mjs';
+import { montarApi, postgres, criarRegistroRecusas } from './labz-ad650613edbc.mjs';
 
 const env = (k: string) => Deno.env.get(k) ?? '';
 

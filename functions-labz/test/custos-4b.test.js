@@ -10,7 +10,7 @@ const { montarComEmpresas, rejeita } = require('./ajuda');
 const { transporteComModeloSimulado } = require('../src/ia/simulacao/modelo-simulado');
 const { PADRAO_LIMITES } = require('../src/motor/consumo');
 
-const cfg = (provedor) => ({ provedor, modelo: 'modelo-ficticio-1', uso: 'simulado', recursosDoModelo: ['texto', 'saida-estruturada', 'ferramentas', 'imagem-entrada', 'imagem-saida'] });
+const cfg = (provedor) => ({ provedor, modelo: provedor === 'anthropic' ? 'claude-haiku-5-5' : 'modelo-ficticio-1', uso: 'simulado', recursosDoModelo: ['texto', 'saida-estruturada', 'ferramentas', 'imagem-entrada', 'imagem-saida'] });
 const montar = (roteiro) => montarComEmpresas({ ia: { transporte: transporteComModeloSimulado(roteiro || {}) } });
 const limites = (extra) => Object.assign(JSON.parse(JSON.stringify(PADRAO_LIMITES)), extra);
 async function rodar(c, agenteId = '04-roteirista', empresaId) {
@@ -71,13 +71,18 @@ test('limites diários por agente, por cliente, por provedor e global (com exce�
 
 test('custo desconhecido NUNCA vira zero; com limite de custo e preço desconhecido, a chamada é bloqueada', async () => {
   const c = await montar();
+  // R1: provedor que COBRA nesta fase (Anthropic) sem preço cadastrado nem chega a chamar
   await c.configModelos.definir(c.ator, '04-roteirista', cfg('anthropic'));
+  const sp = await rodar(c);
+  assert.deepStrictEqual([sp.r.resultado, sp.d.diagnostico.motivo], ['bloqueada-por-custo', 'preco-nao-cadastrado']);
+  // provedor ainda sem cobrança nesta fase (OpenAI, só simulado): o custo fica DESCONHECIDO, contado
+  await c.configModelos.definir(c.ator, '04-roteirista', cfg('openai'));
   const { d } = await rodar(c);
   assert.strictEqual(d.estado, 'COMPLETED');
   assert.deepStrictEqual([d.custos.custoDesconhecido, d.custos.custoEstimado, d.custos.custoConfirmado, d.custos.cobrancaReal], [1, null, null, false]);
   const dia = await c.consumo.doDia(c.ator);
   assert.deepStrictEqual([dia.global.custoDesconhecido, dia.global.custo, dia.custoConfirmado, dia.cobrancaReal], [1, 0, null, false]);
-  assert.ok(dia.provedores.anthropic.custoDesconhecido === 1, 'o desconhecido fica contado, separado do custo');
+  assert.ok(dia.provedores.openai.custoDesconhecido === 1, 'o desconhecido fica contado, separado do custo');
   // limite de custo + preço desconhecido = não dá para garantir → bloqueia
   await c.consumo.definirLimites(c.ator, limites({ porProvedor: { tokensDia: null, custoDia: 1 } }));
   const s = await rodar(c);

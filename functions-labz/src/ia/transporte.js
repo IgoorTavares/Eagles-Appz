@@ -65,4 +65,53 @@ function criarLimitador({ porJanela = 30, janelaMs = 60 * 1000, agoraMs = () => 
   };
 }
 
-module.exports = { criarTransporteBloqueado, criarTransporteSimulado, criarLimitador };
+// ---------- R1: transporte REAL (preparado, TRANCADO) ----------
+// Leva a requisição por HTTPS só para os endereços OFICIAIS (lista fechada) e só pelas rotas
+// conhecidas. Ordem das travas, TODAS antes de qualquer acesso à rede:
+//   1. autorização da fase (autorizado === true; na R1 é sempre false → recusa);
+//   2. provedor na lista fechada (nesta fase: só a Anthropic);
+//   3. rota permitida (mensagens, contagem de tokens, consulta de modelo);
+//   4. interruptor do provedor ligado (labz_config/provedores, lido por provedorLigado);
+//   5. chave configurada no segredo do servidor (nunca no banco, no navegador ou no chat).
+// A chave entra só no cabeçalho, aqui; nunca volta em erro, registro ou resposta.
+const ENDERECOS_OFICIAIS = Object.freeze({ anthropic: 'https://api.anthropic.com' });
+const ROTAS_PERMITIDAS = Object.freeze({ anthropic: [/^\/v1\/messages$/, /^\/v1\/messages\/count_tokens$/, /^\/v1\/models\/[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/] });
+const CABECALHO_CHAVE = Object.freeze({ anthropic: 'x-api-key' });
+
+// opcoes: { autorizado, buscar(url, init), chaveDoProvedor(provedor) → string, provedorLigado(provedor) → Promise<bool> }
+function criarTransporteReal({ autorizado = false, buscar, chaveDoProvedor, provedorLigado } = {}) {
+  const contagem = { tentativasBarradas: 0, enviadas: 0 };
+  return {
+    tipo: 'real',
+    contagem,
+    async enviar(provedor, requisicao, { sinal } = {}) {
+      const barrar = (tipo, msg) => { contagem.tentativasBarradas += 1; throw new ErroProvedor(tipo, msg, { provedor }); };
+      if (autorizado !== true) barrar('nao-autorizado', 'Chamadas reais aos provedores de IA não estão autorizadas nesta fase');
+      if (!Object.prototype.hasOwnProperty.call(ENDERECOS_OFICIAIS, provedor)) barrar('nao-autorizado', 'Provedor fora da lista fechada desta fase');
+      const rota = String(requisicao && requisicao.rota || '');
+      if (!ROTAS_PERMITIDAS[provedor].some((re) => re.test(rota))) barrar('nao-autorizado', 'Rota fora da lista permitida');
+      if (typeof provedorLigado !== 'function' || !(await provedorLigado(provedor))) barrar('nao-autorizado', `Provedor ${provedor} desligado no interruptor (labz_config/provedores)`);
+      const chave = typeof chaveDoProvedor === 'function' ? String(chaveDoProvedor(provedor) || '').trim() : '';
+      if (chave.length < 10) barrar('credencial', `Chave de ${provedor} não configurada no servidor`);
+      if (typeof buscar !== 'function') barrar('nao-autorizado', 'Transporte sem função de rede');
+      if (sinal && sinal.aborted) throw new ErroProvedor('cancelado', 'Chamada cancelada antes de sair', { provedor });
+      const cab = Object.assign({}, requisicao.cabecalhos || {}, { [CABECALHO_CHAVE[provedor]]: chave });
+      contagem.enviadas += 1;
+      let resp;
+      try {
+        resp = await buscar(ENDERECOS_OFICIAIS[provedor] + rota, { method: requisicao.metodo, headers: cab, body: requisicao.corpo === null || requisicao.corpo === undefined ? undefined : JSON.stringify(requisicao.corpo), redirect: 'error', signal: sinal });
+      } catch (e) {
+        if (sinal && sinal.aborted) throw new ErroProvedor('cancelado', 'Chamada abortada', { provedor });
+        // sem resposta: o pedido pode ter sido processado (e cobrado) → resultado DESCONHECIDO (comCorpo: false)
+        throw new ErroProvedor('indisponivel', `${provedor}: falha de rede`, { provedor });
+      }
+      const cabecalhos = {};
+      if (resp.headers && typeof resp.headers.forEach === 'function') resp.headers.forEach((v, k) => { cabecalhos[String(k).toLowerCase()] = v; });
+      let corpo = null;
+      try { corpo = await resp.json(); } catch (e) { corpo = null; }
+      return { status: resp.status, corpo, cabecalhos };
+    },
+  };
+}
+
+module.exports = { criarTransporteBloqueado, criarTransporteSimulado, criarLimitador, criarTransporteReal, ENDERECOS_OFICIAIS };

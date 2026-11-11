@@ -33,6 +33,7 @@
 //    tratados pelo tipo do erro do provedor.
 const { caminhos } = require('../armazenamento/caminhos');
 const { exigirAtor, ATOR_SISTEMA } = require('../auth/super-admin');
+const { criarRegistroChamadas, resultadoDesconhecido } = require('../ia/registro-chamadas');
 const { erro } = require('../nucleo/erros');
 const { garantir } = require('../nucleo/validador');
 const { novoId, relogioPadrao } = require('../nucleo/ids');
@@ -57,7 +58,8 @@ const RESERVA_SAIDA_TOKENS = 1000; // estimativa da resposta, para o limite de c
 const MAX_DADOS_ANTERIORES = 4000; // caracteres de cada resultado anterior levado como dado
 const MAX_PASSOS = 50; // trava contra laço infinito numa mesma rodada
 const MAX_REVISOES_INTERNAS = 2; // Fase 4B: revisões pedidas pela consolidação, por execução
-const MAX_TENTATIVAS_PLANEJAMENTO = 3; // Fase 4B: planos recusados antes de encerrar
+const MAX_TENTATIVAS_PLANEJAMENTO = 3;
+const NEGOCIO = ['precondicao', 'invalido', 'nao-encontrado', 'permissao-negada', 'conflito', 'transicao-invalida', 'limite-excedido']; // Fase 4B: planos recusados antes de encerrar
 const ESQUEMA_REVISAO = { tipo: 'objeto', obrigatorio: true, extras: false, campos: { etapaId: { tipo: 'texto', obrigatorio: true, padrao: /^[a-z0-9-]{1,30}$/ }, motivo: { tipo: 'texto', obrigatorio: true, min: 3, max: 500 } } };
 
 // deps: { banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador, consumo?, entregas?, executorFerramentas?, relogio? }
@@ -67,6 +69,10 @@ const ESQUEMA_REVISAO = { tipo: 'objeto', obrigatorio: true, extras: false, camp
 function criarMotor(deps) {
   const { banco, auditoria, execucoes, fila, portaMemoria, aprovacoes, adaptador, consumo, entregas, compartilhamento } = deps;
   const relogio = deps.relogio || relogioPadrao;
+  // R1: registro das chamadas PAGAS (provedor que não é o simulado): chave única antes de chamar,
+  // resultado desconhecido nunca repete sozinho, no máximo 3 chamadas pagas por etapa.
+  const registro = criarRegistroChamadas({ banco, relogio });
+  const pago = (prep) => !!(prep && prep.provedor && prep.provedor !== 'simulado');
   const executor = deps.executorFerramentas || criarExecutorSimulado();
   const ev = (tipo, id, detalhes, ator = ATOR_SISTEMA) => auditoria.registrar(`execucao.${tipo}`, ator, caminhos.tarefa(id), detalhes);
   const msgCurta = (e) => mensagemSegura((e && e.message) || e, 200); // nunca leva credencial
@@ -113,6 +119,11 @@ function criarMotor(deps) {
     if (!res || !res.reserva) return { custo: null };
     return consumo.liquidar(res.reserva, res.p, uso);
   }
+  // R1: sem resposta do provedor → conta a reserva inteira como custo provável (nunca zero)
+  async function liquidarDesconhecido(res, usoParcial) {
+    if (!res || !res.reserva) return { custo: null };
+    return consumo.liquidarDesconhecido(res.reserva, res.p, usoParcial);
+  }
   const infoCusto = (agenteId, prep, liq) => ({ agenteId, provedor: prep.provedor, custo: liq && liq.custo ? liq.custo : null });
   const usoDoErro = (e) => (e && e.uso ? { tokensEntrada: e.uso.tokensEntrada, tokensSaida: e.uso.tokensSaida, fonte: 'provedor-simulado' } : null);
 
@@ -148,10 +159,28 @@ function criarMotor(deps) {
       if (!c.permitido) throw erro('precondicao', 'O planejamento passaria do limite de consumo desta execução', { motivo: c.motivo, limite: c.limite });
       const res = await reservarConsumo(exe, 'planejamento', '08-estrategista', prep);
       if (!res.permitido) throw erro('precondicao', 'Limite de consumo atingido: o planejamento não foi feito', { motivo: res.motivo, secao: res.secao, limite: res.limite });
+      let chamada = null;
+      if (pago(prep)) {
+        const r = await registro.abrir({ execucaoId: id, etapaId: 'planejamento', agenteId: '08-estrategista', provedor: prep.provedor, modelo: prep.modelo, reserva: res && res.reserva ? res.reserva : null });
+        if (r.bloqueio) {
+          await liquidarConsumo(res, null);
+          await ev('chamada_bloqueada', id, { etapa: 'planejamento', motivo: r.bloqueio }, ator);
+          throw erro('precondicao', 'O planejamento tem uma chamada paga com resultado desconhecido (ou chegou ao limite de chamadas): nada foi chamado de novo', { motivo: r.bloqueio });
+        }
+        chamada = { execucaoId: id, etapaId: 'planejamento', n: r.n };
+      }
       let saida;
       try {
         saida = await adaptador.executar(pedido);
       } catch (e) {
+        if (chamada && resultadoDesconhecido(e)) {
+          const liqD = await liquidarDesconhecido(res, usoDoErro(e));
+          await registro.fechar(chamada, 'desconhecido', { tipoErro: e.tipo || 'interrupcao', custo: liqD.custo });
+          await ev('chamada_resultado_desconhecido', id, { etapa: 'planejamento', tipo: e.tipo || null }, ator);
+          await execucoes.transicionar(ator, id, 'CANCELLED', { motivo: 'planejamento com resultado desconhecido (sem nova chamada automática)', extras: { diagnostico: { motivo: 'resultado-desconhecido', etapa: 'planejamento', tipo: e.tipo || null, em: relogio() } } }).catch(() => {});
+          throw erro('precondicao', 'O planejamento ficou sem resposta do provedor: a chamada não será repetida automaticamente', { motivo: 'resultado-desconhecido' });
+        }
+        if (chamada) await registro.fechar(chamada, e && e.revisavel ? 'invalida' : 'erro', { tipoErro: (e && e.tipo) || null });
         const liq = await liquidarConsumo(res, usoDoErro(e));
         const u = usoDoErro(e);
         await banco.atualizar(caminhos.tarefa(id), Object.assign({ tentativasPlanejamento: tentativa, diagnostico: { motivo: 'planejamento-falhou', tipo: e.tipo || null, detalhe: msgCurta(e), em: relogio() } }, u ? { custos: custos.somar(exe.custos, 'planejamento', u, infoCusto('08-estrategista', prep, liq)) } : {}));
@@ -161,6 +190,7 @@ function criarMotor(deps) {
       }
       const uso = saida && saida.uso && Number.isInteger(saida.uso.tokensEntrada) && Number.isInteger(saida.uso.tokensSaida) ? saida.uso : { tokensEntrada: prep.estimativaEntrada, tokensSaida: 0, fonte: 'estimado' };
       const liq = await liquidarConsumo(res, uso);
+      if (chamada) await registro.fechar(chamada, 'concluida', { tokens: uso.tokensEntrada + uso.tokensSaida, requestId: saida && saida.origem ? saida.origem.requestId : null, custo: liq.custo });
       custosPlano = custos.somar(exe.custos, 'planejamento', uso, infoCusto('08-estrategista', prep, liq));
       if (proposta !== undefined) { /* plano do Super Admin: já validado acima */ } else if (saida && Array.isArray(saida.plano)) proposta = saida.plano; // formato da 4A (lista de passos)
       else if (saida && saida.plano !== undefined) {
@@ -310,14 +340,45 @@ function criarMotor(deps) {
       return { resultado: 'bloqueada-por-custo' };
     }
 
+    // R1: chamada paga → chave única ANTES de chamar; chamada anterior sem resposta bloqueia
+    let chamada = null;
+    if (pago(prep)) {
+      const r = await registro.abrir({ execucaoId: id, etapaId: etapa.id, agenteId: etapa.agenteId, provedor: prep.provedor, modelo: prep.modelo, reserva: res && res.reserva ? res.reserva : null });
+      if (r.bloqueio) {
+        await liquidarConsumo(res, null); // nada foi chamado agora: a reserva NOVA volta
+        // chamada abandonada (o worker caiu depois de enviar): vira "desconhecido" e o custo provável é contado
+        if (r.chamada && r.chamada.estado === 'em-andamento') {
+          const liqD = r.chamada.reserva && consumo ? await consumo.liquidarDesconhecido(r.chamada.reserva, res.p) : { custo: null };
+          await registro.fechar({ execucaoId: id, etapaId: etapa.id, n: r.chamada.n }, 'desconhecido', { tipoErro: 'interrupcao', custo: liqD.custo });
+          await ev('chamada_resultado_desconhecido', id, { etapa: etapa.id, tipo: 'interrupcao' });
+        }
+        await comCracha(id, token, (x) => comEtapa(x, etapa.id, { status: 'pendente', tentativas: tentativa - 1, ultimoErro: r.bloqueio }));
+        await ev('chamada_bloqueada', id, { etapa: etapa.id, motivo: r.bloqueio });
+        await execucoes.transicionar(ATOR_SISTEMA, id, 'REVISION_REQUIRED', { token, motivo: r.bloqueio, extras: { diagnostico: { motivo: r.bloqueio, etapa: etapa.id, em: relogio() } } });
+        return { resultado: 'bloqueada-por-chamada', motivo: r.bloqueio };
+      }
+      chamada = { execucaoId: id, etapaId: etapa.id, n: r.n };
+    }
+
     let saida;
     let qProblemas = null;
     let usoFalha = null;
     try {
       saida = await adaptador.executar(pedido);
     } catch (e) {
-      if (e && e.interrupcao) throw e; // o processo "caiu": nada é limpo (a retomada cuida; a reserva de consumo vence sozinha)
+      if (e && e.interrupcao) throw e; // o processo "caiu": nada é limpo (a chamada fica "em-andamento" e bloqueia a repetição; a reserva vence sozinha)
       usoFalha = usoDoErro(e);
+      if (chamada && resultadoDesconhecido(e)) {
+        // R1: sem resposta do provedor: custo provável = reserva inteira; NUNCA repete sozinho
+        const liqD = await liquidarDesconhecido(res, usoFalha);
+        await registro.fechar(chamada, 'desconhecido', { tipoErro: e.tipo || null, custo: liqD.custo });
+        await comCracha(id, token, (x) => Object.assign(comEtapa(x, etapa.id, { status: 'pendente', ultimoErro: 'resultado-desconhecido' }), { custos: custos.somar(x.custos, etapa.id, { tokensEntrada: prep.estimativaEntrada, tokensSaida: prep.maxTokensSaida, fonte: 'provavel' }, infoCusto(etapa.agenteId, prep, liqD)) }));
+        await ev('chamada_resultado_desconhecido', id, { etapa: etapa.id, tipo: e.tipo || null });
+        await execucoes.transicionar(ATOR_SISTEMA, id, 'REVISION_REQUIRED', { token, motivo: 'resultado desconhecido de uma chamada paga', extras: { diagnostico: { motivo: 'resultado-desconhecido', etapa: etapa.id, tipo: e.tipo || null, em: relogio() } } });
+        return { resultado: 'resultado-desconhecido' };
+      }
+      if (chamada) await registro.fechar(chamada, e && e.revisavel ? 'invalida' : 'erro', { tipoErro: (e && e.tipo) || null });
+      if (chamada && e && e.tipo === 'modelo-indisponivel') await ev('modelo_indisponivel', id, { etapa: etapa.id, agente: etapa.agenteId, provedor: prep.provedor });
       const liq = await liquidarConsumo(res, usoFalha);
       if (usoFalha) await comCracha(id, token, (x) => ({ custos: custos.somar(x.custos, etapa.id, usoFalha, infoCusto(etapa.agenteId, prep, liq)) }));
       if (e && e.cancelado) return liberar(id, token, etapa.id, tentativa);
@@ -342,6 +403,7 @@ function criarMotor(deps) {
       const usoValido = saida && saida.uso && Number.isInteger(saida.uso.tokensEntrada) && Number.isInteger(saida.uso.tokensSaida);
       uso = usoValido ? saida.uso : { tokensEntrada: tokensDe(texto), tokensSaida: 0, fonte: 'estimado' };
       liq = await liquidarConsumo(res, uso);
+      if (chamada) await registro.fechar(chamada, 'concluida', { tokens: uso.tokensEntrada + uso.tokensSaida, requestId: saida && saida.origem ? saida.origem.requestId : null, custo: liq.custo });
     }
 
     // Fase 4C.2: na consolidação, as referências às entregas são do SISTEMA (as do modelo são descartadas)
@@ -390,7 +452,7 @@ function criarMotor(deps) {
       }
       await t.gravar(caminhos.resultadoEtapa(id, etapa.id), {
         simulado: true, agenteId: etapa.agenteId, etapaId: etapa.id, tentativa, texto: textoFinal, referencias: saida.referencias, criadoEm: relogio(), documento: etapa.documento || null,
-        origem: saida.origem ? { provedor: saida.origem.provedor, modelo: saida.origem.modelo, fonteUso: saida.origem.fonteUso } : null,
+        origem: saida.origem ? Object.assign({ provedor: saida.origem.provedor, modelo: saida.origem.modelo, fonteUso: saida.origem.fonteUso }, saida.origem.provedor !== 'simulado' ? { removidosD5: saida.origem.removidosD5 || 0, requestId: saida.origem.requestId || null } : {}) : null,
       });
       const resultado = {
         referencias: saida.referencias, fontes: ctx.fontes.map((f) => `${f.origem}:${f.escopo || '-'}:${f.id}@${f.versao}`), caracteres: textoFinal.length, simulado: true, documento: etapa.documento || null,
@@ -657,8 +719,20 @@ function criarMotor(deps) {
     // Fase 4B: o pedido do usuário vira uma execução orquestrada e o Estrategista planeja.
     async pedido(ator, { empresaId, objetivo, limites } = {}) {
       exigirAtor(ator);
-      const exe = await execucoes.criar(ator, Object.assign({ empresaId: empresaId || null, objetivo, modo: 'orquestrado' }, limites ? { limites } : {}));
-      return planejar(ator, exe.id);
+      const exe = await execucoes.criar(ator, Object.assign({ empresaId: empresaId || null, objetivo, modo: 'orquestrado' }, limites ? { limites } : {}), { origem: 'pedido' });
+      try {
+        return await planejar(ator, exe.id);
+      } catch (e) {
+        // R1 (plano, 13.7): falha INESPERADA no meio (ex.: conflito no banco) não deixa tarefa órfã.
+        // Erros de regra (limite, plano recusado...) já deixam a execução no estado certo.
+        if (!e || !NEGOCIO.includes(e.codigo)) {
+          const atual = await banco.obter(caminhos.tarefa(exe.id)).catch(() => null);
+          const para = atual && atual.estado === 'CREATED' ? 'CANCELLED' : atual && atual.estado === 'PLANNING' ? 'FAILED' : null;
+          if (para) await execucoes.transicionar(ATOR_SISTEMA, exe.id, para, { motivo: 'criação interrompida', extras: { diagnostico: { motivo: 'criacao-interrompida', em: relogio() } } }).catch(() => {}); // se falhar de novo, o monitor encerra
+          await ev('criacao_interrompida', exe.id, { estado: atual ? atual.estado : null }, ator).catch(() => {});
+        }
+        throw e;
+      }
     },
 
     // Super Admin decide um pedido; se não sobrou nenhum pendente, a execução volta para a fila.
@@ -686,6 +760,10 @@ function criarMotor(deps) {
       const extras = { etapas, diagnostico: null };
       if (rep && (rep.fixadas.length || rep.refeitas.length)) await ev('documentos_refixados', id, { fixadas: rep.fixadas.slice(0, 10), refeitas: rep.refeitas.slice(0, 10) }, ator);
       if (limites) extras.limites = Object.assign({}, exe.limites || {}, garantir(custos.ESQUEMA_LIMITES, limites, 'Limites'));
+      // R1: a decisão do Super Admin libera as chamadas pagas com resultado desconhecido das etapas
+      // que voltam a rodar (o custo provável continua contado) e recomeça a contagem de chamadas pagas
+      const liberadas = await registro.liberar(id, etapas.filter((x) => x.status !== 'concluida').map((x) => x.id), ator);
+      if (liberadas) await ev('chamadas_liberadas', id, { quantidade: liberadas }, ator);
       await ev('retomada', id, { limitesNovos: !!limites }, ator);
       return execucoes.transicionar(ator, id, 'READY', { motivo: 'retomada pelo Super Admin', extras });
     },

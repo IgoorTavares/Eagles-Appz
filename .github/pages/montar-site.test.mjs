@@ -192,7 +192,7 @@ test('_config.yml (Jekyll) exclui todo arquivo ou pasta interna da raiz', () => 
   const excluidos = [...cfg.matchAll(/^\s*-\s*"?([^"\n#]+?)"?\s*$/gm)].map((m) => m[1].trim());
   const publicosNaRaiz = new Set(PERMITIDOS.map((f) => f.split('/')[0]));
   const internos = entradasDaRaiz().filter((f) => !f.startsWith('.') && !f.startsWith('_') && !publicosNaRaiz.has(f));
-  assert.ok(internos.includes('functions-labz') && internos.includes('functions') && internos.includes('CLAUDE.md'));
+  assert.ok(internos.includes('testes-regras') && internos.includes('functions') && internos.includes('CLAUDE.md'));
   const faltando = internos.filter((f) => !excluidos.includes(f) && !(f.endsWith('.md') && excluidos.includes('*.md')));
   assert.deepEqual(faltando, [], `faltam no exclude do _config.yml: ${faltando.join(', ')}`);
   // e nada público foi excluído por engano

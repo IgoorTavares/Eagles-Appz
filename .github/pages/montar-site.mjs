@@ -18,7 +18,7 @@ export const PAGINAS = [
   'lancamentos-estoque.html', 'login.html', 'meu-negocio.html', 'meu-perfil.html', 'notas-fiscais-entrada.html',
   'objetos-postagem.html', 'pagina.html', 'pedido-compras.html', 'pedidos-venda.html', 'planos.html', 'portal.html',
   'privacidade.html', 'produtos.html', 'proposta.html', 'site.html', 'suporte.html', 'tarefas.html', 'termos.html',
-  'usuarios.html', 'vendas.html', 'vendedores.html',
+  'usuarios.html', 'vendas.html', 'vendedores.html', 'investimentos.html',
 ];
 export const RECURSOS = ['style.css', 'script.js', 'sw.js', 'manifest.json', 'firebase-config.js', 'CNAME'];
 export const IMAGENS = [
@@ -27,12 +27,14 @@ export const IMAGENS = [
   'assets/icon-maskable-512.png', 'assets/logo-eagles-full.png', 'assets/logo-eagles-icon.png',
   'assets/logo-full.png', 'assets/logo-icon.png',
 ];
-export const PERMITIDOS = Object.freeze([...PAGINAS, ...RECURSOS, ...IMAGENS]);
+// Investimentos (Etapa 05): os scripts e o estilo do módulo e o catálogo estático da Biblioteca (dados públicos)
+export const INVESTIMENTOS = ['inv/inv.css', 'inv/inv-motor.js', 'inv/inv-mercado.js', 'inv/inv-carteira.js', 'inv/inv-noticias.js', 'inv/inv-analise.js', 'inv/inv-ia.js', 'inv/inv-projecoes.js', 'inv/inv-graficos.js', 'inv/inv-biblioteca.js', 'inv/inv-mercado-ui.js', 'inv/inv-carteira-ui.js', 'inv/inv-noticias-ui.js', 'inv/inv-projecoes-ui.js', 'inv/catalogo/meta.json', 'inv/catalogo/ativos.json'];
+export const PERMITIDOS = Object.freeze([...PAGINAS, ...RECURSOS, ...IMAGENS, ...INVESTIMENTOS]);
 export const DOMINIO = 'eagleslabz.com.br';
 
 // nunca podem aparecer no artefato (segunda trava, além da lista de permitidos)
 export const PROIBIDOS = [
-  /^functions(-labz)?(\/|$)/, /^testes-(regras|concorrencia)(\/|$)/, /^\.github(\/|$)/, /^\.git(\/|$)/, /(^|\/)node_modules(\/|$)/,
+  /^functions(-labz)?(\/|$)/, /^testes-(regras|concorrencia|investimentos)(\/|$)/, /^investimentos-portao(\/|$)/, /^\.github(\/|$)/, /^\.git(\/|$)/, /(^|\/)node_modules(\/|$)/,
   /^firestore\./, /^firebase\.json$/, /^package(-lock)?\.json$/, /\.md$/i, /(^|\/)\.env/, /(^|\/)\.secret/,
   /\.(pem|key|p12|log|zip|map)$/i, /(^|\/)_(t|x)_[^/]*\.html$/, /(^|\/)_a[^/]*_[^/]*\.html$/, /(^|\/)\./,
   /(^|\/)(scratch|rascunho|tmp|temp)(\/|$)/i,

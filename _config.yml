@@ -16,6 +16,8 @@ exclude:
   - functions-labz
   - testes-regras
   - testes-concorrencia
+  - investimentos-portao
+  - testes-investimentos
   - package.json
   - package-lock.json
   - node_modules

@@ -1,0 +1,100 @@
+{
+ "formato": "eagles-inv-catalogo-v1",
+ "versao": "20261125120000",
+ "geradoEm": "2026-11-25T12:00:00.000Z",
+ "teste": true,
+ "total": 18,
+ "porFonte": {},
+ "porFonteTeste": {
+  "cvm": 9,
+  "tesouro": 4,
+  "sec": 5,
+  "manual": 3
+ },
+ "totalTeste": 18,
+ "totalReal": 0,
+ "producao": false,
+ "bloqueadasNaProducao": {},
+ "demonstracao": true,
+ "naoConfirmados": 2,
+ "fontes": {
+  "cvm": {
+   "nome": "CVM — Dados Abertos (cadastro de companhias, FCA e informes de FII)",
+   "tipo": "oficial",
+   "licenca": "Dados abertos da CVM — licença declarada no portal A CONFIRMAR (esperada: ODbL, que exige atribuição e compartilhar a base derivada pela mesma licença); não verificável neste ambiente",
+   "atribuicao": "Contém dados da Comissão de Valores Mobiliários (CVM) — Portal de Dados Abertos",
+   "url": "https://dados.cvm.gov.br/",
+   "usada": false,
+   "autorizadaProducao": false,
+   "usadaSoEmTeste": true,
+   "estado": "somente-teste"
+  },
+  "sec": {
+   "nome": "SEC — EDGAR (company tickers)",
+   "tipo": "oficial",
+   "licenca": "Informação pública da SEC (exige identificação no acesso automático)",
+   "atribuicao": "",
+   "url": "https://www.sec.gov/edgar/sec-api-documentation",
+   "usada": false,
+   "autorizadaProducao": false,
+   "usadaSoEmTeste": true,
+   "estado": "somente-teste"
+  },
+  "tesouro": {
+   "nome": "Tesouro Transparente — Tesouro Direto",
+   "tipo": "oficial",
+   "licenca": "Tesouro Transparente — termos de uso A CONFIRMAR para cadastro e para preços; citar a fonte",
+   "atribuicao": "Contém dados do Tesouro Nacional — Tesouro Transparente",
+   "url": "https://www.tesourotransparente.gov.br/",
+   "usada": false,
+   "autorizadaProducao": false,
+   "usadaSoEmTeste": true,
+   "estado": "somente-teste"
+  },
+  "b3": {
+   "nome": "B3 — cadastro de instrumentos",
+   "tipo": "oficial",
+   "licenca": "Política comercial de market data da B3: uso a confirmar por escrito (D-06)",
+   "atribuicao": "",
+   "url": "https://www.b3.com.br/",
+   "usada": false,
+   "autorizadaProducao": false,
+   "usadaSoEmTeste": false,
+   "estado": "desligada"
+  },
+  "coingecko": {
+   "nome": "CoinGecko — lista de moedas",
+   "tipo": "privada",
+   "licenca": "Plano gratuito com atribuição; chave só no servidor (nunca no navegador)",
+   "atribuicao": "",
+   "url": "https://www.coingecko.com/en/api",
+   "usada": false,
+   "autorizadaProducao": false,
+   "usadaSoEmTeste": false,
+   "estado": "desligada"
+  },
+  "manual": {
+   "nome": "Classificação manual (Super Admin)",
+   "tipo": "manual",
+   "licenca": "Cadastro interno",
+   "atribuicao": "",
+   "url": "",
+   "usada": false,
+   "autorizadaProducao": false,
+   "usadaSoEmTeste": true,
+   "estado": "somente-teste"
+  },
+  "teste": {
+   "nome": "DADOS DE TESTE (fictícios)",
+   "tipo": "teste",
+   "licenca": "Sem valor real",
+   "atribuicao": "",
+   "url": "",
+   "usada": false,
+   "autorizadaProducao": false,
+   "usadaSoEmTeste": false,
+   "estado": "sem-arquivo"
+  }
+ },
+ "aviso": "DADOS DE TESTE: empresas e códigos fictícios, sem valor real."
+}

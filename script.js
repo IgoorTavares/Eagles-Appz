@@ -6774,6 +6774,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '26/11/2026 · Investimentos no menu do celular', itens: [
+    { titulo: 'Investimentos aparece no celular', badges: ['corrigido'], texto: 'No celular, o menu lateral e a tela inicial do Painel não mostravam o Investimentos (só o computador mostrava). Agora o Financeiro abre com Financeiro e Investimentos, e a tela inicial ganhou o atalho. Empresas sem o módulo continuam com o menu igual.' },
+  ] },
   { data: '26/11/2026 · Investimentos com dados reais', itens: [
     { titulo: 'Juros, inflação e câmbio reais', badges: ['novo'], texto: 'O módulo Investimentos passa a mostrar Selic, CDI, IPCA, IGP-M, dólar (PTAX), euro, desemprego e PIB do Banco Central, as expectativas do Boletim Focus e os juros dos títulos do Tesouro dos EUA. Cada número mostra a fonte e a data de referência.' },
     { titulo: 'Tesouro Direto com preço real', badges: ['novo'], texto: 'Os títulos do Tesouro Direto têm preço e taxa de compra e venda do Tesouro Transparente, e as carteiras passam a ser avaliadas pelo PU de venda (valor estimado de resgate, bruto: antes de IR, IOF e taxas). Ações e FIIs continuam com preço informado por você: a B3 exige licença paga para cotações.' },
@@ -12069,7 +12072,7 @@ async function sisMontarParaEmpresa(tenantId, versao) {
 // =====================================================================
 // ---------- ERP no celular: gaveta + tela inicial + barra de baixo (igual ao CRM) ----------
 // =====================================================================
-const ERP_MOB_ICONES = { painel: 'quadro', 'meu-negocio': 'grafico', cadastros: 'pessoas', vendas: 'carrinho', estoque: 'estoque', financeiro: 'dinheiro', crm: 'conversa',
+const ERP_MOB_ICONES = { painel: 'quadro', 'meu-negocio': 'grafico', cadastros: 'pessoas', vendas: 'carrinho', estoque: 'estoque', financeiro: 'dinheiro', investimentos: 'grafico', crm: 'conversa',
   produtos: 'pacote', 'clientes-fornecedores': 'pessoas', vendedores: 'usuario', funcionarios: 'usuario', 'pedidos-venda': 'documento', 'objetos-postagem': 'enviar', contratos: 'prancheta', 'nfse-externo': 'abrir',
   'estoque-posicao': 'estoque', 'lancamentos-estoque': 'repetir', 'conferencia-estoque': 'aprovado', 'pedido-compras': 'carrinho', 'notas-fiscais-entrada': 'documento', 'fornecedores-atalho': 'pessoas' };
 function planoTemCrm() { return !TENANT_PLANO || TENANT_PLANO !== 'erp'; }
@@ -12078,7 +12081,8 @@ function erpMobItens() {
   // mesmos itens do menu de cima, com os mesmos filtros (plano, perfil e Meu sistema)
   const ok = (i) => itemVisivelNoPlano(i) && (!i.soProdutos || perfilOpVendeProdutos()) && (!i.modulo || [].concat(i.modulo).some((m) => sisModuloAtivo(m)));
   const rot = (c) => { if (c.key === 'pedidos-venda') { const t = sisTermo('pedido', 'Pedido'); return t === 'Pedido' ? c.label : t + 's'; } if (c.key === 'clientes-fornecedores') return sisTermo('cliente', 'Cliente') + 's e Fornecedores'; return c.label; };
-  return NAV_ITEMS.filter(ok).map((it) => {
+  // v159.1: o celular usa o mesmo menu de cima, inclusive Financeiro ▾ Investimentos quando o módulo está ligado (invNavItem)
+  return NAV_ITEMS.map(invNavItem).filter(ok).map((it) => {
     const filhos = (it.children || []).filter(ok).concat(...((it.columns || []).map((col) => col.items.filter(ok))));
     return { key: it.key, label: it.label, href: it.href || '', filhos: filhos.map((c) => ({ key: c.key, label: rot(c), href: c.href, externo: !!c.externo })) };
   }).filter((it) => it.href || it.filhos.length || it.type === 'meu-negocio');
@@ -12143,6 +12147,9 @@ function erpRenderMobile() {
       ['contratos', 'Contratos', 'prancheta', 'contratos.html', 'contratos'], ['financeiro', 'Financeiro', 'dinheiro', 'financeiro.html'], ['tarefas', 'Tarefas', 'tarefas', 'tarefas.html', '', 'crm'],
       ['crm', 'CRM', 'conversa', 'crm.html', '', 'crm'], ['meu-sistema', 'Meu sistema', 'camadas', '#'], ['configuracoes', 'Configurações', 'configuracoes', 'configuracoes.html']]
       .filter(([k, , , , mod, plano]) => (!mod || (sisModuloAtivo(mod) && (!['estoque', 'compras'].includes(mod) || perfilOpVendeProdutos()))) && (!plano || !TENANT_PLANO || TENANT_PLANO === 'ambos' || TENANT_PLANO === plano));
+    // v159.1: atalho do Investimentos logo depois do Financeiro, só quando o módulo está ligado
+    const iFin = atalhos.findIndex((a) => a[0] === 'financeiro');
+    if (iFin >= 0 && typeof invMenuVisivel === 'function' && invMenuVisivel()) atalhos.splice(iFin + 1, 0, ['investimentos', 'Investimentos', 'grafico', 'investimentos.html']);
     home.innerHTML = `<div class="crm-home-ola"><div><h2>Olá${nome ? ', ' + escapeHtml(nome) : ''}</h2><span>${escapeHtml(hoje)}</span></div></div>
       <div class="crm-home-rotulo">Menu</div>
       <div class="crm-home-grade">${atalhos.map(([k, t, i, h]) => k === 'meu-sistema' ? `<button type="button" class="crm-home-tile" onclick="sisAbrirMeuSistema()"><span class="crm-home-ic">${ic(i, 'ic-herda')}</span><span class="crm-home-txt">${t}</span></button>` : `<a class="crm-home-tile" href="${h}"><span class="crm-home-ic">${ic(i, 'ic-herda')}</span><span class="crm-home-txt">${escapeHtml(t)}</span></a>`).join('')}</div>

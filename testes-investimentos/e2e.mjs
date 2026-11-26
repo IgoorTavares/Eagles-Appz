@@ -641,6 +641,23 @@ const foto = (page, nome, cheia = true) => page.screenshot({ path: join(SAIDA, '
     ok(['bcb_sgs', 'bcb_ptax', 'bcb_focus', 'ust_curva'].every((id) => D.ligada(id)), 'as fontes chamadas são as aprovadas na central de licenças');
   });
 
+  await caso(27, 'Celular (v159.1): gaveta e tela inicial do Painel mostram Investimentos quando o módulo está ligado; empresa sem o módulo não mostra', async () => {
+    const ctx = await contexto(375); const p = await entrar(ctx, P.dir, 'index.html');
+    await p.waitForSelector('#erp-gaveta', { state: 'attached', timeout: 20000 });
+    await p.waitForTimeout(800);
+    const g = await p.evaluate(() => { ERP_GAVETA_ABERTOS.financeiro = true; erpRenderMobile(); return { gaveta: [...document.querySelectorAll('#erp-gaveta a')].map((a) => a.getAttribute('href')), inicio: [...document.querySelectorAll('#erp-home-mobile a')].map((a) => a.getAttribute('href')) }; });
+    ok(g.gaveta.includes('investimentos.html') && g.gaveta.includes('financeiro.html'), 'gaveta com Financeiro e Investimentos: ' + g.gaveta.join(','));
+    ok(g.inicio.includes('investimentos.html'), 'atalho na tela inicial: ' + g.inicio.join(','));
+    ok(!p._erros.length, 'erros: ' + p._erros.join(' | '));
+    // o caso 6 liga o módulo nesta empresa: aqui ele é DESLIGADO de novo para conferir o menu sem o módulo
+    await gravar('tenants/t-off', { nomeEmpresa: 'Empresa sem o módulo', plano: 'erp', ativo: true, limiteUsuarios: 50, modulos: { investimentos: false } });
+    const ctx2 = await contexto(375); const q = await entrar(ctx2, P.off, 'index.html');
+    await q.waitForSelector('#erp-gaveta', { state: 'attached', timeout: 20000 }); await q.waitForTimeout(800);
+    const h = await q.evaluate(() => { erpRenderMobile(); return [...document.querySelectorAll('#erp-gaveta a, #erp-home-mobile a')].map((a) => a.getAttribute('href')); });
+    ok(!h.includes('investimentos.html') && h.includes('financeiro.html'), 'empresa sem o módulo: menu igual ao de antes: ' + h.join(','));
+    await ctx.close(); await ctx2.close();
+  });
+
   await nav.close(); srv.close();
   const passou = R.filter((r) => r[2] === 'PASSOU').length;
   R.forEach(([n, nome, s, d]) => console.log(`${String(n).padStart(2)}. ${s === 'PASSOU' ? '✔' : '✖'} ${nome}${d ? '\n     → ' + d : ''}`));

@@ -15,6 +15,7 @@ exclude:
   - functions
   - functions-labz
   - testes-regras
+  - testes-concorrencia
   - package.json
   - package-lock.json
   - node_modules

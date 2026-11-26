@@ -217,3 +217,71 @@ test('ninguém se promove a Super Admin', async () => {
   await assertFails(setDoc(doc(db(), 'usuarios/anonimo'), { role: 'SuperAdmin' }));
 });
 
+// ---------- v157: anotações e contatos dos negócios (um documento por item) ----------
+test('v157: anotações e contatos dos negócios — mesmas permissões das outras listas do CRM', async () => {
+  for (const col of ['crm_negocio_anotacoes', 'crm_negocio_contatos']) {
+    // quem opera grava e lê; o Diretor também
+    await assertSucceeds(setDoc(doc(db('a1'), `tenants/t1/${col}/x1`), { negocioId: 'n', texto: 'ok' }));
+    await assertSucceeds(updateDoc(doc(db('d1'), `tenants/t1/${col}/x1`), { texto: 'editado' }));
+    await assertSucceeds(getDocs(collection(db('a1'), `tenants/t1/${col}`)));
+    // o Financeiro lê, mas não grava nem apaga
+    await assertSucceeds(getDoc(doc(db('f1'), `tenants/t1/${col}/x1`)));
+    await assertFails(setDoc(doc(db('f1'), `tenants/t1/${col}/x2`), { texto: 'não' }));
+    await assertFails(deleteDoc(doc(db('f1'), `tenants/t1/${col}/x1`)));
+    // login de Cliente, outra empresa e quem não está logado: nada
+    await assertFails(getDoc(doc(db('c1'), `tenants/t1/${col}/x1`)));
+    await assertFails(getDocs(collection(db('d2'), `tenants/t1/${col}`)));
+    await assertFails(setDoc(doc(db('d2'), `tenants/t1/${col}/x3`), { texto: 'invasor' }));
+    await assertFails(getDoc(doc(db(), `tenants/t1/${col}/x1`)));
+    await assertFails(setDoc(doc(db('c1'), `tenants/t1/${col}/x4`), { texto: 'cliente' }));
+    await assertFails(setDoc(doc(db(), `tenants/t1/${col}/x5`), { texto: 'sem login' }));
+    // o Diretor também apaga (o item volta logo abaixo para o resto do teste)
+    await assertSucceeds(deleteDoc(doc(db('d1'), `tenants/t1/${col}/x1`)));
+    await assertSucceeds(setDoc(doc(db('a1'), `tenants/t1/${col}/x1`), { negocioId: 'n', texto: 'ok' }));
+    // empresa suspensa: nem o Diretor dela
+    await assertFails(setDoc(doc(db('d3'), `tenants/t3/${col}/x1`), { texto: 'suspensa' }));
+    // o Super Admin lê
+    await assertSucceeds(getDoc(doc(db('sa'), `tenants/t1/${col}/x1`)));
+    await assertSucceeds(deleteDoc(doc(db('a1'), `tenants/t1/${col}/x1`)));
+  }
+  // a lista não virou "qualquer coleção": um nome parecido continua fechado
+  await assertFails(setDoc(doc(db('d1'), 'tenants/t1/crm_negocio_outros/x'), { a: 1 }));
+  await assertFails(getDoc(doc(db('d1'), 'tenants/t1/crm_negocio_outros/x')));
+});
+test('v157: itens já copiados (dados/{chave}_importados) e reserva do link do portal seguem a regra comum de dados', async () => {
+  for (const k of ['tenants/t1/dados/eagles_crm_negocio_anotacoes_v1_importados', 'tenants/t1/dados/eagles_portal_links_v1__r_0123456789abcdef']) {
+    await assertSucceeds(setDoc(doc(db('a1'), k), { ids: ['a'] }));
+    await assertSucceeds(getDoc(doc(db('f1'), k)));
+    await assertFails(setDoc(doc(db('f1'), k), { ids: [] }));
+    await assertFails(getDoc(doc(db('d2'), k)));
+    await assertFails(setDoc(doc(db('d2'), k), { ids: [] }));
+    await assertFails(getDoc(doc(db('c1'), k)));
+    await assertFails(setDoc(doc(db(), k), { ids: [] }));
+  }
+});
+
+// ---------- Segurança das chaves de IA do CRM (correção S1/S2, 26/11/2026) ----------
+test('Chaves de IA: ninguém grava chave no banco (nem Diretor, nem Super Admin, nem restauração); sem chave grava normalmente', async () => {
+  const cam = 'tenants/t2/dados/eagles_ia_config_v1';
+  const comChave = { valor: { modo: 'empresa', provedor: 'openai', modelos: { openai: 'm' }, chaves: { openai: 'sk-TESTE-FICTICIA' } } };
+  const semChave = { valor: { modo: 'empresa', provedor: 'openai', modelos: { openai: 'm' } } };
+  await assertFails(setDoc(doc(db('d2'), cam), comChave));
+  await assertFails(setDoc(doc(db('sa'), cam), comChave));                                   // restauração pelo Super Admin também
+  await assertFails(setDoc(doc(db('d2'), cam), { valor: { modo: 'navegador', chaves: { gemini: 'AIzaTESTE' } } }));
+  await assertSucceeds(setDoc(doc(db('d2'), cam), semChave));
+  await assertSucceeds(setDoc(doc(db('d2'), cam), { valor: { modo: 'navegador', provedor: '', modelos: {}, chaves: {} } })); // vazio é permitido
+  await assertSucceeds(setDoc(doc(db('sa'), cam), semChave));
+});
+test('Chaves de IA: documento antigo COM chave fica escondido da equipe até o Diretor limpar', async () => {
+  const cam = 'tenants/t1/dados/eagles_ia_config_v1';
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), cam), { valor: { modo: 'empresa', provedor: 'openai', modelos: {}, chaves: { openai: 'sk-TESTE-FICTICIA' } } }); });
+  await assertFails(getDoc(doc(db('a1'), cam)));      // Administrativo
+  await assertFails(getDoc(doc(db('f1'), cam)));      // Financeiro
+  await assertFails(getDoc(doc(db('d2'), cam)));      // outra empresa
+  await assertSucceeds(getDoc(doc(db('d1'), cam)));   // Diretor (limpa ao abrir)
+  await assertSucceeds(getDoc(doc(db('sa'), cam)));   // Super Admin (backup)
+  await assertSucceeds(setDoc(doc(db('d1'), cam), { valor: { modo: 'empresa', provedor: 'openai', modelos: {} } })); // limpeza
+  await assertSucceeds(getDoc(doc(db('a1'), cam)));   // depois da limpeza a equipe volta a ler provedor e modelo
+  await assertSucceeds(getDoc(doc(db('f1'), cam)));
+  await assertSucceeds(getDoc(doc(db('a1'), 'tenants/t1/dados/nao_existe_ainda')));
+});

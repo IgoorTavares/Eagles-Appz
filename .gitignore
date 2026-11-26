@@ -6,3 +6,7 @@ labz-backup*
 **/supabase/backup/*.json
 # a página offline (ferramenta, sem dados) continua no repositório
 !functions-labz/supabase/backup/labz-backup.html
+# dependências e registros dos testes locais (nunca vão para o Git)
+node_modules/
+firestore-debug.log
+*-debug.log

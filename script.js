@@ -779,7 +779,17 @@ const CHAVES_COLECAO = {
   // listas do CRM (mesma proteção: duas pessoas salvando juntas não se apagam)
   eagles_crm_clientes_v1: 'crm_clientes', eagles_crm_negocios_v1: 'crm_negocios', eagles_crm_contratos_v1: 'crm_contratos',
   eagles_servicos_v1: 'crm_servicos', eagles_crm_tarefas_v1: 'crm_tarefas_dia', eagles_crm_lembretes_v1: 'crm_lembretes',
+  // v157: anotações e contatos dos negócios (várias pessoas anotam ao mesmo tempo)
+  eagles_crm_negocio_anotacoes_v1: 'crm_negocio_anotacoes', eagles_crm_negocio_contatos_v1: 'crm_negocio_contatos',
 };
+// Listas que passaram para "um documento por item" quando já estavam em uso
+// (v157). Durante a troca de versão, um aparelho com a versão ANTIGA ainda
+// aberto continua gravando a lista inteira em dados/{chave}. A "ponte" copia
+// para a coleção tudo o que aparece nessa lista antiga e ainda não foi
+// copiado — uma vez só por item: os itens já copiados ficam anotados em
+// dados/{chave}_importados (assim um item excluído depois não volta).
+// Esta versão NUNCA altera nem apaga a lista antiga.
+const CHAVES_COLECAO_PONTE = ['eagles_crm_negocio_anotacoes_v1', 'eagles_crm_negocio_contatos_v1'];
 const COL_ULTIMO = {}; // chave -> Map(id -> JSON do item como está no banco)
 function colRef(key) { return firestoreDb.collection('tenants').doc(TENANT_ID).collection(CHAVES_COLECAO[key]); }
 function colJson(o) {
@@ -803,7 +813,124 @@ async function colMigrar(key, legado) {
   console.log(`[EaglesLabz] "${key}": ${itens.length} item(ns) passaram para um documento por item.`);
   return itens;
 }
+// ---------- ponte da lista antiga (CHAVES_COLECAO_PONTE) ----------
+function ponteRefImportados(key) { return caminhoTenantDoc(key + '_importados'); }
+// código curto e estável a partir de um texto (para itens antigos sem id)
+function ponteHash(txt) {
+  let a = 0x811c9dc5, b = 0x9747b28c;
+  for (let i = 0; i < txt.length; i++) { const c = txt.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193) >>> 0; b = Math.imul(b ^ c, 0x5bd1e995) >>> 0; }
+  return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0');
+}
+// o id do item vira o nome do documento: precisa ser válido no Firestore
+function ponteIdItem(it) {
+  const id = it && it.id !== undefined && it.id !== null ? String(it.id) : '';
+  if (id && id.length <= 200 && !/[/]/.test(id) && id !== '.' && id !== '..' && !/^__.*__$/.test(id)) return id;
+  return 'leg_' + ponteHash(id || colJson(it));
+}
+// prepara os itens da lista antiga para a coleção (sem mudar o conteúdo)
+function ponteNormalizar(legado, primeiraVez) {
+  const agora = Date.now() * 1000;
+  return (Array.isArray(legado) ? legado : []).filter((it) => it && typeof it === 'object' && !Array.isArray(it)).map((it, i) => {
+    const c = colLimpo(it);
+    c.id = ponteIdItem(it);
+    if (c._pos === undefined) {
+      const t = Date.parse(c.criadoEm || '');
+      c._pos = Number.isFinite(t) ? t * 1000 + i : (primeiraVez ? i : agora + i);
+    }
+    return c;
+  });
+}
+// Copia para a coleção os itens da lista antiga ainda não copiados. Cada parte
+// é uma transação: confere a lista de "já copiados", NÃO sobrescreve um item
+// que já existe na coleção e anota os ids copiados. Se falhar (sem internet,
+// sem permissão), nada é alterado e tenta de novo mais tarde.
+const PONTE_ANDAMENTO = {};
+function ponteImportar(key, pendentes, depois) {
+  if (PONTE_ANDAMENTO[key] || !pendentes.length) return;
+  const FV = firebase.firestore.FieldValue;
+  const ref = colRef(key);
+  const refImp = ponteRefImportados(key);
+  PONTE_ANDAMENTO[key] = (async () => {
+    for (let i = 0; i < pendentes.length; i += 100) {
+      const parte = pendentes.slice(i, i + 100);
+      await cloudTransacao(async (tx) => {
+        const imp = await tx.get(refImp);
+        const ja = new Set(imp.exists && Array.isArray(imp.data().ids) ? imp.data().ids : []);
+        const cands = parte.filter((it) => !ja.has(it.id));
+        if (!cands.length) return;
+        const atuais = await Promise.all(cands.map((it) => tx.get(ref.doc(it.id))));
+        cands.forEach((it, j) => {
+          if (atuais[j].exists) return; // já está na coleção: não mexe
+          const d = colLimpo(it); delete d.id;
+          tx.set(ref.doc(it.id), d);
+        });
+        tx.set(refImp, { ids: FV.arrayUnion(...cands.map((it) => it.id)), atualizadoEm: new Date().toISOString(), por: USUARIO_NOME || '' }, { merge: true });
+      });
+    }
+  })().then(() => {
+    delete PONTE_ANDAMENTO[key];
+  }).catch((err) => {
+    console.warn('[EaglesLabz] Cópia da lista antiga de "' + key + '" ficou para depois:', err && (err.code || err.message));
+    setTimeout(() => { delete PONTE_ANDAMENTO[key]; if (typeof depois === 'function') depois(); }, 15000);
+  });
+}
+function colWatchPonte(key, fallback, onChange) {
+  if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'aguardando';
+  let col = null, leg = null, imp = null, impExiste = false, falhou = false;
+  const erro = (err) => {
+    falhou = true;
+    console.error('Erro de sincronização em "' + key + '":', err);
+    if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'erro';
+    atualizarIndicadorSincronizacao('erro');
+    onChange(lsLoad(chaveLocalTenant(key), fallback));
+  };
+  const emitir = () => {
+    if (falhou || col === null || leg === null || imp === null) return;
+    const ids = new Set(col.map((it) => it.id));
+    const pendentes = ponteNormalizar(leg, !impExiste).filter((it) => !ids.has(it.id) && !imp.has(it.id));
+    if (pendentes.length && nivelPodeGravarChave(key)) ponteImportar(key, pendentes, emitir);
+    colGuardarUltimo(key, col); // só o que está de fato na coleção
+    // os itens ainda não copiados já aparecem na tela (nada some enquanto copia)
+    const lista = pendentes.length ? colOrdenar(col.concat(pendentes)) : col;
+    CLOUD_ESTADO_CHAVES[key] = 'carregado';
+    lsSave(chaveLocalTenant(key), lista);
+    onChange(lista);
+    atualizarIndicadorSincronizacao('ok');
+  };
+  colRef(key).onSnapshot((snap) => { col = colOrdenar(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id }))); emitir(); }, erro);
+  caminhoTenantDoc(key).onSnapshot((snap) => { const v = snap.exists ? snap.data().valor : null; leg = Array.isArray(v) ? v : []; emitir(); }, erro);
+  ponteRefImportados(key).onSnapshot((snap) => { impExiste = snap.exists; imp = new Set(snap.exists && Array.isArray(snap.data().ids) ? snap.data().ids : []); emitir(); }, erro);
+}
+async function colGetForcePonte(key, fallback) {
+  const [snap, leg, imp] = await Promise.all([colRef(key).get(), caminhoTenantDoc(key).get(), ponteRefImportados(key).get()]);
+  const col = colOrdenar(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })));
+  const ids = new Set(col.map((it) => it.id));
+  const feitos = new Set(imp.exists && Array.isArray(imp.data().ids) ? imp.data().ids : []);
+  const v = leg.exists ? leg.data().valor : null;
+  const pendentes = ponteNormalizar(Array.isArray(v) ? v : [], !imp.exists).filter((it) => !ids.has(it.id) && !feitos.has(it.id));
+  colGuardarUltimo(key, col);
+  const lista = pendentes.length ? colOrdenar(col.concat(pendentes)) : col;
+  lsSave(chaveLocalTenant(key), lista);
+  CLOUD_ESTADO_CHAVES[key] = 'carregado';
+  return lista.length || !Array.isArray(fallback) ? lista : fallback;
+}
+// VOLTAR ATRÁS (só se o Igor decidir voltar para a v155): grava na lista
+// antiga tudo o que está hoje na coleção + o que ainda não foi copiado, para a
+// versão antiga enxergar as anotações/contatos criados na v157. Só o Diretor
+// ou o Super Admin; roda pelo console do navegador, com o sistema aberto:
+//   await ponteVoltarParaListaAntiga('eagles_crm_negocio_anotacoes_v1')
+// Não apaga a coleção nem a lista de importados.
+async function ponteVoltarParaListaAntiga(key) {
+  if (!CHAVES_COLECAO_PONTE.includes(key)) throw new Error('chave fora da ponte');
+  if (!nivelEhDiretor()) throw new Error('só o Diretor ou o Super Admin');
+  const lista = await colGetForcePonte(key, []);
+  const valor = lista.map((it) => colLimpo(it));
+  await caminhoTenantDoc(key).set({ valor, voltouDaColecaoEm: new Date().toISOString(), voltouPor: USUARIO_NOME || '' }, { merge: true });
+  return valor.length;
+}
+
 function colWatch(key, fallback, onChange) {
+  if (CHAVES_COLECAO_PONTE.includes(key)) { colWatchPonte(key, fallback, onChange); return; }
   if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'aguardando';
   let conferiuLegado = false;
   colRef(key).onSnapshot(async (snap) => {
@@ -887,6 +1014,7 @@ function colSet(key, lista) {
   }
 }
 async function colGetForce(key, fallback) {
+  if (CHAVES_COLECAO_PONTE.includes(key)) return colGetForcePonte(key, fallback);
   const snap = await colRef(key).get();
   let lista = colOrdenar(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })));
   if (!lista.length) {
@@ -901,6 +1029,64 @@ async function colGetForce(key, fallback) {
   CLOUD_ESTADO_CHAVES[key] = 'carregado';
   return lista.length || !Array.isArray(fallback) ? lista : fallback;
 }
+
+// Documento ainda não existe: grava o valor inicial (lista vazia, modelos
+// padrão...) SÓ SE continuar não existindo no banco. É uma transação: lê no
+// servidor e cria na mesma operação. Antes (até a v155) cada tela que abria
+// gravava o valor inicial direto, e uma tela abrindo logo depois do primeiro
+// salvamento de verdade apagava esse salvamento. Sem internet ou sem
+// permissão, não grava nada (a tela usa o valor inicial só na memória).
+// Prazo para uma promessa do banco (não deixa a tela esperando para sempre).
+function cloudComPrazo(promessa, ms) {
+  let t = null;
+  return Promise.race([promessa, new Promise((_, nao) => { t = setTimeout(() => nao(Object.assign(new Error('Sem resposta do servidor'), { code: 'prazo' })), ms); })]).finally(() => clearTimeout(t));
+}
+// Transação com mais paciência: quando muita gente grava o MESMO documento no
+// mesmo instante, o Firebase desiste depois de 5 tentativas; aqui tenta de
+// novo, com espera crescente e um pouco aleatória, até o prazo. A função
+// passada precisa poder rodar mais de uma vez (ela sempre lê o banco de novo).
+// Sem internet, desiste na hora.
+async function cloudTransacao(fn, prazoMs = 45000) {
+  const fim = Date.now() + prazoMs;
+  for (let tentativa = 0; ; tentativa++) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) throw Object.assign(new Error('Sem internet'), { code: 'sem-internet' });
+    try { return await cloudComPrazo(firestoreDb.runTransaction(fn), Math.max(1000, fim - Date.now())); }
+    catch (err) {
+      const code = String((err && err.code) || '');
+      if (!/aborted|failed-precondition|unavailable|deadline-exceeded|resource-exhausted/.test(code) || Date.now() >= fim) throw err;
+      await new Promise((r) => setTimeout(r, Math.min(3000, 150 * 2 ** Math.min(tentativa, 5)) * (0.5 + Math.random())));
+    }
+  }
+}
+const CLOUD_CRIANDO = {};
+function cloudCriarSeAusente(key, valor) {
+  if (CLOUD_CRIANDO[key] || !firestoreDb || typeof firestoreDb.runTransaction !== 'function') return;
+  const ref = caminhoTenantDoc(key);
+  CLOUD_CRIANDO[key] = firestoreDb.runTransaction(async (tx) => {
+    const atual = await tx.get(ref);
+    if (atual.exists) return false;
+    tx.set(ref, { valor });
+    return true;
+  }).catch((err) => { console.warn('[EaglesLabz] Valor inicial de "' + key + '" não gravado agora:', err && (err.code || err.message)); return false; })
+    .then((r) => { delete CLOUD_CRIANDO[key]; return r; });
+}
+
+// ---------- Segurança das chaves de IA (correção S1/S2, auditoria 26/11/2026) ----------
+// A configuração da empresa (eagles_ia_config_v1) guarda só provedor e modelos. Chave de IA NUNCA fica no banco,
+// no localStorage da empresa, no backup nem na restauração: cada pessoa usa a própria, só no próprio navegador.
+let IA_CHAVES_LEGADAS = false; // o documento da empresa ainda tinha chaves (versão antiga): o Diretor limpa ao abrir
+function iaSemChaves(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return v;
+  if (v.chaves && typeof v.chaves === 'object' && Object.values(v.chaves).some(Boolean)) IA_CHAVES_LEGADAS = true;
+  const c = Object.assign({}, v); delete c.chaves; return c;
+}
+const SANEAR_CHAVE = { eagles_ia_config_v1: iaSemChaves };
+const saneado = (key, v) => (SANEAR_CHAVE[key] ? SANEAR_CHAVE[key](v) : v);
+// cópias antigas no localStorage deste aparelho (de antes da correção) perdem as chaves já na abertura
+function iaLimparCopiasLocais() {
+  try { Object.keys(localStorage).forEach((k) => { if (/(^|::)eagles_ia_config_v1$/.test(k)) { const v = JSON.parse(localStorage.getItem(k) || 'null'); if (v && v.chaves) { delete v.chaves; localStorage.setItem(k, JSON.stringify(v)); } } }); } catch (e) { /* sem armazenamento */ }
+}
+iaLimparCopiasLocais();
 
 function cloudWatch(key, fallback, onChange) {
   if (!FIREBASE_PRONTO || !TENANT_ID) {
@@ -919,19 +1105,21 @@ function cloudWatch(key, fallback, onChange) {
   caminhoTenantDoc(key).onSnapshot((snap) => {
     CLOUD_ESTADO_CHAVES[key] = 'carregado';
     if (snap.exists) {
-      const valor = snap.data().valor;
+      const valor = saneado(key, snap.data().valor);
       lsSave(chaveLocalTenant(key), valor);
       onChange(valor);
     } else {
-      if (nivelPodeGravarChave(key)) caminhoTenantDoc(key).set({ valor: fallback });
+      if (nivelPodeGravarChave(key)) cloudCriarSeAusente(key, fallback);
       onChange(fallback);
     }
     atualizarIndicadorSincronizacao('ok');
   }, (err) => {
+    // a regra nova esconde da equipe o documento de IA que ainda tem chaves antigas: não é falha de sincronização
+    if (key === IA_CFG_KEY && err && err.code === 'permission-denied') { CLOUD_ESTADO_CHAVES[key] = 'bloqueado'; onChange(saneado(key, lsLoad(chaveLocalTenant(key), fallback))); return; }
     console.error('Erro de sincronização em "' + key + '":', err);
     if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'erro';
     atualizarIndicadorSincronizacao('erro');
-    onChange(lsLoad(chaveLocalTenant(key), fallback));
+    onChange(saneado(key, lsLoad(chaveLocalTenant(key), fallback)));
   });
 }
 
@@ -939,6 +1127,7 @@ function cloudSet(key, data) {
   if (FIREBASE_PRONTO && TENANT_ID && !nivelPodeGravarChave(key)) { avisarSemPermissaoNivel(); return false; }
   if (!chaveProntaParaGravar(key)) return false;
   if (key === 'eagles_crm_negocios_v1' && typeof negAnotarHistorico === 'function') negAnotarHistorico(data);
+  data = saneado(key, data);
   lsSave(chaveLocalTenant(key), data);
   if (!FIREBASE_PRONTO || !TENANT_ID) return true;
   if (CHAVES_COLECAO[key]) { colSet(key, data); return true; }
@@ -992,8 +1181,10 @@ function cloudSalvarCampos(key, campos, aoPendente) {
 async function cloudGetForce(key, fallback) {
   if (!FIREBASE_PRONTO || !TENANT_ID) return lsLoad(chaveLocalTenant(key), fallback);
   if (CHAVES_COLECAO[key]) return colGetForce(key, fallback);
-  const snap = await caminhoTenantDoc(key).get();
-  const valor = snap.exists ? snap.data().valor : fallback;
+  let snap;
+  try { snap = await caminhoTenantDoc(key).get(); }
+  catch (e) { if (key === IA_CFG_KEY && e && e.code === 'permission-denied') return saneado(key, lsLoad(chaveLocalTenant(key), fallback)); throw e; }
+  const valor = saneado(key, snap.exists ? snap.data().valor : fallback);
   lsSave(chaveLocalTenant(key), valor);
   CLOUD_ESTADO_CHAVES[key] = 'carregado';
   return valor;
@@ -1105,6 +1296,8 @@ async function resolverTenantDoUsuario(user) {
     TENANT_ASSINATURA = tenantSnap.exists ? (tenantSnap.data().assinatura || null) : null;
     // fora do CRM, avisa quando um cliente responder a aprovação
     setTimeout(() => { try { if (typeof aprVigiaGlobal === 'function') aprVigiaGlobal(); } catch (e) {} }, 2500);
+    // segurança das chaves de IA: o Diretor confere UMA vez por sessão se o banco ainda tem chaves antigas e as retira
+    setTimeout(() => { try { iaConferirLegadoUmaVez(); } catch (e) {} }, 3000);
     return true;
   } catch (err) {
     console.error("Erro ao resolver tenant:", err);
@@ -4301,6 +4494,12 @@ function htmlAbaContatosNegocio() {
     </div>`;
 }
 
+// contatos e anotações dos negócios: um documento por item (v157, CHAVES_COLECAO)
+function crmNegocioIniciarSubcolecoes() {
+  cloudWatch(CRM_NEGOCIO_CONTATOS_KEY, [], (data) => { CRM_NEGOCIO_CONTATOS_DATA = data; CRM_NEGOCIO_SUBCOLECOES_CARREGADAS = true; });
+  cloudWatch(CRM_NEGOCIO_ANOTACOES_KEY, [], (data) => { CRM_NEGOCIO_ANOTACOES_DATA = data; });
+}
+
 function abrirNovoContatoNegocio() {
   const painel = document.getElementById('crm-form-novo-contato');
   painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
@@ -6571,8 +6770,17 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '26/11/2026 · Segurança das chaves de IA', itens: [
+    { titulo: 'Chaves de IA só no seu navegador', badges: ['segurança'], texto: 'As chaves dos provedores de IA (OpenAI, Gemini e outros) não ficam mais guardadas no banco da empresa: cada pessoa cadastra a própria chave, que fica só no navegador dela e não vai para o backup. O Diretor continua escolhendo o provedor e o modelo padrão da empresa. Se a sua empresa tinha uma chave salva por uma versão antiga, o sistema a retira do banco quando o Diretor entra e avisa para trocar a chave no site do provedor.' },
+    { titulo: 'Restaurar backup pelo Super Admin', badges: ['corrigido'], texto: 'A restauração de backup feita pela equipe da Eagles Labz não funcionava quando o Super Admin não estava ligado a nenhuma empresa. Agora funciona com a empresa escolhida.' },
+  ] },
   { data: '24/11/2026 · Ajuste no menu do Super Admin', itens: [
     { titulo: 'Menu do Super Admin como antes', badges: ['melhoria'], texto: 'O menu do Super Admin voltou ao formato anterior. Nada mudou nas outras telas, nos dados nem nas permissões.' },
+  ] },
+  { data: '09/11/2026 · Várias pessoas ao mesmo tempo', itens: [
+    { titulo: 'Anotações e contatos dos negócios não se perdem mais', badges: ['corrigido'], texto: 'Quando duas ou mais pessoas anotavam no mesmo instante (em qualquer negócio), só a última anotação ficava salva. Agora cada anotação e cada contato é guardado separado, e todos ficam. Testado com 2, 20, 30 e 50 pessoas ao mesmo tempo. As anotações e os contatos que já existiam passam sozinhos para o formato novo, uma vez só, sem apagar a lista antiga.' },
+    { titulo: 'Links do portal do cliente sem perda e sem duplicar', badges: ['corrigido'], texto: 'Duas pessoas criando links do portal ao mesmo tempo podiam apagar o link uma da outra, ou criar dois links diferentes para o mesmo cliente. Agora o link é criado direto no banco: quem pede depois recebe o mesmo link. Criar um link novo precisa de internet (sem conexão o sistema avisa e não cria nada).' },
+    { titulo: 'Abrir uma tela não apaga mais o que alguém acabou de salvar', badges: ['corrigido'], texto: 'Quando um dado ainda não existia, cada tela que abria gravava o valor inicial (lista vazia ou modelos padrão), e isso podia apagar o primeiro salvamento de outra pessoa. Agora o valor inicial só é gravado se o dado continuar não existindo.' },
   ] },
   { data: '09/11/2026 · Pedido de venda no celular', itens: [
     { titulo: 'Produto achado pelo nome ou pelo código', badges: ['corrigido'], texto: 'No pedido de venda, o produto agora é encontrado pelo nome, pelo código (SKU) ou pelo GTIN, sem diferença de maiúsculas, acentos e espaços — no celular o teclado punha maiúscula ou espaço no fim e o produto não era reconhecido, deixando o preço em R$ 0,00. Também dá para digitar o código no campo "Código", e as sugestões mostram o código e o preço.' },
@@ -7100,7 +7308,7 @@ async function cfgIntegEstado() {
     meta: meta && meta.conectado ? ['ok', 'Conectado'] : ['nao', 'Não conectado'],
     pixel: PAG_PIXELS && PAG_PIXELS.meta && PAG_PIXELS.meta.ativo && PAG_PIXELS.meta.pixelId ? ['ok', 'Ligado'] : ['nao', 'Não configurado'],
     ga: PAG_PIXELS && PAG_PIXELS.ga && PAG_PIXELS.ga.ativo && PAG_PIXELS.ga.medicaoId ? ['ok', 'Ligado'] : ['nao', 'Não configurado'],
-    ia: (ia && ia.modo === 'empresa' && ia.chaves && Object.values(ia.chaves).some(Boolean)) ? ['ok', 'Chave da empresa'] : iaLoc ? ['ok', 'Chave neste navegador'] : ['nao', 'Sem chave'],
+    ia: iaLoc ? ['ok', 'Chave neste navegador'] : ['nao', 'Sem chave'], // chave da empresa no banco não existe mais (correção de segurança)
   };
   if (CFG_ABA_ATUAL === 'integracoes') renderAbaIntegracoesConfig();
 }
@@ -7302,8 +7510,7 @@ function initCrmHub() {
   cloudWatch(CFG_PORTAL_KEY, portalConfigPadrao(), (data) => { CFG_PORTAL_DATA = data; CFG_PORTAL_CARREGADO = true; });
   cloudWatch(CRM_TEMPLATES_BRIEFING_KEY, [], (data) => { CRM_TEMPLATES_BRIEFING_CUSTOM = data; CRM_TEMPLATES_BRIEFING_CARREGADO = true; });
   escutarBriefingsCrm();
-  cloudWatch(CRM_NEGOCIO_CONTATOS_KEY, [], (data) => { CRM_NEGOCIO_CONTATOS_DATA = data; CRM_NEGOCIO_SUBCOLECOES_CARREGADAS = true; });
-  cloudWatch(CRM_NEGOCIO_ANOTACOES_KEY, [], (data) => { CRM_NEGOCIO_ANOTACOES_DATA = data; });
+  crmNegocioIniciarSubcolecoes();
   escutarPropostasCrm();
   renderFiltroClientesCrm();
   renderCrmDashboard();
@@ -7995,7 +8202,7 @@ const IA_PROVEDORES = {
   gemini: { nome: 'Google Gemini', prefixo: 'AIza', site: 'https://aistudio.google.com/app/apikey', siteNome: 'Google AI Studio', passos: ['Entre no Google AI Studio com sua conta Google', 'Clique em "Get API key" / "Create API key"', 'Escolha ou crie um projeto do Google Cloud', 'Copie a chave (começa com AIza) e cole abaixo'] },
   anthropic: { nome: 'Anthropic Claude', prefixo: 'sk-ant-', site: 'https://console.anthropic.com/settings/keys', siteNome: 'Anthropic Console', passos: ['Entre em console.anthropic.com e faça login', 'Abra "API keys" e clique em "Create key"', 'Em "Billing", adicione créditos (a Anthropic cobra por uso)', 'Copie a chave (começa com sk-ant-) e cole abaixo'] },
 };
-let IA_CFG_EMPRESA = { modo: 'navegador', provedor: '', modelos: {}, chaves: {} };
+let IA_CFG_EMPRESA = { modo: 'navegador', provedor: '', modelos: {} }; // nunca tem "chaves" (correção de segurança)
 let IA_ESCUTANDO = false;
 let IA_MODELOS_CACHE = {};
 
@@ -8006,17 +8213,37 @@ function iaIniciar(cb) {
   if (cb) IA_OUVINTES.push(cb);
   if (IA_ESCUTANDO) return;
   IA_ESCUTANDO = true;
-  cloudWatch(IA_CFG_KEY, { modo: 'navegador', provedor: '', modelos: {}, chaves: {} }, (d) => {
+  cloudWatch(IA_CFG_KEY, { modo: 'navegador', provedor: '', modelos: {} }, (d) => {
     const v = d && typeof d === 'object' ? d : {};
-    IA_CFG_EMPRESA = { modo: v.modo === 'empresa' ? 'empresa' : 'navegador', provedor: v.provedor || '', modelos: v.modelos || {}, chaves: v.chaves || {} };
+    IA_CFG_EMPRESA = { modo: v.modo === 'empresa' ? 'empresa' : 'navegador', provedor: v.provedor || '', modelos: v.modelos || {} };
+    iaLimparLegadoNaEmpresa();
     IA_OUVINTES.forEach((f) => { try { f(); } catch (e) { console.error(e); } });
   });
 }
 const IA_OUVINTES = [];
+// o documento da empresa ainda tem chaves de uma versão antiga: o Diretor regrava SEM elas (uma vez) e é avisado
+let IA_LIMPEZA_FEITA = false;
+async function iaConferirLegadoUmaVez() {
+  if (!FIREBASE_PRONTO || !TENANT_ID || !nivelEhDiretor()) return;
+  try { if (sessionStorage.getItem('eagles_ia_legado_conferido') === TENANT_ID) return; sessionStorage.setItem('eagles_ia_legado_conferido', TENANT_ID); } catch (e) { /* sem armazenamento: confere de novo */ }
+  const v = await cloudGetForce(IA_CFG_KEY, null); // passa pelo saneador: marca IA_CHAVES_LEGADAS se o banco tinha chaves
+  if (v && typeof v === 'object') IA_CFG_EMPRESA = { modo: v.modo === 'empresa' ? 'empresa' : 'navegador', provedor: v.provedor || '', modelos: v.modelos || {} };
+  iaLimparLegadoNaEmpresa();
+}
+function iaLimparLegadoNaEmpresa() {
+  if (!IA_CHAVES_LEGADAS || IA_LIMPEZA_FEITA || !FIREBASE_PRONTO || !TENANT_ID || !nivelEhDiretor()) return;
+  IA_LIMPEZA_FEITA = true;
+  caminhoTenantDoc(IA_CFG_KEY).set({ valor: { modo: IA_CFG_EMPRESA.modo, provedor: IA_CFG_EMPRESA.provedor, modelos: IA_CFG_EMPRESA.modelos } }).then(() => {
+    IA_CHAVES_LEGADAS = false;
+    avisar('Por segurança, as chaves de IA que estavam guardadas no banco da empresa foram retiradas.\n\nO provedor e os modelos escolhidos continuam. Cada pessoa da equipe agora cola a própria chave em "Chaves de IA" (ela fica só no navegador dela).\n\nImportante: troque a chave antiga no site do provedor (crie uma nova e apague a antiga), porque cópias dela podem existir em backups e aparelhos.', 'Chaves de IA');
+  }).catch((e) => { IA_LIMPEZA_FEITA = false; console.error('Limpeza das chaves de IA:', e); });
+}
 // Configuração que vale agora (empresa ou este navegador)
 function iaAtual() {
-  const base = IA_CFG_EMPRESA.modo === 'empresa' ? IA_CFG_EMPRESA : iaLocal();
-  const chaves = base.chaves || {};
+  // chave: SEMPRE a deste navegador. Provedor e modelos: os da empresa (modo "empresa") ou os deste navegador
+  const local = iaLocal();
+  const base = IA_CFG_EMPRESA.modo === 'empresa' ? { provedor: IA_CFG_EMPRESA.provedor, modelos: IA_CFG_EMPRESA.modelos || {}, chaves: local.chaves } : local;
+  const chaves = local.chaves || {};
   let provedor = base.provedor && chaves[base.provedor] ? base.provedor : Object.keys(IA_PROVEDORES).find((p) => chaves[p]) || '';
   return { modo: IA_CFG_EMPRESA.modo, provedor, chave: provedor ? chaves[provedor] : '', modelo: provedor ? (base.modelos || {})[provedor] || '' : '', chaves, modelos: base.modelos || {} };
 }
@@ -8118,8 +8345,10 @@ function iaRenderChaves() {
   const ov = srvGarantirModal();
   const diretor = !FIREBASE_PRONTO || !TENANT_ID || nivelEhDiretor();
   const modoEmpresa = IA_CFG_EMPRESA.modo === 'empresa';
-  const base = modoEmpresa ? IA_CFG_EMPRESA : iaLocal();
-  const podeEditar = modoEmpresa ? diretor : true;
+  const local = iaLocal();
+  const base = modoEmpresa ? { provedor: IA_CFG_EMPRESA.provedor, modelos: IA_CFG_EMPRESA.modelos || {}, chaves: local.chaves || {} } : local;
+  const podeEditar = true; // a chave é sempre de quem está usando; provedor e modelo da empresa, só o Diretor
+  const podeModelo = modoEmpresa ? diretor : true;
   const a = iaAtual();
   ov.innerHTML = `
     <div class="modal kb-modal ia-modal" style="max-width:760px;" role="dialog" aria-modal="true">
@@ -8128,20 +8357,20 @@ function iaRenderChaves() {
       <div class="fin-painel">
         <strong>Onde a chave fica guardada</strong>
         <div class="ia-modos">
-          <label class="ia-modo${!modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="navegador" ${!modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Só neste navegador</b><small>Cada pessoa cola a sua chave. Mais seguro: a chave não sai deste computador.</small></span></label>
-          <label class="ia-modo${modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="empresa" ${modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Na empresa</b><small>O Diretor cola uma vez e vale para a equipe toda. Atenção: qualquer pessoa logada da empresa consegue, tecnicamente, ver a chave.</small></span></label>
+          <label class="ia-modo${!modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="navegador" ${!modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Cada pessoa escolhe</b><small>Cada pessoa escolhe o provedor e o modelo e cola a própria chave.</small></span></label>
+          <label class="ia-modo${modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="empresa" ${modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Padrão da empresa</b><small>O Diretor escolhe o provedor e o modelo para a equipe. A chave continua sendo de cada pessoa.</small></span></label>
         </div>
-        ${diretor ? '' : '<p class="kb-vazio-mini" style="margin:8px 0 0;">Só o Diretor muda onde a chave fica.</p>'}
+        <p class="kb-vazio-mini" style="margin:8px 0 0;">${ic('cadeado', 'ic-herda')} A chave fica <b>só neste navegador</b> e nunca é guardada no banco da empresa nem no backup. Ao sair do sistema, ela é apagada deste navegador.${diretor ? '' : ' Só o Diretor muda o padrão da empresa.'}</p>
       </div>
-      ${modoEmpresa && !diretor ? `<div class="fin-painel"><p style="margin:0;">${a.provedor ? `A empresa está usando <b>${escapeHtml(IA_PROVEDORES[a.provedor].nome)}</b>${a.modelo ? ` (modelo ${escapeHtml(a.modelo)})` : ''}. Para trocar, fale com o Diretor.` : 'O Diretor ainda não cadastrou a chave da empresa.'}</p></div>` : `
+      ${`
       <div class="ia-provedores">${Object.keys(IA_PROVEDORES).map((p) => {
         const P = IA_PROVEDORES[p], tem = !!(base.chaves || {})[p], modelos = IA_MODELOS_CACHE[p] || [], modelo = (base.modelos || {})[p] || '';
         return `<div class="fin-painel ia-prov${a.provedor === p ? ' ia-prov-ativo' : ''}">
           <div class="fin-painel-cab"><strong>${escapeHtml(P.nome)}</strong><span class="kb-espaco"></span>${tem ? `<span class="badge badge-success" style="font-size:10.5px;">Conectado</span>` : ''}</div>
           <details class="ia-passos"><summary>Como obter sua chave · <a href="${P.site}" target="_blank" rel="noopener">${P.siteNome}</a></summary><ol>${P.passos.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ol></details>
           ${tem ? `<div class="ia-chave-salva"><code>${escapeHtml(iaMascara(base.chaves[p]))}</code>${podeEditar ? `<button type="button" class="btn btn-small btn-ghost" onclick="iaRemoverChave('${p}')">Remover</button>` : ''}</div>
-            <div class="field full" style="margin-top:8px;"><label>Modelo</label>${modelos.length ? `<select id="ia-m-${p}" ${podeEditar ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value)">${modelos.map((m) => `<option value="${escapeHtml(m)}" ${m === modelo ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select>` : `<div style="display:flex; gap:6px;"><input type="text" id="ia-m-${p}" value="${escapeHtml(modelo)}" ${podeEditar ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value.trim())"><button type="button" class="btn btn-small" onclick="iaRecarregarModelos('${p}')">Listar</button></div>`}</div>
-            ${podeEditar ? `<label class="ia-usar"><input type="radio" name="ia-prov" ${a.provedor === p ? 'checked' : ''} onchange="iaUsarProvedor('${p}')"> Usar este nos agentes</label>` : ''}`
+            <div class="field full" style="margin-top:8px;"><label>Modelo</label>${modelos.length ? `<select id="ia-m-${p}" ${podeModelo ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value)">${modelos.map((m) => `<option value="${escapeHtml(m)}" ${m === modelo ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select>` : `<div style="display:flex; gap:6px;"><input type="text" id="ia-m-${p}" value="${escapeHtml(modelo)}" ${podeModelo ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value.trim())"><button type="button" class="btn btn-small" onclick="iaRecarregarModelos('${p}')">Listar</button></div>`}</div>
+            ${podeModelo ? `<label class="ia-usar"><input type="radio" name="ia-prov" ${a.provedor === p ? 'checked' : ''} onchange="iaUsarProvedor('${p}')"> Usar este nos agentes</label>` : ''}`
           : (podeEditar ? `<div class="field full"><label>Cole sua chave</label><input type="password" id="ia-k-${p}" autocomplete="off" spellcheck="false" placeholder="${P.prefixo}..."></div>
             <button type="button" class="btn btn-small btn-primary" id="ia-b-${p}" onclick="iaValidarESalvar('${p}')">Validar e salvar</button>` : '<p class="kb-vazio-mini">Não conectado.</p>')}
         </div>`;
@@ -8150,19 +8379,27 @@ function iaRenderChaves() {
     </div>`;
 }
 function iaAlvo() { return IA_CFG_EMPRESA.modo === 'empresa' ? 'empresa' : 'local'; }
+// mut recebe { provedor, modelos, chaves }. As CHAVES vão sempre para este navegador; provedor e modelos vão para a
+// empresa (só o Diretor, modo "empresa") ou para este navegador. Nada de chave é enviado ao banco.
 function iaGravar(mut) {
+  const local = iaLocal();
   if (iaAlvo() === 'empresa') {
-    if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) { avisarSemPermissaoNivel('mudar a chave de IA da empresa'); return false; }
-    const v = JSON.parse(JSON.stringify(IA_CFG_EMPRESA)); v.chaves = v.chaves || {}; v.modelos = v.modelos || {}; mut(v);
-    if (cloudSet(IA_CFG_KEY, v) === false) return false;
-    IA_CFG_EMPRESA = v;
-  } else { const v = iaLocal(); mut(v); iaSalvarLocal(v); }
+    const v = { provedor: IA_CFG_EMPRESA.provedor, modelos: JSON.parse(JSON.stringify(IA_CFG_EMPRESA.modelos || {})), chaves: Object.assign({}, local.chaves || {}) };
+    const antes = JSON.stringify({ p: v.provedor, m: v.modelos });
+    mut(v);
+    local.chaves = v.chaves; iaSalvarLocal(local);
+    if (JSON.stringify({ p: v.provedor, m: v.modelos }) !== antes) {
+      if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) return true; // não-Diretor: a chave é dele; o padrão da empresa continua
+      const novo = { modo: 'empresa', provedor: v.provedor, modelos: v.modelos };
+      if (cloudSet(IA_CFG_KEY, novo) === false) return false;
+      IA_CFG_EMPRESA = novo;
+    }
+  } else { mut(local); iaSalvarLocal(local); }
   return true;
 }
 function iaMudarModo(modo) {
   if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) { avisarSemPermissaoNivel(); iaRenderChaves(); return; }
-  const v = Object.assign({}, IA_CFG_EMPRESA, { modo });
-  if (modo === 'navegador') { v.chaves = {}; } // tirar a chave da empresa do banco
+  const v = { modo, provedor: IA_CFG_EMPRESA.provedor || '', modelos: IA_CFG_EMPRESA.modelos || {} }; // nunca leva chave
   if (cloudSet(IA_CFG_KEY, v) === false) { iaRenderChaves(); return; }
   IA_CFG_EMPRESA = v;
   iaRenderChaves(); if (IA_AO_SALVAR) IA_AO_SALVAR();
@@ -8185,7 +8422,7 @@ async function iaValidarESalvar(p) {
   }
 }
 async function iaRecarregarModelos(p) {
-  const a = iaAlvo() === 'empresa' ? IA_CFG_EMPRESA : iaLocal();
+  const a = iaLocal(); // a chave é sempre a deste navegador
   if (!(a.chaves || {})[p]) return;
   try { IA_MODELOS_CACHE[p] = await iaListarModelos(p, a.chaves[p]); iaRenderChaves(); } catch (e) { avisar(e.message, 'Chave de IA'); }
 }
@@ -9862,19 +10099,77 @@ function portalTokenNovo() { return 'pt' + Math.random().toString(36).slice(2, 1
 function portalNomeIgual(a, b) { return ttSemAcento(String(a || '').trim()).replace(/\s+/g, ' ') === ttSemAcento(String(b || '').trim()).replace(/\s+/g, ' '); }
 function portalChave(nome) { if (!nome) return ''; if (PORTAL_LINKS[nome]) return nome; return Object.keys(PORTAL_LINKS).find((k) => portalNomeIgual(k, nome)) || String(nome).trim(); }
 function portalLinkCliente(nome) { nome = portalChave(nome); const t = PORTAL_LINKS[nome]; return t ? location.origin + location.pathname.replace(/[^/]*$/, '') + 'portal.html?p=' + encodeURIComponent(t) : ''; }
-function portalGarantirToken(nome) {
+// ---------- links do portal sem perda (v157) ----------
+// Antes, o mapa "cliente → código do link" era gravado INTEIRO a cada link
+// novo: duas pessoas criando links ao mesmo tempo, um link sumia; e as duas
+// podiam criar códigos diferentes para o mesmo cliente. Agora:
+//  1. cada cliente tem uma RESERVA própria (dados/eagles_portal_links_v1__r_…):
+//     numa transação, quem chega primeiro cria o código; quem chega depois
+//     recebe o mesmo. Só disputa quem pede o MESMO cliente;
+//  2. o mapa recebe só o campo daquele cliente (sem ler o mapa inteiro), então
+//     links de clientes diferentes criados juntos não se apagam nem disputam.
+// Criar ou trocar um link precisa de internet (sem conexão, avisa e não cria).
+const PORTAL_TX_PRAZO_MS = 45000;
+function portalNuvemTx() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb && typeof firestoreDb.runTransaction === 'function'); }
+function portalSemInternet() { if (typeof navigator !== 'undefined' && navigator.onLine === false) throw Object.assign(new Error('Sem internet'), { code: 'sem-internet' }); }
+// procura o cliente num mapa de links (sem diferença de maiúsculas, acentos e espaços)
+function portalAcharNome(mapa, nome) {
+  if (!nome || !mapa || typeof mapa !== 'object') return '';
+  if (mapa[nome]) return nome;
+  return Object.keys(mapa).find((k) => mapa[k] && portalNomeIgual(k, nome)) || '';
+}
+function portalMapaDoDoc(snap) { const v = snap && snap.exists ? snap.data().valor : null; return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
+function portalNomeNorm(n) { return ttSemAcento(String(n || '').trim()).replace(/\s+/g, ' '); }
+function portalRefReserva(nome) { return caminhoTenantDoc(PORTAL_LINKS_KEY + '__r_' + ponteHash(portalNomeNorm(nome))); }
+// grava no mapa SÓ o campo deste cliente
+function portalGravarNoMapa(nome, token) {
+  return cloudComPrazo(caminhoTenantDoc(PORTAL_LINKS_KEY).set({ valor: { [nome]: token } }, { merge: true }), PORTAL_TX_PRAZO_MS);
+}
+// Devolve o código do link do cliente (cria se ainda não existir).
+// Promessa: o código; '' sem permissão; erro sem conexão.
+async function portalGarantirToken(nome) {
   if (!nome) return '';
-  nome = portalChave(nome);
+  nome = portalChave(String(nome).trim());
+  if (!nome) return '';
   if (PORTAL_LINKS[nome]) return PORTAL_LINKS[nome];
   if (!nivelPodeOperar()) return '';
-  PORTAL_LINKS = Object.assign({}, PORTAL_LINKS, { [nome]: portalTokenNovo() });
-  cloudSet(PORTAL_LINKS_KEY, PORTAL_LINKS);
-  portalPublicarCliente(nome, true);
-  return PORTAL_LINKS[nome];
+  if (!portalNuvemTx()) { // modo local (sem Firebase): só neste aparelho
+    PORTAL_LINKS = Object.assign({}, PORTAL_LINKS, { [nome]: portalTokenNovo() });
+    cloudSet(PORTAL_LINKS_KEY, PORTAL_LINKS);
+    return PORTAL_LINKS[nome];
+  }
+  portalSemInternet();
+  // 1) link que já está no mapa do servidor (inclusive os de antes da v157)
+  const mapa = portalMapaDoDoc(await cloudComPrazo(caminhoTenantDoc(PORTAL_LINKS_KEY).get({ source: 'server' }), PORTAL_TX_PRAZO_MS));
+  const achado = portalAcharNome(mapa, nome);
+  if (achado) { PORTAL_LINKS = Object.assign({}, PORTAL_LINKS, { [achado]: mapa[achado] }); portalVistoGuardar(achado, mapa[achado], false); return mapa[achado]; }
+  // 2) a reserva do cliente: quem chega primeiro cria o código
+  const reserva = portalRefReserva(nome);
+  const r = await cloudTransacao(async (tx) => {
+    const s = await tx.get(reserva);
+    const d = s.exists ? s.data() : null;
+    if (d && d.token) return { nome: d.nome || nome, token: d.token, novo: false };
+    const token = portalTokenNovo();
+    tx.set(reserva, { nome, token, criadoEm: new Date().toISOString(), por: USUARIO_NOME || '' });
+    return { nome, token, novo: true };
+  }, PORTAL_TX_PRAZO_MS);
+  // 3) o mapa recebe só este cliente
+  await portalGravarNoMapa(r.nome, r.token);
+  PORTAL_LINKS = Object.assign({}, PORTAL_LINKS, { [r.nome]: r.token });
+  portalVistoGuardar(r.nome, r.token, r.novo);
+  if (r.novo) portalPublicarCliente(r.nome, true);
+  return r.token;
 }
-function portalCopiarLink(nome) {
+function portalAvisarSemConexao(err) {
+  console.error('Portal: link não criado agora', err);
+  avisar('Não foi possível criar o link do portal agora: o sistema precisa estar conectado à internet para isso (assim duas pessoas nunca criam links diferentes para o mesmo cliente). Confira a conexão e tente de novo.', 'Link do portal');
+}
+async function portalCopiarLink(nome) {
   if (!PORTAL_LINKS_CARREGADO) { avisar('Carregando os links do portal. Tente de novo em alguns segundos.'); return; }
-  if (!portalGarantirToken(nome)) { avisarSemPermissaoNivel('criar o link do portal'); return; }
+  let token = '';
+  try { token = await portalGarantirToken(nome); } catch (err) { portalAvisarSemConexao(err); return; }
+  if (!token) { avisarSemPermissaoNivel('criar o link do portal'); return; }
+  nome = portalChave(nome);
   const link = portalLinkCliente(nome);
   const contato = linkContatoCliente(nome);
   portalRender();
@@ -9882,15 +10177,130 @@ function portalCopiarLink(nome) {
     texto: 'O cliente abre direto, sem login. Ali ele vê a produção, aprova ou pede alteração, e manda ideias e pedidos.',
     mensagem: `Olá, ${atdPrimeiroNome(nome)}! Este é o seu portal: lá você acompanha a produção, aprova os conteúdos e manda ideias. É só abrir:\n${link}` });
 }
-function portalNovoLink(nome) {
-  confirmarAcao(`Gerar um link novo para ${nome}? O link antigo para de funcionar na hora.`, () => {
-    const antigo = PORTAL_LINKS[nome];
-    if (antigo && FIREBASE_PRONTO && firestoreDb) firestoreDb.collection('portais_publicos').doc(antigo).delete().catch(() => {});
+// Troca o código do cliente ("link novo"). Na reserva, só troca se o código
+// ainda for o que esta tela conhecia (se outra pessoa já trocou, fica o dela).
+async function portalTrocarToken(nome) {
+  nome = portalChave(nome);
+  const antigo = PORTAL_LINKS[nome] || '';
+  if (!portalNuvemTx()) {
     PORTAL_LINKS = Object.assign({}, PORTAL_LINKS); delete PORTAL_LINKS[nome];
     delete PORTAL_PUB_FEITO[nome];
     cloudSet(PORTAL_LINKS_KEY, PORTAL_LINKS);
+    return nome;
+  }
+  portalSemInternet();
+  // 1) o retrato público do link antigo sai primeiro (o link antigo para de funcionar)
+  if (antigo) await cloudComPrazo(firestoreDb.collection('portais_publicos').doc(antigo).delete(), PORTAL_TX_PRAZO_MS);
+  // 2) o código novo, na reserva do cliente
+  const reserva = portalRefReserva(nome);
+  const r = await cloudTransacao(async (tx) => {
+    const s = await tx.get(reserva);
+    const d = s.exists ? s.data() : null;
+    const atual = (d && d.token) || antigo;
+    if (atual && atual !== antigo) return { nome: (d && d.nome) || nome, token: atual, novo: false };
+    const token = portalTokenNovo();
+    tx.set(reserva, { nome: (d && d.nome) || nome, token, criadoEm: new Date().toISOString(), por: USUARIO_NOME || '', anterior: antigo });
+    return { nome: (d && d.nome) || nome, token, novo: true };
+  }, PORTAL_TX_PRAZO_MS);
+  // 3) o mapa, só este cliente
+  await portalGravarNoMapa(r.nome, r.token);
+  PORTAL_LINKS = Object.assign({}, PORTAL_LINKS, { [r.nome]: r.token });
+  delete PORTAL_PUB_FEITO[r.nome];
+  portalVistoGuardar(r.nome, r.token, r.novo);
+  portalPublicarCliente(r.nome, true);
+  return r.nome;
+}
+function portalNovoLink(nome) {
+  confirmarAcao(`Gerar um link novo para ${nome}? O link antigo para de funcionar na hora.`, async () => {
+    if (!nivelPodeOperar()) { avisarSemPermissaoNivel('gerar um link novo do portal'); return; }
+    try { nome = await portalTrocarToken(nome); } catch (err) { portalAvisarSemConexao(err); return; }
     portalCopiarLink(nome);
   }, 'Novo link do portal');
+}
+// ---------- proteção durante a troca de versão ----------
+// Um aparelho ainda com a versão antiga (até a v155) grava o mapa INTEIRO e
+// pode, sem querer, apagar o link de um cliente ou devolver um código já
+// trocado. Esta versão lembra os links que viu e confere: se o cliente tem
+// reserva, o código certo é o da reserva; se não tem (link de antes da v157),
+// vale o link que continua publicado. Link trocado de propósito ("link novo")
+// tem o retrato público apagado antes — esse não volta.
+const PORTAL_VISTOS = {}; // nome normalizado -> { nome, token, meu }
+function portalVistoGuardar(nome, token, meu) { const k = portalNomeNorm(nome); const ant = PORTAL_VISTOS[k]; PORTAL_VISTOS[k] = { nome, token, meu: !!meu || !!(ant && ant.meu && ant.token === token) }; }
+async function portalPublicoExiste(token) {
+  const s = await firestoreDb.collection('portais_publicos').doc(token).get({ source: 'server' });
+  return s.exists;
+}
+let PORTAL_CONFERINDO = false;
+let PORTAL_CONFERIR_DE_NOVO = false;
+async function portalConferirPerdas(mapa) {
+  mapa = mapa && typeof mapa === 'object' ? mapa : {};
+  const suspeitos = [];
+  Object.keys(PORTAL_VISTOS).forEach((k) => {
+    const v = PORTAL_VISTOS[k];
+    const achado = portalAcharNome(mapa, v.nome);
+    const atual = achado ? mapa[achado] : '';
+    if (atual !== v.token) suspeitos.push({ k, v, achado, atual });
+  });
+  const suspeitosK = new Set(suspeitos.map((x) => x.k));
+  Object.keys(mapa).forEach((n) => { if (mapa[n] && !suspeitosK.has(portalNomeNorm(n))) portalVistoGuardar(n, mapa[n], false); });
+  if (!suspeitos.length) return;
+  if (!portalNuvemTx() || !nivelPodeOperar()) return;
+  if (PORTAL_CONFERINDO) { PORTAL_CONFERIR_DE_NOVO = true; return; }
+  PORTAL_CONFERINDO = true;
+  try {
+    for (const { k, v, achado, atual } of suspeitos) {
+      try {
+        const reserva = portalRefReserva(v.nome);
+        const res = await reserva.get({ source: 'server' });
+        const certo = res.exists && res.data().token ? { nome: res.data().nome || v.nome, token: res.data().token } : null;
+        if (certo) {
+          if (atual === certo.token) { PORTAL_VISTOS[k] = { nome: achado, token: atual, meu: false }; continue; }
+          // retrato público do código da reserva apagado = alguém trocou o link DE PROPÓSITO
+          // (botão "link novo" num aparelho antigo): a reserva passa a acompanhar o código novo
+          const certoPublicado = await portalPublicoExiste(certo.token);
+          if (!certoPublicado && !(v.meu && v.token === certo.token)) {
+            if (atual) {
+              await cloudTransacao(async (tx) => {
+                const r2 = await tx.get(reserva);
+                if (!r2.exists || r2.data().token !== certo.token) return false;
+                tx.set(reserva, Object.assign({}, r2.data(), { token: atual, anterior: certo.token, trocadoEm: new Date().toISOString() }));
+                return true;
+              });
+              PORTAL_VISTOS[k] = { nome: achado, token: atual, meu: false };
+            }
+            continue;
+          }
+          // a reserva manda: o mapa volta para o código dela (numa transação que relê a reserva)
+          const feito = await cloudTransacao(async (tx) => {
+            const r2 = await tx.get(reserva);
+            const tk = r2.exists ? r2.data().token : '';
+            if (!tk) return false;
+            tx.set(caminhoTenantDoc(PORTAL_LINKS_KEY), { valor: { [achado || (r2.data().nome || v.nome)]: tk } }, { merge: true });
+            return true;
+          });
+          if (feito) console.warn('[EaglesLabz] Link do portal de "' + v.nome + '" devolvido conforme a reserva (uma versão antiga do sistema tinha apagado/trocado sem querer).');
+          continue;
+        }
+        // link de antes da v157 (sem reserva): vale o que continua publicado
+        const vistoPublicado = await portalPublicoExiste(v.token);
+        const devolver = vistoPublicado ? (atual ? !(await portalPublicoExiste(atual)) : true) : (!atual && v.meu);
+        if (!devolver) { if (atual) PORTAL_VISTOS[k] = { nome: achado, token: atual, meu: false }; else delete PORTAL_VISTOS[k]; continue; }
+        const ref = caminhoTenantDoc(PORTAL_LINKS_KEY);
+        const feito = await cloudTransacao(async (tx) => {
+          const m = portalMapaDoDoc(await tx.get(ref));
+          const a2 = portalAcharNome(m, v.nome);
+          const cur = a2 ? m[a2] : '';
+          if (cur === v.token || cur !== atual) return false; // já resolvido ou mudou de novo: não mexe
+          tx.set(ref, { valor: { [a2 || v.nome]: v.token } }, { merge: true });
+          return true;
+        });
+        if (feito) console.warn('[EaglesLabz] Link do portal de "' + v.nome + '" devolvido (uma versão antiga do sistema tinha apagado/trocado sem querer).');
+      } catch (e) { /* sem conexão: confere de novo na próxima mudança */ }
+    }
+  } finally {
+    PORTAL_CONFERINDO = false;
+    if (PORTAL_CONFERIR_DE_NOVO) { PORTAL_CONFERIR_DE_NOVO = false; setTimeout(() => portalConferirPerdas(PORTAL_LINKS), 0); }
+  }
 }
 function portalItemPublico(c) {
   const ap = c.aprovacao || {};
@@ -12697,7 +13107,7 @@ async function errResolver(i) {
 
 // ---------- super administrador: uso por empresa ----------
 const USO_SUBS = ['dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'conteudos', 'agenda', 'atend_envios', 'portal', 'portal_pedidos',
-  'erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes'];
+  'erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes', 'crm_negocio_anotacoes', 'crm_negocio_contatos'];
 async function usoContar(ref) {
   try { if (typeof ref.count === 'function') { const s = await ref.count().get(); return s.data().count; } } catch (e) {}
   const s = await ref.get(); return s.size;
@@ -21461,7 +21871,11 @@ async function cntEnviarAprovacao(id) {
   }
   // com cliente, o link é o do portal (o mesmo visual), abrindo direto nesta peça;
   // a resposta continua indo para o mesmo lugar (os avisos e os cartões andam igual)
-  const usaPortal = c.cliente && typeof portalGarantirToken === 'function' && typeof PORTAL_LINKS_CARREGADO !== 'undefined' && PORTAL_LINKS_CARREGADO && portalGarantirToken(c.cliente);
+  let usaPortal = false;
+  if (c.cliente && typeof portalGarantirToken === 'function' && typeof PORTAL_LINKS_CARREGADO !== 'undefined' && PORTAL_LINKS_CARREGADO) {
+    // sem conexão para criar o link do portal: usa o link avulso (como antes, quando os links não tinham chegado)
+    try { usaPortal = !!(await portalGarantirToken(c.cliente)); } catch (e) { console.warn('Portal: link avulso no lugar do portal', e); }
+  }
   const link = usaPortal ? portalLinkCliente(c.cliente) + '&c=' + encodeURIComponent(c.id) : cntLinkAprovacao(token);
   if (usaPortal) {
     portalPublicarCliente(c.cliente, true);
@@ -21804,7 +22218,7 @@ function portalIniciarDados() {
   PORTAL_INICIADO = true;
   cloudWatch(CFG_PORTAL_KEY, portalConfigPadrao(), (d) => { CFG_PORTAL_DATA = d; CFG_PORTAL_CARREGADO = true; portalRender(); portalAgendarPublicacao(); });
   cloudWatch(PORTAL_CLIENTES_KEY, {}, (d) => { PORTAL_CLIENTES = d && typeof d === 'object' ? d : {}; portalRender(); portalAgendarPublicacao(); });
-  cloudWatch(PORTAL_LINKS_KEY, {}, (d) => { PORTAL_LINKS = d && typeof d === 'object' ? d : {}; PORTAL_LINKS_CARREGADO = true; portalRender(); portalAgendarPublicacao(); });
+  cloudWatch(PORTAL_LINKS_KEY, {}, (d) => { PORTAL_LINKS = d && typeof d === 'object' ? d : {}; PORTAL_LINKS_CARREGADO = true; portalConferirPerdas(PORTAL_LINKS); portalRender(); portalAgendarPublicacao(); });
   if (FIREBASE_PRONTO && TENANT_ID && firestoreDb) {
     try {
       firestoreDb.collection('usuarios').where('tenantId', '==', TENANT_ID).onSnapshot((snap) => {
@@ -23012,14 +23426,15 @@ function agComoConfigurarGoogle() {
 // apaga o que foi criado depois do backup. Antes de restaurar, baixa um
 // backup do estado atual. Logins não entram (contas não se recriam).
 const BKP_META_KEY = 'eagles_backup_meta_v1';
-const BKP_SUBCOLECOES = ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'agenda', 'portal', 'portal_pedidos', 'receitas_pendentes', 'atend_envios', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes'];
+const BKP_SUBCOLECOES = ['erp_produtos', 'erp_pedidos_venda', 'erp_clientes_fornecedores', 'erp_contratos', 'erp_pedido_compras', 'erp_notas_entrada', 'erp_mov_estoque', 'erp_vendedores', 'erp_funcionarios', 'erp_objetos_postagem', 'erp_conferencia_estoque', 'dados', 'kanban_tarefas', 'kanban_projetos', 'fin_lancamentos', 'fin_recorrencias', 'fin_meta', 'conteudos', 'agenda', 'portal', 'portal_pedidos', 'receitas_pendentes', 'atend_envios', 'crm_clientes', 'crm_negocios', 'crm_contratos', 'crm_servicos', 'crm_tarefas_dia', 'crm_lembretes', 'crm_negocio_anotacoes', 'crm_negocio_contatos'];
 const BKP_PUBLICAS = ['propostas_publicas', 'briefings_publicos', 'planos_publicos', 'paginas_publicas', 'conteudos_publicos', 'leads_publicos'];
 const BKP_LEMBRETE_DIAS = 30;
-const BKP_NOMES = { crm_clientes: 'Clientes (CRM)', crm_negocios: 'Negócios do Pipeline', crm_contratos: 'Contratos (CRM)', crm_servicos: 'Serviços (CRM)', crm_tarefas_dia: 'Tarefas do dia', crm_lembretes: 'Lembretes', erp_produtos: 'Produtos e serviços (ERP)', erp_pedidos_venda: 'Pedidos de venda', erp_clientes_fornecedores: 'Clientes e fornecedores (ERP)', erp_contratos: 'Contratos (ERP)', erp_pedido_compras: 'Compras', erp_notas_entrada: 'Notas de entrada', erp_mov_estoque: 'Movimentações de estoque', erp_vendedores: 'Vendedores', erp_funcionarios: 'Funcionários', erp_objetos_postagem: 'Objetos de postagem', erp_conferencia_estoque: 'Conferências de estoque', dados: 'Cadastros, CRM e configurações', kanban_tarefas: 'Tarefas do Kanban', kanban_projetos: 'Projetos', fin_lancamentos: 'Lançamentos financeiros', fin_recorrencias: 'Contas recorrentes', fin_meta: 'Controle do Financeiro', conteudos: 'Conteúdos', agenda: 'Compromissos', portal: 'Portal do Cliente', portal_pedidos: 'Pedidos do portal', receitas_pendentes: 'Receitas pendentes', propostas_publicas: 'Propostas', briefings_publicos: 'Briefings', planos_publicos: 'Planos publicados', paginas_publicas: 'Página pública', conteudos_publicos: 'Links de aprovação', leads_publicos: 'Leads do site', pix_publico: 'PIX' };
+const BKP_NOMES = { crm_clientes: 'Clientes (CRM)', crm_negocios: 'Negócios do Pipeline', crm_contratos: 'Contratos (CRM)', crm_servicos: 'Serviços (CRM)', crm_tarefas_dia: 'Tarefas do dia', crm_lembretes: 'Lembretes', crm_negocio_anotacoes: 'Anotações dos negócios', crm_negocio_contatos: 'Contatos dos negócios', erp_produtos: 'Produtos e serviços (ERP)', erp_pedidos_venda: 'Pedidos de venda', erp_clientes_fornecedores: 'Clientes e fornecedores (ERP)', erp_contratos: 'Contratos (ERP)', erp_pedido_compras: 'Compras', erp_notas_entrada: 'Notas de entrada', erp_mov_estoque: 'Movimentações de estoque', erp_vendedores: 'Vendedores', erp_funcionarios: 'Funcionários', erp_objetos_postagem: 'Objetos de postagem', erp_conferencia_estoque: 'Conferências de estoque', dados: 'Cadastros, CRM e configurações', kanban_tarefas: 'Tarefas do Kanban', kanban_projetos: 'Projetos', fin_lancamentos: 'Lançamentos financeiros', fin_recorrencias: 'Contas recorrentes', fin_meta: 'Controle do Financeiro', conteudos: 'Conteúdos', agenda: 'Compromissos', portal: 'Portal do Cliente', portal_pedidos: 'Pedidos do portal', receitas_pendentes: 'Receitas pendentes', propostas_publicas: 'Propostas', briefings_publicos: 'Briefings', planos_publicos: 'Planos publicados', paginas_publicas: 'Página pública', conteudos_publicos: 'Links de aprovação', leads_publicos: 'Leads do site', pix_publico: 'PIX' };
 let BKP_META = null;
 let BKP_ARQUIVO = null;
 
-function bkpNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
+// v157.1: com BKP_ALVO (restauração pelo Super Admin), vale a empresa escolhida, mesmo que o Super Admin não tenha empresa própria
+function bkpNuvem() { return !!(FIREBASE_PRONTO && (BKP_ALVO || TENANT_ID) && firestoreDb); }
 let BKP_ALVO = null; // empresa da restauração feita pelo super administrador (senão, a própria)
 function bkpTenant() { return BKP_ALVO || TENANT_ID; }
 function bkpBase() { return firestoreDb.collection('tenants').doc(bkpTenant()); }
@@ -23027,7 +23442,7 @@ async function bkpColetar() {
   const out = { app: 'eagles-labz', versao: 1, tenantId: bkpTenant(), empresa: BKP_ALVO ? (BKP_ALVO_NOME || '') : ((PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || ''), geradoEm: new Date().toISOString(), geradoPor: USUARIO_NOME || '', colecoes: {} };
   for (const sub of BKP_SUBCOLECOES) {
     const snap = await bkpBase().collection(sub).get();
-    const docs = {}; snap.forEach((d) => { docs[d.id] = d.data(); });
+    const docs = {}; snap.forEach((d) => { docs[d.id] = bkpSemSegredos(sub, d.id, d.data()); });
     out.colecoes[sub] = docs;
   }
   for (const col of BKP_PUBLICAS) {
@@ -23038,6 +23453,11 @@ async function bkpColetar() {
   const pix = await firestoreDb.collection('pix_publico').doc(bkpTenant()).get().catch(() => null);
   out.colecoes.pix_publico = pix && pix.exists ? { [bkpTenant()]: pix.data() } : {};
   return out;
+}
+// o backup e a restauração NUNCA levam chave de IA (nem de um backup antigo, feito antes da correção)
+function bkpSemSegredos(col, id, dados) {
+  if (col === 'dados' && id === 'eagles_ia_config_v1' && dados && dados.valor && typeof dados.valor === 'object') { const v = Object.assign({}, dados.valor); delete v.chaves; return Object.assign({}, dados, { valor: v }); }
+  return dados;
 }
 function bkpBaixarArquivo(obj, prefixo) {
   const nome = `${prefixo || 'backup'}-${kbNomeNorm(obj.empresa || 'empresa').replace(/[^a-z0-9]+/g, '-').slice(0, 30) || 'empresa'}-${obj.geradoEm.slice(0, 10)}.json`;
@@ -23057,7 +23477,7 @@ async function bkpGerar() {
     BKP_META = { ultimoEm: obj.geradoEm, por: USUARIO_NOME || '', itens: bkpContar(obj).reduce((a, [, n]) => a + n, 0) };
     cloudSet(BKP_META_KEY, BKP_META);
     renderAbaBackupConfig();
-    avisar(`Backup baixado: ${nome}\n\nGuarde esse arquivo num lugar seguro (Google Drive, OneDrive ou um pendrive). Ele tem todos os dados da empresa, inclusive o financeiro.`, 'Backup');
+    avisar(`Backup baixado: ${nome}\n\nGuarde esse arquivo num lugar seguro (Google Drive, OneDrive ou um pendrive). Ele tem todos os dados da empresa, inclusive o financeiro (as chaves de IA não vão no backup).`, 'Backup');
   } catch (err) { console.error(err); avisar('Não foi possível gerar o backup agora: ' + mensagemErroFirestore(err)); }
   finally { const b = document.getElementById('bkp-btn-gerar'); if (b) { b.disabled = false; b.textContent = 'Baixar backup completo'; } }
 }
@@ -23092,7 +23512,7 @@ async function bkpRestaurar() {
         if (BKP_SUBCOLECOES.includes(col)) ref = bkpBase().collection(col).doc(id);
         else if (BKP_PUBLICAS.includes(col)) { if (dados.tenantId !== bkpTenant()) return; ref = firestoreDb.collection(col).doc(id); }
         else if (col === 'pix_publico' && id === bkpTenant()) ref = firestoreDb.collection('pix_publico').doc(id);
-        if (ref) escritas.push([ref, dados]);
+        if (ref) escritas.push([ref, bkpSemSegredos(col, id, dados)]);
       });
     });
     let feitos = 0, falhas = 0;
@@ -23261,7 +23681,9 @@ function bkpFecharLembrete(indo) {
 // =====================================================================
 
 const CHATBOT_KB = [
+  { padroes: ['chave de ia', 'chave da ia', 'chave openai', 'chave do gemini', 'chave da api', 'api key'], resposta: 'A chave de IA (OpenAI, Gemini ou Claude) fica só no navegador de cada pessoa: cadastre em Configurações → Integrações → Inteligência artificial. Ela não vai para o banco da empresa nem para o backup; em outro computador ou navegador é preciso cadastrar de novo. O Diretor escolhe o provedor e o modelo padrão da empresa.' },
   // ---------- Visão geral do sistema ----------
+  { padroes: ['duas pessoas ao mesmo tempo', 'anotacao sumiu', 'anotação sumiu', 'minha anotacao sumiu', 'contato sumiu', 'link do portal sumiu', 'salvei e sumiu'], resposta: 'Desde a v157 (09/11/2026), anotações e contatos dos negócios são guardados um por um: várias pessoas podem anotar ao mesmo tempo e tudo fica salvo. Os links do portal também: quem pede o link de um cliente que já tem link recebe o mesmo. Se alguém da equipe ainda estiver com o sistema aberto desde antes da atualização, peça para recarregar a página (F5).' },
   { padroes: ['o que é esse sistema', 'como funciona o sistema', 'pra que serve', 'o que da pra fazer aqui'], resposta: 'O Eagles Labz é um sistema de gestão (ERP): cadastro de clientes/fornecedores/produtos, controle de vendas (pedidos), estoque, financeiro mês a mês, e dashboards pra acompanhar como o negócio está indo. Cada empresa que usa o sistema tem os próprios dados, totalmente separados de qualquer outra.' },
   { padroes: ['por onde eu começo', 'primeiro passo', 'como comecar', 'sou novo aqui'], resposta: 'Sugestão de ordem: 1) Meu Perfil → preencha os dados da sua empresa. 2) Cadastros → cadastre seus produtos e seus clientes/fornecedores. 3) Vendas → registre seus pedidos. 4) Financeiro → acompanhe receitas e despesas do mês. O Painel e o Meu Negócio vão se preenchendo sozinhos conforme você usa o resto.' },
   { padroes: ['diferenca entre painel e financeiro', 'painel ou financeiro'], resposta: 'O Painel é só pra CONSULTA — um resumo rápido do mês. Pra editar qualquer valor (lançar receita, pagamento, etc.), você precisa ir na aba Financeiro mesmo.' },

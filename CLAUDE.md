@@ -1,9 +1,9 @@
 # Eagles Labz — ERP + CRM (white label)
 
-Documento de passagem para o Claude Code. Versão publicada: **v156.1 — LABZ AI removida do sistema** (cache `eagles-cache-v156-1`; 24/11/2026, workflow "Site seguro").
-**v157 — Multiusuário: em revisão num PR** (branch `claude/v157-multiusuario`, a partir da `main` `4a1a89e` + branch original `claude/gracious-edison-173kia`; integração revisada em 24 e 25/11/2026; **sem merge, NÃO publicada**; cache `eagles-cache-v157`; muda o `firestore.rules`: publicar as regras ANTES dos arquivos). Ver item 10.
-**v157.1 — v157 + segurança das chaves de IA (26/11/2026; commit e push autorizados pelo Igor; sem PR, sem merge, NÃO publicada)**: branch `claude/v157-1-seguranca` a partir de `5ec5cc2` (v157 do PR nº 18, que NÃO foi alterado); cache `eagles-cache-v157-1`; muda o `firestore.rules` (publicar as regras ANTES dos arquivos). Ver item 10.
-**v158 — Investimentos, modo essencial (26/11/2026; commit e push autorizados pelo Igor; sem PR, sem merge, NÃO publicada)**: branch `claude/v158-investimentos` = v157.1 + módulo Investimentos (desligado por padrão); cache `eagles-cache-v158`; muda o `firestore.rules`. Só depois da v157.1 publicada. Ver item 10.
+Documento de passagem para o Claude Code. Versão publicada: **v157.1** (cache `eagles-cache-v157-1`; 26/11/2026, workflow "Site seguro"). Antes dela: v156.1 (24/11/2026).
+**v157 — Multiusuário: publicada dentro da v157.1** (PR nº 18, commit `5ec5cc2`, entrou na `main` pelo PR nº 19). Ver item 10.
+**v157.1 — v157 + segurança das chaves de IA (PUBLICADA em 26/11/2026: PR nº 19, merge `8c59400`, "Site seguro" execução nº 58; regras publicadas no console pelo Igor ANTES do merge; conferida no ar pelo Igor)**: branch `claude/v157-1-seguranca` a partir de `5ec5cc2` (o PR nº 18 foi marcado como merged junto) (v157 do PR nº 18, que NÃO foi alterado); cache `eagles-cache-v157-1`; muda o `firestore.rules` (publicar as regras ANTES dos arquivos). Ver item 10.
+**v158 — Investimentos, modo essencial (26/11/2026; em PR; sem merge, NÃO publicada; publicar as regras da v158 ANTES do merge)**: branch `claude/v158-investimentos` = v157.1 + módulo Investimentos (desligado por padrão); cache `eagles-cache-v158`; muda o `firestore.rules`. Só depois da v157.1 publicada. Ver item 10.
 Próxima etapa: ainda não definida. Cada nova etapa (planejamento, implementação, commit, push, merge e publicação) depende de autorização explícita do Igor. **A LABZ AI saiu deste repositório** (ver item 10, v156.1) e continua como projeto independente, num ZIP entregue ao Igor.
 A v142 foi uma entrega externa, fora deste repositório (ver item 10).
 O dono do projeto (Igor) **não é programador**: explique tudo em português simples, sem jargão, e diga

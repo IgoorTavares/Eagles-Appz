@@ -46,7 +46,9 @@ function servir() {
       const f = process.env.CATALOGO !== 'producao' && u.pathname.startsWith('/inv/catalogo/') ? join(RAIZ, 'testes-investimentos/catalogo-teste', u.pathname.slice('/inv/catalogo/'.length))
         : u.pathname === '/inv/noticias-teste.xml' ? join(RAIZ, 'testes-investimentos/noticias-teste.xml') : join(RAIZ, decodeURIComponent(u.pathname));
       if (!f.startsWith(RAIZ) || !existsSync(f) || statSync(f).isDirectory()) { rs.writeHead(404); return rs.end(); }
-      rs.writeHead(200, { 'content-type': TIPOS[extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' }); rs.end(readFileSync(f));
+      rs.writeHead(200, { 'content-type': TIPOS[extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' });
+      // só no teste: a política de segurança (CSP) da página libera também o SIMULADOR local do Firebase (em produção é o googleapis)
+      rs.end(f.endsWith('.html') ? readFileSync(f, 'utf8').replace("connect-src 'self'", "connect-src 'self' http://127.0.0.1:8080 http://127.0.0.1:9099 ws://127.0.0.1:8080") : readFileSync(f));
     });
     srv.listen(0, '127.0.0.1', () => ok({ srv, base: 'http://127.0.0.1:' + srv.address().port }));
   });
@@ -68,7 +70,7 @@ async function entrar(ctx, p, destino) {
   const page = await ctx.newPage(); page._erros = [];
   page.on('pageerror', (e) => page._erros.push(String(e.message || e).slice(0, 200)));
   page.on('crash', () => page._erros.push('PÁGINA TRAVOU (crash)')); page.on('close', () => { page._fechou = new Error('fechou').stack; });
-  page.on('console', (m) => { if (m.type() === 'error' && !/Service ?Worker|sw\.js|bad HTTP response code \(404\)/i.test(m.text())) page._erros.push('console: ' + m.text().slice(0, 200) + (/403/.test(m.text()) ? ' @' + ((m.location() || {}).url || '').replace(/\?.*/, '') : '')); });
+  page._errosTerceiros = []; page.on('console', (m) => { if (/tradingview/.test(((m.location() || {}).url) || '')) { if (m.type() === 'error') page._errosTerceiros.push(m.text().slice(0, 160)); return; } if (m.type() === 'error' && !/Service ?Worker|sw\.js|bad HTTP response code \(404\)/i.test(m.text())) page._erros.push('console: ' + m.text().slice(0, 200) + (/403/.test(m.text()) ? ' @' + ((m.location() || {}).url || '').replace(/\?.*/, '') : '')); });
   page.on('dialog', (d) => (page._dialogo ? d.accept(page._dialogo) : d.dismiss()));
   await page.goto(BASE + '/login.html');
   await page.fill('#login-email', p.email); await page.fill('#login-senha', 'senha-de-teste-123'); await page.click('#btn-login');
@@ -111,9 +113,10 @@ const foto = (page, nome, cheia = true) => page.screenshot({ path: join(SAIDA, '
     const m = await menu(p); ok(/Financeiro.*Investimentos/.test(m), 'menu: ' + m);
     await abrir(p, 'investimentos.html');
     const t = await texto(p);
-    ok(/Biblioteca de ativos/.test(t) && /18 ativos no catálogo/.test(t), 'título/contagem: ' + t.slice(0, 120) + ' | estado: ' + JSON.stringify(await p.evaluate(() => window.INVEST ? { acesso: window.INVEST.estado && window.INVEST.estado.acesso, cat: window.INVEST.estado && window.INVEST.estado.estadoCat, modulos: typeof TENANT_MODULOS !== 'undefined' ? TENANT_MODULOS : 'x', html: (document.getElementById('inv-conteudo')||{}).innerHTML } : 'sem INV')) + ' | erros: ' + p._erros.join(' | '));
+    ok(/Biblioteca de ativos/.test(t) && /21 ativos no catálogo/.test(t), // 18 do catálogo de teste + 3 criptomoedas de referência (11.18)
+       'título/contagem: ' + t.slice(0, 120) + ' | estado: ' + JSON.stringify(await p.evaluate(() => window.INVEST ? { acesso: window.INVEST.estado && window.INVEST.estado.acesso, cat: window.INVEST.estado && window.INVEST.estado.estadoCat, modulos: typeof TENANT_MODULOS !== 'undefined' ? TENANT_MODULOS : 'x', html: (document.getElementById('inv-conteudo')||{}).innerHTML } : 'sem INV')) + ' | erros: ' + p._erros.join(' | '));
     ok(/DADOS DE TESTE/.test(await p.innerText('#inv-avisos')), 'faixa de dados de teste ausente');
-    ok((await p.locator('.inv-linha').count()) === 16, 'esperava 16 ativos (cancelado escondido): ' + (await p.locator('.inv-linha').count()));
+    ok((await p.locator('.inv-linha').count()) === 19, 'esperava 19 ativos (16 do teste com o cancelado escondido + 3 criptomoedas de referência): ' + (await p.locator('.inv-linha').count()));
     ok(await p.locator('.inv-aba.active', { hasText: 'Biblioteca' }).count() === 1, 'aba ativa');
     ok((await p.locator('.inv-aba-off').count()) === 0 && /Projeções/.test(await p.innerText('#inv-abas')), 'todas as abas ligadas desde a Etapa 09 (Projeções inclusive)');
     ok(!p._erros.length, 'erros: ' + p._erros.join(' | '));
@@ -237,7 +240,7 @@ const foto = (page, nome, cheia = true) => page.screenshot({ path: join(SAIDA, '
     await foto(p, '06-falha-da-fonte', false);
     await p.unroute('**/inv/catalogo/meta.json');
     await p.click('#inv-tentar'); await p.waitForTimeout(800);
-    ok(/18 ativos no catálogo/.test(await texto(p)), 'não recuperou');
+    ok(/21 ativos no catálogo/.test(await texto(p)), 'não recuperou'); // 18 + 3 criptomoedas de referência
     await p.route('**/inv/catalogo/ativos.json*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"formato":"outro","itens":[1]}' }));
     await abrir(p, 'investimentos.html');
     ok(/formato inválido/.test(await texto(p)), 'catálogo corrompido deveria ser recusado');
@@ -324,7 +327,7 @@ const foto = (page, nome, cheia = true) => page.screenshot({ path: join(SAIDA, '
   await caso(13, 'Mercado BR e US: índices, gráfico (períodos, comparação), rankings, mapa, radar, fontes; simulado sempre marcado; sem simulador = indisponível', async () => {
     const ctx = await contexto(); const p = await entrar(ctx, P.dir, 'investimentos.html#/br'); await p.waitForTimeout(1200);
     let t = await texto(p);
-    ok(/Cotações indisponíveis/.test(t) && !/Números SIMULADOS/.test(t) && !(await p.isChecked('#inv-simulador')), 'por padrão nada simulado (auditoria): ' + t.slice(0, 200));
+    ok(/Cotações de bolsa indisponíveis/.test(t) && !/Números SIMULADOS/.test(t) && !(await p.isChecked('#inv-simulador')), 'por padrão nada simulado (auditoria): ' + t.slice(0, 200));
     await p.click('#inv-simulador'); await p.waitForTimeout(900); t = await texto(p);
     ok(/Mercado Brasil/.test(t) && /Números SIMULADOS/.test(t) && /Ibovespa/.test(t) && /Taxa Selic/.test(t), 'tela BR no modo demonstração: ' + t.slice(0, 300));
     ok((await p.locator('canvas').count()) >= 2, 'gráficos');
@@ -397,7 +400,7 @@ const foto = (page, nome, cheia = true) => page.screenshot({ path: join(SAIDA, '
     let t = await texto(p);
     ok(/Alertas disparados/.test(t) && /ZZTA3 acima de 0,01/.test(t) && /Aguardando/.test(t), 'alertas: ' + t.slice(0, 400));
     ok((await p.locator('.inv-mini').count()) >= 2 && (await p.locator('.inv-mini', { hasText: 'sem histórico' }).count()) >= 2, 'minigráficos: sem histórico autorizado, mostra "sem histórico" (nunca um gráfico inventado)');
-    ok(/Nenhuma fonte de notícias ligada/.test(t), 'sem servidor não há fonte de notícias (nada fictício por padrão)');
+    ok((await p.locator('.inv-noticia', { hasText: /TESTE|fictíci|DADOS DE TESTE/i }).count()) === 0 && (/Nenhuma fonte de notícias ligada|Federal Reserve|Nenhuma notícia sobre os ativos desta lista/.test(t)), 'notícias só reais de fonte aprovada (Etapa 11), nunca fictícias por padrão');
     ok(/Datas de resultados e de dividendos futuros: indisponível/.test(t), 'calendário honesto');
     await p.click('#inv-fav-comparar'); await p.waitForTimeout(700);
     ok(await p.locator('#inv-fav-comp').count() === 1, 'comparação');
@@ -417,7 +420,7 @@ const foto = (page, nome, cheia = true) => page.screenshot({ path: join(SAIDA, '
     let t = await texto(p); ok(/Insights/.test(t) && /Radar/.test(t) && /Notícias/.test(t) && !/Números SIMULADOS/.test(t), 'blocos da visão geral (sem números simulados por padrão)');
     await foto(p, '25-visao-geral');
     await abrir(p, 'investimentos.html#/noticias'); await p.waitForTimeout(1000);
-    ok(/Nenhuma fonte de notícias ligada/.test(await texto(p)), 'sem demonstração: nenhuma notícia fictícia');
+    { const tn = await texto(p); ok(!/\[TESTE\]/.test(tn) && /Federal Reserve — press releases/.test(tn) && (await p.locator('.inv-noticia a[href^="https://www.federalreserve.gov/"]').count()) >= 1, 'sem demonstração: só notícias REAIS do Federal Reserve (título original e link), nenhuma fictícia'); }
     // daqui em diante, o modo demonstração (só existe com o catálogo de teste) para conferir o News Engine
     await p.evaluate(() => { localStorage.setItem('eagles_inv_pref_v1', JSON.stringify({ simulador: true })); }); await abrir(p, 'investimentos.html#/noticias'); await p.waitForTimeout(1000);
     t = await texto(p); ok(/Notícias de TESTE/.test(t) && /1 duplicada\(s\) removida\(s\)/.test(t), 'notícias');
@@ -628,8 +631,14 @@ const foto = (page, nome, cheia = true) => page.screenshot({ path: join(SAIDA, '
   });
 
   await caso(12, 'Nenhuma chamada para fora do sistema (além das bibliotecas do próprio sistema, servidas localmente no teste)', async () => {
-    const fora = externas.filter((u) => !/fonts\.(googleapis|gstatic)\.com/.test(u));
-    ok(!fora.length, 'chamadas externas: ' + [...new Set(fora)].slice(0, 5).join(', '));
+    // Etapa 11: só as fontes oficiais APROVADAS (Banco Central e Tesouro dos EUA) além das fontes de letra; nada mais
+    const D = createRequire(join(RAIZ, 'x.js'))('./inv/inv-dados.js');
+    // 11.18: a janela isolada do gráfico do TradingView (só o endereço do gráfico, aprovado na central de licenças)
+    const aprovados = ['api.bcb.gov.br', 'olinda.bcb.gov.br', 'home.treasury.gov'];
+    const graficoTV = (u) => D.ligada('tradingview') && /^https:\/\/www\.tradingview-widget\.com\/embed-widget\/advanced-chart\//.test(u);
+    const fora = externas.filter((u) => !/fonts\.(googleapis|gstatic)\.com/.test(u) && !aprovados.includes(new URL(u).hostname) && !graficoTV(u));
+    ok(!fora.length, 'chamadas externas fora das fontes aprovadas: ' + [...new Set(fora)].slice(0, 5).join(', '));
+    ok(['bcb_sgs', 'bcb_ptax', 'bcb_focus', 'ust_curva'].every((id) => D.ligada(id)), 'as fontes chamadas são as aprovadas na central de licenças');
   });
 
   await nav.close(); srv.close();

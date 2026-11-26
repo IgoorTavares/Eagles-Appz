@@ -92,14 +92,17 @@ test('auditoria: fonte que só trouxe dado de TESTE não aparece como fonte real
   // Etapa 10: o catálogo de desenvolvimento (com as fontes ainda não autorizadas) ficou fora do site
   const meta = JSON.parse(readFileSync(new URL('../investimentos-portao/catalogo-dev/meta.json', import.meta.url)));
   const prod = JSON.parse(readFileSync(new URL('../inv/catalogo/meta.json', import.meta.url)));
-  assert.equal(prod.producao, true); assert.equal(prod.total, 0, 'o catálogo que vai ao site fica vazio até as licenças serem confirmadas');
+  // Etapa 11: licenças da CVM e do Tesouro confirmadas (ODbL, registros CKAN oficiais) → catálogo de produção com dados REAIS, sem teste
+  assert.equal(prod.producao, true); assert.equal(prod.demonstracao, false); assert.equal(prod.totalTeste, 0);
+  assert.ok(prod.total > 900 && prod.porFonte.cvm > 800 && prod.porFonte.tesouro > 40, 'catálogo real de produção: ' + JSON.stringify(prod.porFonte));
+  assert.equal(prod.fontes.cvm.autorizadaProducao, true); assert.equal(prod.fontes.tesouro.autorizadaProducao, true);
+  assert.equal(prod.fontes.sec.autorizadaProducao, false, 'SEC aguarda o e-mail de contato do robô');
   assert.equal(meta.fontes.sec.usada, false); assert.equal(meta.fontes.sec.estado, 'somente-teste');
   assert.equal(meta.porFonte.sec, undefined); assert.equal(meta.porFonteTeste.sec, 5);
   assert.equal(meta.totalReal, 953); assert.equal(meta.totalTeste, 5); assert.equal(meta.total, 958);
-  assert.equal(meta.fontes.cvm.autorizadaProducao, false, 'licença da CVM ainda não confirmada');
-  assert.equal(meta.fontes.tesouro.autorizadaProducao, false, 'termos do Tesouro ainda não confirmados');
+  // o modo produção continua barrando fonte NÃO autorizada (SEC) e qualquer dado de teste
   const FIX = new URL('../investimentos-portao/fixtures/', import.meta.url).pathname;
   const p = importar({ entrada: FIX, producao: true, dataGeracao: '2026-11-26T12:00:00.000Z' });
-  assert.equal(p.ativos.length, 0, 'sem fonte autorizada, o catálogo de produção fica vazio (bloqueio de publicação)');
+  assert.ok(p.ativos.every((a) => !a.teste && a.fontes.every((f) => ['cvm', 'tesouro'].includes(f.id))), 'só fontes autorizadas no modo produção');
   assert.ok(p.relatorio.avisos.some((x) => /modo produção/.test(x)));
 });

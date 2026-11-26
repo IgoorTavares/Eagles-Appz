@@ -27,7 +27,8 @@ test('classificação, favoritos, duplicadas e fontes desligadas', () => {
   assert.deepEqual(t('ZZT Alfa').ativos, ['BR:B3:ZZTA3']); assert.ok(t('ZZT Alfa').categorias.includes('favoritos'));
   assert.ok(r.itens.every((n) => /^https:\/\//.test(n.link) && n.resumo.length <= N.RESUMO_MAX + 1));
   for (const [k] of N.CATEGORIAS) assert.ok(N.NOME_CAT[k]);
-  assert.ok(Object.entries(N.FONTES).every(([k, f]) => (k === 'teste') === f.ligada), 'só a fonte de teste está ligada');
+  // Etapa 11: além da fonte de teste, só o Federal Reserve (domínio público, evidência em federalreserve.gov/disclaimer.htm)
+  assert.ok(Object.entries(N.FONTES).every(([k, f]) => ['teste', 'fed'].includes(k) === f.ligada), 'só a fonte de teste e a do Fed estão ligadas');
 });
 
 test('pesquisa: links manuais não são motor automático; motor automático desligado', () => {

@@ -1,31 +1,31 @@
 {
  "formato": "eagles-inv-catalogo-v1",
- "versao": "20261126120000",
- "geradoEm": "2026-11-26T12:00:00.000Z",
+ "versao": "20261126155948",
+ "geradoEm": "2026-11-26T15:59:48Z",
  "teste": false,
- "total": 0,
- "porFonte": {},
- "porFonteTeste": {},
- "totalTeste": 0,
- "totalReal": 0,
- "producao": true,
- "bloqueadasNaProducao": {
+ "total": 953,
+ "porFonte": {
   "cvm": 895,
   "tesouro": 58
  },
+ "porFonteTeste": {},
+ "totalTeste": 0,
+ "totalReal": 953,
+ "producao": true,
+ "bloqueadasNaProducao": {},
  "demonstracao": false,
- "naoConfirmados": 0,
+ "naoConfirmados": 446,
  "fontes": {
   "cvm": {
    "nome": "CVM — Dados Abertos (cadastro de companhias, FCA e informes de FII)",
    "tipo": "oficial",
-   "licenca": "Dados abertos da CVM — licença declarada no portal A CONFIRMAR (esperada: ODbL, que exige atribuição e compartilhar a base derivada pela mesma licença); não verificável neste ambiente",
+   "licenca": "ODbL (Open Data Commons Open Database License) — confirmada em 26/11/2026 nos registros oficiais do portal (cia_aberta-cad, fii-doc-inf_mensal: license_id odc-odbl); exige atribuição e que a base derivada publicada continue sob ODbL",
    "atribuicao": "Contém dados da Comissão de Valores Mobiliários (CVM) — Portal de Dados Abertos",
    "url": "https://dados.cvm.gov.br/",
-   "usada": false,
-   "autorizadaProducao": false,
+   "usada": true,
+   "autorizadaProducao": true,
    "usadaSoEmTeste": false,
-   "estado": "sem-arquivo"
+   "estado": "ok"
   },
   "sec": {
    "nome": "SEC — EDGAR (company tickers)",
@@ -41,13 +41,13 @@
   "tesouro": {
    "nome": "Tesouro Transparente — Tesouro Direto",
    "tipo": "oficial",
-   "licenca": "Tesouro Transparente — termos de uso A CONFIRMAR para cadastro e para preços; citar a fonte",
+   "licenca": "ODbL (Open Data Commons Open Database License) — confirmada em 26/11/2026 no registro oficial \"taxas-dos-titulos-ofertados-pelo-tesouro-direto\" do Tesouro Transparente (license_id odc-odbl); atribuição obrigatória",
    "atribuicao": "Contém dados do Tesouro Nacional — Tesouro Transparente",
    "url": "https://www.tesourotransparente.gov.br/",
-   "usada": false,
-   "autorizadaProducao": false,
+   "usada": true,
+   "autorizadaProducao": true,
    "usadaSoEmTeste": false,
-   "estado": "sem-arquivo"
+   "estado": "ok"
   },
   "b3": {
    "nome": "B3 — cadastro de instrumentos",

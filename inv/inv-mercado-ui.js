@@ -15,13 +15,20 @@
   const valor = (q, a) => {
     if (!q || q.preco == null) return '—';
     const u = (a && a.unidade) || q.unidade;
-    if (u === '%aa') return nf(q.preco) + '% a.a.'; if (u === '%') return nf(q.preco) + '%';
+    if (u === '%aa') return nf(q.preco) + '% a.a.'; if (u === '%') return nf(q.preco) + '%'; if (u === '%am') return nf(q.preco) + '% no mês';
+    if (u === 'BRL_MI') return 'R$ ' + nf(q.preco / 1000, 1) + ' bi';
+    if (u === 'MIL') return (a && a.ticker === 'PAYROLL' && q.preco > 0 ? '+' : '') + nf(q.preco, 0) + ' mil';
     if (u === 'BRL') return 'R$ ' + nf(q.preco, 4);
     if (q.classe === 'indice') return nf(q.preco, 0) + ' pts';
     return (q.moeda === 'USD' ? 'US$ ' : 'R$ ') + nf(q.preco);
   };
   const casasDe = (a) => (a.classe === 'indice' ? 0 : a.unidade === 'BRL' ? 4 : 2);
-  const varTxt = (q) => (q && q.variacaoPct != null ? `${q.variacaoPct > 0 ? '+' : q.variacaoPct < 0 ? '−' : ''}${nf(Math.abs(q.variacaoPct))}%` : '—');
+  // taxas (% a.a., % no mês, %) variam em PONTOS PERCENTUAIS; "+1% de 4,6%" confundiria
+  const ehTaxa = (q, a) => ['%aa', '%am', '%'].includes((a && a.unidade) || (q && q.unidade));
+  const varTxt = (q, a) => {
+    if (q && ehTaxa(q, a) && q.variacao != null) return `${q.variacao > 0 ? '+' : q.variacao < 0 ? '−' : ''}${nf(Math.abs(q.variacao))} p.p.`;
+    return q && q.variacaoPct != null ? `${q.variacaoPct > 0 ? '+' : q.variacaoPct < 0 ? '−' : ''}${nf(Math.abs(q.variacaoPct))}%` : '—';
+  };
   const varCls = (q) => (q && q.variacaoPct > 0 ? 'inv-sobe' : q && q.variacaoPct < 0 ? 'inv-desce' : 'inv-neutro');
   const dataHora = (q) => (q && q.data ? q.data.split('-').reverse().join('/') : '—');
   const volTxt = (v) => (v == null ? '—' : v >= 1e9 ? nf(v / 1e9, 1) + ' bi' : v >= 1e6 ? nf(v / 1e6, 1) + ' mi' : v >= 1e3 ? nf(v / 1e3, 0) + ' mil' : nf(v, 0));
@@ -30,7 +37,7 @@
     const { E } = C();
     const est = [...new Set(cot.filter(Boolean).map((q) => q.estado))];
     if (est.includes('simulado')) return `<div class="inv-faixa inv-faixa-aviso" role="note"><strong>Números SIMULADOS para demonstração.</strong> Nenhuma fonte de cotações está contratada (decisões D-06 e D-10): preços, variações, volumes e gráficos desta aba são fictícios e servem só para mostrar como a tela funciona. Não use para decidir investimentos.</div>`;
-    if (est.every((e) => e === 'indisponivel')) return `<div class="inv-faixa inv-faixa-aviso" role="note"><strong>Cotações indisponíveis.</strong> Nenhuma fonte autorizada está ligada e a demonstração com números simulados está desligada (Configurações).</div>`;
+    if (est.every((e) => e === 'indisponivel')) return `<div class="inv-faixa inv-faixa-aviso" role="note"><strong>Cotações de bolsa indisponíveis.</strong> Não há fonte autorizada de cotações de ações, FIIs, ETFs e índices de bolsa (as bolsas exigem licença paga). Os indicadores econômicos e os títulos públicos desta tela são reais, com a data de referência de cada um.</div>`;
     return est.length ? `<p class="inv-muda">Estados dos dados nesta tela: ${est.map((e) => E((K.ESTADOS[e] || {}).rotulo || e)).join(', ')}.</p>` : '';
   }
 
@@ -40,7 +47,16 @@
     return `<a class="inv-card-q" href="#/ativo/${encodeURIComponent(a.assetId)}" data-grafico="${E(a.assetId)}">
       <span class="inv-card-nome">${E(a.nome)}</span>
       <strong class="inv-card-valor">${E(valor(q, a))}</strong>
-      <span class="inv-card-pe"><span class="${varCls(q)}">${E(varTxt(q))}</span>${tagEstado(q.estado)}</span></a>`;
+      <span class="inv-card-pe"><span class="${varCls(q)}">${E(varTxt(q, a))}</span>${tagEstado(q.estado)}</span>${q && q.real && q.data ? `<span class="inv-card-ref">ref. ${E(dataHora(q))}</span>` : ''}</a>`;
+  }
+  // Etapa 11: rodapé com a origem dos dados reais da tela (atribuição exigida pela licença, data de coleta)
+  function rodapeFontes(cot) {
+    const { E, S } = C(); const DR = window.INVEST.dados; if (!DR) return '';
+    const ret = S.dadosReais; const ids = new Set();
+    (cot || []).forEach((q) => { if (!q || !q.real) return; const r = ret && ret.registros && (ret.registros[q.assetId] || (q.assetId === 'BR:MACRO:USDBRL' && ret.registros['BR:MACRO:PTAX'])); if (r && r.fonte) ids.add(r.fonte); else if (q.fonte === 'tesouro') ids.add('tesouro_direto'); });
+    if (!ids.size) return '';
+    const col = ret && ret.coleta ? new Date(ret.coleta).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    return `<p class="inv-muda inv-atribuicao">${[...ids].map((id) => E((DR.FONTES[id] || {}).atribuicao || id)).join(' · ')}. Licença: ${[...ids].map((id) => /ODbL/.test((DR.FONTES[id] || {}).licenca || '') ? 'ODbL' : 'domínio público').filter((v, i, a) => a.indexOf(v) === i).join(', ')}. Coletado em ${E(col)}; cada número mostra a data de referência da fonte.</p>`;
   }
 
   // ---------- painel de gráfico (reaproveitado na página do ativo) ----------
@@ -127,7 +143,7 @@
     const q = S.motor.cotacao(a);
     host.innerHTML = `<div class="panel-title"><h2>Cotação e gráfico</h2>${tagEstado(q.estado)}</div>
       ${q.preco == null ? `<div class="inv-cotacao"><p>${E(q.motivo || 'Sem fonte autorizada.')}</p><p class="inv-muda">Nenhum preço é mostrado sem uma fonte autorizada.</p></div>` : `
-      <div class="inv-cot-topo"><strong class="inv-cot-preco">${E(valor(q, a))}</strong><span class="${varCls(q)} inv-cot-var">${E(varTxt(q))}</span>
+      <div class="inv-cot-topo"><strong class="inv-cot-preco">${E(valor(q, a))}</strong><span class="${varCls(q)} inv-cot-var">${E(varTxt(q, a))}</span>
         <span class="inv-muda">em ${E(dataHora(q))} · ${E(q.fonteNome)}</span></div>
       ${q.estado === 'simulado' ? '<div class="inv-faixa inv-faixa-aviso" role="note"><strong>SIMULADO:</strong> preço e gráfico fictícios, só para demonstração. Nenhuma fonte de cotações está contratada (D-06/D-10).</div>' : ''}
       ${q.estado === 'manual' ? '<div class="inv-faixa inv-faixa-aviso" role="note"><strong>Preço manual</strong> informado pela sua empresa (sem histórico).</div>' : ''}
@@ -173,12 +189,59 @@
   // ---------- a aba ----------
   const CLASSES_RANK = { BR: [['acao', 'Ações'], ['fii', 'FIIs'], ['bdr', 'BDRs'], ['etf', 'ETFs']], US: [['acao', 'Ações'], ['etf', 'ETFs'], ['reit', 'REITs']] };
   const estAba = { BR: { classe: 'acao', grafico: 'BR:INDICE:IBOV' }, US: { classe: 'acao', grafico: 'US:INDICE:SPX' } };
+  // Etapa 11: painéis com dados reais do Tesouro Direto e do Focus
+  function tesouroHtml() {
+    const { E, S, estado, tagEstado } = C(); const t = S.dadosReais && S.dadosReais.tesouro;
+    if (!t || !t.titulos) return estado('info', 'Preços do Tesouro Direto indisponíveis', 'O arquivo do Tesouro Transparente ainda não foi carregado.');
+    const hoje = typeof isoHoje === 'function' ? isoHoje() : new Date().toISOString().slice(0, 10);
+    const est = window.INVEST.dados.estadoPelaIdade(t.dataBase, hoje, 10);
+    const linhas = Object.entries(t.titulos).sort((a, b) => (a[1].indexador + a[1].vencimento).localeCompare(b[1].indexador + b[1].vencimento));
+    const tx = (v) => (v == null ? '—' : nf(v) + '%');
+    return `<p class="inv-muda">Data-base ${E(t.dataBase.split('-').reverse().join('/'))} ${tagEstado(est)} · ${linhas.length} títulos em oferta · PU = preço unitário</p>
+      <div class="cad-tabela-wrap"><table class="cad-tabela inv-tabela"><thead><tr><th>Título</th><th>Vencimento</th><th class="cad-num">Taxa (compra)</th><th class="cad-num">PU (compra)</th><th class="cad-num">Taxa (venda)</th><th class="cad-num">PU (venda)</th></tr></thead><tbody>
+      ${linhas.map(([tk, x]) => `<tr><td data-label="Título"><a href="#/ativo/${encodeURIComponent('BR:TESOURO:' + tk)}">${E(x.nome)}</a></td><td data-label="Vencimento">${E(x.vencimento.split('-').reverse().join('/'))}</td><td data-label="Taxa (compra)" class="cad-num">${E(tx(x.taxaCompra))}</td><td data-label="PU (compra)" class="cad-num">${x.puCompra ? 'R$ ' + E(nf(x.puCompra)) : '—'}</td><td data-label="Taxa (venda)" class="cad-num">${E(tx(x.taxaVenda))}</td><td data-label="PU (venda)" class="cad-num">${x.puVenda ? 'R$ ' + E(nf(x.puVenda)) : '—'}</td></tr>`).join('')}
+      </tbody></table></div><p class="inv-muda inv-atribuicao">${E(t.atribuicao)}. Licença ODbL. Títulos sem compra no dia aparecem com "—".</p>`;
+  }
+  function focusHtml() {
+    const { E, S, estado } = C(); const f = S.dadosReais && S.dadosReais.registros && S.dadosReais.registros['BR:FOCUS'];
+    if (!f) return estado('info', 'Expectativas indisponíveis', 'O Boletim Focus não foi carregado.');
+    const ind = [['IPCA', 'IPCA (%)'], ['Selic', 'Selic (% a.a.)'], ['PIB Total', 'PIB (%)'], ['Câmbio', 'Câmbio (R$/US$)']];
+    const anos = [...new Set(Object.values(f.expectativas).flatMap((o) => Object.keys(o)))].sort();
+    const dt = Object.values(f.expectativas).flatMap((o) => Object.values(o).map((x) => x.data)).sort().pop();
+    return `<p class="inv-muda">EXPECTATIVAS de mercado (mediana das instituições), não são valores realizados nem garantia. Atualizado em ${E((dt || '').split('-').reverse().join('/'))}.</p>
+      <div class="cad-tabela-wrap"><table class="cad-tabela inv-tabela"><thead><tr><th>Indicador</th>${anos.map((a) => `<th class="cad-num">${E(a)}</th>`).join('')}</tr></thead><tbody>
+      ${ind.map(([k, rot]) => `<tr><td data-label="Indicador">${E(rot)}</td>${anos.map((a) => { const x = (f.expectativas[k] || {})[a]; return `<td data-label="${E(a)}" class="cad-num">${x ? E(nf(x.mediana, k === 'Câmbio' ? 2 : 2)) : '—'}</td>`; }).join('')}</tr>`).join('')}
+      </tbody></table></div><p class="inv-muda inv-atribuicao">${E(f.atribuicao)}. Licença ODbL.</p>`;
+  }
+  // Etapa 11.18: gráficos de mercado do TradingView (só símbolos confirmados; o gráfico é desenhado por eles, numa janela isolada)
+  const TV_POR_PAIS = { BR: ['BR:INDICE:IBOV', 'BR:INDICE:IFIX', 'BR:MACRO:USDBRL', 'BR:MACRO:EURBRL', 'CRYPTO:-:BTC', 'CRYPTO:-:ETH', 'CRYPTO:-:SOL', 'REF:OURO', 'REF:PETROLEO'],
+    US: ['US:INDICE:SPX', 'US:INDICE:NDX', 'CRYPTO:-:BTC', 'CRYPTO:-:ETH', 'CRYPTO:-:SOL', 'REF:OURO', 'REF:PETROLEO'] };
+  const TV_ROTULO = { 'BR:INDICE:IFIX': 'IFIX' };
+  const estTV = { BR: null, US: null };
+  const M = () => window.INVEST.motor;
+  const refTV = (id) => { const a = C().porId(id); if (a) return a; const p = (M().TV_PAINEL || []).find((x) => x.id === id); return { assetId: id, ticker: p ? p.rotulo : id, nome: p ? p.rotulo : id }; };
+  function graficosMercadoHtml(pais) {
+    const tv = window.INVEST.tv; if (!tv || !M().opcoesTradingView) return '';
+    const ids = TV_POR_PAIS[pais].filter((id) => M().opcoesTradingView({ assetId: id }).length);
+    if (!ids.length) return '';
+    const atual = estTV[pais] && ids.includes(estTV[pais]) ? estTV[pais] : ids[0];
+    const rot = (id) => TV_ROTULO[id] || ((M().TV_PAINEL || []).find((x) => x.id === id) || {}).rotulo || id;
+    const corpo = tv.html(refTV(atual), { titulo: 'Gráficos de mercado · ' + rot(atual) });
+    return `<div class="inv-largo inv-tv-mercado" data-tv-mercado="${pais}"><div class="inv-seg-grupo inv-tv-escolha" role="group" aria-label="Escolher o gráfico de mercado">${ids.map((id) => `<button type="button" class="inv-seg${id === atual ? ' on' : ''}" data-tv-ref="${C().E(id)}" aria-pressed="${id === atual}">${C().E(rot(id))}</button>`).join('')}</div>${corpo}</div>`;
+  }
+  function ligarGraficosMercado(host, pais) {
+    const w = host.querySelector(`[data-tv-mercado="${pais}"]`); if (!w) return;
+    window.INVEST.tv.ligar(w);
+    w.querySelectorAll('[data-tv-ref]').forEach((b) => b.addEventListener('click', () => { estTV[pais] = b.dataset.tvRef; const n = document.createElement('div'); n.innerHTML = graficosMercadoHtml(pais); const novo = n.firstElementChild; w.replaceWith(novo); ligarGraficosMercado(novo.parentElement, pais); }));
+  }
   function telaMercado(host, pais) {
     const ctx = C(); const { S, E, estado, cabecalho } = ctx;
     const titulo = pais === 'BR' ? 'Mercado Brasil' : 'Mercado Estados Unidos';
     if (S.estadoCat !== 'ok' || !S.motor) { host.innerHTML = cabecalho(titulo, '') + `<div class="panel">${S.estadoCat === 'erro' ? estado('erro', 'Catálogo indisponível', S.erroCat) : estado('carregando', 'Carregando o mercado…')}</div>`; return; }
     const ea = estAba[pais];
     const ind = K.INDICES[pais], mac = K.MACRO[pais];
+    // sem fonte para os índices de bolsa: o gráfico inicial passa para um indicador com dado real
+    if (!ea.escolhido && S.dadosReais) { const alvo = mac.find((x) => x.assetId === (pais === 'BR' ? 'BR:MACRO:USDBRL' : 'US:MACRO:UST10Y')); const q0 = alvo && S.motor.cotacao(alvo); if (q0 && q0.real) ea.grafico = alvo.assetId; }
     const cInd = S.motor.cotacoes(ind), cMac = S.motor.cotacoes(mac);
     const univ = S.cat.filter((a) => a.pais === pais && a.situacao === 'ativo' && a.classe !== 'tesouro');
     const cUniv = S.motor.cotacoes(univ);
@@ -193,24 +256,28 @@
       (temTeste ? `<div class="inv-faixa inv-faixa-aviso" role="note"><strong>Ativos de TESTE:</strong> o catálogo dos EUA ainda usa empresas fictícias (o arquivo oficial da SEC não foi recebido — pendência da 05.1).</div>` : '') + `
       <div class="panel"><div class="panel-title"><h2>Principais índices</h2></div><div class="inv-cards">${amplos.map((a, i) => cartao(a, cInd[ind.indexOf(a)])).join('')}</div></div>
       <div class="inv-grade">
+        ${graficosMercadoHtml(pais)}
         <div class="panel inv-largo"><div class="panel-title"><h2>Gráfico · <span data-graf-nome>${E(sel.nome)}</span></h2>
           <label class="inv-campo inv-campo-curto"><span class="sr-only">Escolher índice ou indicador</span><select class="inv-select" data-graf-sel>${[...ind, ...mac].map((x) => `<option value="${E(x.assetId)}"${x.assetId === sel.assetId ? ' selected' : ''}>${E(x.nome)}</option>`).join('')}</select></label></div>
           <div data-graf></div></div>
         <div class="panel"><div class="panel-title"><h2>${pais === 'BR' ? 'Juros, inflação e câmbio' : 'Juros, inflação e Treasuries'}</h2></div>
-          <ul class="inv-macro">${mac.map((a, i) => `<li><a href="#/ativo/${encodeURIComponent(a.assetId)}">${E(a.nome)}</a><strong>${E(valor(cMac[i], a))}</strong>${C().tagEstado(cMac[i].estado)}</li>`).join('')}</ul></div>
+          <ul class="inv-macro">${mac.map((a, i) => `<li><a href="#/ativo/${encodeURIComponent(a.assetId)}">${E(a.nome)}</a><strong>${E(valor(cMac[i], a))}</strong>${C().tagEstado(cMac[i].estado)}${cMac[i].real && cMac[i].data ? `<small class="inv-muda">ref. ${E(dataHora(cMac[i]))}</small>` : ''}</li>`).join('')}</ul>${rodapeFontes(cMac)}</div>
+        ${pais === 'BR' ? `<div class="panel inv-largo"><div class="panel-title"><h2>Tesouro Direto — preços e taxas</h2></div>${tesouroHtml()}</div>
+        <div class="panel inv-largo"><div class="panel-title"><h2>Expectativas de mercado (Boletim Focus)</h2></div>${focusHtml()}</div>` : ''}
         <div class="panel"><div class="panel-title"><h2>Índices setoriais</h2></div>
           <ul class="inv-macro">${setoriais.map((a) => { const q = cInd[ind.indexOf(a)]; return `<li><a href="#/ativo/${encodeURIComponent(a.assetId)}">${E(a.nome)}</a><strong class="${varCls(q)}">${E(varTxt(q))}</strong>${C().tagEstado(q.estado)}</li>`; }).join('')}</ul></div>
         <div class="panel inv-largo"><div class="panel-title inv-lista-cab"><h2>Destaques do dia</h2>
           <div class="inv-seg-grupo" role="group" aria-label="Classe">${CLASSES_RANK[pais].map(([k, n]) => `<button type="button" class="inv-seg${ea.classe === k ? ' on' : ''}" data-rank-classe="${k}" aria-pressed="${ea.classe === k}">${E(n)} <small>${contagem(k)}</small></button>`).join('')}</div></div>
           ${contagem(ea.classe) ? `<div class="inv-rank-grade"><div><h3>Maiores altas</h3>${tabelaRank(rk.altas)}</div><div><h3>Maiores baixas</h3>${tabelaRank(rk.baixas)}</div><div><h3>Maior volume</h3>${tabelaRank(rk.volume, 'volume')}</div></div>`
-          : estado('info', `Sem ${CLASSES_RANK[pais].find((x) => x[0] === ea.classe)[1]} no catálogo`, ea.classe === 'etf' && pais === 'BR' ? 'Os ETFs brasileiros só entram com o cadastro da B3, que depende da licença por escrito (D-06).' : pais === 'US' ? 'O catálogo dos EUA depende do arquivo oficial da SEC (pendência da 05.1) e, para ETFs, de uma fonte com licença.' : 'Nenhum ativo desta classe nas fontes recebidas.')}</div>
+          : estado('info', `Sem ${CLASSES_RANK[pais].find((x) => x[0] === ea.classe)[1]} no catálogo`, ea.classe === 'etf' && pais === 'BR' ? 'Os ETFs brasileiros só entram com o cadastro da B3, que depende da licença por escrito (D-06).' : pais === 'US' ? 'O catálogo dos EUA depende do arquivo oficial da SEC, que exige um e-mail de contato da empresa para o robô (pendência da Etapa 11), e, para ETFs, de uma fonte com licença.' : 'Nenhum ativo desta classe nas fontes recebidas.')}</div>
         <div class="panel inv-largo"><div class="panel-title"><h2>Mapa de calor por setor</h2></div><div data-mapa>${estado('carregando', 'Montando o mapa…')}</div></div>
         <div class="panel"><div class="panel-title"><h2>Radar</h2></div><div data-radar>${estado('carregando', 'Procurando sinais…')}</div></div>
         <div class="panel"><div class="panel-title"><h2>Fontes de dados</h2></div>${fontesHtml(pais)}
-          ${ctx.S.demoPermitida ? `<label class="inv-check"><input type="checkbox" id="inv-simulador"${ctx.S.simulador ? ' checked' : ''}> Modo demonstração: mostrar números SIMULADOS (só neste navegador; nunca entram em carteiras reais)</label>` : '<p class="inv-muda">Sem fonte de cotações contratada: os números ficam indisponíveis. Nada é atualizado automaticamente.</p>'}</div>
+          ${ctx.S.demoPermitida ? `<label class="inv-check"><input type="checkbox" id="inv-simulador"${ctx.S.simulador ? ' checked' : ''}> Modo demonstração: mostrar números SIMULADOS (só neste navegador; nunca entram em carteiras reais)</label>` : '<p class="inv-muda">Indicadores de juros, inflação, câmbio e Tesouro vêm de fontes oficiais (dados reais, com a data de referência de cada um). Cotações de ações, FIIs, ETFs, BDRs e índices de bolsa: sem fonte autorizada (indisponíveis).</p>'}</div>
       </div>`;
+    ligarGraficosMercado(host, pais);
     painelGrafico(host.querySelector('[data-graf]'), sel, { sufixo: 'mercado' + pais });
-    host.querySelector('[data-graf-sel]').addEventListener('change', (e) => { ea.grafico = e.target.value; const x = [...ind, ...mac].find((y) => y.assetId === ea.grafico); host.querySelector('[data-graf-nome]').textContent = x.nome; painelGrafico(host.querySelector('[data-graf]'), x, { sufixo: 'mercado' + pais }); });
+    host.querySelector('[data-graf-sel]').addEventListener('change', (e) => { ea.grafico = e.target.value; ea.escolhido = true; const x = [...ind, ...mac].find((y) => y.assetId === ea.grafico); host.querySelector('[data-graf-nome]').textContent = x.nome; painelGrafico(host.querySelector('[data-graf]'), x, { sufixo: 'mercado' + pais }); });
     host.querySelectorAll('[data-rank-classe]').forEach((b) => b.addEventListener('click', () => { ea.classe = b.dataset.rankClasse; telaMercado(host, pais); }));
     ctx.ligarLinhas(host);
     const simEl = host.querySelector('#inv-simulador'); if (simEl) simEl.addEventListener('change', (e) => { ctx.salvarPref({ simulador: e.target.checked }); ctx.montarMotor(); telaMercado(host, pais); });
@@ -223,5 +290,5 @@
   }
   T.br = (host) => telaMercado(host, 'BR');
   T.us = (host) => telaMercado(host, 'US');
-  window.INVEST.mercadoUi = { valor, varTxt, varCls, nf, volTxt, painelGrafico, faixaSimulado, cartao, dataHora };
+  window.INVEST.mercadoUi = { valor, varTxt, varCls, nf, volTxt, painelGrafico, faixaSimulado, cartao, dataHora, rodapeFontes, tesouroHtml, focusHtml };
 })();

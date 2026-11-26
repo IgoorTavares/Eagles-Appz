@@ -1,5 +1,5 @@
 // ---------- Service Worker · Eagles Labz ----------
-const CACHE_NAME = 'eagles-cache-v158';
+const CACHE_NAME = 'eagles-cache-v159';
 
 const APP_SHELL = [
   './',
@@ -41,6 +41,12 @@ self.addEventListener('fetch', (event) => {
 
   if (url.hostname.includes('firestore.googleapis.com') || url.hostname.includes('identitytoolkit.googleapis.com') || url.hostname.includes('securetoken.googleapis.com') ||
       url.hostname === 'api.openai.com' || url.hostname === 'api.anthropic.com' || url.hostname === 'generativelanguage.googleapis.com') {
+    return;
+  }
+  // Etapa 11: dados de mercado das fontes oficiais vão SEMPRE à rede (o próprio módulo guarda com prazo e mostra a data);
+  // o cache "guardado primeiro" daqui mostraria um dado velho como se fosse o atual
+  if (['api.bcb.gov.br', 'olinda.bcb.gov.br', 'home.treasury.gov', 'api.fiscaldata.treasury.gov'].includes(url.hostname) ||
+      (url.origin === self.location.origin && url.pathname.includes('/inv/dados/'))) {
     return;
   }
 

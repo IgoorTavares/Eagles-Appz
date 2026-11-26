@@ -6774,6 +6774,14 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '26/11/2026 · Investimentos com dados reais', itens: [
+    { titulo: 'Juros, inflação e câmbio reais', badges: ['novo'], texto: 'O módulo Investimentos passa a mostrar Selic, CDI, IPCA, IGP-M, dólar (PTAX), euro, desemprego e PIB do Banco Central, as expectativas do Boletim Focus e os juros dos títulos do Tesouro dos EUA. Cada número mostra a fonte e a data de referência.' },
+    { titulo: 'Tesouro Direto com preço real', badges: ['novo'], texto: 'Os títulos do Tesouro Direto têm preço e taxa de compra e venda do Tesouro Transparente, e as carteiras passam a ser avaliadas com esses preços. Ações e FIIs continuam com preço informado por você: a B3 exige licença paga para cotações.' },
+    { titulo: 'Biblioteca com 953 ativos e notícias oficiais', badges: ['novo'], texto: 'A Biblioteca traz as empresas da CVM e os títulos do Tesouro (dados abertos, licença ODbL). As notícias vêm do Federal Reserve, com o título original e o link para a publicação.' },
+    { titulo: 'Gráficos do TradingView', badges: ['novo'], texto: 'Ações e fundos imobiliários da B3, Ibovespa, IFIX, dólar, euro, ouro, petróleo, Bitcoin, Ethereum e Solana ganham o gráfico gratuito do TradingView (linha, candles, volume, períodos, indicadores e zoom), com a bolsa, o par e o atraso informados. O gráfico roda numa janela isolada e os números dele não entram na sua carteira.' },
+    { titulo: 'Indicadores dos EUA e fundamentos das empresas', badges: ['novo'], texto: 'O Mercado US mostra juros do Fed, inflação, emprego, PIB e outros indicadores (FRED). A tela de cada empresa brasileira mostra receita, lucro, margem, ROE, patrimônio, dívida e caixa dos últimos anos e trimestres, das demonstrações consolidadas da CVM.' },
+    { titulo: 'Google Finance', badges: ['melhoria'], texto: 'Cada ativo tem o botão "Ver cotação e gráfico no Google Finance", que abre a página do Google em outra aba. O sistema não copia nada de lá.' },
+  ] },
   { data: '26/11/2026 · Investimentos (módulo opcional)', itens: [
     { titulo: 'Link do portal: "link novo" não é mais desfeito', badges: ['corrigido'], texto: 'Quando alguém gerava um link novo do portal num aparelho que ainda estava com uma versão antiga do sistema, outra tela aberta podia desfazer a troca. Agora a troca feita de propósito vale, e a proteção contra trocas sem querer continua.' },
     { titulo: 'Link do portal: duas pessoas gerando link novo ao mesmo tempo', badges: ['corrigido'], texto: 'Se duas pessoas pediam um link novo para o mesmo cliente no mesmo instante, uma delas via a mensagem errada de "sem internet" e a troca dela não acontecia. Agora as duas ficam com o mesmo link novo, e as mensagens dizem a causa real quando algo dá errado.' },

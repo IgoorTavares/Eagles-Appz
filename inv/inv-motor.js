@@ -23,9 +23,9 @@
   const MOEDAS = ['BRL', 'USD'];
   // fontes conhecidas (sem nenhuma credencial; a credencial, quando existir, fica só no servidor)
   const FONTES = {
-    cvm: { nome: 'CVM — Dados Abertos (cadastro de companhias, FCA e informes de FII)', tipo: 'oficial', licenca: 'Dados abertos da CVM — licença declarada no portal A CONFIRMAR (esperada: ODbL, que exige atribuição e compartilhar a base derivada pela mesma licença); não verificável neste ambiente', atribuicao: 'Contém dados da Comissão de Valores Mobiliários (CVM) — Portal de Dados Abertos', url: 'https://dados.cvm.gov.br/', habilitada: true, credencial: false, autorizadaProducao: false },
+    cvm: { nome: 'CVM — Dados Abertos (cadastro de companhias, FCA e informes de FII)', tipo: 'oficial', licenca: 'ODbL (Open Data Commons Open Database License) — confirmada em 26/11/2026 nos registros oficiais do portal (cia_aberta-cad, fii-doc-inf_mensal: license_id odc-odbl); exige atribuição e que a base derivada publicada continue sob ODbL', atribuicao: 'Contém dados da Comissão de Valores Mobiliários (CVM) — Portal de Dados Abertos', url: 'https://dados.cvm.gov.br/', habilitada: true, credencial: false, autorizadaProducao: true },
     sec: { nome: 'SEC — EDGAR (company tickers)', tipo: 'oficial', licenca: 'Informação pública da SEC (exige identificação no acesso automático)', url: 'https://www.sec.gov/edgar/sec-api-documentation', habilitada: true, credencial: false },
-    tesouro: { nome: 'Tesouro Transparente — Tesouro Direto', tipo: 'oficial', licenca: 'Tesouro Transparente — termos de uso A CONFIRMAR para cadastro e para preços; citar a fonte', atribuicao: 'Contém dados do Tesouro Nacional — Tesouro Transparente', url: 'https://www.tesourotransparente.gov.br/', habilitada: true, credencial: false, autorizadaProducao: false },
+    tesouro: { nome: 'Tesouro Transparente — Tesouro Direto', tipo: 'oficial', licenca: 'ODbL (Open Data Commons Open Database License) — confirmada em 26/11/2026 no registro oficial "taxas-dos-titulos-ofertados-pelo-tesouro-direto" do Tesouro Transparente (license_id odc-odbl); atribuição obrigatória', atribuicao: 'Contém dados do Tesouro Nacional — Tesouro Transparente', url: 'https://www.tesourotransparente.gov.br/', habilitada: true, credencial: false, autorizadaProducao: true },
     b3: { nome: 'B3 — cadastro de instrumentos', tipo: 'oficial', licenca: 'Política comercial de market data da B3: uso a confirmar por escrito (D-06)', url: 'https://www.b3.com.br/', habilitada: false, credencial: false },
     coingecko: { nome: 'CoinGecko — lista de moedas', tipo: 'privada', licenca: 'Plano gratuito com atribuição; chave só no servidor (nunca no navegador)', url: 'https://www.coingecko.com/en/api', habilitada: false, credencial: true },
     manual: { nome: 'Classificação manual (Super Admin)', tipo: 'manual', licenca: 'Cadastro interno', url: '', habilitada: true, credencial: false },
@@ -185,10 +185,76 @@
 
   // Pesquisa externa AUTORIZADA: só links que a PRÓPRIA pessoa abre (o sistema não coleta nada),
   // montados só com dados públicos do ativo (nunca carteira, valores ou nomes de clientes).
+  // ---------- TradingView (Etapa 11.18): SÓ símbolos CONFIRMADOS no gráfico gratuito ----------
+  // Confirmados em 26/11/2026 abrindo cada um no gráfico incorporado: o rótulo do próprio gráfico informa a bolsa/fonte e o atraso.
+  // atraso: '15min' (o gráfico mostra "15 min delayed"), 'indicativo' ("Dados indicativos": não é preço oficial de bolsa),
+  // 'nao-informado' (o gráfico não mostra o atraso). Nada aqui é "tempo real".
+  const TV_ATRASO = { '15min': 'Atraso de 15 min (informado pelo gráfico)', indicativo: 'Dados indicativos (não é o preço oficial de bolsa)', 'nao-informado': 'Atraso não informado pelo gráfico' };
+  const TV_REF = {
+    'CRYPTO:-:BTC': [{ s: 'BINANCE:BTCBRL', fonte: 'Binance', par: 'BTC/BRL', atraso: 'indicativo' }, { s: 'COINBASE:BTCUSD', fonte: 'Coinbase', par: 'BTC/USD', atraso: 'indicativo' }, { s: 'BINANCE:BTCUSDT', fonte: 'Binance', par: 'BTC/USDT', atraso: 'indicativo' }],
+    'CRYPTO:-:ETH': [{ s: 'BINANCE:ETHBRL', fonte: 'Binance', par: 'ETH/BRL', atraso: 'indicativo' }, { s: 'COINBASE:ETHUSD', fonte: 'Coinbase', par: 'ETH/USD', atraso: 'indicativo' }],
+    'CRYPTO:-:SOL': [{ s: 'BINANCE:SOLBRL', fonte: 'Binance', par: 'SOL/BRL', atraso: 'indicativo' }, { s: 'COINBASE:SOLUSD', fonte: 'Coinbase', par: 'SOL/USD', atraso: 'indicativo' }],
+    'BR:INDICE:IBOV': [{ s: 'BMFBOVESPA:IBOV', fonte: 'B3', par: 'Ibovespa (pontos)', curto: 'Ibovespa', atraso: '15min' }, { s: 'BMFBOVESPA:BOVA11', fonte: 'B3', par: 'BOVA11 (ETF que replica o Ibovespa, R$)', curto: 'BOVA11 (ETF)', atraso: '15min' }],
+    'BR:INDICE:IFIX': [{ s: 'BMFBOVESPA:IFIX', fonte: 'B3', par: 'IFIX (pontos)', atraso: '15min' }],
+    'US:INDICE:SPX': [{ s: 'FOREXCOM:SPXUSD', fonte: 'FOREX.com (CFD)', par: 'Referência do S&P 500 — CFD, não é o índice oficial', curto: 'S&P 500 (CFD)', atraso: 'indicativo' }, { s: 'AMEX:SPY', fonte: 'Cboe One', par: 'SPY (ETF que replica o S&P 500, US$)', curto: 'SPY (ETF)', atraso: '15min' }],
+    'US:INDICE:NDX': [{ s: 'FOREXCOM:NSXUSD', fonte: 'FOREX.com (CFD)', par: 'Referência do Nasdaq 100 (US 100) — CFD, não é o índice oficial', curto: 'US 100 (CFD)', atraso: 'indicativo' }, { s: 'NASDAQ:QQQ', fonte: 'Cboe One', par: 'QQQ (ETF que replica o Nasdaq 100, US$)', curto: 'QQQ (ETF)', atraso: '15min' }],
+    'BR:MACRO:USDBRL': [{ s: 'FX_IDC:USDBRL', fonte: 'ICE', par: 'USD/BRL', atraso: 'indicativo' }],
+    'BR:MACRO:EURBRL': [{ s: 'FX_IDC:EURBRL', fonte: 'ICE', par: 'EUR/BRL', atraso: 'indicativo' }],
+    'REF:OURO': [{ s: 'OANDA:XAUUSD', fonte: 'OANDA', par: 'Ouro (XAU/USD, onça troy)', atraso: 'indicativo' }],
+    'REF:PETROLEO': [{ s: 'TVC:USOIL', fonte: 'TVC (CFD)', par: 'Petróleo WTI (US$/barril)', curto: 'WTI', atraso: 'indicativo' }, { s: 'TVC:UKOIL', fonte: 'TVC (CFD)', par: 'Petróleo Brent (US$/barril)', curto: 'Brent', atraso: 'indicativo' }],
+  };
+  // fora do gráfico gratuito ("Símbolo somente disponível no TradingView"): SP:SPX, NASDAQ:IXIC, NASDAQ:NDX — por isso não aparecem
+  const TV_NAO_DISPONIVEL = { 'US:INDICE:IXIC': 'O Nasdaq Composite só abre no site do TradingView (não no gráfico incorporado gratuito).' };
+  // referências de mercado (não negociáveis aqui) que têm gráfico: aparecem no painel "Gráficos de mercado"
+  const TV_PAINEL = [
+    { id: 'BR:INDICE:IBOV', rotulo: 'Ibovespa' }, { id: 'US:INDICE:SPX', rotulo: 'S&P 500' }, { id: 'US:INDICE:NDX', rotulo: 'Nasdaq 100' },
+    { id: 'CRYPTO:-:BTC', rotulo: 'Bitcoin' }, { id: 'CRYPTO:-:ETH', rotulo: 'Ethereum' }, { id: 'CRYPTO:-:SOL', rotulo: 'Solana' },
+    { id: 'BR:MACRO:USDBRL', rotulo: 'Dólar' }, { id: 'BR:MACRO:EURBRL', rotulo: 'Euro' }, { id: 'REF:OURO', rotulo: 'Ouro' }, { id: 'REF:PETROLEO', rotulo: 'Petróleo' },
+  ];
+  // confirmações do catálogo (arquivo inv/catalogo/tradingview.json, gerado pela varredura): { assetId: { s, atraso, fonte } }
+  let TV_CONF = {};
+  function definirConfirmadosTV(j) {
+    TV_CONF = {};
+    if (!j || j.formato !== 'eagles-inv-tradingview-v1' || !j.itens || typeof j.itens !== 'object') return 0;
+    for (const [id, x] of Object.entries(j.itens)) if (x && /^[A-Z_]{2,12}:[A-Z0-9.!]{1,15}$/.test(x.s) && TV_ATRASO[x.atraso]) TV_CONF[id] = { s: x.s, fonte: String(x.fonte || '').slice(0, 40), par: '', atraso: x.atraso };
+    return Object.keys(TV_CONF).length;
+  }
+  // devolve as opções de gráfico confirmadas para um ativo (ou []); nunca monta símbolo "no chute"
+  function opcoesTradingView(a) {
+    if (!a || !a.assetId || a.classe === 'tesouro' || a.situacao === 'cancelado') return [];
+    if (TV_REF[a.assetId]) return TV_REF[a.assetId].slice();
+    if (TV_CONF[a.assetId]) return [TV_CONF[a.assetId]];
+    return [];
+  }
+  const simboloTradingView = (a) => { const o = opcoesTradingView(a)[0]; return o ? o.s : null; };
+  // URL do gráfico incorporado. Só dados públicos do ativo; nenhum identificador da empresa, da pessoa ou da carteira.
+  function urlGraficoTradingView(simbolo, op) {
+    op = op || {};
+    if (!/^[A-Z_]{2,12}:[A-Z0-9.!]{1,15}$/.test(String(simbolo || ''))) return null;
+    const cor = /^#[0-9a-f]{6}$/i.test(op.fundo || '') ? op.fundo : null;
+    const cfg = { autosize: true, symbol: simbolo, interval: op.intervalo || 'D', timezone: 'America/Sao_Paulo', theme: op.tema === 'dark' ? 'dark' : 'light', style: op.estilo || '1', locale: 'br',
+      allow_symbol_change: false, save_image: false, calendar: false, hide_side_toolbar: !!op.compacto, hide_top_toolbar: false, withdateranges: true, details: false, hotlist: false,
+      support_host: 'https://www.tradingview.com', width: '100%', height: '100%' };
+    if (cor) { cfg.backgroundColor = cor; cfg.gridColor = op.grade && /^rgba?\([\d., ]+\)$/.test(op.grade) ? op.grade : (op.tema === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'); }
+    return 'https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#' + encodeURIComponent(JSON.stringify(cfg));
+  }
+  // Google Finance: SÓ link que a pessoa abre (os termos do Google proíbem copiar, guardar ou redistribuir os dados).
+  // Só para correspondências confirmadas (o formato CÓDIGO:BOLSA do Google para cada tipo de ativo).
+  const GF_BOLSA = { B3: 'BVMF', NASDAQ: 'NASDAQ', NYSE: 'NYSE', NYSEARCA: 'NYSEARCA' };
+  const GF_REF = { 'BR:INDICE:IBOV': 'IBOV:INDEXBVMF', 'US:INDICE:SPX': '.INX:INDEXSP', 'US:INDICE:IXIC': '.IXIC:INDEXNASDAQ', 'US:INDICE:NDX': 'NDX:INDEXNASDAQ', 'US:INDICE:DJI': '.DJI:INDEXDJX',
+    'BR:MACRO:USDBRL': 'USD-BRL', 'BR:MACRO:EURBRL': 'EUR-BRL', 'CRYPTO:-:BTC': 'BTC-BRL', 'CRYPTO:-:ETH': 'ETH-BRL', 'CRYPTO:-:SOL': 'SOL-BRL' };
+  function linkGoogleFinance(a) {
+    if (!a || !a.ticker || a.classe === 'tesouro') return null;
+    let q = GF_REF[a.assetId] || null;
+    if (!q && !(TV_CONF[a.assetId] || a.pais === 'US')) return null; // B3: só quando o código foi confirmado na bolsa (varredura); EUA: códigos do arquivo oficial da SEC
+    if (!q) { const b = GF_BOLSA[String(a.bolsa || '').toUpperCase()]; if (!b || !/^[A-Z0-9.\-]{1,12}$/i.test(a.ticker)) return null; q = String(a.ticker).toUpperCase().replace('-', '.') + ':' + b; }
+    return 'https://www.google.com/finance/quote/' + encodeURIComponent(q).replace(/%3A/g, ':') + '?hl=pt';
+  }
   function linksExternos(a) {
     const g = (q) => 'https://www.google.com/search?q=' + encodeURIComponent(q);
     const l = [{ id: 'google', rotulo: 'Pesquisar no Google', url: g(`${a.ticker} ${a.nome}`) },
       { id: 'google-noticias', rotulo: 'Notícias no Google', url: g(`${a.ticker} ${a.nome}`) + '&tbm=nws' }];
+    const gf = linkGoogleFinance(a); if (gf) l.unshift({ id: 'google-finance', rotulo: 'Ver cotação e gráfico no Google Finance', url: gf });
     if (a.ids.cik) l.push({ id: 'sec', rotulo: 'Documentos na SEC (EDGAR)', url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=' + a.ids.cik });
     if (a.ids.cnpj) l.push({ id: 'cvm', rotulo: 'Documentos na CVM (pesquisa)', url: g(`site:cvm.gov.br ${fmtCnpj(a.ids.cnpj)}`) });
     if (a.classe === 'tesouro') l.push({ id: 'tesouro', rotulo: 'Tesouro Direto (preços e taxas)', url: 'https://www.tesourodireto.com.br/titulos/precos-e-taxas.htm' });
@@ -256,7 +322,7 @@
   return {
     CLASSES, PAISES, BOLSAS, MOEDAS, FONTES, PRIORIDADE, ESTADOS, LIMITES, LEITURAS_DAS_REGRAS, OPERACOES, FAV_MAX_LISTAS, FAV_MAX_ATIVOS,
     semAcento, normTexto, normTicker, soDigitos, limpaNome, cnpjValido, fmtCnpj, isinValido, cikNorm,
-    montarAssetId, validarAtivo, novoAtivo, mesclar, indexar, buscar, opcoesFiltro, linksExternos, cotacaoDaBiblioteca,
+    montarAssetId, validarAtivo, novoAtivo, mesclar, indexar, buscar, opcoesFiltro, linksExternos, linkGoogleFinance, simboloTradingView, urlGraficoTradingView, opcoesTradingView, definirConfirmadosTV, TV_ATRASO, TV_REF, TV_PAINEL, TV_NAO_DISPONIVEL, cotacaoDaBiblioteca,
     estadoConsumo, podeExecutar, criarMedidor, diaHoje, favoritosPadrao, favoritosValidos, alternarFavorito, ehFavorito, validarCatalogo,
   };
 });

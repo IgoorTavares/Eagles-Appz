@@ -138,6 +138,11 @@ const TIPOS_TESOURO = [
   [/^tesouro prefixado$/i, 'PREFIXADO', 'Prefixado'], [/^tesouro igpm\+ com juros semestrais$/i, 'IGPMJ', 'IGP-M (juros semestrais)'],
   [/^tesouro renda\+/i, 'RENDA', 'IPCA (Renda+)'], [/^tesouro educa\+/i, 'EDUCA', 'IPCA (Educa+)'],
 ];
+// Etapa 11: o mesmo código do título usado no catálogo (ex.: SELIC-2027), para casar preço e cadastro
+export function tickerTesouro(tipoTitulo, vencIso) {
+  const tipo = TIPOS_TESOURO.find(([rx]) => rx.test(String(tipoTitulo || '').trim()));
+  return tipo && vencIso ? { ticker: `${tipo[1]}-${vencIso.slice(0, 4)}`, indexador: tipo[2] } : null;
+}
 export function tesouro(texto, op = {}) {
   const regs = lerCsv(texto, ';');
   exigir(regs, ['Tipo Titulo', 'Data Vencimento', 'Data Base'], 'Tesouro');

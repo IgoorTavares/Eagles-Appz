@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Etapa 11.18: política de segurança desta página. Só o TradingView (e o login do Firebase) podem abrir janelas incorporadas;
+     a página só conversa com o Firebase e as fontes oficiais aprovadas. 'unsafe-inline'/'unsafe-eval' continuam porque o sistema
+     inteiro usa onclick="..." e um aviso com new Function (limitação antiga, registrada no relatório). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://www.gstatic.com https://api.bcb.gov.br https://olinda.bcb.gov.br https://home.treasury.gov https://api.fiscaldata.treasury.gov; frame-src https://www.tradingview-widget.com https://labz-18246.firebaseapp.com; child-src https://www.tradingview-widget.com https://labz-18246.firebaseapp.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Investimentos · Eagles Labz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -100,6 +105,7 @@
 <script src="inv/inv-ia.js"></script>
 <script src="inv/inv-projecoes.js"></script>
 <script src="inv/inv-graficos.js"></script>
+<script src="inv/inv-dados.js"></script>
 <script src="inv/inv-biblioteca.js"></script>
 <script src="inv/inv-mercado-ui.js"></script>
 <script src="inv/inv-carteira-ui.js"></script>

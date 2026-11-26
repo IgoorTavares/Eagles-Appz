@@ -28,7 +28,7 @@ export const IMAGENS = [
   'assets/logo-full.png', 'assets/logo-icon.png',
 ];
 // Investimentos (Etapa 05): os scripts e o estilo do módulo e o catálogo estático da Biblioteca (dados públicos)
-export const INVESTIMENTOS = ['inv/inv.css', 'inv/inv-motor.js', 'inv/inv-mercado.js', 'inv/inv-carteira.js', 'inv/inv-noticias.js', 'inv/inv-analise.js', 'inv/inv-ia.js', 'inv/inv-projecoes.js', 'inv/inv-graficos.js', 'inv/inv-biblioteca.js', 'inv/inv-mercado-ui.js', 'inv/inv-carteira-ui.js', 'inv/inv-noticias-ui.js', 'inv/inv-projecoes-ui.js', 'inv/catalogo/meta.json', 'inv/catalogo/ativos.json'];
+export const INVESTIMENTOS = ['inv/inv.css', 'inv/inv-motor.js', 'inv/inv-mercado.js', 'inv/inv-carteira.js', 'inv/inv-noticias.js', 'inv/inv-analise.js', 'inv/inv-ia.js', 'inv/inv-projecoes.js', 'inv/inv-graficos.js', 'inv/inv-biblioteca.js', 'inv/inv-mercado-ui.js', 'inv/inv-carteira-ui.js', 'inv/inv-noticias-ui.js', 'inv/inv-projecoes-ui.js', 'inv/catalogo/meta.json', 'inv/catalogo/ativos.json', 'inv/inv-dados.js', 'inv/catalogo/tradingview.json', 'inv/dados/tesouro.json', 'inv/dados/noticias.json', 'inv/dados/macro-us.json', 'inv/dados/fundamentos-br.json', 'inv/dados/fundamentos-us.json', 'inv/dados/catalogo-us.json', 'inv/dados/status.json', 'inv/dados/manifesto.json'];
 export const PERMITIDOS = Object.freeze([...PAGINAS, ...RECURSOS, ...IMAGENS, ...INVESTIMENTOS]);
 export const DOMINIO = 'eagleslabz.com.br';
 

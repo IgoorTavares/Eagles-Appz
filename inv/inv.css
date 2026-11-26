@@ -278,3 +278,24 @@
 .pg-invest .inv-graf-area:empty, .pg-invest .inv-graf-sem { display: none; }
 .pg-invest .inv-bloco { display: block; white-space: normal; text-align: inherit; }
 @media (max-width: 860px) { .pg-invest .inv-tabela td { overflow-wrap: anywhere; } .pg-invest .inv-tabela td .inv-estado { white-space: normal; } }
+
+/* Etapa 11: botões "Usar CDI/IPCA" das Projeções quebram a linha no celular */
+.pg-invest .inv-pj-usar { white-space: normal; text-align: left; max-width: 100%; height: auto; line-height: 1.3; }
+
+/* Etapa 11.18 — gráfico do TradingView (janela isolada) */
+.pg-invest .inv-tv .inv-tv-caixa { position: relative; width: 100%; height: 460px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border, rgba(127,127,127,.25)); }
+.pg-invest .inv-tv iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.pg-invest .inv-tv .inv-tv-atrib { margin: 6px 0 0; font-size: 12px; }
+.pg-invest .inv-tv .panel-title { flex-wrap: wrap; gap: 6px; }
+@media (max-width: 600px) { .pg-invest .inv-tv .inv-tv-caixa { height: 340px; } }
+.pg-invest .inv-tv-pares { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+.pg-invest .inv-tv-fonte { margin: 0 0 8px; font-size: 12px; overflow-wrap: anywhere; }
+.pg-invest .inv-tv-carregando { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; }
+.pg-invest .inv-tv-caixa iframe { z-index: 1; }
+.pg-invest .inv-tv-erro { position: absolute; inset: auto 8px 8px 8px; z-index: 2; margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--surface, #fff); border: 1px solid var(--border, rgba(127,127,127,.3)); font-size: 13px; }
+.pg-invest .inv-tv-gf { margin: 8px 0 0; }
+.pg-invest .inv-fund th[scope="row"] { text-align: left; font-weight: 500; white-space: nowrap; }
+.pg-invest .inv-fund-sub { font-size: 14px; margin: 14px 0 6px; }
+.pg-invest .inv-fund-nota { margin-top: 10px; font-size: 12px; }
+@media (max-width: 600px) { .pg-invest .inv-fund th[scope="row"] { white-space: normal; } }
+.pg-invest .inv-tv-pares .btn { white-space: normal; max-width: 100%; text-align: left; }

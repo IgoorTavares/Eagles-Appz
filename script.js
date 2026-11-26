@@ -6775,6 +6775,8 @@ function selecionarFaviconConfig(input) {
 
 const CFG_CHANGELOG = [
   { data: '26/11/2026 · Investimentos (módulo opcional)', itens: [
+    { titulo: 'Link do portal: "link novo" não é mais desfeito', badges: ['corrigido'], texto: 'Quando alguém gerava um link novo do portal num aparelho que ainda estava com uma versão antiga do sistema, outra tela aberta podia desfazer a troca. Agora a troca feita de propósito vale, e a proteção contra trocas sem querer continua.' },
+    { titulo: 'Link do portal: duas pessoas gerando link novo ao mesmo tempo', badges: ['corrigido'], texto: 'Se duas pessoas pediam um link novo para o mesmo cliente no mesmo instante, uma delas via a mensagem errada de "sem internet" e a troca dela não acontecia. Agora as duas ficam com o mesmo link novo, e as mensagens dizem a causa real quando algo dá errado.' },
     { titulo: 'Investimentos no menu Financeiro', badges: ['novo'], texto: 'Módulo opcional, desligado por padrão: só aparece quando a equipe da Eagles Labz o liga para a sua empresa. Traz a Biblioteca de ativos, Favoritos, Minha carteira (com o saldo conferido pelo banco a cada lançamento), Projeções e simuladores. Os preços são informados por você (preço manual); não há cotação automática, notícias nem IA ligadas nesta versão.' },
   ] },
   { data: '26/11/2026 · Segurança das chaves de IA', itens: [
@@ -10164,7 +10166,7 @@ async function portalGarantirToken(nome) {
   await portalGravarNoMapa(r.nome, r.token);
   PORTAL_LINKS = Object.assign({}, PORTAL_LINKS, { [r.nome]: r.token });
   portalVistoGuardar(r.nome, r.token, r.novo);
-  if (r.novo) portalPublicarCliente(r.nome, true);
+  if (r.novo) { portalPublicarCliente(r.nome, true); portalConfirmarPublicacao(r.nome, r.token); }
   return r.token;
 }
 function portalAvisarSemConexao(err) {
@@ -10184,6 +10186,27 @@ async function portalCopiarLink(nome) {
     texto: 'O cliente abre direto, sem login. Ali ele vê a produção, aprova ou pede alteração, e manda ideias e pedidos.',
     mensagem: `Olá, ${atdPrimeiroNome(nome)}! Este é o seu portal: lá você acompanha a produção, aprova os conteúdos e manda ideias. É só abrir:\n${link}` });
 }
+// v158: apagar o retrato do link anterior. A regra do banco só deixa apagar um retrato que EXISTE; quando outra
+// pessoa trocou o link no mesmo instante (ou o retrato nunca foi publicado), a exclusão é recusada embora o link
+// anterior já esteja desativado. Então, se a exclusão falhar, o SERVIDOR (sem o cache do aparelho) é consultado:
+// só segue se ele confirmar que o retrato não existe; se ainda existir, ou se não der para confirmar, a troca para.
+async function portalApagarRetratoAntigo(token) {
+  try { await cloudComPrazo(firestoreDb.collection('portais_publicos').doc(token).delete(), PORTAL_TX_PRAZO_MS); return; }
+  catch (errApagar) {
+    let existe = true;
+    try { existe = await cloudComPrazo(portalPublicoExiste(token), PORTAL_TX_PRAZO_MS); }
+    catch (errConsulta) { throw Object.assign(new Error('Não foi possível confirmar no servidor que o link anterior foi desativado'), { code: 'sem-confirmacao', causa: errConsulta }); }
+    if (existe) throw Object.assign(new Error('O link anterior continua ativo e não pôde ser desativado'), { code: 'link-antigo-ativo', causa: errApagar });
+  }
+}
+// mensagem de acordo com a causa real da falha ao gerar um link novo
+function portalMensagemFalhaTroca(err) {
+  const c = err && err.code;
+  if (c === 'link-antigo-ativo') return 'O link anterior deste cliente continua ativo e não pôde ser desativado (sem permissão para alterá-lo). Nada foi trocado: o link atual continua valendo.';
+  if (c === 'sem-confirmacao') return 'Não foi possível confirmar no servidor que o link anterior foi desativado. Nada foi trocado: confira a conexão e tente de novo.';
+  if (c === 'permission-denied') return 'Sem permissão para gerar um link novo para este cliente. Nada foi trocado.';
+  return 'Não foi possível gerar o link novo agora: o sistema precisa estar conectado à internet para isso. Nada foi trocado; confira a conexão e tente de novo.';
+}
 // Troca o código do cliente ("link novo"). Na reserva, só troca se o código
 // ainda for o que esta tela conhecia (se outra pessoa já trocou, fica o dela).
 async function portalTrocarToken(nome) {
@@ -10197,7 +10220,7 @@ async function portalTrocarToken(nome) {
   }
   portalSemInternet();
   // 1) o retrato público do link antigo sai primeiro (o link antigo para de funcionar)
-  if (antigo) await cloudComPrazo(firestoreDb.collection('portais_publicos').doc(antigo).delete(), PORTAL_TX_PRAZO_MS);
+  if (antigo) await portalApagarRetratoAntigo(antigo);
   // 2) o código novo, na reserva do cliente
   const reserva = portalRefReserva(nome);
   const r = await cloudTransacao(async (tx) => {
@@ -10215,12 +10238,13 @@ async function portalTrocarToken(nome) {
   delete PORTAL_PUB_FEITO[r.nome];
   portalVistoGuardar(r.nome, r.token, r.novo);
   portalPublicarCliente(r.nome, true);
+  if (r.novo) portalConfirmarPublicacao(r.nome, r.token);
   return r.nome;
 }
 function portalNovoLink(nome) {
   confirmarAcao(`Gerar um link novo para ${nome}? O link antigo para de funcionar na hora.`, async () => {
     if (!nivelPodeOperar()) { avisarSemPermissaoNivel('gerar um link novo do portal'); return; }
-    try { nome = await portalTrocarToken(nome); } catch (err) { portalAvisarSemConexao(err); return; }
+    try { nome = await portalTrocarToken(nome); } catch (err) { console.error('Portal: link novo não gerado', err); avisar(portalMensagemFalhaTroca(err), 'Link do portal'); return; }
     portalCopiarLink(nome);
   }, 'Novo link do portal');
 }
@@ -10233,6 +10257,29 @@ function portalNovoLink(nome) {
 // tem o retrato público apagado antes — esse não volta.
 const PORTAL_VISTOS = {}; // nome normalizado -> { nome, token, meu }
 function portalVistoGuardar(nome, token, meu) { const k = portalNomeNorm(nome); const ant = PORTAL_VISTOS[k]; PORTAL_VISTOS[k] = { nome, token, meu: !!meu || !!(ant && ant.meu && ant.token === token) }; }
+// v158 (correção da corrida da marca "meu"): a marca protege o código que ESTA tela acabou de criar enquanto o
+// retrato público dele ainda não foi publicado (sem retrato, não dá para saber se um aparelho antigo trocou de
+// propósito). Antes, ela nunca era desligada e, conforme a ordem das gravações, desfazia um "link novo" pedido de
+// propósito num aparelho antigo. Agora ela é desligada SÓ quando a publicação do retrato do código VIGENTE é
+// confirmada no servidor; a confirmação atrasada de um código anterior não mexe na proteção de um código mais novo.
+function portalVistoPublicado(nome, token) {
+  const v = PORTAL_VISTOS[portalNomeNorm(nome)];
+  if (v && v.meu && token && v.token === token) v.meu = false;
+}
+// Quando o retrato é publicado por outra tela (ou esta não publica, ex.: sem os conteúdos carregados), confere no
+// servidor algumas vezes (no máximo 3 leituras). Sem internet ou com falha, a proteção continua ligada.
+const PORTAL_CONFIRMAR_ESPERAS = [3000, 10000, 30000];
+function portalConfirmarPublicacao(nome, token, i) {
+  i = i || 0;
+  if (!token || i >= PORTAL_CONFIRMAR_ESPERAS.length) return;
+  setTimeout(async () => {
+    const v = PORTAL_VISTOS[portalNomeNorm(nome)];
+    if (!v || !v.meu || v.token !== token) return; // já confirmado, ou o código mudou
+    let existe = false;
+    try { existe = await portalPublicoExiste(token); } catch (e) { existe = false; }
+    if (existe) portalVistoPublicado(nome, token); else portalConfirmarPublicacao(nome, token, i + 1);
+  }, PORTAL_CONFIRMAR_ESPERAS[i]);
+}
 async function portalPublicoExiste(token) {
   const s = await firestoreDb.collection('portais_publicos').doc(token).get({ source: 'server' });
   return s.exists;
@@ -10261,7 +10308,7 @@ async function portalConferirPerdas(mapa) {
         const res = await reserva.get({ source: 'server' });
         const certo = res.exists && res.data().token ? { nome: res.data().nome || v.nome, token: res.data().token } : null;
         if (certo) {
-          if (atual === certo.token) { PORTAL_VISTOS[k] = { nome: achado, token: atual, meu: false }; continue; }
+          if (atual === certo.token) { portalVistoGuardar(achado, atual, false); continue; } // mesmo código: não apaga a proteção desta tela
           // retrato público do código da reserva apagado = alguém trocou o link DE PROPÓSITO
           // (botão "link novo" num aparelho antigo): a reserva passa a acompanhar o código novo
           const certoPublicado = await portalPublicoExiste(certo.token);
@@ -10273,7 +10320,7 @@ async function portalConferirPerdas(mapa) {
                 tx.set(reserva, Object.assign({}, r2.data(), { token: atual, anterior: certo.token, trocadoEm: new Date().toISOString() }));
                 return true;
               });
-              PORTAL_VISTOS[k] = { nome: achado, token: atual, meu: false };
+              portalVistoGuardar(achado, atual, false);
             }
             continue;
           }
@@ -10291,7 +10338,7 @@ async function portalConferirPerdas(mapa) {
         // link de antes da v157 (sem reserva): vale o que continua publicado
         const vistoPublicado = await portalPublicoExiste(v.token);
         const devolver = vistoPublicado ? (atual ? !(await portalPublicoExiste(atual)) : true) : (!atual && v.meu);
-        if (!devolver) { if (atual) PORTAL_VISTOS[k] = { nome: achado, token: atual, meu: false }; else delete PORTAL_VISTOS[k]; continue; }
+        if (!devolver) { if (atual) portalVistoGuardar(achado, atual, false); else delete PORTAL_VISTOS[k]; continue; }
         const ref = caminhoTenantDoc(PORTAL_LINKS_KEY);
         const feito = await cloudTransacao(async (tx) => {
           const m = portalMapaDoDoc(await tx.get(ref));
@@ -10332,7 +10379,7 @@ function portalPublicarCliente(nome, forcar) {
   const assinatura = JSON.stringify(doc);
   if (!forcar && PORTAL_PUB_FEITO[nome] === assinatura) return;
   PORTAL_PUB_FEITO[nome] = assinatura;
-  firestoreDb.collection('portais_publicos').doc(token).set(finLimpar(Object.assign(doc, { atualizadoEm: new Date().toISOString() }))).catch((e) => { delete PORTAL_PUB_FEITO[nome]; console.error('Portal: não publicou', e); });
+  firestoreDb.collection('portais_publicos').doc(token).set(finLimpar(Object.assign(doc, { atualizadoEm: new Date().toISOString() }))).then(() => portalVistoPublicado(nome, token)).catch((e) => { delete PORTAL_PUB_FEITO[nome]; console.error('Portal: não publicou', e); });
 }
 function portalAgendarPublicacao() {
   clearTimeout(PORTAL_PUB_TIMER);

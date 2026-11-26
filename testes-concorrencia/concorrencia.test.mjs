@@ -362,6 +362,10 @@ test('6b. convivência: aparelho antigo com a lista de links desatualizada não 
   anotar(t, `convivência · links · código velho devolvido pelo antigo · ficou o novo: ${fim2.Seven === tokNovo ? 'sim' : 'NÃO'} · retrato do código velho apagado: ${velhoPublico ? 'NÃO' : 'sim'}`);
   assert.notEqual(tokNovo, tokSeven); assert.equal(fim2.Seven, tokNovo); assert.equal(velhoPublico, null);
 
+  // v158 (correção da corrida da marca "meu"): a tela que criou o código só libera a proteção depois de confirmar
+  // no servidor o retrato público DESTE código (aqui publicado pelo teste). Antes, a liberação dependia da ordem
+  // das gravações e, sem ela, o "link novo" abaixo era desfeito (falha intermitente reproduzida em 26/11/2026).
+  await novo.page.waitForFunction((tk) => { const v = PORTAL_VISTOS[portalNomeNorm('Seven')]; return v && v.token === tk && v.meu === false; }, tokNovo, { timeout: 45000 });
   // o aparelho antigo usa "link novo" DE PROPÓSITO (apaga o retrato público antes): a troca vale
   await antigo.page.waitForFunction((tk) => PORTAL_LINKS.Seven === tk, tokNovo, { timeout: 30000 }); // o antigo já vê o link vigente
   await antigo.page.evaluate(() => portalNovoLink('Seven'));
@@ -374,6 +378,174 @@ test('6b. convivência: aparelho antigo com a lista de links desatualizada não 
   await fechar([novo, antigo]);
   assert.notEqual(fim4.Seven, tokNovo); assert.equal(fim4.Seven, fim3.Seven);
   assert.equal(resSeven.token, fim4.Seven);
+});
+
+// =====================================================================
+// 6c. Regressão da corrida da marca "meu" (v158): a proteção do código recém-criado vale até a publicação do
+// retrato DESTE código ser confirmada; confirmação atrasada de código anterior não a desliga; sem internet ela
+// continua; duas trocas simultâneas dão um código só; e o "link novo" de propósito num aparelho antigo vale.
+test('6c. portal: proteção do link recém-criado — publicação confirmada, fora de ordem, sem internet, trocas simultâneas', async (t) => {
+  const emp = await empresaNova();
+  const [pa, pn, pn2] = await pessoas(emp, 3);
+  const novo = await A.abrirPessoa(BASE, pn, { pagina: '__leve.html' });
+  const novo2 = await A.abrirPessoa(BASE, pn2, { pagina: '__leve.html' });
+  const antigo = await A.abrirPessoa(BASE, pa, { versao: 'antiga', pagina: '__leve.html' });
+  await Promise.all([A.esperarCarregado(novo, [LINKS]), A.esperarCarregado(novo2, [LINKS]), A.esperarCarregado(antigo, [LINKS])]);
+  const marca = (p, nome) => p.page.evaluate((n) => { const v = PORTAL_VISTOS[portalNomeNorm(n)]; return v ? { token: v.token, meu: v.meu } : null; }, nome);
+  const publicar = (emp2, tk, cli) => A.gravar(`portais_publicos/${tk}`, { tenantId: emp2, cliente: cli, cfg: {}, conteudos: [] });
+
+  // (1) criou o código e o retrato AINDA não existe: a proteção continua ligada (passou da 1ª conferência, de 3 s)
+  const tk1 = await novo.page.evaluate(() => portalGarantirToken('Lumen'));
+  await A.pausa(5000);
+  const m1 = await marca(novo, 'Lumen');
+  assert.equal(m1.token, tk1); assert.equal(m1.meu, true, 'sem retrato publicado, a proteção tem que continuar');
+  // ... e é liberada assim que o retrato DESTE código existe no servidor
+  await publicar(emp, tk1, 'Lumen');
+  await novo.page.waitForFunction((tk) => { const v = PORTAL_VISTOS[portalNomeNorm('Lumen')]; return v.token === tk && v.meu === false; }, tk1, { timeout: 45000 });
+
+  // (2) confirmação FORA DE ORDEM: troca para um código novo; a confirmação atrasada do código anterior não libera o novo
+  await novo.page.evaluate(() => portalTrocarToken('Lumen'));
+  const m2 = await marca(novo, 'Lumen');
+  assert.notEqual(m2.token, tk1); assert.equal(m2.meu, true);
+  await novo.page.evaluate((tk) => portalVistoPublicado('Lumen', tk), tk1); // "chegou agora" a confirmação do código anterior
+  assert.equal((await marca(novo, 'Lumen')).meu, true, 'confirmação do código anterior desligou a proteção do novo');
+  assert.equal(await A.ler(`portais_publicos/${tk1}`), null, 'o retrato do link anterior tem que ser apagado (link antigo invalidado)');
+  const tk2 = m2.token;
+
+  // (3) SEM INTERNET na hora da conferência: o retrato existe, mas a tela não consegue confirmar → proteção continua;
+  //     a internet volta → a próxima conferência confirma e libera
+  await A.semInternet(novo);
+  await publicar(emp, tk2, 'Lumen');
+  await A.pausa(5000);
+  assert.equal((await marca(novo, 'Lumen')).meu, true, 'sem internet não pode liberar a proteção');
+  await A.comInternet(novo);
+  await novo.page.waitForFunction((tk) => { const v = PORTAL_VISTOS[portalNomeNorm('Lumen')]; return v.token === tk && v.meu === false; }, tk2, { timeout: 45000 });
+
+  // (4) DOIS pedidos de troca AO MESMO TEMPO (duas telas novas): um código só, reserva = mapa, sem duplicar
+  await A.esperar(async () => (await novo2.page.evaluate(() => PORTAL_LINKS.Lumen)) === tk2, 30000, 200);
+  await Promise.all([novo.page.evaluate(() => portalTrocarToken('Lumen')), novo2.page.evaluate(() => portalTrocarToken('Lumen'))]);
+  const mapa4 = await A.esperar(async () => { const l = await linksDb(emp); return l.Lumen && l.Lumen !== tk2 ? l : null; }, 30000, 200) || await linksDb(emp);
+  const reservas = (await A.listar(`tenants/${emp}/dados`)).filter((d) => d.id.startsWith('eagles_portal_links_v1__r_') && /lumen/i.test(d.nome));
+  const [v4a, v4b] = [await novo.page.evaluate(() => PORTAL_LINKS.Lumen), await novo2.page.evaluate(() => PORTAL_LINKS.Lumen)];
+  anotar(t, `portal · meu · 2 trocas simultâneas · mapa ${mapa4.Lumen === v4a && v4a === v4b ? 'igual nas duas telas' : 'DIFERENTE'} · reservas do cliente ${reservas.length} · reserva = mapa: ${reservas[0] && reservas[0].token === mapa4.Lumen ? 'sim' : 'NÃO'}`);
+  assert.equal(reservas.length, 1); assert.equal(reservas[0].token, mapa4.Lumen); assert.equal(v4a, mapa4.Lumen); assert.equal(v4b, mapa4.Lumen);
+  assert.equal(Object.keys(mapa4).filter((k) => /lumen/i.test(k)).length, 1, 'cliente duplicado no mapa');
+  assert.equal(await A.ler(`portais_publicos/${tk2}`), null, 'retrato do código trocado continua no ar');
+  const tk4 = mapa4.Lumen;
+  const donos = [await marca(novo, 'Lumen'), await marca(novo2, 'Lumen')].filter((m) => m.token === tk4 && m.meu).length;
+  assert.ok(donos <= 1, 'as duas telas acham que criaram o mesmo código');
+
+  // (5) com a publicação confirmada, o aparelho ANTIGO pede "link novo" DE PROPÓSITO → a troca vale, a reserva acompanha,
+  //     o código anterior é invalidado e o mapa não fica com o cliente duplicado nem sem código
+  await publicar(emp, tk4, 'Lumen');
+  await Promise.all([novo, novo2].map((p) => p.page.waitForFunction((tk) => { const v = PORTAL_VISTOS[portalNomeNorm('Lumen')]; return !v || v.token !== tk || v.meu === false; }, tk4, { timeout: 45000 })));
+  await antigo.page.waitForFunction((tk) => PORTAL_LINKS.Lumen === tk, tk4, { timeout: 30000 });
+  await antigo.page.evaluate(() => portalNovoLink('Lumen'));
+  const fim = await A.esperar(async () => { const l = await linksDb(emp); return l.Lumen && l.Lumen !== tk4 ? l : null; }, 30000, 300) || await linksDb(emp);
+  await A.pausa(4000);
+  const fim2 = await linksDb(emp);
+  const res5 = (await A.listar(`tenants/${emp}/dados`)).filter((d) => d.id.startsWith('eagles_portal_links_v1__r_') && /lumen/i.test(d.nome));
+  anotar(t, `portal · meu · "link novo" no aparelho antigo depois da publicação confirmada · a troca vale: ${fim2.Lumen !== tk4 && fim2.Lumen === fim.Lumen ? 'sim' : 'NÃO'} · reserva acompanhou: ${res5[0] && res5[0].token === fim2.Lumen ? 'sim' : 'NÃO'} · retrato anterior apagado: ${(await A.ler(`portais_publicos/${tk4}`)) ? 'NÃO' : 'sim'}`);
+  assert.notEqual(fim2.Lumen, tk4); assert.equal(fim2.Lumen, fim.Lumen);
+  assert.equal(res5.length, 1); assert.equal(res5[0].token, fim2.Lumen);
+  assert.equal(await A.ler(`portais_publicos/${tk4}`), null);
+  assert.equal(Object.keys(fim2).filter((k) => /lumen/i.test(k)).length, 1);
+  // as telas novas acompanham o código vigente (nenhuma volta para o anterior)
+  await Promise.all([novo, novo2].map((p) => p.page.waitForFunction((tk) => PORTAL_LINKS.Lumen === tk, fim2.Lumen, { timeout: 30000 })));
+  await fechar([novo, novo2, antigo]);
+});
+
+// =====================================================================
+// 6d. "Link novo" quando o retrato do link anterior já não existe (v158): outra pessoa trocou no mesmo instante,
+// o retrato nunca foi publicado ou já foi excluído. A regra só deixa apagar retrato que existe; o sistema confere
+// no SERVIDOR e só segue se ele não existir. Falha real de permissão e falha da consulta param a troca sem mexer
+// em nada, com a mensagem certa.
+test('6d. portal: link novo com retrato anterior inexistente, 3 trocas simultâneas, falhas de permissão e de consulta, conteúdo e isolamento', async (t) => {
+  const emp = await empresaNova(); const emp2 = await empresaNova();
+  const [p1, p2, p3, pc] = await pessoas(emp, 4); const [q1] = await pessoas(emp2, 1);
+  const [a, b, c] = await Promise.all([p1, p2, p3].map((p) => A.abrirPessoa(BASE, p, { pagina: '__leve.html' })));
+  const outra = await A.abrirPessoa(BASE, q1, { pagina: '__leve.html' });
+  await Promise.all([a, b, c, outra].map((p) => A.esperarCarregado(p, [LINKS])));
+  const publicar = (tk, cli, ten = emp) => A.gravar(`portais_publicos/${tk}`, { tenantId: ten, cliente: cli, cfg: {}, conteudos: [] });
+  const reservasDe = async (e, re) => (await A.listar(`tenants/${e}/dados`)).filter((d) => d.id.startsWith('eagles_portal_links_v1__r_') && re.test(d.nome));
+  const trocar = (p, cli) => p.page.evaluate(async (n) => { try { await portalTrocarToken(n); return { ok: true, token: PORTAL_LINKS[n] }; } catch (e) { return { ok: false, code: e.code || '', msg: portalMensagemFalhaTroca(e) }; } }, cli);
+  const linksEmp2Antes = await linksDb(emp2);
+
+  // (1) retrato NUNCA publicado: a troca segue (o servidor confirma que não existe)
+  const tO = await a.page.evaluate(() => portalGarantirToken('Orion'));
+  assert.equal(await A.ler(`portais_publicos/${tO}`), null);
+  const r1 = await trocar(a, 'Orion');
+  const m1 = await linksDb(emp); const res1 = await reservasDe(emp, /orion/i);
+  anotar(t, `portal · troca · retrato nunca publicado · troca ${r1.ok ? 'feita' : 'RECUSADA (' + r1.code + ')'} · reserva = mapa: ${res1.length === 1 && res1[0].token === m1.Orion ? 'sim' : 'NÃO'}`);
+  assert.ok(r1.ok, 'troca recusada com retrato inexistente: ' + JSON.stringify(r1)); assert.notEqual(m1.Orion, tO); assert.equal(res1.length, 1); assert.equal(res1[0].token, m1.Orion);
+
+  // (2) retrato JÁ EXCLUÍDO (publicado e depois apagado): a troca segue
+  const tS = await a.page.evaluate(() => portalGarantirToken('Sirius'));
+  await publicar(tS, 'Sirius'); await A.apagar(`portais_publicos/${tS}`);
+  const r2 = await trocar(a, 'Sirius');
+  assert.ok(r2.ok, JSON.stringify(r2)); assert.notEqual((await linksDb(emp)).Sirius, tS);
+
+  // (3) TRÊS trocas ao mesmo tempo sobre o mesmo código anterior (retrato publicado): todas terminam com o MESMO código novo
+  const tA = await a.page.evaluate(() => portalGarantirToken('Atlas'));
+  await publicar(tA, 'Atlas');
+  await Promise.all([b, c].map((p) => p.page.waitForFunction((tk) => PORTAL_LINKS.Atlas === tk, tA, { timeout: 30000 })));
+  const r3 = await Promise.all([a, b, c].map((p) => trocar(p, 'Atlas')));
+  const m3 = await linksDb(emp); const res3 = await reservasDe(emp, /atlas/i);
+  const tokens3 = [...new Set(r3.map((x) => x.token))];
+  anotar(t, `portal · troca · 3 ao mesmo tempo · terminaram bem ${r3.filter((x) => x.ok).length}/3 · códigos diferentes nas telas ${tokens3.length} · reservas ${res3.length} · reserva = mapa: ${res3[0] && res3[0].token === m3.Atlas ? 'sim' : 'NÃO'} · retrato anterior apagado: ${(await A.ler(`portais_publicos/${tA}`)) ? 'NÃO' : 'sim'}`);
+  assert.deepEqual(r3.map((x) => x.ok), [true, true, true], JSON.stringify(r3));
+  assert.equal(tokens3.length, 1); assert.equal(tokens3[0], m3.Atlas); assert.notEqual(m3.Atlas, tA);
+  assert.equal(res3.length, 1); assert.equal(res3[0].token, m3.Atlas);
+  assert.equal(Object.keys(m3).filter((k) => /atlas/i.test(k)).length, 1);
+  assert.equal(await A.ler(`portais_publicos/${tA}`), null);
+
+  // (4) FALHA REAL DE PERMISSÃO: o retrato do link anterior existe mas é de OUTRA empresa → a troca para, nada muda
+  const tN = await a.page.evaluate(() => portalGarantirToken('Nox'));
+  await publicar(tN, 'Nox', emp2);
+  const resN0 = await reservasDe(emp, /nox/i);
+  const r4 = await trocar(a, 'Nox');
+  const resN1 = await reservasDe(emp, /nox/i);
+  anotar(t, `portal · troca · falha real de permissão · parou: ${r4.ok ? 'NÃO' : 'sim (' + r4.code + ')'} · mapa e reserva iguais: ${(await linksDb(emp)).Nox === tN && resN1[0].token === tN ? 'sim' : 'NÃO'} · retrato da outra empresa intacto: ${(await A.ler(`portais_publicos/${tN}`) || {}).tenantId === emp2 ? 'sim' : 'NÃO'}`);
+  assert.equal(r4.ok, false); assert.equal(r4.code, 'link-antigo-ativo'); assert.match(r4.msg, /continua ativo/);
+  assert.equal((await linksDb(emp)).Nox, tN); assert.deepEqual(resN1, resN0);
+  assert.equal((await A.ler(`portais_publicos/${tN}`)).tenantId, emp2);
+
+  // (5) FALHA DA CONSULTA ao servidor (retrato inexistente, mas a consulta não responde) → a troca para, nada muda
+  const tV = await a.page.evaluate(() => portalGarantirToken('Vega'));
+  await a.page.evaluate(() => { window.__portalPublicoExisteOriginal = portalPublicoExiste; portalPublicoExiste = async () => { throw Object.assign(new Error('servidor indisponível (simulado)'), { code: 'unavailable' }); }; });
+  const r5 = await trocar(a, 'Vega');
+  await a.page.evaluate(() => { portalPublicoExiste = window.__portalPublicoExisteOriginal; });
+  const resV = await reservasDe(emp, /vega/i);
+  anotar(t, `portal · troca · falha da consulta ao servidor · parou: ${r5.ok ? 'NÃO' : 'sim (' + r5.code + ')'} · mapa e reserva iguais: ${(await linksDb(emp)).Vega === tV && resV[0].token === tV ? 'sim' : 'NÃO'}`);
+  assert.equal(r5.ok, false); assert.equal(r5.code, 'sem-confirmacao'); assert.match(r5.msg, /confirmar no servidor/);
+  assert.equal((await linksDb(emp)).Vega, tV); assert.equal(resV.length, 1); assert.equal(resV[0].token, tV);
+  // ... e com a consulta de volta, a mesma troca funciona
+  assert.ok((await trocar(a, 'Vega')).ok);
+
+  // (6) CONTEÚDO no link vigente: numa tela real do CRM (publica o retrato), a troca publica o retrato do código novo
+  //     da empresa certa, apaga o anterior e libera a proteção pela confirmação da própria publicação
+  const crm = await A.abrirPessoa(BASE, pc, { pagina: 'crm.html' });
+  await A.esperarCarregado(crm, [LINKS], 90000);
+  await crm.page.waitForFunction(() => typeof CNT_CARREGADO !== 'undefined' && CNT_CARREGADO === true, null, { timeout: 90000 });
+  const tZ = await crm.page.evaluate(() => portalGarantirToken('Zeta'));
+  const pubZ = await A.esperar(async () => A.ler(`portais_publicos/${tZ}`), 30000, 300);
+  assert.ok(pubZ && pubZ.tenantId === emp && pubZ.cliente === 'Zeta' && Array.isArray(pubZ.conteudos), 'retrato do primeiro código não publicado');
+  const r6 = await trocar(crm, 'Zeta');
+  const pub6 = await A.esperar(async () => A.ler(`portais_publicos/${r6.token}`), 30000, 300);
+  const meu6 = await A.esperar(async () => (await crm.page.evaluate(() => PORTAL_VISTOS[portalNomeNorm('Zeta')].meu)) === false || null, 15000, 200);
+  anotar(t, `portal · troca · tela real do CRM · retrato do código novo: ${pub6 && pub6.tenantId === emp && pub6.cliente === 'Zeta' ? 'publicado, empresa certa' : 'NÃO'} · anterior apagado: ${(await A.ler(`portais_publicos/${tZ}`)) ? 'NÃO' : 'sim'} · proteção liberada pela publicação: ${meu6 ? 'sim' : 'NÃO'}`);
+  assert.ok(r6.ok); assert.ok(pub6 && pub6.tenantId === emp && pub6.cliente === 'Zeta' && Array.isArray(pub6.conteudos));
+  assert.equal(await A.ler(`portais_publicos/${tZ}`), null); assert.ok(meu6);
+
+  // (7) ISOLAMENTO: a outra empresa não foi tocada, e uma tela dela não consegue apagar retrato desta empresa
+  assert.deepEqual(await linksDb(emp2), linksEmp2Antes);
+  assert.equal((await reservasDe(emp2, /./)).length, 0);
+  const apagouDeOutra = await outra.page.evaluate(async (tk) => { try { await firestoreDb.collection('portais_publicos').doc(tk).delete(); return true; } catch (e) { return e.code; } }, r6.token);
+  assert.equal(apagouDeOutra, 'permission-denied');
+  // sem duplicidade de clientes no mapa
+  const mf = await linksDb(emp);
+  for (const cli of ['Orion', 'Sirius', 'Atlas', 'Nox', 'Vega', 'Zeta']) assert.equal(Object.keys(mf).filter((k) => k.toLowerCase() === cli.toLowerCase()).length, 1, 'cliente duplicado: ' + cli);
+  await fechar([a, b, c, outra, crm]);
 });
 
 // =====================================================================

@@ -1,0 +1,8 @@
+Tipo Titulo;Data Vencimento;Data Base;Taxa Compra Manha;Taxa Venda Manha;PU Compra Manha;PU Venda Manha;PU Base Manha
+Tesouro Selic;01/03/2099;01/01/2099;0,10;0,12;1,00;1,00;1,00
+Tesouro Selic;01/03/2099;02/01/2099;0,10;0,12;1,00;1,00;1,00
+Tesouro IPCA+;15/05/2098;02/01/2099;5,00;5,10;1,00;1,00;1,00
+Tesouro IPCA+ com Juros Semestrais;15/08/2097;02/01/2099;5,00;5,10;1,00;1,00;1,00
+Tesouro Prefixado;01/01/2096;02/01/2099;10,00;10,10;1,00;1,00;1,00
+Tesouro Antigo Descontinuado;01/01/2095;01/01/2099;1,00;1,00;1,00;1,00;1,00
+Tesouro Tipo Desconhecido;01/01/2094;02/01/2099;1,00;1,00;1,00;1,00;1,00

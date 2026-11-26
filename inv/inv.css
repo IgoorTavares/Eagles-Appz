@@ -1,0 +1,280 @@
+/* =====================================================================
+   Investimentos · Etapa 05 — complemento visual da Biblioteca de Ativos
+   A base é o padrão nativo do Eagles Labz: <main class="main pg-cad pg-invest">
+   herda painéis, tabelas, etiquetas e a tabela que vira lista no celular (.pg-cad).
+   Aqui só o que é próprio do módulo, SEMPRE com os tokens do tema do sistema
+   (--text, --text-soft, --border, --bg-soft, --bg-elevated, --blue-*, --warning*, --danger*):
+   nenhuma cor fixa, para valer nos 14 temas e no tema personalizado.
+   Escopo: .pg-invest (nunca .pg-inv, que é do Inventário, nem .pv-*, que é do portal).
+   ===================================================================== */
+.pg-invest .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* abas internas do módulo (mesmo desenho das abas do Financeiro: sublinhado na cor de destaque) */
+.pg-invest .inv-abas { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--mn-linha); margin: -4px 0 18px; }
+.pg-invest .inv-abas::-webkit-scrollbar { display: none; }
+.pg-invest .inv-aba { display: inline-flex; align-items: baseline; gap: 6px; padding: 10px 12px 9px; white-space: nowrap; font-size: 14px; font-weight: 550; color: var(--text-soft); text-decoration: none; border-bottom: 2px solid transparent; }
+.pg-invest a.inv-aba:hover { color: var(--text); }
+.pg-invest .inv-aba.active { color: var(--text); border-bottom-color: var(--blue-strong); }
+.pg-invest .inv-aba:focus-visible { outline: 2px solid var(--blue-strong); outline-offset: -2px; border-radius: 6px; }
+.pg-invest .inv-aba-off { color: color-mix(in srgb, var(--text-soft) 70%, transparent); cursor: default; }
+.pg-invest .inv-aba-off small { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--bg-soft); color: var(--text-soft); }
+
+/* faixas de aviso (dados de teste, consumo) */
+.pg-invest .inv-faixa { padding: 10px 14px; border-radius: var(--mn-r); margin-bottom: 14px; font-size: 13.5px; line-height: 1.45; border: 1px solid transparent; }
+.pg-invest .inv-faixa-aviso { background: var(--warning-tint); color: var(--text); border-color: color-mix(in srgb, var(--warning) 35%, transparent); }
+.pg-invest .inv-faixa-perigo { background: var(--danger-tint); color: var(--text); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+
+/* filtros */
+.pg-invest .inv-filtros { display: grid; gap: 12px; margin-bottom: 16px; }
+.pg-invest .inv-busca { width: auto; }
+.pg-invest .inv-busca input { width: 100%; }
+.pg-invest .inv-filtros-linha { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; }
+.pg-invest .inv-campo { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-soft); min-width: 150px; flex: 1 1 150px; max-width: 240px; }
+.pg-invest .inv-campo select { width: 100%; }
+.pg-invest .inv-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); min-height: 38px; }
+.pg-invest .inv-res-cab { font-size: 12.5px; color: var(--text-soft); padding: 12px 0 4px; min-height: 18px; }
+.pg-invest .inv-mais { display: flex; justify-content: center; padding: 12px 0 6px; }
+
+/* célula do ativo */
+.pg-invest .inv-linha { cursor: pointer; }
+.pg-invest .inv-linha:focus-visible { outline: 2px solid var(--blue-strong); outline-offset: -2px; }
+.pg-invest .inv-ativo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pg-invest .inv-ativo > div { display: grid; min-width: 0; }
+.pg-invest .inv-ativo strong { font-size: 14px; letter-spacing: .01em; }
+.pg-invest .inv-ativo span:not(.inv-logo):not(.badge):not(.inv-nome) { font-size: 12.5px; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46ch; }
+.pg-invest .inv-logo { flex: none; width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; background: var(--blue-tint); color: var(--blue-text); }
+.pg-invest .inv-logo-g { width: 48px; height: 48px; border-radius: 12px; font-size: 13px; }
+.pg-invest .inv-fonte { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; background: var(--bg-soft); color: var(--text-soft); }
+.pg-invest .inv-fav { min-width: 38px; min-height: 38px; }
+.pg-invest .inv-estrela { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; vertical-align: -3px; }
+.pg-invest .inv-estrela.on { fill: var(--warning); stroke: var(--warning); }
+
+/* estados do dado */
+.pg-invest .inv-estado { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; padding: 2px 8px; border-radius: 999px; white-space: nowrap; background: var(--bg-soft); color: var(--text-soft); }
+.pg-invest .inv-estado::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pg-invest .inv-estado-teste { background: var(--warning-tint); color: var(--warning); }
+.pg-invest .inv-estado-manual, .pg-invest .inv-estado-atrasado, .pg-invest .inv-estado-fechamento { background: var(--blue-tint); color: var(--blue-text); }
+
+/* telas de estado: carregando, vazio, erro, indisponível */
+.pg-invest .inv-estado-tela { display: grid; justify-items: center; gap: 8px; text-align: center; padding: 34px 16px; color: var(--text-soft); }
+.pg-invest .inv-estado-tela h3 { margin: 0; font-size: 15.5px; color: var(--text); }
+.pg-invest .inv-estado-tela p { margin: 0; max-width: 460px; font-size: 13.5px; line-height: 1.5; }
+.pg-invest .inv-estado-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; background: var(--bg-soft); color: var(--text-soft); }
+.pg-invest .inv-estado-ic.inv-erro { background: var(--danger-tint); color: var(--danger); }
+.pg-invest .inv-estado-ic.inv-carregando { border: 3px solid var(--border); border-top-color: var(--blue-strong); border-radius: 50%; width: 30px; height: 30px; background: none; animation: inv-gira .8s linear infinite; }
+@keyframes inv-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pg-invest .inv-estado-ic.inv-carregando { animation: none; } }
+
+/* página do ativo */
+.pg-invest .inv-voltar { display: inline-block; margin-bottom: 8px; font-size: 13px; color: var(--text-soft); text-decoration: none; }
+.pg-invest .inv-voltar:hover { color: var(--text); }
+.pg-invest .inv-ativo-cab { gap: 16px; flex-wrap: wrap; }
+.pg-invest .inv-ativo-cab h1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.pg-invest .inv-nome { font-size: 15px; font-weight: 500; color: var(--text-soft); letter-spacing: 0; }
+.pg-invest .inv-ativo-cab p { display: flex; flex-wrap: wrap; gap: 6px; }
+.pg-invest .inv-fav-acoes { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.pg-invest .inv-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.pg-invest .inv-grade > .panel { margin: 0; }
+.pg-invest .inv-cotacao { display: grid; gap: 8px; justify-items: start; }
+.pg-invest .inv-cotacao p { margin: 0; font-size: 13.5px; color: var(--text); }
+.pg-invest .inv-muda { color: var(--text-soft); font-size: 12.5px; }
+.pg-invest .inv-ident td:first-child { color: var(--text-soft); width: 40%; }
+.pg-invest .inv-lista, .pg-invest .inv-links { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pg-invest .inv-lista li { display: grid; gap: 2px; font-size: 13.5px; padding-bottom: 10px; border-bottom: 1px solid var(--mn-linha); }
+.pg-invest .inv-lista li:last-child { border-bottom: 0; padding-bottom: 0; }
+.pg-invest .inv-links a { color: var(--text); font-weight: 600; font-size: 13.5px; text-decoration: underline; text-decoration-color: var(--blue-strong); text-decoration-thickness: 2px; text-underline-offset: 3px; } /* cor do texto (legível em todos os temas, inclusive o personalizado); destaque só no sublinhado */
+.pg-invest .inv-lista-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pg-invest .inv-lista-cab h2 span { font-size: 12px; font-weight: 600; color: var(--text-soft); margin-left: 6px; }
+.pg-invest .inv-perigo { color: var(--danger); }
+
+/* consumo do dia (administração) */
+.pg-invest .inv-uso { display: grid; gap: 6px; margin-bottom: 14px; }
+.pg-invest .inv-uso-rot { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.pg-invest .inv-uso-barra { height: 8px; border-radius: 999px; background: var(--bg-soft); overflow: hidden; }
+.pg-invest .inv-uso-barra i { display: block; height: 100%; background: var(--blue-strong); border-radius: inherit; }
+.pg-invest .inv-uso-barra i.alto { background: var(--warning); }
+.pg-invest .inv-uso-barra i.cheio { background: var(--danger); }
+
+/* aviso flutuante */
+.inv-toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 200; padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 600; background: var(--text); color: var(--bg); transition: opacity .15s, transform .15s; }
+.inv-toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* celular e telas estreitas (a tabela vira lista pelo .pg-cad) */
+@media (max-width: 860px) {
+  .pg-invest .inv-grade { grid-template-columns: minmax(0, 1fr); }
+  .pg-invest .inv-campo { max-width: none; flex-basis: calc(50% - 6px); min-width: 0; }
+  .pg-invest .inv-ativo span:not(.inv-logo):not(.badge):not(.inv-nome) { max-width: 60vw; }
+  .pg-invest .inv-ident td:first-child { width: auto; }
+}
+@media (max-width: 420px) { .pg-invest .inv-campo { flex-basis: 100%; } }
+
+/* =====================================================================
+   Etapa 06 — Mercado BR/US e página do ativo (gráficos, cartões, rankings, mapa de calor, radar)
+   ===================================================================== */
+.pg-invest .inv-largo { grid-column: 1 / -1; }
+.pg-invest .inv-sobe { color: color-mix(in srgb, var(--success) 78%, var(--text)); font-weight: 650; } /* puxado para a cor do texto: contraste de 4,5:1 em todos os temas */
+.pg-invest .inv-desce { color: color-mix(in srgb, var(--danger) 78%, var(--text)); font-weight: 650; }
+.pg-invest .inv-neutro { color: var(--text-soft); }
+.pg-invest .inv-estado-simulado { background: var(--warning-tint); color: var(--warning); }
+.pg-invest .inv-estado-tempo-real { background: var(--success-tint, var(--bg-soft)); color: var(--success); }
+.pg-invest .inv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.pg-invest .inv-card-q { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--mn-linha); border-radius: var(--mn-r); text-decoration: none; color: var(--text); background: var(--bg-elevated); min-width: 0; }
+.pg-invest .inv-card-q:hover { border-color: var(--blue-strong); }
+.pg-invest .inv-card-q:focus-visible { outline: 2px solid var(--blue-strong); outline-offset: 2px; }
+.pg-invest .inv-card-nome { font-size: 12.5px; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-invest .inv-card-valor { font-size: 18px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.pg-invest .inv-card-pe { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; }
+.pg-invest .inv-graf-ctl { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 10px; }
+.pg-invest .inv-graf-ctl2 { align-items: flex-end; }
+.pg-invest .inv-seg-grupo { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 9px; background: var(--bg-soft); }
+.pg-invest .inv-seg { border: 0; background: transparent; color: var(--text-soft); font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 10px; border-radius: 7px; cursor: pointer; min-height: 30px; }
+.pg-invest .inv-seg small { font-size: 11px; opacity: .8; }
+.pg-invest .inv-seg:hover { color: var(--text); }
+.pg-invest .inv-seg.on { background: var(--bg-elevated); color: var(--text); box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 14%, transparent); }
+.pg-invest .inv-seg:focus-visible { outline: 2px solid var(--blue-strong); outline-offset: 1px; }
+.pg-invest .inv-campo-curto { flex: 0 1 190px; min-width: 140px; }
+.pg-invest .inv-campo-curto input { width: 100%; }
+.pg-invest .inv-graf-area { position: relative; height: 340px; }
+.pg-invest .inv-graf-inf { height: 120px; margin-top: 6px; }
+.pg-invest .inv-graf-area[hidden] { display: none; }
+.pg-invest .inv-graf-rod { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-soft); margin-top: 8px; }
+.pg-invest .inv-graf-comp { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.pg-invest .inv-chip { border: 0; cursor: pointer; font: inherit; font-size: 12px; }
+.pg-invest .inv-cot-topo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 10px; }
+.pg-invest .inv-cot-preco { font-size: 26px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.pg-invest .inv-cot-var { font-size: 15px; }
+.pg-invest .inv-cot-dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px 16px; margin: 0 0 14px; }
+.pg-invest .inv-cot-dl div { display: grid; gap: 2px; }
+.pg-invest .inv-cot-dl dt { font-size: 12px; color: var(--text-soft); }
+.pg-invest .inv-cot-dl dd { margin: 0; font-weight: 650; font-variant-numeric: tabular-nums; }
+.pg-invest .inv-tec { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px 16px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--mn-linha); }
+.pg-invest .inv-tec div { display: grid; gap: 2px; font-size: 13px; }
+.pg-invest .inv-tec span { color: var(--text-soft); font-size: 12px; }
+.pg-invest .inv-macro { list-style: none; margin: 0; padding: 0; display: grid; }
+.pg-invest .inv-macro li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--mn-linha); font-size: 13.5px; }
+.pg-invest .inv-macro li:last-child { border-bottom: 0; }
+.pg-invest .inv-macro a { color: var(--text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-invest .inv-macro a:hover { text-decoration: underline; text-decoration-color: var(--blue-strong); }
+.pg-invest .inv-macro strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-invest .inv-rank-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.pg-invest .inv-rank-grade h3 { margin: 0 0 6px; font-size: 13.5px; }
+.pg-invest .inv-rank td, .pg-invest .inv-rank th { padding-top: 7px; padding-bottom: 7px; }
+.pg-invest .inv-rank .inv-ativo span { max-width: 22ch; }
+.pg-invest .inv-rank-pe { margin: 6px 0 0; }
+.pg-invest .inv-mapa { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.pg-invest .inv-mapa-setor h3 { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 6px; font-size: 12.5px; font-weight: 650; }
+.pg-invest .inv-mapa-setor h3 span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-invest .inv-mapa-itens { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 4px; }
+.pg-invest .inv-mapa-item { display: grid; gap: 1px; padding: 7px 6px; border-radius: 6px; text-decoration: none; color: var(--text); font-size: 11.5px; text-align: center; min-width: 0; }
+.pg-invest .inv-mapa-item strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.pg-invest .inv-mapa-item:focus-visible { outline: 2px solid var(--blue-strong); outline-offset: 1px; }
+.pg-invest .inv-radar { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pg-invest .inv-radar li { display: grid; gap: 3px; padding-bottom: 10px; border-bottom: 1px solid var(--mn-linha); font-size: 13px; justify-items: start; }
+.pg-invest .inv-radar li:last-child { border-bottom: 0; }
+.pg-invest .inv-radar a { color: var(--text); text-decoration: none; }
+@media (max-width: 1100px) { .pg-invest .inv-rank-grade { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 860px) {
+  .pg-invest .inv-graf-area { height: 260px; }
+  .pg-invest .inv-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-invest .inv-campo-curto { flex: 1 1 calc(50% - 8px); }
+  .pg-invest .inv-macro li { grid-template-columns: minmax(0, 1fr) auto; }
+  .pg-invest .inv-macro li .inv-estado { grid-column: 1 / -1; justify-self: start; }
+}
+@media (max-width: 420px) { .pg-invest .inv-cards { grid-template-columns: minmax(0, 1fr); } .pg-invest .inv-seg { padding: 5px 8px; } }
+
+/* =====================================================================
+   Etapa 07 — Minha Carteira
+   ===================================================================== */
+.pg-invest .inv-acoes-topo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pg-invest .inv-ct-barra { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.pg-invest .inv-ct-barra .inv-campo { max-width: 360px; flex: 1 1 260px; }
+.pg-invest .inv-kpis { display: flex; flex-wrap: wrap; border: 1px solid var(--mn-linha); border-radius: var(--mn-r); overflow: hidden; margin-bottom: 16px; background: var(--bg-elevated); }
+.pg-invest .inv-kpi { flex: 1 1 190px; display: grid; gap: 3px; align-content: start; padding: 14px 16px; min-width: 0; box-shadow: inset -1px -1px 0 var(--mn-linha); }
+.pg-invest .inv-kpi > span { font-size: 12.5px; color: var(--text-soft); }
+.pg-invest .inv-kpi > strong { font-size: 19px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pg-invest .inv-kpi small { font-size: 11.5px; color: var(--text-soft); line-height: 1.35; }
+.pg-invest .inv-graf-media { height: 280px; }
+.pg-invest .inv-graf-baixa { height: 180px; }
+.pg-invest .inv-distr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.pg-invest .inv-distr h3 { margin: 0 0 8px; font-size: 13.5px; }
+.pg-invest .inv-barras { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pg-invest .inv-barras li { display: grid; grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 4.2em; gap: 8px; align-items: center; font-size: 13px; }
+.pg-invest .inv-barras li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-invest .inv-barras strong { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pg-invest .inv-barra { height: 8px; border-radius: 999px; background: var(--bg-soft); overflow: hidden; }
+.pg-invest .inv-barra i { display: block; height: 100%; background: var(--blue-strong); border-radius: inherit; }
+.pg-invest .inv-estornada td { color: var(--text-soft); }
+.pg-invest .inv-estornada td:not(:last-child) { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-soft) 60%, transparent); }
+.pg-invest .inv-avisos-lista { margin: 6px 0 0; padding-left: 18px; }
+/* janela (fica fora do <main>: regras próprias, só com tokens do tema) */
+#inv-modal .inv-modal { max-width: 640px; }
+#inv-modal .field[hidden] { display: none; }
+#inv-modal .field label { display: grid; gap: 6px; }
+#inv-modal textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 13px; }
+#inv-modal .inv-check { display: inline-flex !important; align-items: center; gap: 8px; font-size: 13px; }
+#inv-modal .inv-muda { color: var(--text-soft); font-size: 12.5px; margin: 0; }
+#inv-modal .inv-modal-erro { margin: 12px 0 0; padding: 9px 12px; border-radius: 8px; background: var(--danger-tint); color: var(--text); font-size: 13px; }
+#inv-modal .inv-modal-op { padding: 10px 12px; border-radius: 8px; background: var(--bg-soft); font-size: 13.5px; }
+#inv-modal .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+@media (max-width: 860px) {
+  .pg-invest .inv-distr { grid-template-columns: minmax(0, 1fr); }
+  .pg-invest .inv-kpi { flex-basis: 40%; }
+  #inv-modal .form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 380px) { .pg-invest .inv-kpi { flex-basis: 100%; } }
+
+/* =====================================================================
+   Etapa 08 — Favoritos, Notícias e insights, Visão geral
+   ===================================================================== */
+.pg-invest .inv-subabas { margin-bottom: 14px; }
+.pg-invest .inv-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pg-invest .inv-chips .inv-seg { background: var(--bg-soft); }
+.pg-invest .inv-chips .inv-seg.on { background: var(--bg-elevated); outline: 1px solid var(--blue-strong); }
+.pg-invest .inv-noticias { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.pg-invest .inv-noticia { display: grid; gap: 4px; padding-bottom: 14px; border-bottom: 1px solid var(--mn-linha); }
+.pg-invest .inv-noticia:last-child { border-bottom: 0; padding-bottom: 0; }
+.pg-invest .inv-noticia a { color: var(--text); font-weight: 650; font-size: 14.5px; text-decoration: none; }
+.pg-invest .inv-noticia a:hover { text-decoration: underline; text-decoration-color: var(--blue-strong); }
+.pg-invest .inv-noticia p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.pg-invest .inv-noticia .inv-muda { font-size: 12px; }
+.pg-invest .inv-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.pg-invest .inv-insights { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pg-invest .inv-insights li, .pg-invest .inv-insight-curto { padding: 10px 12px; border-radius: 8px; border-left: 3px solid var(--border); background: var(--bg-soft); display: grid; gap: 3px; margin: 0 0 8px; }
+.pg-invest .inv-insights li p { margin: 0; font-size: 13.5px; }
+.pg-invest .inv-insight-atencao { border-left-color: var(--warning) !important; }
+.pg-invest .inv-insight-info { border-left-color: var(--blue-strong) !important; }
+.pg-invest .inv-sub { font-size: 13.5px; margin: 14px 0 6px; }
+.pg-invest .inv-mini { width: 120px; height: 34px; position: relative; }
+.pg-invest .inv-boletim-linha { margin: 0 0 8px; font-size: 14px; line-height: 1.55; }
+.pg-invest .inv-boletim-agora { border-color: var(--blue-strong); }
+.pg-invest .panel-title a { font-size: 12.5px; color: var(--text-soft); }
+@media (max-width: 860px) { .pg-invest .inv-mini { width: 100%; max-width: 160px; } }
+
+.pg-invest .inv-inconsistente td { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+
+/* =====================================================================
+   Etapa 09 — Projeções
+   ===================================================================== */
+.pg-invest .inv-grade.inv-pj { grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); align-items: start; }
+.pg-invest .inv-pj-form { grid-template-columns: 1fr 1fr; gap: 10px; }
+.pg-invest .inv-pj-form .field label { display: grid; gap: 4px; font-size: 12.5px; }
+.pg-invest .inv-pj-form input, .pg-invest .inv-pj-form textarea { width: 100%; }
+.pg-invest .inv-pj-form small { display: block; margin-top: 2px; font-size: 11.5px; }
+.pg-invest .inv-pj .inv-check { display: flex; margin: 4px 0; }
+.pg-invest .inv-off { color: var(--text-soft); }
+.pg-invest .inv-invalido { outline: 2px solid var(--danger); }
+.pg-invest .inv-pj-linha { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin-bottom: 10px; }
+.pg-invest .inv-pj-linha .inv-campo { flex: 1 1 150px; max-width: 220px; }
+.pg-invest .inv-pj-linha .inv-campo input { width: 100%; }
+.pg-invest .inv-pj-res { margin: 6px 0; font-size: 14px; line-height: 1.5; }
+.pg-invest .inv-pj-cel { width: 100%; max-width: 120px; text-align: right; }
+.pg-invest .inv-det summary { cursor: pointer; font-size: 13px; color: var(--text-soft); margin-top: 8px; }
+@media (max-width: 1100px) { .pg-invest .inv-grade.inv-pj { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 420px) { .pg-invest .inv-pj-form { grid-template-columns: minmax(0, 1fr); } .pg-invest .inv-pj-cel { max-width: none; } }
+
+/* auditoria (responsivo): canvas sem gráfico desenhado tem 300px de largura natural — nunca passa do contêiner */
+.pg-invest canvas { max-width: 100%; }
+.pg-invest .inv-mini { overflow: hidden; }
+.pg-invest .inv-graf-area:empty, .pg-invest .inv-graf-sem { display: none; }
+.pg-invest .inv-bloco { display: block; white-space: normal; text-align: inherit; }
+@media (max-width: 860px) { .pg-invest .inv-tabela td { overflow-wrap: anywhere; } .pg-invest .inv-tabela td .inv-estado { white-space: normal; } }

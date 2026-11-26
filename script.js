@@ -1196,6 +1196,7 @@ async function cloudGetForce(key, fallback) {
 
 let TENANT_ID = null;
 let TENANT_ASSINATURA = null;
+let TENANT_MODULOS = null; // módulos extras ligados pelo Super Admin (ex.: { investimentos: true })
 let TENANT_PLANO = null; // 'erp' | 'crm' | 'ambos' — controla quais ferramentas aparecem
 let USUARIO_ROLE = null;
 let USUARIO_NOME = null;
@@ -1271,6 +1272,7 @@ async function resolverTenantDoUsuario(user) {
       if (TENANT_ID) {
         const tenantSnapSA = await firestoreDb.collection('tenants').doc(TENANT_ID).get();
         TENANT_PLANO = tenantSnapSA.exists ? (tenantSnapSA.data().plano || 'erp') : 'erp';
+        TENANT_MODULOS = tenantSnapSA.exists ? (tenantSnapSA.data().modulos || null) : null;
       }
       return true;
     }
@@ -1294,6 +1296,7 @@ async function resolverTenantDoUsuario(user) {
     }
     TENANT_PLANO = tenantSnap.exists ? (tenantSnap.data().plano || 'erp') : 'erp';
     TENANT_ASSINATURA = tenantSnap.exists ? (tenantSnap.data().assinatura || null) : null;
+    TENANT_MODULOS = tenantSnap.exists ? (tenantSnap.data().modulos || null) : null;
     // fora do CRM, avisa quando um cliente responder a aprovação
     setTimeout(() => { try { if (typeof aprVigiaGlobal === 'function') aprVigiaGlobal(); } catch (e) {} }, 2500);
     // segurança das chaves de IA: o Diretor confere UMA vez por sessão se o banco ainda tem chaves antigas e as retira
@@ -1379,6 +1382,7 @@ function aplicarBloqueioFinanceiro(alvo) {
 function aplicarRestricoesDeNivel() {
   if (!FIREBASE_PRONTO || !TENANT_ID || nivelUsuario() === 'superadmin' || nivelUsuario() === 'diretor') return;
   const pagina = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  if (pagina === 'investimentos.html') return; // Investimentos decide o próprio acesso (perfil + módulo + liberação do Diretor)
   const paginasFinanceiras = ['index.html', '', 'meu-negocio.html', 'financeiro.html'];
   if (!nivelVeFinanceiro() && paginasFinanceiras.includes(pagina)) {
     aplicarBloqueioFinanceiro(document.querySelector('main.main'));
@@ -6770,6 +6774,9 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '26/11/2026 · Investimentos (módulo opcional)', itens: [
+    { titulo: 'Investimentos no menu Financeiro', badges: ['novo'], texto: 'Módulo opcional, desligado por padrão: só aparece quando a equipe da Eagles Labz o liga para a sua empresa. Traz a Biblioteca de ativos, Favoritos, Minha carteira (com o saldo conferido pelo banco a cada lançamento), Projeções e simuladores. Os preços são informados por você (preço manual); não há cotação automática, notícias nem IA ligadas nesta versão.' },
+  ] },
   { data: '26/11/2026 · Segurança das chaves de IA', itens: [
     { titulo: 'Chaves de IA só no seu navegador', badges: ['segurança'], texto: 'As chaves dos provedores de IA (OpenAI, Gemini e outros) não ficam mais guardadas no banco da empresa: cada pessoa cadastra a própria chave, que fica só no navegador dela e não vai para o backup. O Diretor continua escolhendo o provedor e o modelo padrão da empresa. Se a sua empresa tinha uma chave salva por uma versão antiga, o sistema a retira do banco quando o Diretor entra e avisa para trocar a chave no site do provedor.' },
     { titulo: 'Restaurar backup pelo Super Admin', badges: ['corrigido'], texto: 'A restauração de backup feita pela equipe da Eagles Labz não funcionava quando o Super Admin não estava ligado a nenhuma empresa. Agora funciona com a empresa escolhida.' },
@@ -14290,6 +14297,20 @@ function itemVisivelNoPlano(item) {
   return item.plano === TENANT_PLANO;
 }
 
+// Investimentos (Etapa 05): o Financeiro vira um grupo com "Investimentos" SÓ quando o Super Admin
+// ligou o módulo para a empresa (tenants/{id}.modulos.investimentos) — ou para o próprio Super Admin.
+// Empresas sem o módulo continuam com o menu exatamente igual.
+function invMenuVisivel() {
+  if (typeof USUARIO_ROLE !== 'undefined' && USUARIO_ROLE === 'SuperAdmin') return true;
+  return !!(TENANT_MODULOS && TENANT_MODULOS.investimentos === true) && typeof nivelUsuario === 'function' && nivelUsuario() !== 'cliente';
+}
+function invNavItem(item) {
+  if (item.key !== 'financeiro' || !invMenuVisivel()) return item;
+  return Object.assign({}, item, { href: undefined, children: [
+    { key: 'financeiro', href: 'financeiro.html', label: 'Financeiro' },
+    { key: 'investimentos', href: 'investimentos.html', label: 'Investimentos' },
+  ] });
+}
 function renderTopbar(activeKey) {
   const nav = document.getElementById('topbar-nav');
   if (!nav) return;
@@ -14298,7 +14319,7 @@ function renderTopbar(activeKey) {
   let html = '';
   const soProd = (i) => (!i.soProdutos || typeof perfilOpVendeProdutos !== 'function' || perfilOpVendeProdutos()) && (!i.modulo || typeof sisModuloAtivo !== 'function' || [].concat(i.modulo).some((m) => sisModuloAtivo(m)));
   const rotulo = (c) => { if (typeof sisTermo !== 'function') return c.label; if (c.key === 'pedidos-venda') { const t = sisTermo('pedido', 'Pedido'); return t === 'Pedido' ? c.label : t + 's'; } if (c.key === 'clientes-fornecedores') return sisTermo('cliente', 'Cliente') + 's e Fornecedores'; return c.label; };
-  NAV_ITEMS.filter(itemVisivelNoPlano).filter(soProd).forEach((item) => {
+  NAV_ITEMS.map(invNavItem).filter(itemVisivelNoPlano).filter(soProd).forEach((item) => {
     if (item.type === 'meu-negocio') {
       html += `<div class="topbar-item">
         <button type="button" class="topbar-menu-btn" onclick="toggleDropdown('menu-meu-negocio')">${item.label} <span class="chevron">▾</span></button>

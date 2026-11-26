@@ -341,3 +341,36 @@ test('artefato: nenhuma credencial em nenhum arquivo publicado (só a apiKey pú
     assert.ok(!RX.test(t), 'possível credencial em ' + rel(p) + ': ' + (t.match(RX) || [''])[0].slice(0, 12) + '…');
   }
 });
+
+// Etapa 10: o ARTEFATO publicado (o que vai para o site) não pode ter dado fictício, de teste, fonte não autorizada
+// nem credencial — nem escondido pela tela.
+test('artefato: sem dados fictícios, sem fontes não autorizadas e sem credenciais (Investimentos e o resto do site)', () => {
+  const saida = path.join(tmp(), '_site');
+  const r = montar({ raiz: RAIZ, saida });
+  assert.deepEqual(r.erros, []);
+  const todos = []; const andar = (d) => { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (fs.statSync(p).isDirectory()) andar(p); else todos.push(p); } }; andar(saida);
+  const rel = (p) => path.relative(saida, p).split(path.sep).join('/');
+  // nenhum arquivo de teste, de desenvolvimento ou do importador
+  assert.ok(!todos.some((p) => /noticias-teste|catalogo-teste|catalogo-dev|investimentos-portao|testes-|fixtures/.test(rel(p))), 'arquivo interno no site');
+  // catálogo de produção: só fontes autorizadas, nada de teste, sem demonstração
+  const meta = JSON.parse(fs.readFileSync(path.join(saida, 'inv/catalogo/meta.json'), 'utf8'));
+  const itens = JSON.parse(fs.readFileSync(path.join(saida, 'inv/catalogo/ativos.json'), 'utf8')).itens;
+  assert.equal(meta.producao, true, 'o catálogo publicado tem que ser o de produção (importar.mjs --producao)');
+  assert.equal(meta.demonstracao, false, 'demonstração desligada no site');
+  assert.equal(meta.totalTeste, 0);
+  for (const a of itens) {
+    assert.ok(!a.teste && !/^ZZT/.test(a.ticker), 'ativo de teste no site: ' + a.assetId);
+    assert.ok(a.fontes.every((f) => meta.fontes[f.id] && meta.fontes[f.id].autorizadaProducao === true), 'fonte não autorizada no site: ' + a.assetId);
+  }
+  // nenhuma credencial em nenhum arquivo publicado (padrões de chaves de IA e tokens)
+  const RX = /(sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{10,}|AIza[0-9A-Za-z_-]{30,}|xai-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/;
+  for (const p of todos) {
+    if (/\.(png|jpe?g|ico|webp|gif|svg)$/i.test(p)) continue;
+    let t = fs.readFileSync(p, 'utf8');
+    // exceção única: a apiKey pública do Firebase, só no firebase-config.js (é pública por natureza; não é segredo)
+    if (rel(p) === 'firebase-config.js') t = t.replace(/apiKey:\s*["']AIza[0-9A-Za-z_-]+["']/, 'apiKey: "publica"');
+    assert.ok(!RX.test(t), 'possível credencial em ' + rel(p) + ': ' + (t.match(RX) || [''])[0].slice(0, 12) + '…');
+  }
+  // os textos fictícios do feed de teste não estão em nenhum arquivo
+  for (const p of todos) if (/\.(js|json|html|xml)$/.test(p)) assert.ok(!/\[TESTE\] (Copom fictício|Empresa ZZT)/.test(fs.readFileSync(p, 'utf8')), 'notícia fictícia em ' + rel(p));
+});

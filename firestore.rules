@@ -159,6 +159,144 @@ service cloud.firestore {
       return !(d.get('valor', null) is map) || d.valor.get('chaves', {}) == {} || d.valor.get('chaves', null) == null;
     }
 
+    // ---------- Investimentos (Etapa 05) ----------
+    // O módulo é ligado empresa por empresa pelo Super Admin (tenants/{id}.modulos.investimentos — só ele grava
+    // o documento da empresa). Quem usa: Diretor e Financeiro; o Administrativo só com a liberação do Diretor
+    // (tenants/{id}/inv_acesso/{uid}). O Super Admin NÃO tem acesso automático aos dados privados (D-02).
+    function invModulo(tenantId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('modulos', {}).get('investimentos', false) == true;
+    }
+    function invPodeUsar(tenantId) {
+      return souMembroAtivo(tenantId) && invModulo(tenantId) && (
+        ehRoleDiretor(meuRole()) || meuRole() == 'Financeiro' ||
+        (meuRole() == 'Administrativo' && exists(/databases/$(database)/documents/tenants/$(tenantId)/inv_acesso/$(request.auth.uid))));
+    }
+    // soma de consumo: só os 3 contadores + horário do servidor; cada gravação soma de 0 a 500 em cada um
+    function invSoma(campo) {
+      return request.resource.data.get(campo, 0) is int &&
+        request.resource.data.get(campo, 0) - (resource == null ? 0 : resource.data.get(campo, 0)) >= 0 &&
+        request.resource.data.get(campo, 0) - (resource == null ? 0 : resource.data.get(campo, 0)) <= 500;
+    }
+    // ---------- Investimentos (Etapas 06–08) ----------
+    // Carteira PESSOAL: só o dono (nem o Diretor, nem o Super Admin). Carteira da EMPRESA: Diretor e Financeiro.
+    // (escrita para gastar poucas expressões: o Firebase avalia no máximo 1.000 por gravação)
+    function invCartPode(tenantId, d) {
+      return d.tipo == 'pessoal' ? (d.dono == request.auth.uid && (meuRole() == 'SuperAdmin' ? invSaPropria(tenantId) : invPodeUsar(tenantId))) :
+        (d.tipo == 'empresa' && (ehRoleDiretor(meuRole()) || meuRole() == 'Financeiro') && invPodeUsar(tenantId));
+    }
+    // D-02 (aprovada em 26/11/2026): o Super Admin pode ter a PRÓPRIA carteira pessoal, só na empresa a que está vinculado,
+    // com o módulo ligado nela. Nunca lê carteira de outra pessoa (o dono tem que ser ele) nem a carteira da empresa.
+    function invSaPropria(tenantId) {
+      return estaLogado() && meuRole() == 'SuperAdmin' && meuTenantId() != null && meuTenantId() == tenantId &&
+        empresaAtiva(tenantId) && contaLivre() && invModulo(tenantId);
+    }
+    // Etapa 10: a carteira guarda o SALDO (caixa em centavos e a quantidade de cada ativo em 1e-8) e a data da última
+    // operação. As regras conferem cada mudança desse saldo: nada fica negativo, nem por gravação direta.
+    function invCartCampos(d) {
+      return d.keys().hasOnly(['nome', 'tipo', 'dono', 'corretoras', 'moedaBase', 'caixaAutomatico', 'ativa', 'opsN', 'saldo', 'ultimaData', 'criadoEm', 'atualizadoEm']) &&
+        d.nome is string && d.nome.size() >= 1 && d.nome.size() <= 60 && d.tipo in ['pessoal', 'empresa'] && d.dono is string &&
+        d.corretoras is list && d.corretoras.size() <= 20 && d.moedaBase == 'BRL' && d.caixaAutomatico is bool && d.ativa is bool &&
+        d.opsN is int && d.opsN >= 0 && d.opsN <= 5000 && d.atualizadoEm == request.time &&
+        d.saldo is map && d.saldo.keys().hasOnly(['caixa', 'pos']) && d.saldo.caixa is int && d.saldo.caixa >= 0 && d.saldo.pos is map && d.saldo.pos.size() <= 500 &&
+        d.ultimaData is string && d.ultimaData.size() == 10;
+    }
+    function invNum(d, campo, max) {
+      return !d.keys().hasAny([campo]) || ((d[campo] is int || d[campo] is float) && d[campo] >= 0 && d[campo] <= max);
+    }
+    function invTxt(d, campo, max) {
+      return !d.keys().hasAny([campo]) || (d[campo] is string && d[campo].size() <= max);
+    }
+    // data AAAA-MM-DD de CALENDÁRIO (mês 1–12, dia que existe no mês, 29/02 só em ano bissexto) e não depois de hoje.
+    // "Hoje" é a data UTC do servidor: no Brasil (UTC−3) a data local nunca passa da data UTC, então não há folga.
+    function invDiasNoMes(a, m) {
+      return m == 2 ? ((a % 4 == 0 && (a % 100 != 0 || a % 400 == 0)) ? 29 : 28) : (m in [4, 6, 9, 11] ? 30 : 31);
+    }
+    function invDataValida(s) {
+      return s is string && s.matches('^(19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}$') &&
+        int(s[5:7]) >= 1 && int(s[5:7]) <= 12 && int(s[8:10]) >= 1 && int(s[8:10]) <= invDiasNoMes(int(s[0:4]), int(s[5:7])) &&
+        int(s[0:4]) * 10000 + int(s[5:7]) * 100 + int(s[8:10]) <= request.time.year() * 10000 + request.time.month() * 100 + request.time.day();
+    }
+    function invTem(d, campos) { return d.keys().hasAll(campos); }
+    function invCam(d) { return d.moeda == 'USD' ? d.cambio : 1; }
+    // campos obrigatórios e proibidos por tipo de operação
+    function invOpCamposDoTipo(d) {
+      return (d.tipo in ['compra', 'venda'] && invTem(d, ['assetId', 'qtd', 'qtdE8', 'preco', 'dq']) && d.qtd > 0) ||
+        (d.tipo in ['aporte', 'retirada', 'taxa'] && invTem(d, ['valor']) && d.valor > 0 && !d.keys().hasAny(['assetId', 'qtd', 'preco', 'dq', 'fator', 'estorna'])) ||
+        (d.tipo in ['dividendo', 'jcp', 'rendimento', 'amortizacao'] && invTem(d, ['assetId', 'valor']) && d.valor > 0 && !d.keys().hasAny(['qtd', 'preco', 'fator', 'estorna'])) ||
+        (d.tipo in ['desdobramento', 'grupamento'] && invTem(d, ['assetId', 'fator', 'dq']) && d.fator > 1 && !d.keys().hasAny(['valor', 'preco', 'estorna'])) ||
+        (d.tipo == 'bonificacao' && invTem(d, ['assetId', 'qtd', 'qtdE8', 'dq']) && d.qtd > 0 && !d.keys().hasAny(['preco', 'fator', 'estorna'])) ||
+        (d.tipo == 'estorno' && invTem(d, ['estorna', 'dc', 'ai']) && !d.keys().hasAny(['assetId', 'qtd', 'preco', 'valor', 'fator']));
+    }
+    // efeito declarado (dq = quantidade em 1e-8, dc = caixa em centavos, ai = aporte implícito) conferido com os números
+    // da operação. Tolerância de 2 centavos / 1 unidade de 1e-8 (o cálculo da tela é exato; aqui a conta é em ponto flutuante).
+    function invOpEfeito(d, posAntes) {
+      return d.dc is int && d.ai is int && d.ai >= 0 && (!d.keys().hasAny(['dq']) || d.dq is int) && (
+        (d.tipo == 'compra' && d.qtdE8 is int && math.abs(d.qtdE8 - d.qtd * 100000000) <= 1 && d.dq == d.qtdE8 && d.dc <= 0 &&
+          math.abs(-d.dc - (d.qtd * d.preco + d.get('taxas', 0)) * invCam(d) * 100) <= 2) ||
+        (d.tipo == 'venda' && d.qtdE8 is int && math.abs(d.qtdE8 - d.qtd * 100000000) <= 1 && d.dq == -d.qtdE8 && d.ai == 0 &&
+          math.abs(d.dc - (d.qtd * d.preco - d.get('taxas', 0)) * invCam(d) * 100) <= 2) ||
+        (d.tipo == 'aporte' && d.ai == 0 && d.dc > 0 && math.abs(d.dc - d.valor * 100) < 0.51) ||
+        (d.tipo == 'retirada' && d.ai == 0 && d.dc < 0 && math.abs(-d.dc - d.valor * 100) < 0.51) ||
+        (d.tipo == 'taxa' && d.dc < 0 && math.abs(-d.dc - d.valor * 100) < 0.51) ||
+        (d.tipo in ['dividendo', 'jcp', 'rendimento'] && d.ai == 0 && !d.keys().hasAny(['dq']) && d.get('irRetido', 0) <= d.valor &&
+          math.abs(d.dc - (d.valor - d.get('irRetido', 0)) * invCam(d) * 100) <= 2) ||
+        (d.tipo == 'amortizacao' && d.ai == 0 && !d.keys().hasAny(['dq']) && math.abs(d.dc - d.valor * invCam(d) * 100) <= 2) ||
+        (d.tipo == 'bonificacao' && d.ai == 0 && d.dc == 0 && d.qtdE8 is int && math.abs(d.qtdE8 - d.qtd * 100000000) <= 1 && d.dq == d.qtdE8) ||
+        (d.tipo == 'desdobramento' && d.ai == 0 && d.dc == 0 && d.dq >= 0 && math.abs((posAntes + d.dq) - posAntes * d.fator) <= d.fator) ||
+        (d.tipo == 'grupamento' && d.ai == 0 && d.dc == 0 && d.dq <= 0 && math.abs((posAntes + d.dq) - posAntes / d.fator) <= 1));
+    }
+    // operação: imutável (só criar); corrigir = nova operação "estorno"
+    // Auditoria (26/11/2026): quantidade e preço até 10 milhões (o cálculo usa inteiros em 1e-8 e precisa caber em 2^53)
+    function invOpValida(d) {
+      return d.keys().hasOnly(['tipo', 'data', 'assetId', 'qtd', 'qtdE8', 'preco', 'valor', 'taxas', 'irRetido', 'fator', 'moeda', 'cambio', 'estorna', 'corretora', 'nota', 'seq', 'dq', 'dc', 'ai', 'alvoAsset', 'criadoPor', 'criadoEm']) &&
+        d.tipo in ['compra', 'venda', 'aporte', 'retirada', 'dividendo', 'jcp', 'rendimento', 'taxa', 'desdobramento', 'grupamento', 'bonificacao', 'amortizacao', 'estorno'] &&
+        invDataValida(d.data) && invOpCamposDoTipo(d) && (d.moeda != 'USD' || (d.keys().hasAny(['cambio']) && d.cambio > 0)) &&
+        (!d.keys().hasAny(['assetId']) || (d.assetId is string && d.assetId.size() <= 40 && d.assetId.matches('^[A-Z]+:[A-Z0-9-]+:[A-Z0-9.-]+$'))) &&
+        invNum(d, 'qtd', 10000000) && invNum(d, 'preco', 10000000) && invNum(d, 'valor', 10000000000) && invNum(d, 'taxas', 10000000) &&
+        invNum(d, 'irRetido', 10000000000) && invNum(d, 'fator', 1000) && invNum(d, 'cambio', 100) &&
+        d.moeda in ['BRL', 'USD'] && invTxt(d, 'estorna', 40) && invTxt(d, 'corretora', 40) && invTxt(d, 'nota', 200) &&
+        (d.tipo != 'estorno' || d.keys().hasAny(['estorna'])) &&
+        d.criadoPor == request.auth.uid && d.criadoEm == request.time;
+    }
+    function invOpNova(tenantId, cid, oid, c) {
+      return c.ativa == true && oid == string(c.opsN + 1) &&
+        request.resource.data.seq == c.opsN + 1 && invOpValida(request.resource.data) &&
+        request.resource.data.data >= c.ultimaData &&
+        getAfter(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)).data.opsN == c.opsN + 1 &&
+        (request.resource.data.tipo == 'estorno' ? invEstornoValido(tenantId, cid, request.resource.data) :
+          invOpEfeito(request.resource.data, c.saldo.pos.get(request.resource.data.get('assetId', '-'), 0)));
+    }
+    // estorno = lançamento de REVERSÃO: a operação alvo existe, é reversível, não é estorno e ainda não foi estornada
+    // (o marcador nasce agora); o efeito é exatamente o contrário do efeito da operação alvo.
+    function invEstornoValido(tenantId, cid, d) {
+      return exists(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)/operacoes/$(d.estorna)) &&
+        invEstornoEspelha(d, get(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)/operacoes/$(d.estorna)).data) &&
+        !exists(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)/estornos/$(d.estorna)) &&
+        existsAfter(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)/estornos/$(d.estorna));
+    }
+    function invEstornoEspelha(d, t) {
+      return t.tipo in ['compra', 'venda', 'aporte', 'retirada', 'dividendo', 'jcp', 'rendimento', 'taxa', 'amortizacao', 'bonificacao'] &&
+        d.dc is int && d.dc == -t.dc && d.ai == 0 &&
+        (t.keys().hasAny(['dq']) ? (d.keys().hasAny(['dq']) && d.dq == -t.dq && d.alvoAsset == t.assetId) : !d.keys().hasAny(['dq']));
+    }
+    function invAtivoDaOp(o) { return o.tipo == 'estorno' ? o.get('alvoAsset', '-') : o.get('assetId', '-'); }
+    function invSaldoTransicao(a, n, o) {
+      return n.ultimaData == o.data && o.data >= a.ultimaData &&
+        // caixa: antes + efeito + aporte implícito, nunca negativo; aporte implícito só cobre o que faltou (e só no modo automático)
+        n.saldo.caixa == a.saldo.caixa + o.dc + o.ai && n.saldo.caixa >= 0 &&
+        (o.ai == 0 || (a.caixaAutomatico == true && o.tipo in ['compra', 'taxa'] && a.saldo.caixa + o.dc < 0 && o.ai == -(a.saldo.caixa + o.dc))) &&
+        // quantidade: só o ativo da operação muda, pelo efeito declarado, e nunca fica negativa
+        (o.keys().hasAny(['dq']) ?
+          (n.saldo.pos.diff(a.saldo.pos).affectedKeys().hasOnly([invAtivoDaOp(o)]) &&
+            n.saldo.pos.get(invAtivoDaOp(o), 0) == a.saldo.pos.get(invAtivoDaOp(o), 0) + o.dq && n.saldo.pos.get(invAtivoDaOp(o), 0) >= 0) :
+          n.saldo.pos == a.saldo.pos);
+    }
+    function invUsoValido() {
+      return request.resource.data.keys().hasOnly(['leituras', 'gravacoes', 'exclusoes', 'atualizadoEm']) &&
+        request.resource.data.atualizadoEm == request.time &&
+        invSoma('leituras') && invSoma('gravacoes') && invSoma('exclusoes');
+    }
+
     // ---------- usuarios/{uid} ----------
     match /usuarios/{userId} {
       // Cada um lê o próprio documento (é assim que o sistema descobre o
@@ -362,6 +500,86 @@ service cloud.firestore {
           (souSuperAdmin() || (souMembroAtivo(tenantId) && podeOperar()));
       }
 
+      // ---------- Investimentos (Etapa 05) ----------
+      // Favoritos: um documento por pessoa; só a própria pessoa lê e grava (nem o Diretor, nem o Super Admin).
+      match /inv_favoritos/{uid} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid && invPodeUsar(tenantId);
+        allow create, update: if request.auth != null && request.auth.uid == uid && invPodeUsar(tenantId) &&
+          request.resource.data.keys().hasOnly(['listas', 'atualizadoEm']) &&
+          request.resource.data.listas is list && request.resource.data.listas.size() >= 1 && request.resource.data.listas.size() <= 20 &&
+          request.resource.data.atualizadoEm == request.time;
+      }
+      // Liberação do Administrativo: só o Diretor da empresa grava, e só para quem é Administrativo da própria empresa.
+      match /inv_acesso/{uid} {
+        allow read: if souMembroAtivo(tenantId) && (request.auth.uid == uid || souDiretor());
+        allow create: if souMembroAtivo(tenantId) && souDiretor() && meuRole() != 'SuperAdmin' && invModulo(tenantId) &&
+          get(/databases/$(database)/documents/usuarios/$(uid)).data.get('tenantId', '') == tenantId &&
+          get(/databases/$(database)/documents/usuarios/$(uid)).data.get('role', '') == 'Administrativo' &&
+          request.resource.data.keys().hasOnly(['liberadoPor', 'em']) &&
+          request.resource.data.liberadoPor == request.auth.uid && request.resource.data.em == request.time;
+        allow delete: if souMembroAtivo(tenantId) && souDiretor() && meuRole() != 'SuperAdmin';
+      }
+
+      // Carteiras (Etapa 07). Nada é apagado: a carteira é arquivada (ativa = false) e a operação é estornada.
+      match /inv_carteiras/{cid} {
+        allow read: if invCartPode(tenantId, resource.data);
+        allow create: if invCartCampos(request.resource.data) && request.resource.data.dono == request.auth.uid &&
+          request.resource.data.opsN == 0 && request.resource.data.saldo == { 'caixa': 0, 'pos': {} } && request.resource.data.ultimaData == '1900-01-01' &&
+          request.resource.data.criadoEm == request.time && invCartPode(tenantId, request.resource.data);
+        // O contador só sobe junto com a operação de número igual ao novo contador (nunca sozinho) e só com a carteira ativa;
+        // o saldo muda EXATAMENTE pelo efeito dessa operação e nunca fica negativo (caixa nem quantidade de nenhum ativo);
+        // a data da operação não pode ser anterior à da última (lançamentos em ordem de data).
+        allow update: if invCartPode(tenantId, resource.data) && invCartCampos(request.resource.data) &&
+          request.resource.data.tipo == resource.data.tipo && request.resource.data.dono == resource.data.dono &&
+          request.resource.data.criadoEm == resource.data.criadoEm && request.resource.data.caixaAutomatico == resource.data.caixaAutomatico && (
+            (request.resource.data.opsN == resource.data.opsN && request.resource.data.saldo == resource.data.saldo && request.resource.data.ultimaData == resource.data.ultimaData) ||
+            (request.resource.data.opsN == resource.data.opsN + 1 && resource.data.ativa == true && request.resource.data.ativa == true &&
+              invSaldoTransicao(resource.data, request.resource.data,
+                getAfter(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)/operacoes/$(string(request.resource.data.opsN))).data)));
+        allow delete: if false;
+        // Operações NUMERADAS: a de número N só existe se o contador passar de N−1 para N na mesma gravação.
+        // Assim cada incremento corresponde a exatamente UMA operação, e duas gravações simultâneas na mesma
+        // posição não passam juntas (a segunda encontra o número ocupado e é recusada).
+        match /operacoes/{oid} {
+          allow read: if invCartPode(tenantId, get(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)).data);
+          allow create: if invOpNova(tenantId, cid, oid, get(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)).data);
+          allow update, delete: if false;
+        }
+        // Marcador de estorno: um por operação estornada (impede estornar duas vezes); criado junto com o estorno.
+        match /estornos/{alvo} {
+          allow read: if invCartPode(tenantId, get(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)).data);
+          // (permissão garantida pela operação de estorno da mesma gravação, que só existe se a carteira passou pelas regras)
+          allow create: if estaLogado() &&
+            request.resource.data.keys().hasOnly(['op', 'criadoPor', 'criadoEm']) && request.resource.data.op is string &&
+            request.resource.data.criadoPor == request.auth.uid && request.resource.data.criadoEm == request.time &&
+            getAfter(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)/operacoes/$(request.resource.data.op)).data.tipo == 'estorno' &&
+            getAfter(/databases/$(database)/documents/tenants/$(tenantId)/inv_carteiras/$(cid)/operacoes/$(request.resource.data.op)).data.estorna == alvo;
+          allow update, delete: if false;
+        }
+      }
+      // Preços informados pela empresa (um documento só): todos do módulo leem; Diretor e Financeiro gravam.
+      match /inv_precos/{docId} {
+        allow read: if invPodeUsar(tenantId) || invSaPropria(tenantId);
+        allow create, update: if docId == 'manual' && invPodeUsar(tenantId) && (ehRoleDiretor(meuRole()) || meuRole() == 'Financeiro') &&
+          request.resource.data.keys().hasOnly(['itens', 'por', 'atualizadoEm']) && request.resource.data.itens is list &&
+          request.resource.data.itens.size() <= 300 && request.resource.data.por == request.auth.uid && request.resource.data.atualizadoEm == request.time;
+        allow delete: if false;
+      }
+      // Cenários de projeção (Etapa 09): um documento por pessoa, até 20 cenários; só ela lê e grava. Guarda só premissas.
+      match /inv_cenarios/{uid} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid && (invPodeUsar(tenantId) || invSaPropria(tenantId));
+        allow create, update: if request.auth != null && request.auth.uid == uid && (invPodeUsar(tenantId) || invSaPropria(tenantId)) &&
+          request.resource.data.keys().hasOnly(['itens', 'atualizadoEm']) && request.resource.data.itens is list &&
+          request.resource.data.itens.size() <= 20 && request.resource.data.atualizadoEm == request.time;
+      }
+      // Alertas de preço: um documento por pessoa; só ela lê e grava.
+      match /inv_alertas/{uid} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid && invPodeUsar(tenantId);
+        allow create, update: if request.auth != null && request.auth.uid == uid && invPodeUsar(tenantId) &&
+          request.resource.data.keys().hasOnly(['itens', 'atualizadoEm']) && request.resource.data.itens is list &&
+          request.resource.data.itens.size() <= 50 && request.resource.data.atualizadoEm == request.time;
+      }
+
       // Projetos do Kanban: também um documento por projeto.
       match /kanban_projetos/{projetoId} {
         allow read: if souSuperAdmin() || souMembroAtivo(tenantId);
@@ -475,6 +693,21 @@ service cloud.firestore {
     // login (sem estar logado) só pode SOMAR 1; ninguém zera nem lê de fora.
     // Com 5, a conta fica bloqueada (regra contaLivre) até o Super Admin
     // apagar o registro. Acertar a senha antes de 5 zera o contador.
+    // ---------- Investimentos: consumo do dia (soma cooperativa; sem dados privados) ----------
+    // Lê e soma: quem usa o módulo (em qualquer empresa habilitada) e o Super Admin. Ninguém apaga nem diminui.
+    match /inv_admin_uso/{dia} {
+      allow read: if souSuperAdmin() || (meuTenantId() != null && invPodeUsar(meuTenantId()));
+      allow create, update: if dia.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        (souSuperAdmin() || (meuTenantId() != null && invPodeUsar(meuTenantId()))) && invUsoValido();
+    }
+
+    // ---------- Investimentos: cache GLOBAL de mercado (um por ativo, para todas as empresas) ----------
+    // Só o SERVIDOR grava (D-10). Ninguém do navegador grava: dado de mercado nunca é repetido por empresa.
+    match /inv_mercado/{ativoId} {
+      allow read: if souSuperAdmin() || (meuTenantId() != null && invPodeUsar(meuTenantId()));
+      allow write: if false;
+    }
+
     match /tentativas_login/{email} {
       allow get: if souSuperAdmin() || (estaLogado() && request.auth.token.email == email);
       allow list: if souSuperAdmin();

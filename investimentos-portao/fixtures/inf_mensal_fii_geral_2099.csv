@@ -1,0 +1,5 @@
+CNPJ_Fundo;Data_Referencia;Versao;Data_Entrega;Nome_Fundo;Data_Funcionamento;Publico_Alvo;Codigo_ISIN;Quantidade_Cotas_Emitidas;Fundo_Exclusivo;Mandato;Segmento_Atuacao;Tipo_Gestao
+99.000.006/0001-26;2099-01-01;1;2099-02-10;FII ZZT LOGÍSTICA (TESTE);2015-01-01;Investidores em Geral;BRZZTLCTF009;1000000;N;Renda;Logística;Ativa
+99.000.006/0001-26;2099-02-01;1;2099-03-10;FII ZZT LOGÍSTICA (TESTE);2015-01-01;Investidores em Geral;BRZZTLCTF009;1000000;N;Renda;Logística;Ativa
+99.000.007/0001-70;2099-02-01;1;2099-03-10;FII ZZT PAPEL (TESTE);2018-01-01;Investidores em Geral;BRZZTPCTF000;500000;N;Títulos e Valores Mobiliários;Recebíveis;Ativa
+98.000.007/0001-70;2099-02-01;1;2099-03-10;FII SEM COTA EM BOLSA (TESTE);2018-01-01;Investidores Profissionais;;0;S;Renda;Outros;Passiva

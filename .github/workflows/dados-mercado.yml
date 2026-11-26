@@ -1,0 +1,75 @@
+# Etapa 11 / 11.18 — robô de dados de mercado (R$ 0: GitHub Actions em repositório público).
+# OPÇÃO B: a atualização automática é SÓ DE DADOS e fica separada da publicação do código.
+#  - Este workflow NUNCA publica o site, nunca grava na main e nunca roda o montador do "Site seguro".
+#  - Ele busca as fontes aprovadas, VALIDA cada arquivo (formato, tamanho, datas, conteúdo malicioso, anti-vazio),
+#    mantém o último arquivo válido quando uma fonte falha e gera status.json + manifesto.json (sha256 de cada arquivo).
+#  - Publicar os dados automaticamente exige um repositório SÓ DE DADOS (ex.: eagles-dados, com GitHub Pages próprio)
+#    e duas configurações que só o Igor faz: a variável DADOS_REPO e o segredo DADOS_DEPLOY_KEY (chave de implantação
+#    válida SÓ para aquele repositório). Sem elas, o passo de publicação fica desligado (como está hoje).
+# Segredos usados (nenhum valor aparece em arquivo, registro ou tela): FRED_API_KEY, SEC_CONTACT_EMAIL, BLS_API_KEY, BRAPI_TOKEN.
+name: Dados de mercado (robô, só dados)
+on:
+  schedule:
+    - cron: '37 22 * * 1-5'   # dias úteis, 19h37 em Brasília (depois do fechamento)
+  workflow_dispatch:
+  pull_request:
+    paths: ['investimentos-portao/**', 'inv/inv-dados.js', 'testes-investimentos/dados-reais.test.mjs', '.github/workflows/dados-mercado.yml']
+permissions:
+  contents: read
+concurrency: { group: dados-mercado, cancel-in-progress: false }
+jobs:
+  robo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Robô de dados (Tesouro Direto, Fed, FRED, CVM, SEC; brapi só com autorização)
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          SEC_CONTACT_EMAIL: ${{ secrets.SEC_CONTACT_EMAIL }}
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+          BRAPI_TOKEN: ${{ secrets.BRAPI_TOKEN }}
+          BRAPI_USO_AUTORIZADO: ${{ vars.BRAPI_USO_AUTORIZADO }}
+        run: node investimentos-portao/robo-dados.mjs --saida inv/dados
+      - name: Conferir que nenhum segredo foi parar nos arquivos
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          SEC_CONTACT_EMAIL: ${{ secrets.SEC_CONTACT_EMAIL }}
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+          BRAPI_TOKEN: ${{ secrets.BRAPI_TOKEN }}
+        run: node investimentos-portao/conferir-segredos.mjs inv/dados
+      - name: Testes da camada de dados e do artefato
+        run: node --test testes-investimentos/dados-reais.test.mjs testes-investimentos/fontes-1118.test.mjs .github/pages/montar-site.test.mjs
+      - name: Guardar os arquivos gerados (conferência; não é publicação)
+        uses: actions/upload-artifact@v4
+        with: { name: dados-mercado, path: inv/dados, retention-days: 7 }
+
+  # Publicação SÓ DE DADOS num repositório separado (desligada até o Igor criar o repositório e configurar a chave).
+  publicar-dados:
+    needs: robo
+    if: ${{ vars.DADOS_REPO != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dados-mercado, path: dados }
+      - name: Só arquivos de dados conhecidos (nada de HTML, JS, CSS ou service worker)
+        run: |
+          cd dados
+          for f in *; do case "$f" in tesouro.json|noticias.json|macro-us.json|fundamentos-br.json|fundamentos-us.json|catalogo-us.json|status.json|manifesto.json) ;; *) echo "arquivo inesperado: $f"; exit 1;; esac; done
+      - name: Enviar ao repositório de dados (chave de implantação só daquele repositório)
+        env:
+          DADOS_REPO: ${{ vars.DADOS_REPO }}
+          DADOS_DEPLOY_KEY: ${{ secrets.DADOS_DEPLOY_KEY }}
+        run: |
+          test -n "$DADOS_DEPLOY_KEY" || { echo "DADOS_DEPLOY_KEY ausente: nada publicado"; exit 0; }
+          mkdir -p ~/.ssh && printf '%s\n' "$DADOS_DEPLOY_KEY" > ~/.ssh/id && chmod 600 ~/.ssh/id
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/id -o StrictHostKeyChecking=accept-new"
+          git clone --depth 1 "git@github.com:${DADOS_REPO}.git" destino
+          mkdir -p destino/inv/dados && cp dados/*.json destino/inv/dados/
+          cd destino && git add inv/dados && git -c user.name="robo-dados" -c user.email="robo-dados@users.noreply.github.com" commit -m "dados $(date -u +%FT%TZ)" || exit 0
+          git push origin HEAD

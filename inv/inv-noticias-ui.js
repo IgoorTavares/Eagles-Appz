@@ -21,7 +21,18 @@
     if (NT.estado === 'ok') return;
     // sem servidor, nenhuma fonte real de notícias está ligada; as notícias FICTÍCIAS de teste só aparecem no modo
     // demonstração (que não existe no site publicado)
-    if (!C().S.simulador) { Object.assign(NT, { estado: 'ok', itens: [], removidas: 0, erros: [], teste: false, semFonte: true }); return; }
+    // Etapa 11: notícias REAIS das fontes aprovadas, prontas em inv/dados/noticias.json (gerado pelo robô): título original,
+    // data e link — sem copiar o texto da matéria. Sem o arquivo, a tela diz que não há fonte ligada.
+    if (!C().S.simulador) {
+      const arq = C().S.dadosReais && C().S.dadosReais.noticias;
+      if (!arq) { Object.assign(NT, { estado: C().S.estadoDados === 'carregando' || C().S.estadoDados === 'parado' ? 'nao-lido' : 'ok', itens: [], removidas: 0, erros: [], teste: false, semFonte: true }); return; }
+      const MAPA = { noticias_fed: 'fed', noticias_sec: 'sec', noticias_bcb: 'bcb', noticias_cvm: 'cvm' };
+      const brutos = arq.itens.map((x) => ({ titulo: String(x.titulo || '').slice(0, 240), link: N.linkSeguro(x.link), data: x.data, fonte: MAPA[x.fonte] || x.fonte, resumo: '' }))
+        .filter((x) => x.titulo && x.link && N.FONTES[x.fonte] && N.FONTES[x.fonte].ligada);
+      const d = N.deduplicar(brutos.map((n) => N.classificar(n, favoritosAtivos())));
+      Object.assign(NT, { estado: 'ok', itens: d.itens, removidas: d.removidas, erros: [], teste: false, semFonte: !d.itens.length, coleta: arq.coleta });
+      return;
+    }
     NT.estado = 'carregando';
     try {
       const r = await fetch('inv/noticias-teste.xml', { cache: 'no-cache' });
@@ -34,7 +45,7 @@
   function itemNoticia(n) {
     const { E } = C(); const F = N.FONTES[n.fonte] || {};
     return `<li class="inv-noticia"><a href="${E(n.link)}" target="_blank" rel="noopener noreferrer nofollow">${E(n.titulo)} ↗</a>
-      <p>${E(n.resumo)}</p>
+      ${n.resumo ? `<p>${E(n.resumo)}</p>` : ''}
       <span class="inv-muda">${E(F.nome || n.fonte)} · ${n.data ? E(n.data.slice(0, 10).split('-').reverse().join('/')) + ' ' + E(n.data.slice(11, 16)) : 'sem data'}${n.repetidaEm ? ' · ' + n.repetidaEm.length + ' cópia(s) repetida(s) removida(s)' : ''}</span>
       <span class="inv-tags">${n.categorias.map((c) => `<span class="badge badge-neutral">${E(N.NOME_CAT[c] || c)}</span>`).join(' ')}${F.tipo === 'teste' ? ' <span class="inv-estado inv-estado-teste">Teste</span>' : ''}</span></li>`;
   }
@@ -103,7 +114,7 @@
         <div class="panel"><div class="panel-title"><h2>Calendário</h2></div>
           ${proventos.length ? `<h3 class="inv-sub">Proventos que você lançou</h3><ul class="inv-macro">${proventos.map((o) => `<li><span>${E(o.data.split('-').reverse().join('/'))} · ${E(o.assetId.split(':')[2])}</span><strong>${E(CT.TIPOS[o.tipo].nome)}</strong><span>${E(U().nf(o.valor))}</span></li>`).join('')}</ul>` : ''}
           ${estado('info', 'Datas de resultados e de dividendos futuros: indisponível', 'Dependem de uma fonte autorizada (D-06/D-10). Nada é estimado.')}</div>
-        <div class="panel inv-largo"><div class="panel-title"><h2>Notícias dos favoritos</h2></div>${noticias.length ? `<ul class="inv-noticias">${noticias.slice(0, 6).map(itemNoticia).join('')}</ul>` : estado('info', NT.semFonte ? 'Nenhuma fonte de notícias ligada' : 'Nenhuma notícia sobre os ativos desta lista', NT.semFonte ? 'As notícias dependem de um servidor e de fontes com termos confirmados.' : '')}</div>
+        <div class="panel inv-largo"><div class="panel-title"><h2>Notícias dos favoritos</h2></div>${noticias.length ? `<ul class="inv-noticias">${noticias.slice(0, 6).map(itemNoticia).join('')}</ul>` : estado('info', NT.semFonte ? 'Nenhuma fonte de notícias ligada' : 'Nenhuma notícia sobre os ativos desta lista', NT.semFonte ? 'As notícias vêm só de fontes oficiais com licença confirmada; nenhuma está disponível agora.' : 'As notícias reais (fontes oficiais) não citam estes ativos.')}</div>
       </div>`;
     ativos.forEach((x, i) => { const cv = document.getElementById('inv-mini-' + i); const h = x.a ? S.motor.historico(x.a, '3M') : { pontos: [] };
       if (h.pontos.length > 1) G.mini(cv, h.pontos); else if (cv) cv.parentNode.innerHTML = '<span class="inv-muda">sem histórico</span>'; });
@@ -139,15 +150,18 @@
     const { S } = C();
     const ind = [...K.INDICES.BR.filter((i) => ['IBOV', 'IFIX'].includes(i.ticker)), ...K.INDICES.US.filter((i) => ['SPX', 'IXIC'].includes(i.ticker))].map((a) => S.motor.cotacao(a));
     const macroBR = Object.fromEntries(K.MACRO.BR.map((a) => [a.ticker, Object.assign({ unidade: a.unidade }, S.motor.cotacao(a))]));
+    // Etapa 11: indicadores reais primeiro (Banco Central e Tesouro dos EUA); índices de bolsa seguem sem fonte autorizada
+    const macroCard = [...['SELIC', 'CDI', 'IPCA12M', 'USDBRL', 'EURBRL'].map((k) => K.MACRO.BR.find((x) => x.ticker === k)), K.MACRO.US.find((x) => x.ticker === 'UST10Y')].filter(Boolean).map((a) => ({ a, q: S.motor.cotacao(a) }));
     const acoes = S.cat.filter((a) => a.pais === 'BR' && a.classe === 'acao' && a.situacao === 'ativo');
     const rk = K.rankings(S.motor.cotacoes(acoes), 5);
-    return { ind, macroBR, rk };
+    return { ind, macroBR, macroCard, rk };
   }
   // CDI acumulado entre duas datas (série diária do Market Engine; % a.a. → fator diário em 252 pregões)
   // benchmarks SÓ com histórico autorizado (o CDI simulado não é usado como referência real)
   function cdiNoPeriodo(ini) {
     const { S } = C(); const h = S.motorReal.historico(K.MACRO.BR.find((x) => x.ticker === 'CDI'), 'MAX');
     if (!h.pontos.length) return null;
+    if (h.pontos[0].data > ini) return null; // histórico carregado não cobre o período inteiro: não compara (comparação parcial engana)
     let f = 1; for (const p of h.pontos) if (p.data > ini) f *= Math.pow(1 + p.fechamento / 100, 1 / 252);
     return { pct: (f - 1) * 100, estado: h.estado };
   }
@@ -188,7 +202,7 @@
     if (NI.secao === 'noticias') {
       const cats = [['todas', 'Todas'], ...N.CATEGORIAS.map(([k, n]) => [k, n]), ['favoritos', 'Favoritos']];
       const lista = N.filtrar(NT.itens, NT.cat);
-      corpo = (NT.semFonte ? '<div class="inv-faixa inv-faixa-aviso" role="note"><strong>Nenhuma fonte de notícias ligada.</strong> As fontes oficiais (Banco Central, IBGE, CVM, Tesouro, Federal Reserve, SEC, BLS) já estão cadastradas, mas a leitura automática depende de um servidor (D-10) e da confirmação dos termos de uso. Não há atualização automática de notícias.</div>' : '') + (NT.teste ? '<div class="inv-faixa inv-faixa-aviso" role="note"><strong>Notícias de TESTE (fictícias).</strong> As fontes oficiais (Banco Central, IBGE, CVM, Tesouro, Federal Reserve, SEC, BLS) já estão cadastradas, mas a leitura automática depende do servidor (D-10) e da confirmação dos termos de uso. Nenhuma matéria é copiada: só título, resumo curto e o link original.</div>' : '') + `
+      corpo = (NT.semFonte ? '<div class="inv-faixa inv-faixa-aviso" role="note"><strong>Nenhuma fonte de notícias ligada.</strong> As notícias vêm só de fontes oficiais com licença confirmada (hoje: Federal Reserve), num arquivo preparado pelo robô de dados; ele não está disponível agora.</div>' : (NT.coleta ? `<p class="inv-muda">Notícias reais de fontes oficiais com licença confirmada (Federal Reserve: domínio público). Título original e link para a publicação; o texto da matéria não é copiado. Coletadas em ${E(new Date(NT.coleta).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }))}.</p>` : '')) + (NT.teste ? '<div class="inv-faixa inv-faixa-aviso" role="note"><strong>Notícias de TESTE (fictícias).</strong> As fontes oficiais (Banco Central, IBGE, CVM, Tesouro, Federal Reserve, SEC, BLS) já estão cadastradas, mas a leitura automática depende do servidor (D-10) e da confirmação dos termos de uso. Nenhuma matéria é copiada: só título, resumo curto e o link original.</div>' : '') + `
         <div class="panel"><div class="inv-chips" role="group" aria-label="Categorias">${cats.map(([k, n]) => { const q = k === 'todas' ? NT.itens.length : N.filtrar(NT.itens, k).length; return `<button type="button" class="inv-seg${NT.cat === k ? ' on' : ''}" data-cat="${E(k)}" aria-pressed="${NT.cat === k}">${E(n)} <small>${q}</small></button>`; }).join('')}</div></div>
         <div class="panel">${NT.estado === 'erro' ? estado('erro', 'Notícias indisponíveis', NT.erros.join('; ')) : lista.length ? `<ul class="inv-noticias">${lista.map(itemNoticia).join('')}</ul><p class="inv-muda">${NT.removidas} duplicada(s) removida(s) · classificação por palavras-chave (sem IA).</p>` : estado('info', 'Nenhuma notícia nesta categoria', NT.cat === 'favoritos' ? 'Nenhuma notícia cita os seus favoritos.' : '')}</div>
         <div class="panel"><div class="panel-title"><h2>Fontes de notícias</h2></div><ul class="inv-lista">${Object.entries(N.FONTES).map(([, f]) => `<li><strong>${E(f.nome)}</strong><span>${f.ligada ? '<span class="badge badge-blue">Ligada</span>' : '<span class="badge badge-neutral">Desligada</span>'} ${E(f.formato)} · ${E(f.pais)}</span><span class="inv-muda">${E(f.termos)}</span></li>`).join('')}</ul></div>`;
@@ -247,9 +261,9 @@
     const brl = CU().brl, pct = CU().pct;
     const R = (k) => ({ acao: 'Ações', fii: 'FIIs', etf: 'ETFs', bdr: 'BDRs', reit: 'REITs', tesouro: 'Tesouro Direto', renda_fixa: 'Renda fixa', cripto: 'Cripto', fundo: 'Fundos' }[k] || k);
     host.innerHTML = cabecalho('Visão geral', cart ? `Carteira: ${cart.c.nome} (${cart.c.tipo === 'pessoal' ? 'pessoal' : 'empresa'}) · mesmos números da aba Minha carteira` : 'Mercado, favoritos, notícias e insights') +
-      U().faixaSimulado([...m.ind, ...(cart ? cart.av.itens.map((i) => ({ estado: i.estado })) : [])]) +
+      U().faixaSimulado([...m.macroCard.map((x) => x.q), ...m.ind, ...(cart ? cart.av.itens.map((i) => ({ estado: i.estado })) : [])]) +
       (disp.length ? `<div class="inv-faixa inv-faixa-aviso" role="status"><strong>Alertas disparados:</strong> ${disp.map((d) => E(textoAlerta(d.alerta))).join(' · ')} · <a href="#/favoritos">ver</a></div>` : '') +
-      `<div class="panel"><div class="inv-cards">${m.ind.map((q) => U().cartao(ctx.porId(q.assetId), q)).join('')}${['SELIC', 'USDBRL'].map((k) => U().cartao(K.MACRO.BR.find((x) => x.ticker === k), m.macroBR[k])).join('')}</div></div>` +
+      `<div class="panel"><div class="inv-cards">${m.macroCard.map((x) => U().cartao(x.a, x.q)).join('')}${m.ind.map((q) => U().cartao(ctx.porId(q.assetId), q)).join('')}</div>${U().rodapeFontes ? U().rodapeFontes(m.macroCard.map((x) => x.q)) : ''}</div>` +
       (cart ? `<div class="inv-kpis">
         ${kpi('Patrimônio', cart.av.patrimonio == null ? 'Indisponível' : brl(cart.av.patrimonio), cart.av.situacao === 'parcial' ? `<strong>parcial</strong>: ${cart.av.cobertura.ativos} de ${cart.av.cobertura.de} ativos avaliados` : cart.av.situacao === 'indisponivel' ? 'sem preço autorizado ou manual' : cart.av.situacao === 'inconsistente' ? 'carteira inconsistente' : `caixa ${brl(cart.av.caixa)}`)}
         ${kpi('Aportado (líquido)', brl(cart.av.aportado))}

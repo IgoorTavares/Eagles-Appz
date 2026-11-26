@@ -80,7 +80,7 @@
     const ind = (dados.indices || []).map(usa).filter((q) => q && q.preco != null);
     if (ind.length) linhas.push((tipo === 'abertura' ? 'Referência do último fechamento: ' : tipo === 'intradiario' ? 'Até agora: ' : 'No fechamento: ') + ind.map((q) => `${q.nome} ${pctTxt(q.variacaoPct || 0)}`).join('; ') + '.');
     const mac = (dados.macro || []).map(usa).filter((q) => q && q.preco != null);
-    if (mac.length) linhas.push('Indicadores: ' + mac.map((q) => `${q.nome} ${q.unidade === '%aa' ? q.preco.toLocaleString('pt-BR') + '% a.a.' : q.unidade === '%' ? q.preco.toLocaleString('pt-BR') + '%' : 'R$ ' + q.preco.toLocaleString('pt-BR', { minimumFractionDigits: 4 })}`).join('; ') + '.');
+    if (mac.length) linhas.push('Indicadores: ' + mac.map((q) => `${q.nome} ${q.unidade === '%aa' ? q.preco.toLocaleString('pt-BR') + '% a.a.' : q.unidade === '%' ? q.preco.toLocaleString('pt-BR') + '%' : q.unidade === '%am' ? q.preco.toLocaleString('pt-BR') + '% no mês' : q.unidade === 'BRL_MI' ? 'R$ ' + (q.preco / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' bi' : 'R$ ' + q.preco.toLocaleString('pt-BR', { minimumFractionDigits: 4 })}`).join('; ') + '.');
     const al = (dados.altas || []).slice(0, 3).map(usa), bx = (dados.baixas || []).slice(0, 3).map(usa);
     if (al.length) linhas.push('Maiores altas: ' + al.map((q) => `${q.ticker} ${pctTxt(q.variacaoPct)}`).join(', ') + '.');
     if (bx.length) linhas.push('Maiores baixas: ' + bx.map((q) => `${q.ticker} ${pctTxt(q.variacaoPct)}`).join(', ') + '.');

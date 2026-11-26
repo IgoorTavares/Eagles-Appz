@@ -24,8 +24,10 @@
     'tempo-real': { rotulo: 'Tempo real', real: true },
     atrasado: { rotulo: 'Atrasado', real: true },
     fechamento: { rotulo: 'Fechamento', real: true },
+    historico: { rotulo: 'Histórico', real: true },
+    desatualizado: { rotulo: 'Desatualizado', real: true }, // dado real, mas mais velho que o prazo da série (Etapa 11)
     manual: { rotulo: 'Manual', real: false },
-    simulado: { rotulo: 'Simulado', real: false },
+    simulado: { rotulo: 'Demonstração (simulado)', real: false },
     indisponivel: { rotulo: 'Indisponível', real: false },
   };
 
@@ -57,11 +59,21 @@
       X('BR', 'SELIC', 'Taxa Selic (meta)', '%aa', 14.25, 0, 'Juros'), X('BR', 'CDI', 'CDI', '%aa', 14.15, 0, 'Juros'),
       X('BR', 'IPCA12M', 'IPCA — 12 meses', '%', 4.6, 0.02, 'Inflação'), X('BR', 'USDBRL', 'Dólar comercial (USD/BRL)', 'BRL', 5.45, 0.008, 'Câmbio'),
       X('BR', 'EURBRL', 'Euro (EUR/BRL)', 'BRL', 6.05, 0.008, 'Câmbio'),
+      // Etapa 11: séries reais do Banco Central (SGS)
+      X('BR', 'SELICEF', 'Taxa Selic efetiva (base 252)', '%aa', 14.15, 0, 'Juros'), X('BR', 'IPCA', 'IPCA — variação no mês', '%am', 0.4, 0.05, 'Inflação'),
+      X('BR', 'IGPM', 'IGP-M — variação no mês', '%am', 0.5, 0.05, 'Inflação'), X('BR', 'DESEMPREGO', 'Taxa de desocupação (PNAD)', '%', 6, 0.01, 'Atividade'),
+      X('BR', 'PIBMENSAL', 'PIB mensal — valores correntes (R$ milhões)', 'BRL_MI', 1100000, 0.01, 'Atividade'),
     ],
     US: [
-      X('US', 'FEDFUNDS', 'Fed Funds (limite superior)', '%aa', 4.50, 0, 'Juros'), X('US', 'CPI12M', 'Inflação ao consumidor (CPI) — 12 meses', '%', 2.9, 0.02, 'Inflação'),
+      X('US', 'FEDFUNDS', 'Fed Funds — taxa efetiva', '%aa', 4.50, 0, 'Juros'), X('US', 'CPI12M', 'Inflação ao consumidor (CPI) — 12 meses', '%', 2.9, 0.02, 'Inflação'),
+      X('US', 'CORECPI12M', 'Núcleo do CPI — 12 meses', '%', 2.8, 0.02, 'Inflação'), X('US', 'PCE12M', 'Consumo das famílias (PCE) — 12 meses', '%', 5, 0.02, 'Atividade'),
+      X('US', 'UNRATE', 'Taxa de desemprego', '%', 4.1, 0.01, 'Emprego'), X('US', 'PAYROLL', 'Empregos criados no mês (payroll)', 'MIL', 150, 0.2, 'Emprego'),
+      X('US', 'GDPREAL', 'PIB real — trimestre anualizado', '%', 2, 0.05, 'Atividade'), X('US', 'INDPRO12M', 'Produção industrial — 12 meses', '%', 1, 0.05, 'Atividade'),
+      X('US', 'RENDA12M', 'Renda disponível real — 12 meses', '%', 1.5, 0.05, 'Atividade'), X('US', 'HOUST', 'Novas moradias iniciadas (anualizado)', 'MIL', 1300, 0.02, 'Atividade'),
+      X('US', 'M212M', 'Oferta monetária M2 — 12 meses', '%', 4, 0.02, 'Juros'),
       X('US', 'UST2Y', 'Treasury 2 anos (taxa)', '%aa', 4.1, 0.015, 'Treasuries'), X('US', 'UST10Y', 'Treasury 10 anos (taxa)', '%aa', 4.3, 0.012, 'Treasuries'),
       X('US', 'UST30Y', 'Treasury 30 anos (taxa)', '%aa', 4.6, 0.010, 'Treasuries'),
+      X('US', 'UST3M', 'Treasury 3 meses (taxa)', '%aa', 4.3, 0.010, 'Treasuries'), X('US', 'UST5Y', 'Treasury 5 anos (taxa)', '%aa', 4.2, 0.012, 'Treasuries'),
     ],
   };
 
@@ -70,14 +82,16 @@
   const PROVEDORES = {
     servidor: { nome: 'EAGLES DATA ENGINE — cache global no servidor (inv_mercado)', estado: 'atrasado', mercados: ['BR', 'US'], credencial: false, servidor: true, licenca: 'Depende do provedor contratado pelo servidor', ligado: false, motivo: 'Depende do servidor (D-10)', cachePermitidoSeg: 900 },
     b3: { nome: 'B3 — market data', estado: 'atrasado', mercados: ['BR'], credencial: true, servidor: true, licenca: 'Política comercial de market data da B3 (D-06)', ligado: false, motivo: 'Licença por escrito pendente (D-06)', cachePermitidoSeg: 0 },
-    bcb: { nome: 'Banco Central — SGS (Selic, CDI, IPCA, câmbio PTAX)', estado: 'fechamento', mercados: ['BR'], credencial: false, servidor: true, licenca: 'Dados abertos do Banco Central (termos a confirmar)', ligado: false, motivo: 'Precisa do servidor para a leitura automática (D-10)', cachePermitidoSeg: 86400 },
-    tesouro: { nome: 'Tesouro Transparente — preços e taxas do Tesouro Direto', estado: 'fechamento', mercados: ['BR'], credencial: false, servidor: false, licenca: 'Termos de uso a confirmar (05.1)', ligado: false, motivo: 'Uso dos preços aguarda a confirmação dos termos (05.1)', cachePermitidoSeg: 86400 },
+    // Etapa 11: dados REAIS aprovados (ODbL), lidos pelo carregador de inv-dados.js; ligados quando o retrato existe
+    bcb: { nome: 'Banco Central do Brasil — SGS e PTAX (Selic, CDI, IPCA, câmbio)', estado: 'fechamento', mercados: ['BR'], credencial: false, servidor: false, licenca: 'ODbL (dados abertos do Banco Central) — atribuição obrigatória', ligado: false, motivo: 'Liga quando os dados do Banco Central carregam', cachePermitidoSeg: 3600 },
+    tesouro: { nome: 'Tesouro Transparente — preços e taxas do Tesouro Direto', estado: 'fechamento', mercados: ['BR'], credencial: false, servidor: false, licenca: 'ODbL (Tesouro Transparente) — atribuição obrigatória', ligado: false, motivo: 'Liga quando o arquivo de preços do Tesouro carrega', cachePermitidoSeg: 3600 },
+    ust: { nome: 'U.S. Department of the Treasury — curva diária de juros', estado: 'fechamento', mercados: ['US'], credencial: false, servidor: false, licenca: 'Obra do governo federal dos EUA (17 U.S.C. §105) — citar a fonte', ligado: false, motivo: 'Liga quando a curva do Tesouro dos EUA carrega', cachePermitidoSeg: 3600 },
     fred: { nome: 'FRED (St. Louis Fed) — juros, inflação e Treasuries', estado: 'fechamento', mercados: ['US'], credencial: true, servidor: true, licenca: 'Termos do FRED; chave gratuita só no servidor', ligado: false, motivo: 'Chave só no servidor (D-10)', cachePermitidoSeg: 86400 },
     eua: { nome: 'Provedor de cotações dos EUA (a escolher)', estado: 'atrasado', mercados: ['US'], credencial: true, servidor: true, licenca: 'Plano e licença a contratar (orçamento atual R$ 0)', ligado: false, motivo: 'Sem provedor contratado (D-10)', cachePermitidoSeg: 0 },
     manual: { nome: 'Preço informado pela empresa', estado: 'manual', mercados: ['BR', 'US'], credencial: false, servidor: false, licenca: 'Cadastro interno da empresa', ligado: true, cachePermitidoSeg: 0 },
     simulador: { nome: 'Simulador de demonstração (números fictícios)', estado: 'simulado', mercados: ['BR', 'US', 'CRYPTO'], credencial: false, servidor: false, licenca: 'Sem valor real', ligado: true, cachePermitidoSeg: 86400 },
   };
-  const ORDEM = ['servidor', 'b3', 'bcb', 'tesouro', 'fred', 'eua', 'manual', 'simulador'];
+  const ORDEM = ['servidor', 'b3', 'bcb', 'tesouro', 'ust', 'fred', 'eua', 'manual', 'simulador'];
 
   // ---------- utilidades numéricas ----------
   const r2 = (n) => Math.round(n * 100) / 100;
@@ -184,6 +198,7 @@
       preco: bruto.preco, abertura: bruto.abertura ?? null, maxima: bruto.maxima ?? null, minima: bruto.minima ?? null, volume: bruto.volume ?? null,
       fechamentoAnterior: ant ?? null, variacao: variacao == null ? null : r4(variacao), variacaoPct: variacao == null ? null : r4((variacao / ant) * 100),
       data: bruto.data, horario: bruto.horario, estado, fonte: provedorId, fonteNome: P.nome || provedorId, real: !!(ESTADOS[estado] || {}).real,
+      tipoPreco: bruto.tipoPreco || null, detalhe: bruto.detalhe || null, // Tesouro: qual PU é o preço (venda = resgate bruto; base = referência)
     };
   }
   const indisponivel = (a, motivo) => ({ assetId: a.assetId, ticker: a.ticker, nome: a.nome, classe: a.classe, pais: a.pais, moeda: a.moeda || '', preco: null, estado: 'indisponivel', fonte: null, real: false, motivo: motivo || 'Sem fonte autorizada para este ativo.' });
@@ -195,7 +210,7 @@
     const agora = op.agora || (() => Date.now());
     const cache = new Map(); // chave → { ate, valor }
     const uso = {}; const falhas = {};
-    const limites = Object.assign({ servidor: 2000, b3: 0, bcb: 200, tesouro: 50, fred: 200, eua: 0 }, op.limites || {});
+    const limites = Object.assign({ servidor: 2000, b3: 0, bcb: 2000, tesouro: 5000, ust: 2000, fred: 200, eua: 0 }, op.limites || {}); // bcb/tesouro/ust leem do retrato em memória (sem rede por consulta)
     const ligado = (id) => {
       const P = PROVEDORES[id]; if (!P || !ad[id]) return false;
       if (id === 'simulador') return op.simulador !== false;

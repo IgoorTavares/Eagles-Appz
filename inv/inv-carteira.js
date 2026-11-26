@@ -266,7 +266,7 @@
       custoTotal += x.custoBRL;
       if (valorBRL == null) semPreco++; else { custoCoberto += x.custoBRL; valorCoberto += valorBRL; if (x.moeda === 'USD') usd += valorBRL; estados.add(q.estado); }
       itens.push({ assetId: x.assetId, ticker: a.ticker || x.assetId.split(':')[2], nome: a.nome || '', classe: a.classe || '', pais: a.pais || x.assetId.split(':')[0], setor: a.setor || 'Sem setor', moeda: x.moeda,
-        qtd: x.qtdE8 / 1e8, precoMedio: x.precoMedio, preco: valorBRL == null ? null : q.preco, estado: valorBRL == null ? 'indisponivel' : q.estado, motivo, valor, valorBRL, custoBRL: x.custoBRL,
+        qtd: x.qtdE8 / 1e8, precoMedio: x.precoMedio, preco: valorBRL == null ? null : q.preco, estado: valorBRL == null ? 'indisponivel' : q.estado, precoData: valorBRL == null ? null : (q.data || null), precoFonte: valorBRL == null ? null : (q.fonteNome || q.fonte || null), precoTipo: valorBRL == null ? null : (q.tipoPreco || null), motivo, valor, valorBRL, custoBRL: x.custoBRL,
         resultado: valorBRL == null ? null : valorBRL - x.custoBRL, resultadoPct: valorBRL == null || !x.custoBRL ? null : r2(((valorBRL - x.custoBRL) / x.custoBRL) * 100), proventos: x.proventos, lucroRealizado: x.lucroRealizado });
     }
     const nPos = itens.length;

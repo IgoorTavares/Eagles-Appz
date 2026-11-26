@@ -160,5 +160,11 @@ test('o núcleo não usa rede, IA nem chaves', () => {
   const fonte = readFileSync(new URL('../inv/inv-motor.js', import.meta.url), 'utf8') + readFileSync(new URL('../inv/inv-biblioteca.js', import.meta.url), 'utf8');
   assert.ok(!/api\.openai|anthropic|generativelanguage|gemini|apiKey|x-api-key|Bearer /i.test(fonte));
   const fetchs = fonte.match(/fetch\(([^)]*)\)/g) || [];
-  assert.ok(fetchs.every((f) => /inv\/catalogo\//.test(f)), 'só busca o catálogo do próprio site: ' + fetchs.join(' | '));
+  // Etapa 11: além do catálogo, só o carregador de dados reais (fetch(u, o)), o teste de conexão do Super Admin (DE_TESTE)
+  // e (11.18) o estado do robô, que é um arquivo do PRÓPRIO site (inv/dados/status.json)
+  assert.ok(fetchs.every((f) => /inv\/catalogo\//.test(f) || /^fetch\('inv\/dados\/status\.json'/.test(f) || /^fetch\(u, o\)$/.test(f) || /^fetch\(DE_TESTE\[id\]/.test(f)), 'busca fora do permitido: ' + fetchs.join(' | '));
+  // e o teste de conexão só aponta para fontes APROVADAS ou para arquivos do próprio site
+  const testes = [...fonte.matchAll(/(\w+): [`'"](https?:\/\/[^/`'"]+)/g)].filter((m) => /DE_TESTE|bcb_|ust_|fiscaldata/.test(m[1]));
+  const D = createRequire(import.meta.url)('../inv/inv-dados.js');
+  for (const [, id, host] of testes) assert.ok(D.FONTES[id] && ['aprovada', 'aprovada-condicoes'].includes(D.FONTES[id].estado), `teste de conexão para fonte não aprovada: ${id} ${host}`);
 });

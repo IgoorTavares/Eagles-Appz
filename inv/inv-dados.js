@@ -264,9 +264,14 @@
     return {
       cotacao(a) {
         if (a.classe !== 'tesouro') return null;
-        const x = t[a.ticker]; if (!x || !(x.puBase > 0)) return null;
+        const x = t[a.ticker]; if (!x || !(x.puBase > 0 || x.puVenda > 0)) return null;
         const h = x.historico || []; const ant = h.length > 1 ? h[h.length - 2][1] : null;
-        return { preco: x.puBase, fechamentoAnterior: ant, data: arq.dataBase, horario: arq.dataBase + 'T00:00:00', estado: estadoPelaIdade(arq.dataBase, hoje, 10) === 'desatualizado' ? 'desatualizado' : 'fechamento', fonteOriginal: 'tesouro_direto', extra: { puCompra: x.puCompra, puVenda: x.puVenda, taxaCompra: x.taxaCompra, taxaVenda: x.taxaVenda } };
+        // Avaliação da carteira = PU de VENDA (o que o Tesouro paga no resgate antecipado, BRUTO: antes de IR, IOF e taxas).
+        // Sem PU de venda no dia, usa o PU BASE, marcado como "referência" (não é valor de resgate). O PU de compra nunca avalia carteira.
+        const venda = x.puVenda > 0;
+        return { preco: venda ? x.puVenda : x.puBase, tipoPreco: venda ? 'pu-venda' : 'pu-base', fechamentoAnterior: !venda || x.puVenda === x.puBase ? ant : null, // variação só entre preços do mesmo tipo (o histórico é do PU base)
+          data: arq.dataBase, horario: arq.dataBase + 'T00:00:00', estado: estadoPelaIdade(arq.dataBase, hoje, 10) === 'desatualizado' ? 'desatualizado' : 'fechamento', fonteOriginal: 'tesouro_direto',
+          detalhe: { puCompra: x.puCompra > 0 ? x.puCompra : null, puVenda: venda ? x.puVenda : null, puBase: x.puBase > 0 ? x.puBase : null, taxaCompra: x.taxaCompra, taxaVenda: x.taxaVenda, dataBase: arq.dataBase, historico: 'PU base (referência diária do Tesouro)' } };
       },
       historico(a) { if (a.classe !== 'tesouro') return null; const x = t[a.ticker]; return x && x.historico && x.historico.length ? x.historico.map(([d, v]) => ({ data: d, fechamento: v, abertura: v, maxima: v, minima: v, volume: 0 })) : null; },
     };

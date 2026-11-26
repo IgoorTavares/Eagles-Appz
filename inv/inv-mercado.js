@@ -198,6 +198,7 @@
       preco: bruto.preco, abertura: bruto.abertura ?? null, maxima: bruto.maxima ?? null, minima: bruto.minima ?? null, volume: bruto.volume ?? null,
       fechamentoAnterior: ant ?? null, variacao: variacao == null ? null : r4(variacao), variacaoPct: variacao == null ? null : r4((variacao / ant) * 100),
       data: bruto.data, horario: bruto.horario, estado, fonte: provedorId, fonteNome: P.nome || provedorId, real: !!(ESTADOS[estado] || {}).real,
+      tipoPreco: bruto.tipoPreco || null, detalhe: bruto.detalhe || null, // Tesouro: qual PU é o preço (venda = resgate bruto; base = referência)
     };
   }
   const indisponivel = (a, motivo) => ({ assetId: a.assetId, ticker: a.ticker, nome: a.nome, classe: a.classe, pais: a.pais, moeda: a.moeda || '', preco: null, estado: 'indisponivel', fonte: null, real: false, motivo: motivo || 'Sem fonte autorizada para este ativo.' });

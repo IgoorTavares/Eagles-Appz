@@ -216,6 +216,7 @@ sempre o que ele precisa fazer (subir arquivos, publicar regras, testar algo).
     - `conferir-segredos.mjs` reprova se um segredo aparecer.
   - **Opção B:** o job `publicar-dados` do `dados-mercado.yml` fica DESLIGADO até existir o repositório só de dados (`DADOS_REPO` + `DADOS_DEPLOY_KEY`); o "Site seguro" continua o único que publica código.
   - **Testes:** `testes-investimentos/fontes-1118.test.mjs`.
+  - **Tesouro (verificação antes do merge):** a carteira é avaliada pelo **PU de venda** (resgate estimado, bruto, antes de IR/IOF/taxas; `tipoPreco: 'pu-venda'`). O PU base só entra sem PU de venda, rotulado como referência (`'pu-base'`). O PU de compra nunca avalia. O histórico/gráfico é do PU base. O motor repassa `tipoPreco`/`detalhe` (`normalizar`).
 - **Correção isolada das regras** (só a proteção do Super Admin, sem nada da LABZ AI): branch local `claude/seguranca-super-admin` a partir da `main`, commit local `5d0816e` (autorizado pelo Igor em 30/10/2026); 23/23 testes (antes da correção, 2 falhavam). Auditoria de 30/10: as regras publicadas eram idênticas à `main`. A publicação é manual, pelo Igor, no console do Firebase.
 - Pendência registrada na v154 (D3c): o mesmo "Salvo falso" para quem não pode gravar existe em Clientes e Fornecedores e em outros cadastros, que ignoram a recusa do `cloudSet`. Ficou para uma etapa própria.
 - Pendências funcionais registradas na análise da v150 (não corrigidas; dependem de uma etapa funcional aprovada pelo Igor):

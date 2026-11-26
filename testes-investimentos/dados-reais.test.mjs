@@ -209,3 +209,22 @@ test('Google Finance só como link; TradingView numa janela isolada, sem script 
   assert.ok(/referrerPolicy = 'no-referrer'/.test(bib), 'sem referenciador');
   assert.ok(/por TradingView/.test(bib), 'atribuição visível');
 });
+
+test('Tesouro: carteira avaliada pelo PU de VENDA (resgate bruto), PU base só como referência rotulada; PU de compra nunca avalia', () => {
+  const D = createRequire(import.meta.url)('../inv/inv-dados.js');
+  const arq = { dataBase: '2026-11-25', titulos: { 'IPCA-2035': { puCompra: 2510, puVenda: 2495.5, puBase: 2500, taxaCompra: 7.9, taxaVenda: 7.95, historico: [['2026-11-24', 2490], ['2026-11-25', 2500]] } } };
+  const c = D.criarAdaptadorTesouro(arq, '2026-11-26').cotacao({ classe: 'tesouro', ticker: 'IPCA-2035' });
+  assert.equal(c.preco, 2495.5); assert.equal(c.tipoPreco, 'pu-venda');
+  assert.equal(c.fechamentoAnterior, null, 'sem variação misturando PU de venda com histórico do PU base');
+  assert.deepEqual([c.detalhe.puCompra, c.detalhe.puVenda, c.detalhe.puBase], [2510, 2495.5, 2500]);
+  arq.titulos['IPCA-2035'].puVenda = null;
+  const b = D.criarAdaptadorTesouro(arq, '2026-11-26').cotacao({ classe: 'tesouro', ticker: 'IPCA-2035' });
+  assert.equal(b.preco, 2500); assert.equal(b.tipoPreco, 'pu-base'); assert.equal(b.fechamentoAnterior, 2490);
+  const K = createRequire(import.meta.url)('../inv/inv-mercado.js');
+  const m = K.criarMotor({ adaptadores: { tesouro: D.criarAdaptadorTesouro(arq, '2026-11-26') }, ligados: { tesouro: true }, simulador: false });
+  const q = m.cotacao({ assetId: 'BR:TESOURO:IPCA-2035', ticker: 'IPCA-2035', classe: 'tesouro', pais: 'BR', moeda: 'BRL' });
+  assert.equal(q.tipoPreco, 'pu-base', 'o tipo do preço chega até a tela e a carteira');
+  const ui = readFileSync(new URL('../inv/inv-carteira-ui.js', import.meta.url), 'utf8');
+  assert.match(ui, /PU de venda: resgate estimado bruto \(antes de IR, IOF e taxas\)/);
+  assert.match(ui, /PU de referência \(base\): não é o valor de resgate/);
+});

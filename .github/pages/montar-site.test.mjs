@@ -325,3 +325,19 @@ test('guarda em PR (VOLTAS=0): só confere a fonte; não lista nem cancela nada'
   assert.equal(r.status, 0);
   assert.doesNotMatch(r.chamadas, /actions\/runs/);
 });
+
+// v157.1: o ARTEFATO publicado não pode ter credencial (chaves de IA, tokens, chaves privadas) em nenhum arquivo.
+test('artefato: nenhuma credencial em nenhum arquivo publicado (só a apiKey pública do Firebase)', () => {
+  const saida = path.join(tmp(), '_site');
+  const r = montar({ raiz: RAIZ, saida });
+  assert.deepEqual(r.erros, []);
+  const todos = []; const andar = (d) => { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (fs.statSync(p).isDirectory()) andar(p); else todos.push(p); } }; andar(saida);
+  const rel = (p) => path.relative(saida, p).split(path.sep).join('/');
+  const RX = /(sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{10,}|AIza[0-9A-Za-z_-]{30,}|xai-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/;
+  for (const p of todos) {
+    if (/\.(png|jpe?g|ico|webp|gif|svg)$/i.test(p)) continue;
+    let t = fs.readFileSync(p, 'utf8');
+    if (rel(p) === 'firebase-config.js') t = t.replace(/apiKey:\s*["']AIza[0-9A-Za-z_-]+["']/, 'apiKey: "publica"');
+    assert.ok(!RX.test(t), 'possível credencial em ' + rel(p) + ': ' + (t.match(RX) || [''])[0].slice(0, 12) + '…');
+  }
+});

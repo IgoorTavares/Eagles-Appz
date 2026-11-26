@@ -259,3 +259,29 @@ test('v157: itens já copiados (dados/{chave}_importados) e reserva do link do p
     await assertFails(setDoc(doc(db(), k), { ids: [] }));
   }
 });
+
+// ---------- Segurança das chaves de IA do CRM (correção S1/S2, 26/11/2026) ----------
+test('Chaves de IA: ninguém grava chave no banco (nem Diretor, nem Super Admin, nem restauração); sem chave grava normalmente', async () => {
+  const cam = 'tenants/t2/dados/eagles_ia_config_v1';
+  const comChave = { valor: { modo: 'empresa', provedor: 'openai', modelos: { openai: 'm' }, chaves: { openai: 'sk-TESTE-FICTICIA' } } };
+  const semChave = { valor: { modo: 'empresa', provedor: 'openai', modelos: { openai: 'm' } } };
+  await assertFails(setDoc(doc(db('d2'), cam), comChave));
+  await assertFails(setDoc(doc(db('sa'), cam), comChave));                                   // restauração pelo Super Admin também
+  await assertFails(setDoc(doc(db('d2'), cam), { valor: { modo: 'navegador', chaves: { gemini: 'AIzaTESTE' } } }));
+  await assertSucceeds(setDoc(doc(db('d2'), cam), semChave));
+  await assertSucceeds(setDoc(doc(db('d2'), cam), { valor: { modo: 'navegador', provedor: '', modelos: {}, chaves: {} } })); // vazio é permitido
+  await assertSucceeds(setDoc(doc(db('sa'), cam), semChave));
+});
+test('Chaves de IA: documento antigo COM chave fica escondido da equipe até o Diretor limpar', async () => {
+  const cam = 'tenants/t1/dados/eagles_ia_config_v1';
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), cam), { valor: { modo: 'empresa', provedor: 'openai', modelos: {}, chaves: { openai: 'sk-TESTE-FICTICIA' } } }); });
+  await assertFails(getDoc(doc(db('a1'), cam)));      // Administrativo
+  await assertFails(getDoc(doc(db('f1'), cam)));      // Financeiro
+  await assertFails(getDoc(doc(db('d2'), cam)));      // outra empresa
+  await assertSucceeds(getDoc(doc(db('d1'), cam)));   // Diretor (limpa ao abrir)
+  await assertSucceeds(getDoc(doc(db('sa'), cam)));   // Super Admin (backup)
+  await assertSucceeds(setDoc(doc(db('d1'), cam), { valor: { modo: 'empresa', provedor: 'openai', modelos: {} } })); // limpeza
+  await assertSucceeds(getDoc(doc(db('a1'), cam)));   // depois da limpeza a equipe volta a ler provedor e modelo
+  await assertSucceeds(getDoc(doc(db('f1'), cam)));
+  await assertSucceeds(getDoc(doc(db('a1'), 'tenants/t1/dados/nao_existe_ainda')));
+});

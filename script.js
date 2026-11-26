@@ -1071,6 +1071,23 @@ function cloudCriarSeAusente(key, valor) {
     .then((r) => { delete CLOUD_CRIANDO[key]; return r; });
 }
 
+// ---------- Segurança das chaves de IA (correção S1/S2, auditoria 26/11/2026) ----------
+// A configuração da empresa (eagles_ia_config_v1) guarda só provedor e modelos. Chave de IA NUNCA fica no banco,
+// no localStorage da empresa, no backup nem na restauração: cada pessoa usa a própria, só no próprio navegador.
+let IA_CHAVES_LEGADAS = false; // o documento da empresa ainda tinha chaves (versão antiga): o Diretor limpa ao abrir
+function iaSemChaves(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return v;
+  if (v.chaves && typeof v.chaves === 'object' && Object.values(v.chaves).some(Boolean)) IA_CHAVES_LEGADAS = true;
+  const c = Object.assign({}, v); delete c.chaves; return c;
+}
+const SANEAR_CHAVE = { eagles_ia_config_v1: iaSemChaves };
+const saneado = (key, v) => (SANEAR_CHAVE[key] ? SANEAR_CHAVE[key](v) : v);
+// cópias antigas no localStorage deste aparelho (de antes da correção) perdem as chaves já na abertura
+function iaLimparCopiasLocais() {
+  try { Object.keys(localStorage).forEach((k) => { if (/(^|::)eagles_ia_config_v1$/.test(k)) { const v = JSON.parse(localStorage.getItem(k) || 'null'); if (v && v.chaves) { delete v.chaves; localStorage.setItem(k, JSON.stringify(v)); } } }); } catch (e) { /* sem armazenamento */ }
+}
+iaLimparCopiasLocais();
+
 function cloudWatch(key, fallback, onChange) {
   if (!FIREBASE_PRONTO || !TENANT_ID) {
     onChange(lsLoad(chaveLocalTenant(key), fallback));
@@ -1088,7 +1105,7 @@ function cloudWatch(key, fallback, onChange) {
   caminhoTenantDoc(key).onSnapshot((snap) => {
     CLOUD_ESTADO_CHAVES[key] = 'carregado';
     if (snap.exists) {
-      const valor = snap.data().valor;
+      const valor = saneado(key, snap.data().valor);
       lsSave(chaveLocalTenant(key), valor);
       onChange(valor);
     } else {
@@ -1097,10 +1114,12 @@ function cloudWatch(key, fallback, onChange) {
     }
     atualizarIndicadorSincronizacao('ok');
   }, (err) => {
+    // a regra nova esconde da equipe o documento de IA que ainda tem chaves antigas: não é falha de sincronização
+    if (key === IA_CFG_KEY && err && err.code === 'permission-denied') { CLOUD_ESTADO_CHAVES[key] = 'bloqueado'; onChange(saneado(key, lsLoad(chaveLocalTenant(key), fallback))); return; }
     console.error('Erro de sincronização em "' + key + '":', err);
     if (CLOUD_ESTADO_CHAVES[key] !== 'carregado') CLOUD_ESTADO_CHAVES[key] = 'erro';
     atualizarIndicadorSincronizacao('erro');
-    onChange(lsLoad(chaveLocalTenant(key), fallback));
+    onChange(saneado(key, lsLoad(chaveLocalTenant(key), fallback)));
   });
 }
 
@@ -1108,6 +1127,7 @@ function cloudSet(key, data) {
   if (FIREBASE_PRONTO && TENANT_ID && !nivelPodeGravarChave(key)) { avisarSemPermissaoNivel(); return false; }
   if (!chaveProntaParaGravar(key)) return false;
   if (key === 'eagles_crm_negocios_v1' && typeof negAnotarHistorico === 'function') negAnotarHistorico(data);
+  data = saneado(key, data);
   lsSave(chaveLocalTenant(key), data);
   if (!FIREBASE_PRONTO || !TENANT_ID) return true;
   if (CHAVES_COLECAO[key]) { colSet(key, data); return true; }
@@ -1161,8 +1181,10 @@ function cloudSalvarCampos(key, campos, aoPendente) {
 async function cloudGetForce(key, fallback) {
   if (!FIREBASE_PRONTO || !TENANT_ID) return lsLoad(chaveLocalTenant(key), fallback);
   if (CHAVES_COLECAO[key]) return colGetForce(key, fallback);
-  const snap = await caminhoTenantDoc(key).get();
-  const valor = snap.exists ? snap.data().valor : fallback;
+  let snap;
+  try { snap = await caminhoTenantDoc(key).get(); }
+  catch (e) { if (key === IA_CFG_KEY && e && e.code === 'permission-denied') return saneado(key, lsLoad(chaveLocalTenant(key), fallback)); throw e; }
+  const valor = saneado(key, snap.exists ? snap.data().valor : fallback);
   lsSave(chaveLocalTenant(key), valor);
   CLOUD_ESTADO_CHAVES[key] = 'carregado';
   return valor;
@@ -1274,6 +1296,8 @@ async function resolverTenantDoUsuario(user) {
     TENANT_ASSINATURA = tenantSnap.exists ? (tenantSnap.data().assinatura || null) : null;
     // fora do CRM, avisa quando um cliente responder a aprovação
     setTimeout(() => { try { if (typeof aprVigiaGlobal === 'function') aprVigiaGlobal(); } catch (e) {} }, 2500);
+    // segurança das chaves de IA: o Diretor confere UMA vez por sessão se o banco ainda tem chaves antigas e as retira
+    setTimeout(() => { try { iaConferirLegadoUmaVez(); } catch (e) {} }, 3000);
     return true;
   } catch (err) {
     console.error("Erro ao resolver tenant:", err);
@@ -6746,6 +6770,10 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '26/11/2026 · Segurança das chaves de IA', itens: [
+    { titulo: 'Chaves de IA só no seu navegador', badges: ['segurança'], texto: 'As chaves dos provedores de IA (OpenAI, Gemini e outros) não ficam mais guardadas no banco da empresa: cada pessoa cadastra a própria chave, que fica só no navegador dela e não vai para o backup. O Diretor continua escolhendo o provedor e o modelo padrão da empresa. Se a sua empresa tinha uma chave salva por uma versão antiga, o sistema a retira do banco quando o Diretor entra e avisa para trocar a chave no site do provedor.' },
+    { titulo: 'Restaurar backup pelo Super Admin', badges: ['corrigido'], texto: 'A restauração de backup feita pela equipe da Eagles Labz não funcionava quando o Super Admin não estava ligado a nenhuma empresa. Agora funciona com a empresa escolhida.' },
+  ] },
   { data: '24/11/2026 · Ajuste no menu do Super Admin', itens: [
     { titulo: 'Menu do Super Admin como antes', badges: ['melhoria'], texto: 'O menu do Super Admin voltou ao formato anterior. Nada mudou nas outras telas, nos dados nem nas permissões.' },
   ] },
@@ -7280,7 +7308,7 @@ async function cfgIntegEstado() {
     meta: meta && meta.conectado ? ['ok', 'Conectado'] : ['nao', 'Não conectado'],
     pixel: PAG_PIXELS && PAG_PIXELS.meta && PAG_PIXELS.meta.ativo && PAG_PIXELS.meta.pixelId ? ['ok', 'Ligado'] : ['nao', 'Não configurado'],
     ga: PAG_PIXELS && PAG_PIXELS.ga && PAG_PIXELS.ga.ativo && PAG_PIXELS.ga.medicaoId ? ['ok', 'Ligado'] : ['nao', 'Não configurado'],
-    ia: (ia && ia.modo === 'empresa' && ia.chaves && Object.values(ia.chaves).some(Boolean)) ? ['ok', 'Chave da empresa'] : iaLoc ? ['ok', 'Chave neste navegador'] : ['nao', 'Sem chave'],
+    ia: iaLoc ? ['ok', 'Chave neste navegador'] : ['nao', 'Sem chave'], // chave da empresa no banco não existe mais (correção de segurança)
   };
   if (CFG_ABA_ATUAL === 'integracoes') renderAbaIntegracoesConfig();
 }
@@ -8174,7 +8202,7 @@ const IA_PROVEDORES = {
   gemini: { nome: 'Google Gemini', prefixo: 'AIza', site: 'https://aistudio.google.com/app/apikey', siteNome: 'Google AI Studio', passos: ['Entre no Google AI Studio com sua conta Google', 'Clique em "Get API key" / "Create API key"', 'Escolha ou crie um projeto do Google Cloud', 'Copie a chave (começa com AIza) e cole abaixo'] },
   anthropic: { nome: 'Anthropic Claude', prefixo: 'sk-ant-', site: 'https://console.anthropic.com/settings/keys', siteNome: 'Anthropic Console', passos: ['Entre em console.anthropic.com e faça login', 'Abra "API keys" e clique em "Create key"', 'Em "Billing", adicione créditos (a Anthropic cobra por uso)', 'Copie a chave (começa com sk-ant-) e cole abaixo'] },
 };
-let IA_CFG_EMPRESA = { modo: 'navegador', provedor: '', modelos: {}, chaves: {} };
+let IA_CFG_EMPRESA = { modo: 'navegador', provedor: '', modelos: {} }; // nunca tem "chaves" (correção de segurança)
 let IA_ESCUTANDO = false;
 let IA_MODELOS_CACHE = {};
 
@@ -8185,17 +8213,37 @@ function iaIniciar(cb) {
   if (cb) IA_OUVINTES.push(cb);
   if (IA_ESCUTANDO) return;
   IA_ESCUTANDO = true;
-  cloudWatch(IA_CFG_KEY, { modo: 'navegador', provedor: '', modelos: {}, chaves: {} }, (d) => {
+  cloudWatch(IA_CFG_KEY, { modo: 'navegador', provedor: '', modelos: {} }, (d) => {
     const v = d && typeof d === 'object' ? d : {};
-    IA_CFG_EMPRESA = { modo: v.modo === 'empresa' ? 'empresa' : 'navegador', provedor: v.provedor || '', modelos: v.modelos || {}, chaves: v.chaves || {} };
+    IA_CFG_EMPRESA = { modo: v.modo === 'empresa' ? 'empresa' : 'navegador', provedor: v.provedor || '', modelos: v.modelos || {} };
+    iaLimparLegadoNaEmpresa();
     IA_OUVINTES.forEach((f) => { try { f(); } catch (e) { console.error(e); } });
   });
 }
 const IA_OUVINTES = [];
+// o documento da empresa ainda tem chaves de uma versão antiga: o Diretor regrava SEM elas (uma vez) e é avisado
+let IA_LIMPEZA_FEITA = false;
+async function iaConferirLegadoUmaVez() {
+  if (!FIREBASE_PRONTO || !TENANT_ID || !nivelEhDiretor()) return;
+  try { if (sessionStorage.getItem('eagles_ia_legado_conferido') === TENANT_ID) return; sessionStorage.setItem('eagles_ia_legado_conferido', TENANT_ID); } catch (e) { /* sem armazenamento: confere de novo */ }
+  const v = await cloudGetForce(IA_CFG_KEY, null); // passa pelo saneador: marca IA_CHAVES_LEGADAS se o banco tinha chaves
+  if (v && typeof v === 'object') IA_CFG_EMPRESA = { modo: v.modo === 'empresa' ? 'empresa' : 'navegador', provedor: v.provedor || '', modelos: v.modelos || {} };
+  iaLimparLegadoNaEmpresa();
+}
+function iaLimparLegadoNaEmpresa() {
+  if (!IA_CHAVES_LEGADAS || IA_LIMPEZA_FEITA || !FIREBASE_PRONTO || !TENANT_ID || !nivelEhDiretor()) return;
+  IA_LIMPEZA_FEITA = true;
+  caminhoTenantDoc(IA_CFG_KEY).set({ valor: { modo: IA_CFG_EMPRESA.modo, provedor: IA_CFG_EMPRESA.provedor, modelos: IA_CFG_EMPRESA.modelos } }).then(() => {
+    IA_CHAVES_LEGADAS = false;
+    avisar('Por segurança, as chaves de IA que estavam guardadas no banco da empresa foram retiradas.\n\nO provedor e os modelos escolhidos continuam. Cada pessoa da equipe agora cola a própria chave em "Chaves de IA" (ela fica só no navegador dela).\n\nImportante: troque a chave antiga no site do provedor (crie uma nova e apague a antiga), porque cópias dela podem existir em backups e aparelhos.', 'Chaves de IA');
+  }).catch((e) => { IA_LIMPEZA_FEITA = false; console.error('Limpeza das chaves de IA:', e); });
+}
 // Configuração que vale agora (empresa ou este navegador)
 function iaAtual() {
-  const base = IA_CFG_EMPRESA.modo === 'empresa' ? IA_CFG_EMPRESA : iaLocal();
-  const chaves = base.chaves || {};
+  // chave: SEMPRE a deste navegador. Provedor e modelos: os da empresa (modo "empresa") ou os deste navegador
+  const local = iaLocal();
+  const base = IA_CFG_EMPRESA.modo === 'empresa' ? { provedor: IA_CFG_EMPRESA.provedor, modelos: IA_CFG_EMPRESA.modelos || {}, chaves: local.chaves } : local;
+  const chaves = local.chaves || {};
   let provedor = base.provedor && chaves[base.provedor] ? base.provedor : Object.keys(IA_PROVEDORES).find((p) => chaves[p]) || '';
   return { modo: IA_CFG_EMPRESA.modo, provedor, chave: provedor ? chaves[provedor] : '', modelo: provedor ? (base.modelos || {})[provedor] || '' : '', chaves, modelos: base.modelos || {} };
 }
@@ -8297,8 +8345,10 @@ function iaRenderChaves() {
   const ov = srvGarantirModal();
   const diretor = !FIREBASE_PRONTO || !TENANT_ID || nivelEhDiretor();
   const modoEmpresa = IA_CFG_EMPRESA.modo === 'empresa';
-  const base = modoEmpresa ? IA_CFG_EMPRESA : iaLocal();
-  const podeEditar = modoEmpresa ? diretor : true;
+  const local = iaLocal();
+  const base = modoEmpresa ? { provedor: IA_CFG_EMPRESA.provedor, modelos: IA_CFG_EMPRESA.modelos || {}, chaves: local.chaves || {} } : local;
+  const podeEditar = true; // a chave é sempre de quem está usando; provedor e modelo da empresa, só o Diretor
+  const podeModelo = modoEmpresa ? diretor : true;
   const a = iaAtual();
   ov.innerHTML = `
     <div class="modal kb-modal ia-modal" style="max-width:760px;" role="dialog" aria-modal="true">
@@ -8307,20 +8357,20 @@ function iaRenderChaves() {
       <div class="fin-painel">
         <strong>Onde a chave fica guardada</strong>
         <div class="ia-modos">
-          <label class="ia-modo${!modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="navegador" ${!modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Só neste navegador</b><small>Cada pessoa cola a sua chave. Mais seguro: a chave não sai deste computador.</small></span></label>
-          <label class="ia-modo${modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="empresa" ${modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Na empresa</b><small>O Diretor cola uma vez e vale para a equipe toda. Atenção: qualquer pessoa logada da empresa consegue, tecnicamente, ver a chave.</small></span></label>
+          <label class="ia-modo${!modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="navegador" ${!modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Cada pessoa escolhe</b><small>Cada pessoa escolhe o provedor e o modelo e cola a própria chave.</small></span></label>
+          <label class="ia-modo${modoEmpresa ? ' ativo' : ''}"><input type="radio" name="ia-modo" value="empresa" ${modoEmpresa ? 'checked' : ''} ${diretor ? '' : 'disabled'} onchange="iaMudarModo(this.value)"><span><b>Padrão da empresa</b><small>O Diretor escolhe o provedor e o modelo para a equipe. A chave continua sendo de cada pessoa.</small></span></label>
         </div>
-        ${diretor ? '' : '<p class="kb-vazio-mini" style="margin:8px 0 0;">Só o Diretor muda onde a chave fica.</p>'}
+        <p class="kb-vazio-mini" style="margin:8px 0 0;">${ic('cadeado', 'ic-herda')} A chave fica <b>só neste navegador</b> e nunca é guardada no banco da empresa nem no backup. Ao sair do sistema, ela é apagada deste navegador.${diretor ? '' : ' Só o Diretor muda o padrão da empresa.'}</p>
       </div>
-      ${modoEmpresa && !diretor ? `<div class="fin-painel"><p style="margin:0;">${a.provedor ? `A empresa está usando <b>${escapeHtml(IA_PROVEDORES[a.provedor].nome)}</b>${a.modelo ? ` (modelo ${escapeHtml(a.modelo)})` : ''}. Para trocar, fale com o Diretor.` : 'O Diretor ainda não cadastrou a chave da empresa.'}</p></div>` : `
+      ${`
       <div class="ia-provedores">${Object.keys(IA_PROVEDORES).map((p) => {
         const P = IA_PROVEDORES[p], tem = !!(base.chaves || {})[p], modelos = IA_MODELOS_CACHE[p] || [], modelo = (base.modelos || {})[p] || '';
         return `<div class="fin-painel ia-prov${a.provedor === p ? ' ia-prov-ativo' : ''}">
           <div class="fin-painel-cab"><strong>${escapeHtml(P.nome)}</strong><span class="kb-espaco"></span>${tem ? `<span class="badge badge-success" style="font-size:10.5px;">Conectado</span>` : ''}</div>
           <details class="ia-passos"><summary>Como obter sua chave · <a href="${P.site}" target="_blank" rel="noopener">${P.siteNome}</a></summary><ol>${P.passos.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ol></details>
           ${tem ? `<div class="ia-chave-salva"><code>${escapeHtml(iaMascara(base.chaves[p]))}</code>${podeEditar ? `<button type="button" class="btn btn-small btn-ghost" onclick="iaRemoverChave('${p}')">Remover</button>` : ''}</div>
-            <div class="field full" style="margin-top:8px;"><label>Modelo</label>${modelos.length ? `<select id="ia-m-${p}" ${podeEditar ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value)">${modelos.map((m) => `<option value="${escapeHtml(m)}" ${m === modelo ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select>` : `<div style="display:flex; gap:6px;"><input type="text" id="ia-m-${p}" value="${escapeHtml(modelo)}" ${podeEditar ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value.trim())"><button type="button" class="btn btn-small" onclick="iaRecarregarModelos('${p}')">Listar</button></div>`}</div>
-            ${podeEditar ? `<label class="ia-usar"><input type="radio" name="ia-prov" ${a.provedor === p ? 'checked' : ''} onchange="iaUsarProvedor('${p}')"> Usar este nos agentes</label>` : ''}`
+            <div class="field full" style="margin-top:8px;"><label>Modelo</label>${modelos.length ? `<select id="ia-m-${p}" ${podeModelo ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value)">${modelos.map((m) => `<option value="${escapeHtml(m)}" ${m === modelo ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select>` : `<div style="display:flex; gap:6px;"><input type="text" id="ia-m-${p}" value="${escapeHtml(modelo)}" ${podeModelo ? '' : 'disabled'} onchange="iaSalvarModelo('${p}', this.value.trim())"><button type="button" class="btn btn-small" onclick="iaRecarregarModelos('${p}')">Listar</button></div>`}</div>
+            ${podeModelo ? `<label class="ia-usar"><input type="radio" name="ia-prov" ${a.provedor === p ? 'checked' : ''} onchange="iaUsarProvedor('${p}')"> Usar este nos agentes</label>` : ''}`
           : (podeEditar ? `<div class="field full"><label>Cole sua chave</label><input type="password" id="ia-k-${p}" autocomplete="off" spellcheck="false" placeholder="${P.prefixo}..."></div>
             <button type="button" class="btn btn-small btn-primary" id="ia-b-${p}" onclick="iaValidarESalvar('${p}')">Validar e salvar</button>` : '<p class="kb-vazio-mini">Não conectado.</p>')}
         </div>`;
@@ -8329,19 +8379,27 @@ function iaRenderChaves() {
     </div>`;
 }
 function iaAlvo() { return IA_CFG_EMPRESA.modo === 'empresa' ? 'empresa' : 'local'; }
+// mut recebe { provedor, modelos, chaves }. As CHAVES vão sempre para este navegador; provedor e modelos vão para a
+// empresa (só o Diretor, modo "empresa") ou para este navegador. Nada de chave é enviado ao banco.
 function iaGravar(mut) {
+  const local = iaLocal();
   if (iaAlvo() === 'empresa') {
-    if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) { avisarSemPermissaoNivel('mudar a chave de IA da empresa'); return false; }
-    const v = JSON.parse(JSON.stringify(IA_CFG_EMPRESA)); v.chaves = v.chaves || {}; v.modelos = v.modelos || {}; mut(v);
-    if (cloudSet(IA_CFG_KEY, v) === false) return false;
-    IA_CFG_EMPRESA = v;
-  } else { const v = iaLocal(); mut(v); iaSalvarLocal(v); }
+    const v = { provedor: IA_CFG_EMPRESA.provedor, modelos: JSON.parse(JSON.stringify(IA_CFG_EMPRESA.modelos || {})), chaves: Object.assign({}, local.chaves || {}) };
+    const antes = JSON.stringify({ p: v.provedor, m: v.modelos });
+    mut(v);
+    local.chaves = v.chaves; iaSalvarLocal(local);
+    if (JSON.stringify({ p: v.provedor, m: v.modelos }) !== antes) {
+      if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) return true; // não-Diretor: a chave é dele; o padrão da empresa continua
+      const novo = { modo: 'empresa', provedor: v.provedor, modelos: v.modelos };
+      if (cloudSet(IA_CFG_KEY, novo) === false) return false;
+      IA_CFG_EMPRESA = novo;
+    }
+  } else { mut(local); iaSalvarLocal(local); }
   return true;
 }
 function iaMudarModo(modo) {
   if (FIREBASE_PRONTO && TENANT_ID && !nivelEhDiretor()) { avisarSemPermissaoNivel(); iaRenderChaves(); return; }
-  const v = Object.assign({}, IA_CFG_EMPRESA, { modo });
-  if (modo === 'navegador') { v.chaves = {}; } // tirar a chave da empresa do banco
+  const v = { modo, provedor: IA_CFG_EMPRESA.provedor || '', modelos: IA_CFG_EMPRESA.modelos || {} }; // nunca leva chave
   if (cloudSet(IA_CFG_KEY, v) === false) { iaRenderChaves(); return; }
   IA_CFG_EMPRESA = v;
   iaRenderChaves(); if (IA_AO_SALVAR) IA_AO_SALVAR();
@@ -8364,7 +8422,7 @@ async function iaValidarESalvar(p) {
   }
 }
 async function iaRecarregarModelos(p) {
-  const a = iaAlvo() === 'empresa' ? IA_CFG_EMPRESA : iaLocal();
+  const a = iaLocal(); // a chave é sempre a deste navegador
   if (!(a.chaves || {})[p]) return;
   try { IA_MODELOS_CACHE[p] = await iaListarModelos(p, a.chaves[p]); iaRenderChaves(); } catch (e) { avisar(e.message, 'Chave de IA'); }
 }
@@ -23375,7 +23433,8 @@ const BKP_NOMES = { crm_clientes: 'Clientes (CRM)', crm_negocios: 'Negócios do 
 let BKP_META = null;
 let BKP_ARQUIVO = null;
 
-function bkpNuvem() { return !!(FIREBASE_PRONTO && TENANT_ID && firestoreDb); }
+// v157.1: com BKP_ALVO (restauração pelo Super Admin), vale a empresa escolhida, mesmo que o Super Admin não tenha empresa própria
+function bkpNuvem() { return !!(FIREBASE_PRONTO && (BKP_ALVO || TENANT_ID) && firestoreDb); }
 let BKP_ALVO = null; // empresa da restauração feita pelo super administrador (senão, a própria)
 function bkpTenant() { return BKP_ALVO || TENANT_ID; }
 function bkpBase() { return firestoreDb.collection('tenants').doc(bkpTenant()); }
@@ -23383,7 +23442,7 @@ async function bkpColetar() {
   const out = { app: 'eagles-labz', versao: 1, tenantId: bkpTenant(), empresa: BKP_ALVO ? (BKP_ALVO_NOME || '') : ((PERFIL_DATA && (PERFIL_DATA.nomeFantasia || PERFIL_DATA.nomeEmpresa)) || ''), geradoEm: new Date().toISOString(), geradoPor: USUARIO_NOME || '', colecoes: {} };
   for (const sub of BKP_SUBCOLECOES) {
     const snap = await bkpBase().collection(sub).get();
-    const docs = {}; snap.forEach((d) => { docs[d.id] = d.data(); });
+    const docs = {}; snap.forEach((d) => { docs[d.id] = bkpSemSegredos(sub, d.id, d.data()); });
     out.colecoes[sub] = docs;
   }
   for (const col of BKP_PUBLICAS) {
@@ -23394,6 +23453,11 @@ async function bkpColetar() {
   const pix = await firestoreDb.collection('pix_publico').doc(bkpTenant()).get().catch(() => null);
   out.colecoes.pix_publico = pix && pix.exists ? { [bkpTenant()]: pix.data() } : {};
   return out;
+}
+// o backup e a restauração NUNCA levam chave de IA (nem de um backup antigo, feito antes da correção)
+function bkpSemSegredos(col, id, dados) {
+  if (col === 'dados' && id === 'eagles_ia_config_v1' && dados && dados.valor && typeof dados.valor === 'object') { const v = Object.assign({}, dados.valor); delete v.chaves; return Object.assign({}, dados, { valor: v }); }
+  return dados;
 }
 function bkpBaixarArquivo(obj, prefixo) {
   const nome = `${prefixo || 'backup'}-${kbNomeNorm(obj.empresa || 'empresa').replace(/[^a-z0-9]+/g, '-').slice(0, 30) || 'empresa'}-${obj.geradoEm.slice(0, 10)}.json`;
@@ -23413,7 +23477,7 @@ async function bkpGerar() {
     BKP_META = { ultimoEm: obj.geradoEm, por: USUARIO_NOME || '', itens: bkpContar(obj).reduce((a, [, n]) => a + n, 0) };
     cloudSet(BKP_META_KEY, BKP_META);
     renderAbaBackupConfig();
-    avisar(`Backup baixado: ${nome}\n\nGuarde esse arquivo num lugar seguro (Google Drive, OneDrive ou um pendrive). Ele tem todos os dados da empresa, inclusive o financeiro.`, 'Backup');
+    avisar(`Backup baixado: ${nome}\n\nGuarde esse arquivo num lugar seguro (Google Drive, OneDrive ou um pendrive). Ele tem todos os dados da empresa, inclusive o financeiro (as chaves de IA não vão no backup).`, 'Backup');
   } catch (err) { console.error(err); avisar('Não foi possível gerar o backup agora: ' + mensagemErroFirestore(err)); }
   finally { const b = document.getElementById('bkp-btn-gerar'); if (b) { b.disabled = false; b.textContent = 'Baixar backup completo'; } }
 }
@@ -23448,7 +23512,7 @@ async function bkpRestaurar() {
         if (BKP_SUBCOLECOES.includes(col)) ref = bkpBase().collection(col).doc(id);
         else if (BKP_PUBLICAS.includes(col)) { if (dados.tenantId !== bkpTenant()) return; ref = firestoreDb.collection(col).doc(id); }
         else if (col === 'pix_publico' && id === bkpTenant()) ref = firestoreDb.collection('pix_publico').doc(id);
-        if (ref) escritas.push([ref, dados]);
+        if (ref) escritas.push([ref, bkpSemSegredos(col, id, dados)]);
       });
     });
     let feitos = 0, falhas = 0;
@@ -23617,6 +23681,7 @@ function bkpFecharLembrete(indo) {
 // =====================================================================
 
 const CHATBOT_KB = [
+  { padroes: ['chave de ia', 'chave da ia', 'chave openai', 'chave do gemini', 'chave da api', 'api key'], resposta: 'A chave de IA (OpenAI, Gemini ou Claude) fica só no navegador de cada pessoa: cadastre em Configurações → Integrações → Inteligência artificial. Ela não vai para o banco da empresa nem para o backup; em outro computador ou navegador é preciso cadastrar de novo. O Diretor escolhe o provedor e o modelo padrão da empresa.' },
   // ---------- Visão geral do sistema ----------
   { padroes: ['duas pessoas ao mesmo tempo', 'anotacao sumiu', 'anotação sumiu', 'minha anotacao sumiu', 'contato sumiu', 'link do portal sumiu', 'salvei e sumiu'], resposta: 'Desde a v157 (09/11/2026), anotações e contatos dos negócios são guardados um por um: várias pessoas podem anotar ao mesmo tempo e tudo fica salvo. Os links do portal também: quem pede o link de um cliente que já tem link recebe o mesmo. Se alguém da equipe ainda estiver com o sistema aberto desde antes da atualização, peça para recarregar a página (F5).' },
   { padroes: ['o que é esse sistema', 'como funciona o sistema', 'pra que serve', 'o que da pra fazer aqui'], resposta: 'O Eagles Labz é um sistema de gestão (ERP): cadastro de clientes/fornecedores/produtos, controle de vendas (pedidos), estoque, financeiro mês a mês, e dashboards pra acompanhar como o negócio está indo. Cada empresa que usa o sistema tem os próprios dados, totalmente separados de qualquer outra.' },

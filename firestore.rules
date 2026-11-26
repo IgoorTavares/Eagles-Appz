@@ -154,6 +154,11 @@ service cloud.firestore {
       return estaLogado() && meuTenantId() != null && meuTenantId() == tenantId && meuRole() != 'Cliente' && empresaAtiva(tenantId) && contaLivre();
     }
 
+    // documento de configuração de IA sem chave nenhuma (campo "chaves" ausente ou vazio)
+    function iaDocSemChaves(d) {
+      return !(d.get('valor', null) is map) || d.valor.get('chaves', {}) == {} || d.valor.get('chaves', null) == null;
+    }
+
     // ---------- usuarios/{uid} ----------
     match /usuarios/{userId} {
       // Cada um lê o próprio documento (é assim que o sistema descobre o
@@ -234,13 +239,17 @@ service cloud.firestore {
       // financeiro; configurações da empresa só o Diretor grava; o resto
       // todos leem e só quem opera grava.
       match /dados/{docId} {
+        // Chaves de IA (correção de segurança S1): o documento de IA que ainda tiver chaves de uma versão antiga
+        // só é lido pelo Diretor (que o limpa ao abrir) e pelo Super Admin (backup); a equipe não lê até a limpeza.
         allow read: if souSuperAdmin() || (souMembroAtivo(tenantId) &&
-          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1']) || veFinanceiro()));
-        allow write: if souSuperAdmin() || (souMembroAtivo(tenantId) && (
+          (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1']) || veFinanceiro()) &&
+          (docId != 'eagles_ia_config_v1' || souDiretor() || resource == null || iaDocSemChaves(resource.data)));
+        // e NINGUÉM grava chave de IA no banco (nem o Diretor, nem o Super Admin, nem uma restauração de backup antigo)
+        allow write: if (docId != 'eagles_ia_config_v1' || request.resource == null || iaDocSemChaves(request.resource.data)) && (souSuperAdmin() || (souMembroAtivo(tenantId) && (
           (docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1'] && veFinanceiro()) ||
           (docId in ['eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1', 'eagles_ia_config_v1', 'eagles_sistema_config_v1'] && souDiretor()) ||
           (!(docId in ['eagles_fin_ciclos_v1', 'eagles_fin_modelo_v1', 'eagles_fin_metas_v1', 'eagles_fin_caixas_v1', 'eagles_fin_tributos_v1', 'eagles_fin_pix_v1', 'eagles_fin_ia_analista_v1', 'eagles_fin_ia_analista_erp_v1', 'eagles_perfil_empresa_v1', 'eagles_cfg_portal_cliente_v1', 'eagles_cfg_briefing_visual_v1', 'eagles_cfg_categorias_conteudo_v1', 'eagles_crm_pagina_aprovacao_v1', 'eagles_integracao_pixels_v1', 'eagles_backup_meta_v1', 'eagles_ia_config_v1', 'eagles_sistema_config_v1']) && podeOperar())
-        ));
+        )));
       }
 
       // Vagas do limite de usuários: o Diretor ocupa uma vaga junto com a

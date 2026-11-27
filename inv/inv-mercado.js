@@ -88,10 +88,12 @@
     ust: { nome: 'U.S. Department of the Treasury — curva diária de juros', estado: 'fechamento', mercados: ['US'], credencial: false, servidor: false, licenca: 'Obra do governo federal dos EUA (17 U.S.C. §105) — citar a fonte', ligado: false, motivo: 'Liga quando a curva do Tesouro dos EUA carrega', cachePermitidoSeg: 3600 },
     fred: { nome: 'FRED (St. Louis Fed) — juros, inflação e Treasuries', estado: 'fechamento', mercados: ['US'], credencial: true, servidor: true, licenca: 'Termos do FRED; chave gratuita só no servidor', ligado: false, motivo: 'Chave só no servidor (D-10)', cachePermitidoSeg: 86400 },
     eua: { nome: 'Provedor de cotações dos EUA (a escolher)', estado: 'atrasado', mercados: ['US'], credencial: true, servidor: true, licenca: 'Plano e licença a contratar (orçamento atual R$ 0)', ligado: false, motivo: 'Sem provedor contratado (D-10)', cachePermitidoSeg: 0 },
+    // v160: cota OFICIAL de fundos abertos (CVM Informe Diário, D-1), lida do eagles-dados; nunca "tempo real"
+    fundos: { nome: 'CVM — cota oficial de fundos abertos (Informe Diário)', estado: 'fechamento', mercados: ['BR'], credencial: false, servidor: false, licenca: 'ODbL (dados abertos da CVM) — atribuição obrigatória', ligado: false, motivo: 'Liga quando o índice de fundos do eagles-dados carrega', cachePermitidoSeg: 3600 },
     manual: { nome: 'Preço informado pela empresa', estado: 'manual', mercados: ['BR', 'US'], credencial: false, servidor: false, licenca: 'Cadastro interno da empresa', ligado: true, cachePermitidoSeg: 0 },
     simulador: { nome: 'Simulador de demonstração (números fictícios)', estado: 'simulado', mercados: ['BR', 'US', 'CRYPTO'], credencial: false, servidor: false, licenca: 'Sem valor real', ligado: true, cachePermitidoSeg: 86400 },
   };
-  const ORDEM = ['servidor', 'b3', 'bcb', 'tesouro', 'ust', 'fred', 'eua', 'manual', 'simulador'];
+  const ORDEM = ['servidor', 'b3', 'bcb', 'tesouro', 'fundos', 'ust', 'fred', 'eua', 'manual', 'simulador'];
 
   // ---------- utilidades numéricas ----------
   const r2 = (n) => Math.round(n * 100) / 100;
@@ -198,7 +200,7 @@
       preco: bruto.preco, abertura: bruto.abertura ?? null, maxima: bruto.maxima ?? null, minima: bruto.minima ?? null, volume: bruto.volume ?? null,
       fechamentoAnterior: ant ?? null, variacao: variacao == null ? null : r4(variacao), variacaoPct: variacao == null ? null : r4((variacao / ant) * 100),
       data: bruto.data, horario: bruto.horario, estado, fonte: provedorId, fonteNome: P.nome || provedorId, real: !!(ESTADOS[estado] || {}).real,
-      tipoPreco: bruto.tipoPreco || null, detalhe: bruto.detalhe || null, // Tesouro: qual PU é o preço (venda = resgate bruto; base = referência)
+      tipoPreco: bruto.tipoPreco || null, detalhe: bruto.detalhe || null, precoDec: bruto.precoDec || null, // v160: cota de fundo em texto decimal (até 12 casas) // Tesouro: qual PU é o preço (venda = resgate bruto; base = referência)
     };
   }
   const indisponivel = (a, motivo) => ({ assetId: a.assetId, ticker: a.ticker, nome: a.nome, classe: a.classe, pais: a.pais, moeda: a.moeda || '', preco: null, estado: 'indisponivel', fonte: null, real: false, motivo: motivo || 'Sem fonte autorizada para este ativo.' });
@@ -210,7 +212,7 @@
     const agora = op.agora || (() => Date.now());
     const cache = new Map(); // chave → { ate, valor }
     const uso = {}; const falhas = {};
-    const limites = Object.assign({ servidor: 2000, b3: 0, bcb: 2000, tesouro: 5000, ust: 2000, fred: 200, eua: 0 }, op.limites || {}); // bcb/tesouro/ust leem do retrato em memória (sem rede por consulta)
+    const limites = Object.assign({ servidor: 2000, b3: 0, bcb: 2000, tesouro: 5000, fundos: 20000, ust: 2000, fred: 200, eua: 0 }, op.limites || {}); // bcb/tesouro/ust leem do retrato em memória (sem rede por consulta)
     const ligado = (id) => {
       const P = PROVEDORES[id]; if (!P || !ad[id]) return false;
       if (id === 'simulador') return op.simulador !== false;

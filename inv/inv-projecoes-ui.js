@@ -86,6 +86,7 @@
   // ---------- resultados ----------
   const kpi = (rot, val, extra) => `<div class="inv-kpi"><span>${C().E(rot)}</span><strong>${val}</strong>${extra ? `<small>${extra}</small>` : ''}</div>`;
   function resultados(host) {
+    setTimeout(() => { const el = host.querySelector && host.querySelector('#inv-rf-calc'); if (el && !el.childElementCount && window.INVEST.telas._calcRendaFixa) window.INVEST.telas._calcRendaFixa(el); }, 0); // v160
     const { E, estado } = C(); const p = S9.p;
     const v = PJ.validar(p);
     if (!v.ok) { host.innerHTML = `<div class="panel">${estado('erro', 'Confira as premissas', v.erros.join('; '))}</div>`; return; }
@@ -113,6 +114,7 @@
         ${kpi('Renda mensal só com proventos', brl(r.rendaMensalProventos), 'no fim, sem consumir o patrimônio')}
       </div>
       <div class="inv-grade">
+        <div class="panel inv-largo" id="inv-rf-calc"></div>
         <div class="panel inv-largo"><div class="panel-title"><h2>Evolução projetada</h2><span>nominal, real e aportado</span></div>
           <div class="inv-graf-area inv-graf-media"><canvas id="inv-pj-evo" role="img" aria-label="Evolução projetada do patrimônio"></canvas></div>
           <details class="inv-det"><summary>Tabela ano a ano</summary><div class="table-scroll"><table class="inv-tabela"><thead><tr><th>Mês</th><th class="cad-num">Nominal</th><th class="cad-num">Real</th><th class="cad-num">Aportado</th></tr></thead><tbody>

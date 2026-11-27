@@ -164,7 +164,8 @@ test('carregador: deduplica pedidos iguais, usa cache com prazo, isola falhas e 
 
 test('central de licenças: só liga o que tem licença aprovada e integração; nada pago, nada com chave no navegador', () => {
   const ligadas = Object.keys(D.FONTES).filter(D.ligada).sort();
-  assert.deepEqual(ligadas, ['bcb_focus', 'bcb_ptax', 'bcb_sgs', 'cvm', 'fred', 'noticias_fed', 'sec_edgar', 'tesouro_direto', 'tradingview', 'ust_curva']);
+  // v160: + cvm_fundos, cvm_fii, eia_fred, cambio_int, worldbank (homologadas na Etapa 12 com evidência de licença por série/indicador)
+  assert.deepEqual(ligadas, ['bcb_focus', 'bcb_ptax', 'bcb_sgs', 'cambio_int', 'cvm', 'cvm_fii', 'cvm_fundos', 'eia_fred', 'fred', 'noticias_fed', 'sec_edgar', 'tesouro_direto', 'tradingview', 'ust_curva', 'worldbank']);
   for (const id of ligadas) { const F = D.FONTES[id]; assert.ok(F.evidencia && F.licenca && F.atribuicao, 'evidência e atribuição: ' + id); assert.equal(F.chave, false); assert.equal(F.custo, 'R$ 0'); }
   for (const id of ['ibge', 'bls', 'noticias_bcb', 'coinbase', 'kraken', 'mercado_bitcoin']) assert.equal(D.FONTES[id].estado, 'aguardando', id);
   for (const id of ['b3', 'brapi', 'google_finance']) assert.equal(D.FONTES[id].estado, 'incompativel', id); // brapi grátis = só teste; Google proíbe copiar

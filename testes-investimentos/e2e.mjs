@@ -40,6 +40,10 @@ function servir() {
       const u = new URL(rq.url, 'http://x');
       if (u.pathname === '/firebase-config.js') { rs.writeHead(200, { 'content-type': TIPOS['.js'] }); return rs.end(CONFIG); }
       if (u.pathname === '/sw.js') { rs.writeHead(404); return rs.end(); }
+      // v160: o repositório de dados (eagles-dados) LOCAL, servido aqui como se fosse a hospedagem de dados; e o inv-dados.js
+      // aponta para ele SÓ quando o teste liga window.__EAGLES_DADOS_TESTE (os casos antigos continuam no caminho do site)
+      if (process.env.EAGLES_DADOS && u.pathname.startsWith('/eagles-dados/')) { const f = join(process.env.EAGLES_DADOS, decodeURIComponent(u.pathname.slice('/eagles-dados/'.length))); if (!f.startsWith(process.env.EAGLES_DADOS) || !existsSync(f) || statSync(f).isDirectory()) { rs.writeHead(404); return rs.end(); } rs.writeHead(200, { 'content-type': 'application/json' }); return rs.end(readFileSync(f)); }
+      if (process.env.EAGLES_DADOS && u.pathname === '/inv/inv-dados.js') { rs.writeHead(200, { 'content-type': TIPOS['.js'], 'cache-control': 'no-store' }); return rs.end(readFileSync(join(RAIZ, 'inv/inv-dados.js'), 'utf8').replace(/const DADOS_BASE = \/\^https[^\n]*\n/, "const DADOS_BASE = (typeof window !== 'undefined' && window.__EAGLES_DADOS_TESTE) ? location.origin + '/eagles-dados/' : '';\n")); }
       // os testes usam o catálogo de TESTE (fictício, estável); o publicado é o real (05.1), testado à parte
       // Etapa 10: o site publicado só tem o catálogo de PRODUÇÃO (vazio até confirmar as licenças) e nenhuma notícia de teste;
       // os testes de tela usam o catálogo fictício e o feed fictício, servidos daqui (nunca vão para o site)
@@ -656,6 +660,132 @@ const foto = (page, nome, cheia = true) => page.screenshot({ path: join(SAIDA, '
     const h = await q.evaluate(() => { erpRenderMobile(); return [...document.querySelectorAll('#erp-gaveta a, #erp-home-mobile a')].map((a) => a.getAttribute('href')); });
     ok(!h.includes('investimentos.html') && h.includes('financeiro.html'), 'empresa sem o módulo: menu igual ao de antes: ' + h.join(','));
     await ctx.close(); await ctx2.close();
+  });
+
+
+  // ======================= v160 (Etapa 12) =======================
+  const comDados = async (largura, tema) => { const c = await contexto(largura, tema); await c.addInitScript(() => { window.__EAGLES_DADOS_TESTE = true; }); return c; };
+  const FUNDO_ABERTO = 'BR:FUNDO:00068305000135', FUNDO_FECHADO = 'BR:FUNDO:00083181000167', SUB = 'BR:FUNDO:00832435000100.CFKON1794851758', CLASSE_AGR = 'BR:FUNDO:00832435000100';
+  await caso(28, 'v160 Fundos: pesquisa (nome, CNPJ, subclasse), página do fundo com a cota de todas as casas, fechado sem avaliar, subclasse distinta da classe; favoritar; lançar e avaliar na carteira pela cota exata', async () => {
+    ok(process.env.EAGLES_DADOS, 'EAGLES_DADOS não configurado');
+    const ctx = await comDados(); const p = await entrar(ctx, P.fin, 'investimentos.html#/biblioteca'); await p.waitForTimeout(800);
+    await p.click('#inv-fundos-abrir'); await p.fill('#inv-busca', 'caixa empreender'); await p.waitForTimeout(2500);
+    let t = await p.evaluate(() => document.getElementById('inv-busca-fundos').innerText);
+    ok(/CAIXA EMPREENDER/.test(t) && /classes e subclasses/.test(t), 'pesquisa por nome: ' + t.slice(0, 300));
+    await p.fill('#inv-busca', '00.832.435/0001-00'); await p.waitForTimeout(1200);
+    const linhas = await p.evaluate(() => [...document.querySelectorAll('#inv-busca-fundos tr[data-id]')].map((r) => r.dataset.id));
+    ok(linhas.includes(CLASSE_AGR_ID()) || linhas.length >= 2, 'CNPJ com subclasses: ' + linhas.join(','));
+    ok(linhas.some((x) => x.includes('.')), 'a subclasse aparece separada: ' + linhas.join(','));
+    await p.goto(BASE + '/investimentos.html#/ativo/' + encodeURIComponent(FUNDO_ABERTO)); await p.waitForTimeout(3000);
+    t = await texto(p); const idx = await p.evaluate(async (id) => { await window.INVEST.ctx.garantirFundos([id]); const h = window.INVEST.estado.fundos.hist.get(id); return window.INVEST.fundos.ultima(h); }, FUNDO_ABERTO);
+    const cotaTela = idx[1].split('.'); ok(t.includes(Number(cotaTela[0]).toLocaleString('pt-BR') + ',' + (cotaTela[1] || '')), 'cota com todas as casas: ' + idx[1] + ' | ' + t.slice(0, 500));
+    ok(/Rentabilidade pela cota/.test(t) && /Em 12 meses/.test(t) && /Contém dados da Comissão de Valores Mobiliários/.test(t) && /ODbL/.test(t), 'rentabilidade e atribuição');
+    ok(await p.evaluate(() => !!document.querySelector('#inv-fundo-graf canvas, #inv-fundo-graf svg, #inv-fundo-graf .inv-estado-tela')), 'gráfico (ou estado) da cota');
+    await foto(p, 'v160-fundo-aberto');
+    await p.click('#inv-fav-fundo'); await p.waitForTimeout(1200);
+    const fav = await lerDoc(`tenants/t-inv/inv_favoritos/${P.fin.uid}`); ok(JSON.stringify(fav).includes(FUNDO_ABERTO), 'favorito gravado');
+    await p.goto(BASE + '/investimentos.html#/ativo/' + encodeURIComponent(FUNDO_FECHADO)); await p.waitForTimeout(2500); t = await texto(p);
+    ok(/não avalia a carteira/.test(t) && /fechado/i.test(t), 'fundo fechado com o aviso: ' + t.slice(0, 400));
+    await p.goto(BASE + '/investimentos.html#/ativo/' + encodeURIComponent(SUB)); await p.waitForTimeout(2500); t = await texto(p);
+    ok(/SUBCLASSE II/.test(t) && /CFKON1794851758/.test(t), 'página da subclasse');
+    // lançar na carteira pela regra atual (sem mudar o Firebase) e avaliar pela cota EXATA
+    const r = await p.evaluate(async (id) => {
+      const W = window.INVEST.carteiraEstado; await window.INVEST.carteiraUi.carregarCarteiras(); const c = W.carteiras.find((x) => x.tipo === 'pessoal' && x.ativa !== false) || W.carteiras[0];
+      const h = new Date(), hoje = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+      const S = window.INVEST.estado; const u = window.INVEST.fundos.ultima(S.fundos.hist.get(id));
+      if (c.ativa === false) return { erro: 'carteira arquivada' };
+      await window.INVEST.carteiraGravarOp(c, { tipo: 'aporte', data: hoje, valor: 100000, moeda: 'BRL' });
+      await window.INVEST.carteiraGravarOp(c, { tipo: 'compra', data: hoje, assetId: id, qtd: 1000, preco: Number(u[1]), moeda: 'BRL' });
+      const ops = await window.INVEST.carteiraUi.carregarOps(c); const rr = window.INVEST.carteiraResumo(c, ops, false); const it = rr.av.itens.find((x) => x.assetId === id);
+      return { valor: it && it.valor, cota: u[1], estado: it && it.estado, tipo: it && it.precoTipo, esperado: window.INVEST.carteira.valorCentavosTxt(100000000000, u[1]) };
+    }, FUNDO_ABERTO);
+    ok(r.valor === r.esperado && r.tipo === 'cota-oficial', 'avaliação pela cota oficial exata: ' + JSON.stringify(r));
+    medidas.fundoCarteira = r;
+    ok(!p._erros.length, 'erros: ' + p._erros.join(' | ')); await ctx.close();
+  });
+  function CLASSE_AGR_ID() { return CLASSE_AGR; }
+  await caso(29, 'v160 Integridade no navegador: arquivo adulterado (SHA-256 não confere) nunca é mostrado; manifesto inválido/antigo mantém o último conferido; sem eagles-dados = indisponível com o motivo', async () => {
+    const ctx = await comDados();
+    await ctx.route(/\/eagles-dados\/snapshots\/\d+\/fundos-h-\d+\.json/, async (r) => { const resp = await r.fetch(); const b = Buffer.from(await resp.body()); b[Math.floor(b.length / 2)] ^= 0x20; return r.fulfill({ status: 200, body: b, contentType: 'application/json' }); });
+    const p = await entrar(ctx, P.dir, 'investimentos.html#/ativo/' + encodeURIComponent(FUNDO_ABERTO)); await p.waitForTimeout(3500);
+    const t = await texto(p); const ev = await p.evaluate(() => window.INVEST.ctx.carregadorDados().eventosIntegridade());
+    ok(/Sem cota válida|não pôde ser carregado/.test(t), 'sem o dado adulterado: ' + t.slice(0, 300));
+    ok(ev.some((e) => /SHA-256 não confere/.test(e.msg)), 'evento de integridade: ' + JSON.stringify(ev).slice(0, 300));
+    await ctx.unroute(/\/eagles-dados\/snapshots\/\d+\/fundos-h-\d+\.json/);
+    await ctx.route(/\/eagles-dados\/manifesto\.json/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"formato":"eagles-dados-manifesto-v2","sequencia":1,"gerado":"2026-01-01T00:00:00Z","arquivos":{"sw.js":{}}}' }));
+    const ok2 = await p.evaluate(async () => { const c = window.INVEST.ctx.carregadorDados(); const r = await window.INVEST.snapshot.criarLeitor({ fetch: (u, o) => fetch(u, o), base: location.origin + '/eagles-dados/', armazenamento: localStorage, hoje: '2026-11-27' }).manifesto(); return r; });
+    ok(ok2.ok && ok2.origem === 'guardado' && /inválido/.test(ok2.aviso), 'manifesto inválido: mantém o guardado: ' + JSON.stringify(ok2).slice(0, 200));
+    const ctx3 = await contexto(); const q = await entrar(ctx3, P.dir, 'investimentos.html#/biblioteca'); await q.waitForTimeout(800);
+    const t3 = await q.evaluate(() => document.getElementById('inv-busca-fundos').innerText); ok(/eagles-dados/.test(t3), 'sem eagles-dados: ' + t3);
+    await ctx.close(); await ctx3.close();
+  });
+  await caso(30, 'v160 Mercados internacionais e FII: energia (WTI, Brent; gás desligado com motivo), câmbio com tipo e fonte ao lado da PTAX, macro anual do Banco Mundial; resumo na Visão geral; informe mensal do FII (VPA não é cotação)', async () => {
+    const ctx = await comDados(); const p = await entrar(ctx, P.dir, 'investimentos.html#/us'); await p.waitForTimeout(3500);
+    let t = await texto(p);
+    ok(/Petróleo WTI/.test(t) && /Petróleo Brent/.test(t) && /Gás natural Henry Hub/.test(t) && /Desligado/.test(t) && /NÃO são contratos futuros|Não são contratos futuros/i.test(t), 'energia: ' + t.slice(0, 200));
+    ok(/Câmbio internacional/.test(t) && /BCE/.test(t) && /Fed H\.10/.test(t) && /Banco do Canadá/.test(t) && /Conferência cruzada/.test(t), 'câmbio');
+    ok(/Macroeconomia internacional/.test(t) && /Brasil/.test(t) && /ANUAIS/.test(t) && /CC BY 4\.0/.test(t), 'macro');
+    await foto(p, 'v160-mercado-us');
+    await p.goto(BASE + '/investimentos.html#/br'); await p.waitForTimeout(2500); t = await texto(p); ok(/Câmbio: PTAX e referências internacionais/.test(t), 'câmbio no Mercado BR');
+    await p.goto(BASE + '/investimentos.html#/visao'); await p.waitForTimeout(3000); t = await texto(p); ok(/Mercados internacionais/.test(t), 'resumo na Visão geral');
+    const fii = await p.evaluate(async () => { const el = document.createElement('div'); document.body.appendChild(el); await window.INVEST.telas._fiiMensal(el, { assetId: 'BR:B3:VPSI11', classe: 'fii', ids: { cnpj: '00332266000131' } }); return el.innerText; });
+    ok(/Valor patrimonial por cota/.test(fii) && /VPA não é cotação/.test(fii) && /P\/VP/.test(fii) && /B3/.test(fii), 'FII: ' + fii.slice(0, 300));
+    ok(!p._erros.length, 'erros: ' + p._erros.join(' | ')); await ctx.close();
+  });
+  await caso(31, 'v160 Calculadora de renda fixa (Projeções): CDB % do CDI com o CDI oficial; LCI sem isenção confirmada avisa; carência bloqueia o resgate; nada é gravado', async () => {
+    const ctx = await comDados(); const p = await entrar(ctx, P.dir, 'investimentos.html#/projecoes'); await p.waitForTimeout(3500);
+    await p.waitForSelector('#inv-rf-form', { timeout: 15000 });
+    const antes = await lerDoc(`tenants/t-inv/inv_cenarios/${P.dir.uid}`);
+    const d = new Date(); d.setMonth(d.getMonth() - 6); const ap = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    await p.selectOption('#inv-rf-form [name=tipo]', 'LCI'); await p.fill('#inv-rf-form [name=taxa]', '95'); await p.fill('#inv-rf-form [name=aplicacao]', ap); await p.fill('#inv-rf-form [name=vencimento]', '2028-12-01'); await p.fill('#inv-rf-form [name=carencia]', '2027-06-01'); await p.selectOption('#inv-rf-form [name=liquidez]', 'carencia');
+    await p.click('#inv-rf-form button[type=submit]'); await p.waitForTimeout(800);
+    const t = await p.evaluate(() => document.getElementById('inv-rf-res').innerText);
+    ok(/Saldo contratual bruto/.test(t) && /IR \(/.test(t) && /isenção não confirmada/.test(t) && /carência/.test(t) && /Crédito privado/.test(t), 'resultado: ' + t.slice(0, 600));
+    ok(/Valor estimado de resgate\s+indisponível/.test(t), 'carência bloqueia o resgate');
+    await foto(p, 'v160-renda-fixa');
+    const depois = await lerDoc(`tenants/t-inv/inv_cenarios/${P.dir.uid}`); ok(JSON.stringify(antes) === JSON.stringify(depois), 'nada gravado');
+    ok(!p._erros.length, 'erros: ' + p._erros.join(' | ')); await ctx.close();
+  });
+  await caso(32, 'v160 Celular 320px, 14 temas, as 8 abas e XSS: nada rola para o lado, telas novas sem erro, nome malicioso aparece como texto', async () => {
+    const abas = ['visao', 'carteira', 'br', 'us', 'biblioteca', 'favoritos', 'projecoes', 'noticias'];
+    for (const [larg, tema] of [[320, 'padrao-claro'], [1366, 'padrao-escuro'], [390, 'midnight'], [1024, 'rosa-claro']]) {
+      const ctx = await comDados(larg, tema); const p = await entrar(ctx, P.dir, 'investimentos.html#/visao');
+      for (const a of abas.concat(['ativo/' + encodeURIComponent(FUNDO_ABERTO)])) {
+        await p.goto(BASE + '/investimentos.html#/' + a); await p.waitForTimeout(a === 'visao' || a.startsWith('ativo') ? 2500 : 1500);
+        const larguraDoc = await p.evaluate(() => document.documentElement.scrollWidth);
+        if (larguraDoc > larg + 1) { const culpados = await p.evaluate((L) => [...document.querySelectorAll('#inv-conteudo *')].filter((e) => e.getBoundingClientRect().right > L + 1 && ![...e.children].some((c) => c.getBoundingClientRect().right > L + 1)).slice(0, 5).map((e) => e.tagName + '.' + e.className + ' «' + (e.textContent || '').slice(0, 60) + '» ' + Math.round(e.getBoundingClientRect().right)), larg); throw new Error(`${a} em ${larg}px rola para o lado: ${larguraDoc} · ${culpados.join(' | ')}`); }
+        if (larg === 320 || larg === 1366) await foto(p, `v160-aba-${a.replace(/[^a-z]/g, '').slice(0, 12)}-${larg}-${tema}`, false);
+      }
+      ok(!p._erros.length, `erros (${tema}): ` + p._erros.join(' | ')); await ctx.close();
+    }
+    const ctx = await comDados(); const p = await entrar(ctx, P.dir, 'investimentos.html#/biblioteca'); await p.waitForTimeout(800);
+    const x = await p.evaluate(async () => { const S = window.INVEST.estado; await window.INVEST.ctx.carregarIndiceFundos(); S.fundos.indice.itens.push(['BR:FUNDO:11111111000191', '<img src=x onerror="window.__xss=1">FUNDO MAU', 'FIF', '', 'A', 'N', 'G', 'N', '', '2026-11-24', '']); S.fundos.porId.clear(); window.__xss = 0;
+      document.getElementById('inv-busca').value = 'fundo mau'; S.busca = 'fundo mau'; window.INVEST.ctx.desenhar(); await new Promise((r) => setTimeout(r, 600)); return { xss: window.__xss, img: document.querySelectorAll('#inv-busca-fundos img').length, txt: document.getElementById('inv-busca-fundos').innerText.slice(0, 300) }; });
+    ok(x.xss === 0 && x.img === 0 && /FUNDO MAU/.test(x.txt), 'XSS: ' + JSON.stringify(x));
+    await ctx.close();
+  });
+
+  await caso(33, 'v160 Os 14 temas nas telas novas (fundo, Mercado US, renda fixa): desenhadas sem erro e com contraste de texto ≥ 4,5:1', async () => {
+    const lum = (rgb) => { const c = rgb.match(/[\d.]+/g).slice(0, 3).map((x) => +x / 255).map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4))); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+    const contraste = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+    const problemas = []; medidas.contrasteV160 = {};
+    for (const tema of TEMAS) {
+      const ctx = await comDados(1366, tema); const p = await entrar(ctx, P.dir, 'investimentos.html#/ativo/' + encodeURIComponent(FUNDO_ABERTO)); await p.waitForTimeout(2500);
+      for (const [rota, sel] of [['ativo/' + encodeURIComponent(FUNDO_ABERTO), '.inv-card strong, #inv-conteudo h1, .inv-muda'], ['us', '.inv-macro-v160 strong, .inv-tab-v160 td'], ['projecoes', '#inv-rf-calc h2, #inv-rf-calc .inv-muda, #inv-rf-form label']]) {
+        if (!rota.startsWith('ativo')) { await p.goto(BASE + '/investimentos.html#/' + rota); await p.waitForTimeout(2200); }
+        const pares = await p.evaluate((sel) => {
+          const fundo = (el) => { while (el) { const c = getComputedStyle(el).backgroundColor; if (c && !/rgba\(\d+, \d+, \d+, 0\)|transparent|\/ 0\)$/.test(c)) return c; el = el.parentElement; } return getComputedStyle(document.body).backgroundColor; };
+          const cv = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+          const rgb = (c) => { cv.clearRect(0, 0, 1, 1); cv.fillStyle = '#000'; cv.fillStyle = c; cv.fillRect(0, 0, 1, 1); const d = cv.getImageData(0, 0, 1, 1).data; return `rgb(${d[0]}, ${d[1]}, ${d[2]})`; };
+          return [...document.querySelectorAll(sel)].slice(0, 6).map((el) => [rgb(getComputedStyle(el).color), rgb(fundo(el))]);
+        }, sel);
+        if (!pares.length) problemas.push(`${tema}/${rota}: nada desenhado`);
+        for (const [c, f] of pares) { const k = contraste(c, f); medidas.contrasteV160[tema + '/' + rota] = Math.min(medidas.contrasteV160[tema + '/' + rota] || 99, +k.toFixed(2)); if (k < 4.5) problemas.push(`${tema}/${rota}: ${k.toFixed(2)} (${c} sobre ${f})`); }
+      }
+      if (p._erros.length) problemas.push(`${tema}: ` + p._erros.join(' | '));
+      await ctx.close();
+    }
+    ok(!problemas.length, problemas.slice(0, 8).join(' · '));
   });
 
   await nav.close(); srv.close();

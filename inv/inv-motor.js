@@ -19,7 +19,7 @@
     renda_fixa: 'Renda fixa', tesouro: 'Tesouro Direto', fundo: 'Fundo', cripto: 'Criptomoeda', indice: 'Índice',
   };
   const PAISES = { BR: 'Brasil', US: 'Estados Unidos', CRYPTO: 'Cripto (global)' };
-  const BOLSAS = { B3: 'B3', TESOURO: 'Tesouro Direto', NYSE: 'NYSE', NASDAQ: 'Nasdaq', NYSEARCA: 'NYSE Arca', CBOE: 'Cboe', OTC: 'Balcão (OTC)', INDICE: 'Índice', MACRO: 'Indicador econômico', '-': '—' };
+  const BOLSAS = { B3: 'B3', TESOURO: 'Tesouro Direto', FUNDO: 'Fundo (CVM)', NYSE: 'NYSE', NASDAQ: 'Nasdaq', NYSEARCA: 'NYSE Arca', CBOE: 'Cboe', OTC: 'Balcão (OTC)', INDICE: 'Índice', MACRO: 'Indicador econômico', '-': '—' };
   const MOEDAS = ['BRL', 'USD'];
   // fontes conhecidas (sem nenhuma credencial; a credencial, quando existir, fica só no servidor)
   const FONTES = {
@@ -66,6 +66,7 @@
     TESOURO: /^[A-Z]+-\d{4}$/,               // SELIC-2029, IPCA-2035, PREFIXADO-2027, IPCAJ-2040
     NYSE: /^[A-Z]{1,5}([.\-][A-Z])?$/, NASDAQ: /^[A-Z]{1,5}$/, NYSEARCA: /^[A-Z]{1,5}$/, CBOE: /^[A-Z]{1,5}$/, OTC: /^[A-Z]{1,5}$/,
     '-': /^[A-Z0-9]{2,15}$/,
+    FUNDO: /^(\d{14}|[A-Z0-9]{1,16})$/,       // v160: CNPJ da classe ou código da subclasse (CVM)
   };
 
   function validarAtivo(a) {

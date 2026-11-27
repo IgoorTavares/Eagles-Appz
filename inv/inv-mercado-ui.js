@@ -264,6 +264,10 @@
           <div data-graf></div></div>
         <div class="panel"><div class="panel-title"><h2>${pais === 'BR' ? 'Juros, inflação e câmbio' : 'Juros, inflação e Treasuries'}</h2></div>
           <ul class="inv-macro">${mac.map((a, i) => `<li><a href="#/ativo/${encodeURIComponent(a.assetId)}">${E(a.nome)}</a><strong>${E(valor(cMac[i], a))}</strong>${C().tagEstado(cMac[i].estado)}${cMac[i].real && cMac[i].data ? `<small class="inv-muda">ref. ${E(dataHora(cMac[i]))}</small>` : ''}</li>`).join('')}</ul>${rodapeFontes(cMac)}</div>
+        ${window.INVEST.internacional ? (pais === 'BR' ? `<div class="panel inv-largo"><div class="panel-title"><h2>Câmbio: PTAX e referências internacionais</h2></div>${window.INVEST.internacional.cambioHtml('BR')}</div>`
+          : `<div class="panel"><div class="panel-title"><h2>Energia (EIA)</h2></div>${window.INVEST.internacional.energiaHtml()}</div>
+             <div class="panel inv-largo"><div class="panel-title"><h2>Câmbio internacional</h2></div>${window.INVEST.internacional.cambioHtml('US')}</div>
+             <div class="panel inv-largo"><div class="panel-title"><h2>Macroeconomia internacional (Banco Mundial)</h2></div>${window.INVEST.internacional.macroIntHtml()}</div>`) : ''}
         ${pais === 'BR' ? `<div class="panel inv-largo"><div class="panel-title"><h2>Tesouro Direto — preços e taxas</h2></div>${tesouroHtml()}</div>
         <div class="panel inv-largo"><div class="panel-title"><h2>Expectativas de mercado (Boletim Focus)</h2></div>${focusHtml()}</div>` : ''}
         <div class="panel"><div class="panel-title"><h2>Índices setoriais</h2></div>

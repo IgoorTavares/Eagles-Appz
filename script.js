@@ -6774,6 +6774,12 @@ function selecionarFaviconConfig(input) {
 // nesse sistema — nao é texto generico, cada entrada aqui aconteceu.
 
 const CFG_CHANGELOG = [
+  { data: '27/11/2026 · Investimentos: fundos, renda fixa e mercados internacionais', itens: [
+    { titulo: 'Fundos de investimento (CVM)', badges: ['novo'], texto: 'Pesquisa de cerca de 26 mil classes e subclasses de fundos por nome, CNPJ ou código da subclasse, com a cota oficial (todas as casas decimais), patrimônio, captações, resgates, cotistas e rentabilidade no mês, no ano e em 12 meses. Fundos abertos são avaliados na carteira pela cota oficial; fundos fechados e negociados em bolsa, não (a tela explica o motivo).' },
+    { titulo: 'FII: informe mensal', badges: ['novo'], texto: 'Na página do FII: patrimônio, valor patrimonial por cota (VPA), cotistas e rendimentos de até 13 meses. O VPA não é cotação; o P/VP só aparece com um preço de negociação de data compatível.' },
+    { titulo: 'Calculadora de renda fixa', badges: ['novo'], texto: 'Em Projeções: CDB, LCI, LCA, LC, LF, debêntures, CRI e CRA pelo contrato (prefixado, % do CDI, CDI + taxa, IPCA + taxa), com IR, IOF, carência e liquidez. A isenção só entra quando você confirma que está no contrato.' },
+    { titulo: 'Mercados internacionais', badges: ['novo'], texto: 'Petróleo WTI e Brent (EIA), câmbio do Banco Central Europeu, do Fed e do Banco do Canadá ao lado da PTAX, e PIB, inflação, desemprego e dívida de 12 países (Banco Mundial). Cada número com a fonte, a data e o tipo.' },
+  ] },
   { data: '26/11/2026 · Investimentos no menu do celular', itens: [
     { titulo: 'Investimentos aparece no celular', badges: ['corrigido'], texto: 'No celular, o menu lateral e a tela inicial do Painel não mostravam o Investimentos (só o computador mostrava). Agora o Financeiro abre com Financeiro e Investimentos, e a tela inicial ganhou o atalho. Empresas sem o módulo continuam com o menu igual.' },
   ] },

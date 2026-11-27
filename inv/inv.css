@@ -299,3 +299,16 @@
 .pg-invest .inv-fund-nota { margin-top: 10px; font-size: 12px; }
 @media (max-width: 600px) { .pg-invest .inv-fund th[scope="row"] { white-space: normal; } }
 .pg-invest .inv-tv-pares .btn { white-space: normal; max-width: 100%; text-align: left; }
+
+/* ---------- v160 (Etapa 12.10): fundos, FII, energia, câmbio e macro internacional, renda fixa ---------- */
+/* listas com data/aviso: o texto auxiliar ocupa a linha inteira (nunca alarga a coluna nem rola para o lado no celular) */
+.pg-invest .inv-macro-v160 li > small, .pg-invest .inv-macro-v160 li > .badge { grid-column: 1 / -1; justify-self: start; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.pg-invest .inv-macro-v160 li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.pg-invest #inv-busca-fundos .inv-muda, .pg-invest #inv-rf-res .inv-lista li { overflow-wrap: anywhere; }
+.pg-invest #inv-rf-form .inv-check { align-items: flex-start; }
+/* tabelas novas no celular (viram lista "rótulo … valor"): rótulos longos quebram em vez de empurrar o valor para fora */
+@media (max-width: 768px) {
+  .pg-invest .inv-tab-v160 td::before { flex-shrink: 1; min-width: 0; overflow-wrap: anywhere; }
+  .pg-invest .inv-tab-v160 td, .pg-invest .inv-tab-v160 td.cad-num { overflow-wrap: anywhere; min-width: 0; }
+  .pg-invest .inv-tab-v160 td small { white-space: nowrap; }
+}

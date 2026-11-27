@@ -46,12 +46,19 @@
     brapi: { nome: 'brapi (cotações da B3 com atraso)', site: 'https://brapi.dev/pricing', api: 'brapi.dev/api/quote', licenca: 'Plano gratuito "para validar a integração com dados e ativos de teste"; uso comercial só nos planos pagos (FAQ); página de termos com erro 404', evidencia: 'brapi.dev/pricing e FAQ lidos em 26/11/2026', estado: 'incompativel', modo: 'nenhum', motivo: 'O plano gratuito não permite uso comercial; desligada em produção (sem contratar plano pago)', custo: 'gratuito só para teste' },
     google_finance: { nome: 'Google Finance', site: 'https://www.google.com/finance/', api: '— (sem API)', licenca: 'Aviso do Google: os dados não podem ser copiados, guardados ou redistribuídos, nem usados comercialmente, sem consentimento por escrito', evidencia: 'Aviso legal das páginas do Google Finance, lido em 26/11/2026', estado: 'incompativel', modo: 'nenhum', motivo: 'Só como link que a pessoa abre ("Ver cotação e gráfico no Google Finance"); o sistema não lê nada de lá', custo: 'R$ 0' },
     tradingview: { nome: 'TradingView — gráfico gratuito para sites (Advanced Real-Time Chart)', site: 'https://www.tradingview.com/widget-docs/', api: 'www.tradingview-widget.com/embed-widget/advanced-chart (janela incorporada)', licenca: 'Widget gratuito "para incorporar em qualquer site"; a atribuição do TradingView deve ficar como foi desenhada (políticas, item de atribuição)', evidencia: 'widget-docs (Advanced Chart: "free ... to easily embed in any website") e tradingview.com/policies (atribuição), lidos em 26/11/2026', atribuicao: 'Gráfico por TradingView', estado: 'aprovada-condicoes', modo: 'incorporado', cors: false, chave: false, cadastro: false, custo: 'R$ 0', frequencia: 'ao vivo no gráfico (B3 e EUA com 15 min de atraso)' },
+    // v160 (Etapa 12): fontes novas, com a licença conferida uma a uma (evidências no pacote da v160)
+    cvm_fundos: { nome: 'CVM — Cadastro de Fundos e Informe Diário (cotas, PL, captação, resgate, cotistas)', site: 'https://dados.cvm.gov.br/dataset/fi-doc-inf_diario', api: 'registro_fundo_classe.zip + inf_diario_fi_AAAAMM.zip', licenca: ODBL, evidencia: 'Registros CKAN fi-cad e fi-doc-inf_diario: license_id odc-odbl (conferido em 26–27/11/2026)', atribuicao: 'Contém dados da Comissão de Valores Mobiliários (CVM) — Portal de Dados Abertos', estado: 'aprovada-condicoes', modo: 'arquivo', cors: false, chave: false, cadastro: false, custo: 'R$ 0', frequencia: 'diária (cota D-1); cadastro diário', condicao: 'Servido pelo repositório de dados (eagles-dados), com a base derivada aberta sob ODbL' },
+    cvm_fii: { nome: 'CVM — Informe Mensal de FII (PL, VPA, cotistas)', site: 'https://dados.cvm.gov.br/dataset/fii-doc-inf_mensal', api: 'inf_mensal_fii_AAAA.zip', licenca: ODBL, evidencia: 'Registro CKAN fii-doc-inf_mensal: license_id odc-odbl', atribuicao: 'Contém dados da Comissão de Valores Mobiliários (CVM) — Informe Mensal de FII', estado: 'aprovada-condicoes', modo: 'arquivo', cors: false, chave: false, cadastro: false, custo: 'R$ 0', frequencia: 'mensal', condicao: 'VPA é valor patrimonial, nunca cotação' },
+    eia_fred: { nome: 'EIA via FRED® — petróleo WTI e Brent (preço à vista)', site: 'https://fred.stlouisfed.org/series/DCOILWTICO', api: 'fredgraph.csv (DCOILWTICO, DCOILBRENTEU)', licenca: 'Domínio público — "Public Domain: Citation Requested" em cada série; EIA: obra do governo dos EUA', evidencia: 'Páginas das séries no FRED e termos da EIA (27/11/2026). Gás natural Henry Hub DESLIGADO: a EIA atribui o preço à Refinitiv (LSEG)', atribuicao: 'Fonte: U.S. Energy Information Administration via FRED®', estado: 'aprovada-condicoes', modo: 'arquivo', cors: false, chave: false, cadastro: false, custo: 'R$ 0', frequencia: 'diária (dias úteis)' },
+    cambio_int: { nome: 'Câmbio internacional — BCE, Fed H.10 e Banco do Canadá', site: 'https://data.ecb.europa.eu/', api: 'data-api.ecb.europa.eu (EXR) · fredgraph.csv (DEX*) · bankofcanada.ca/valet', licenca: 'BCE: reutilização gratuita, inclusive comercial, citando a fonte; Fed H.10: domínio público; Banco do Canadá: uso livre com atribuição', evidencia: 'Política de uso do BCE, páginas das séries no FRED e termos do Banco do Canadá (27/11/2026)', atribuicao: 'Fontes: Banco Central Europeu; Federal Reserve (H.10) via FRED®; Bank of Canada', estado: 'aprovada-condicoes', modo: 'arquivo', cors: false, chave: false, cadastro: false, custo: 'R$ 0', frequencia: 'dias úteis' },
+    worldbank: { nome: 'Banco Mundial — World Development Indicators', site: 'https://datacatalog.worldbank.org/search/dataset/0037712', api: 'api.worldbank.org/v2', licenca: 'CC BY 4.0 (conferida no metadado de CADA indicador: License_Type)', evidencia: 'Catálogo do WDI e metadados dos 8 indicadores (27/11/2026)', atribuicao: 'Fonte: Banco Mundial — World Development Indicators (CC BY 4.0)', estado: 'aprovada-condicoes', modo: 'arquivo', cors: false, chave: false, cadastro: false, custo: 'R$ 0', frequencia: 'anual (revisado pela fonte)' },
     b3: { nome: 'B3 — market data (índices e cotações)', site: 'https://www.b3.com.br/pt_br/market-data-e-indices/', api: 'licença de market data', licenca: 'Licença comercial paga de market data', evidencia: 'Política comercial da B3', estado: 'incompativel', modo: 'nenhum', motivo: 'Exige contrato pago (orçamento R$ 0)', custo: 'pago' },
   };
   // Opção B: endereço do repositório SÓ DE DADOS (vazio = o próprio site). Trocar exige nova versão do sistema e a liberação
   // do endereço na política de segurança (CSP) do investimentos.html; um endereço fora do padrão é ignorado.
   const DADOS_BASE_CONFIG = '';
-  const DADOS_BASE = /^https:\/\/[a-z0-9-]+\.github\.io\/[a-z0-9._-]+\/$/i.test(DADOS_BASE_CONFIG) ? DADOS_BASE_CONFIG : '';
+  // v160: eagles-dados v2 (manifesto.json na raiz + snapshots imutáveis). Só https e só hospedagens previstas; vazio = desligado.
+  const DADOS_BASE = /^https:\/\/([a-z0-9-]+\.github\.io\/[a-z0-9._-]+|[a-z0-9-]+\.(web\.app|firebaseapp\.com))\/$/i.test(DADOS_BASE_CONFIG) ? DADOS_BASE_CONFIG : '';
   const ligada = (id) => !!(FONTES[id] && (FONTES[id].estado === 'aprovada' || FONTES[id].estado === 'aprovada-condicoes') && FONTES[id].modo !== 'nenhum');
 
   // ---------- séries do Banco Central usadas (códigos oficiais do SGS) ----------
@@ -193,6 +200,35 @@
       out[m.id] = { serie: sid, nome: m.nome, valor: x.valor, unidade: ['%', '%aa', 'MIL'].includes(x.unidade) ? x.unidade : '%', dataRef: x.dataRef, frequencia: String(x.frequencia || '').slice(0, 20), atribuicao: limparTexto(x.atribuicao || '', 160), historico: hist, extra: x.extra && Number.isFinite(x.extra.valor) ? { medida: String(x.extra.medida).slice(0, 20), valor: x.extra.valor, dataRef: String(x.extra.dataRef || '').slice(0, 10) } : null };
     }
     return Object.keys(out).length ? { coleta: String(j.coleta || '').slice(0, 30), itens: out } : null;
+  }
+
+  // ---------- v160: energia (EIA via FRED), câmbio internacional e macro internacional ----------
+  const num6 = (v) => (Number.isFinite(v) ? v : null);
+  function lerEnergia(j, hoje) {
+    if (!j || j.formato !== 'eagles-inv-energia-v1' || !j.series || typeof j.series !== 'object') return null;
+    const out = {};
+    for (const [id, x] of Object.entries(j.series)) { if (!/^[A-Z_]{2,12}$/.test(id) || !x || !Number.isFinite(x.valor) || !dataValida(x.dataRef) || x.dataRef > hoje) continue;
+      out[id] = { id, nome: limparTexto(x.nome, 90), unidade: limparTexto(x.unidade, 30), moeda: x.moeda === 'USD' ? 'USD' : '', valor: x.valor, dataRef: x.dataRef, tipoReferencia: limparTexto(x.tipoReferencia, 140), atribuicao: limparTexto(x.atribuicao, 140), historico: (x.historico || []).filter((p) => Array.isArray(p) && dataValida(p[0]) && p[0] <= hoje && Number.isFinite(p[1])) }; }
+    const desligadas = {}; for (const [k, v] of Object.entries(j.desligadas || {})) if (/^[A-Z_]{2,12}$/.test(k)) desligadas[k] = limparTexto(v, 200);
+    return Object.keys(out).length || Object.keys(desligadas).length ? { coleta: String(j.coleta || '').slice(0, 30), series: out, desligadas } : null;
+  }
+  const MOEDA = /^[A-Z]{3}$/;
+  function lerCambioInt(j, hoje) {
+    if (!j || j.formato !== 'eagles-inv-cambio-int-v1' || !j.pares || typeof j.pares !== 'object') return null;
+    const pares = {};
+    for (const [k, x] of Object.entries(j.pares)) { if (!/^[A-Z]{6}:(bce|h10|boc)$/.test(k) || !x || !MOEDA.test(x.base) || !MOEDA.test(x.cotada) || !(x.valor > 0) || !dataValida(x.dataRef) || x.dataRef > hoje) continue;
+      pares[k] = { base: x.base, cotada: x.cotada, valor: x.valor, dataRef: x.dataRef, fonte: k.split(':')[1], tipo: ['referencia', 'compra', 'media'].includes(x.tipo) ? x.tipo : 'referencia', tipoTexto: limparTexto(x.tipoTexto, 160), atribuicao: limparTexto(x.atribuicao, 140), historico: (x.historico || []).filter((p) => Array.isArray(p) && dataValida(p[0]) && p[0] <= hoje && p[1] > 0) }; }
+    const conferencias = (j.conferencias || []).slice(0, 10).map((c) => ({ teste: limparTexto(c.teste, 120), data: dataValida(c.data) ? c.data : '', difPct: num6(c.difPct), ok: c.ok === true }));
+    return Object.keys(pares).length ? { coleta: String(j.coleta || '').slice(0, 30), pares, conferencias, nota: limparTexto(j.nota, 240) } : null;
+  }
+  function lerMacroInt(j) {
+    if (!j || j.formato !== 'eagles-inv-macro-int-v1' || !j.paises || typeof j.paises !== 'object') return null;
+    const paises = {};
+    for (const [p, x] of Object.entries(j.paises)) { if (!/^[A-Z]{3}$/.test(p) || !x || !x.indicadores) continue; const ind = {};
+      for (const [k, i] of Object.entries(x.indicadores)) if (/^[A-Z_]{2,20}$/.test(k) && i && /^\d{4}$/.test(i.ano) && Number.isFinite(i.valor)) ind[k] = { nome: limparTexto(i.nome, 80), unidade: limparTexto(i.unidade, 40), ano: i.ano, valor: i.valor, revisao: dataValida(i.revisao) ? i.revisao : '', serie: (i.serie || []).filter((s) => Array.isArray(s) && /^\d{4}$/.test(s[0]) && Number.isFinite(s[1])) };
+      paises[p] = { nome: limparTexto(x.nome, 40), indicadores: ind }; }
+    const licencas = {}; for (const [k, l] of Object.entries(j.licencas || {})) if (/^[A-Z_]{2,20}$/.test(k)) licencas[k] = { licenca: limparTexto(l.licenca, 40), fonteOriginal: limparTexto(l.fonteOriginal, 200) };
+    return Object.keys(paises).length ? { coleta: String(j.coleta || '').slice(0, 30), paises, licencas, atribuicao: limparTexto(j.atribuicao, 140) } : null;
   }
 
   // catálogo dos EUA (robô, a partir do company_tickers_exchange.json da SEC): só código, nome, bolsa e CIK
@@ -345,6 +381,7 @@
       // Opção B: o manifesto diz a VERSÃO do conjunto; todos os arquivos são pedidos com a mesma versão (conjunto coerente,
       // troca "atômica" para quem lê). Sem manifesto válido, cada arquivo vale pelo próprio formato (compatível com a v159).
       const base = op.base != null && op.base !== '' ? op.base : DADOS_BASE;
+      if (leitorV2()) { await carregarDoEaglesDados(bruto, tarefas, hoje); await Promise.all(tarefas); const r = montarRetrato(bruto, { hoje, coleta: new Date(agora()).toISOString() }); return Object.assign(r, { tesouro: bruto.tesouro || null, noticias: bruto.noticias || null, catalogoUS: bruto.catalogoUS || null, manifesto: bruto.manifesto || null, energia: bruto.energia || null, cambioInt: bruto.cambioInt || null, macroInt: bruto.macroInt || null, eaglesDados: true }); }
       const man = await buscar('manifesto', `arq:manifesto:${hoje}:${Math.floor(agora() / 3600000)}`, base + 'inv/dados/manifesto.json', 'json', 3600, (j) => (j && j.formato === 'eagles-inv-manifesto-v1' && /^\d{8,14}$/.test(String(j.versao)) && j.arquivos && typeof j.arquivos === 'object' ? { versao: String(j.versao), coleta: String(j.coleta || '').slice(0, 30), arquivos: Object.keys(j.arquivos) } : null));
       const v = man ? '?v=' + man.versao : '';
       bruto.manifesto = man;
@@ -352,19 +389,64 @@
       tarefas.push(buscar('noticias_fed', `arq:noticias:${hoje}${v}`, base + 'inv/dados/noticias.json' + v, 'json', 1800, (j) => (j && Array.isArray(j.itens) ? j : null)).then((v) => { if (v) { bruto.noticias = v; st('noticias_fed').registros = v.itens.length; } }));
       if (ligada('fred')) tarefas.push(buscar('fred', `arq:macro-us:${hoje}${v}`, base + 'inv/dados/macro-us.json' + v, 'json', 3 * 3600, (j) => lerMacroUS(j, hoje)).then((v) => { if (v) { bruto.macroUS = v; st('fred').registros = Object.keys(v.itens).length; } }));
       if (ligada('sec_edgar')) tarefas.push(buscar('sec_edgar', `arq:catalogo-us:${hoje}${v}`, base + 'inv/dados/catalogo-us.json' + v, 'json', 12 * 3600, lerCatalogoUS).then((v) => { if (v) { bruto.catalogoUS = v; st('sec_edgar').registros = v.length; } }));
+      // v160: energia, câmbio internacional e macro internacional (arquivos pequenos do robô, no site)
+      if (ligada('eia_fred')) tarefas.push(buscar('eia_fred', `arq:energia:${hoje}${v}`, base + 'inv/dados/energia.json' + v, 'json', 6 * 3600, (j) => lerEnergia(j, hoje)).then((x) => { if (x) { bruto.energia = x; st('eia_fred').registros = Object.keys(x.series).length; } }));
+      if (ligada('cambio_int')) tarefas.push(buscar('cambio_int', `arq:cambio-int:${hoje}${v}`, base + 'inv/dados/cambio-int.json' + v, 'json', 6 * 3600, (j) => lerCambioInt(j, hoje)).then((x) => { if (x) { bruto.cambioInt = x; st('cambio_int').registros = Object.keys(x.pares).length; } }));
+      if (ligada('worldbank')) tarefas.push(buscar('worldbank', `arq:macro-int:${hoje}${v}`, base + 'inv/dados/macro-int.json' + v, 'json', 24 * 3600, lerMacroInt).then((x) => { if (x) { bruto.macroInt = x; st('worldbank').registros = Object.keys(x.paises).length; } }));
       await Promise.all(tarefas);
       const retrato = montarRetrato(bruto, { hoje, coleta: new Date(agora()).toISOString() });
       retrato.tesouro = bruto.tesouro || null; retrato.noticias = bruto.noticias || null; retrato.catalogoUS = bruto.catalogoUS || null; retrato.manifesto = bruto.manifesto || null;
+      retrato.energia = bruto.energia || null; retrato.cambioInt = bruto.cambioInt || null; retrato.macroInt = bruto.macroInt || null;
       return retrato;
     }
+    // ---------- v160: eagles-dados (repositório SÓ de dados, snapshots imutáveis conferidos por SHA-256) ----------
+    let _leitor = null;
+    function leitorV2() {
+      const b = op.baseDados != null ? op.baseDados : DADOS_BASE; if (!b) return null;
+      const SN = (typeof window !== 'undefined' && window.INVEST && window.INVEST.snapshot) || (typeof require === 'function' ? require('./inv-snapshot.js') : null);
+      if (!SN) return null;
+      if (!_leitor) _leitor = SN.criarLeitor({ fetch: f, base: b, armazenamento: arm, hoje: op.hoje, agora, subtle: op.subtle });
+      return _leitor;
+    }
+    async function arqV2(nome, fonteId, ler) {
+      const L = leitorV2(); const S = st(fonteId); S.requisicoes++;
+      const r = await L.arquivo(nome);
+      if (!r.ok) { S.erros++; S.ultimoErro = String(r.erro || 'indisponível').slice(0, 160); return null; }
+      if (r.aviso) S.ultimoErro = r.aviso.slice(0, 200); else { S.ultimaOk = new Date(agora()).toISOString(); S.ultimoErro = ''; }
+      if (r.doCache) S.doCache++;
+      const v = ler ? ler(r.dados) : r.dados; if (v && typeof v === 'object') Object.defineProperty(v, '_integridade', { value: { estado: r.estado, aviso: r.aviso || '', sha256: r.sha256, competencia: r.competencia }, enumerable: false });
+      return v;
+    }
+    async function carregarDoEaglesDados(bruto, tarefas, hoje) {
+      const m = await leitorV2().manifesto(); bruto.manifesto = m.ok ? { versao: String(m.manifesto.sequencia), coleta: m.manifesto.gerado, arquivos: Object.keys(m.manifesto.arquivos), origem: m.origem, aviso: m.aviso || '' } : null;
+      if (!m.ok) { st('manifesto').erros++; st('manifesto').ultimoErro = m.erro; return; }
+      tarefas.push(arqV2('tesouro.json', 'tesouro_direto', (j) => (j && j.titulos ? j : null)).then((x) => { if (x) { bruto.tesouro = x; st('tesouro_direto').registros = Object.keys(x.titulos).length; } }));
+      tarefas.push(arqV2('noticias.json', 'noticias_fed', (j) => (j && Array.isArray(j.itens) ? j : null)).then((x) => { if (x) bruto.noticias = x; }));
+      if (ligada('fred')) tarefas.push(arqV2('macro-us.json', 'fred', (j) => lerMacroUS(j, hoje)).then((x) => { if (x) bruto.macroUS = x; }));
+      if (ligada('sec_edgar')) tarefas.push(arqV2('catalogo-us.json', 'sec_edgar', lerCatalogoUS).then((x) => { if (x) bruto.catalogoUS = x; }));
+      if (ligada('eia_fred')) tarefas.push(arqV2('energia.json', 'eia_fred', (j) => lerEnergia(j, hoje)).then((x) => { if (x) bruto.energia = x; }));
+      if (ligada('cambio_int')) tarefas.push(arqV2('cambio-int.json', 'cambio_int', (j) => lerCambioInt(j, hoje)).then((x) => { if (x) bruto.cambioInt = x; }));
+      if (ligada('worldbank')) tarefas.push(arqV2('macro-int.json', 'worldbank', lerMacroInt).then((x) => { if (x) bruto.macroInt = x; }));
+    }
+    // fundos e FII: SÓ pelo eagles-dados (grandes demais para o site). Sem ele: indisponível, com o motivo.
+    const SEM_EAGLES_DADOS = 'Os dados de fundos ficam no repositório de dados (eagles-dados), que ainda não foi ativado.';
+    const fundos = {
+      disponivel: () => !!leitorV2() && ligada('cvm_fundos'),
+      motivo: () => (!leitorV2() ? SEM_EAGLES_DADOS : !ligada('cvm_fundos') ? 'Fonte desligada' : ''),
+      indice: () => (leitorV2() && ligada('cvm_fundos') ? arqV2('fundos-indice.json', 'cvm_fundos', (j) => (j && j.formato === 'eagles-inv-fundos-indice-v1' && Array.isArray(j.itens) ? j : null)) : Promise.resolve(null)),
+      shard: (arq) => (leitorV2() && ligada('cvm_fundos') && /^fundos-h-\d{3}\.json$/.test(arq) ? arqV2(arq, 'cvm_fundos', (j) => (j && j.fundos ? j : null)) : Promise.resolve(null)),
+      fii: () => (leitorV2() && ligada('cvm_fii') ? arqV2('fii-mensal.json', 'cvm_fii', (j) => (j && j.formato === 'eagles-inv-fii-mensal-v1' && j.fundos ? j : null)) : Promise.resolve(null)),
+    };
     // fundamentos (arquivos maiores): só quando a pessoa abre a tela de um ativo; um download por dia por aparelho
     function fundamentos(pais) {
       const fonte = pais === 'US' ? 'sec_edgar' : 'cvm'; if (!ligada(fonte)) return Promise.resolve(null);
       const arq = pais === 'US' ? 'fundamentos-us.json' : 'fundamentos-br.json'; const fmt = pais === 'US' ? 'eagles-inv-fundamentos-us-v1' : 'eagles-inv-fundamentos-br-v1';
-      return buscar(fonte, `arq:${arq}:${op.hoje}`, (op.base || DADOS_BASE) + 'inv/dados/' + arq, 'json', 12 * 3600, (j) => (j && j.formato === fmt && j.empresas && typeof j.empresas === 'object' ? j : null));
+      const lerF = (j) => (j && j.formato === fmt && j.empresas && typeof j.empresas === 'object' ? j : null);
+      if (leitorV2()) return arqV2(arq, fonte, lerF);
+      return buscar(fonte, `arq:${arq}:${op.hoje}`, (op.base || DADOS_BASE) + 'inv/dados/' + arq, 'json', 12 * 3600, lerF);
     }
-    return { carregarTudo, fundamentos, status: () => JSON.parse(JSON.stringify(status)), limparCache: () => { try { if (!arm) return; const ks = []; for (let i = 0; i < arm.length; i++) { const k = arm.key(i); if (k && k.startsWith(PREFIXO)) ks.push(k); } ks.forEach((k) => arm.removeItem(k)); } catch (e) { /* sem acesso */ } } };
+    return { carregarTudo, fundamentos, fundos, eventosIntegridade: () => (_leitor ? _leitor.eventos() : []), status: () => JSON.parse(JSON.stringify(status)), limparCache: () => { try { if (!arm) return; const ks = []; for (let i = 0; i < arm.length; i++) { const k = arm.key(i); if (k && k.startsWith(PREFIXO)) ks.push(k); } ks.forEach((k) => arm.removeItem(k)); } catch (e) { /* sem acesso */ } } };
   }
 
-  return { DADOS_BASE, FRED_MAPA, lerMacroUS, lerCatalogoUS, VERSAO, CONSULTA, FONTES, SERIES_BCB, CURVA_UST, ligada, lerSGS, lerPTAX, lerFocus, lerCurvaUST, lerFeed, limparTexto, linkSeguro, estadoPelaIdade, registro, montarRetrato, criarAdaptadorRetrato, criarAdaptadorTesouro, criarCarregador, brParaIso, usParaIso, dataValida };
+  return { DADOS_BASE, FRED_MAPA, lerMacroUS, lerCatalogoUS, lerEnergia, lerCambioInt, lerMacroInt, VERSAO, CONSULTA, FONTES, SERIES_BCB, CURVA_UST, ligada, lerSGS, lerPTAX, lerFocus, lerCurvaUST, lerFeed, limparTexto, linkSeguro, estadoPelaIdade, registro, montarRetrato, criarAdaptadorRetrato, criarAdaptadorTesouro, criarCarregador, brParaIso, usParaIso, dataValida };
 });

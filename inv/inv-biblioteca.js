@@ -92,7 +92,37 @@
     desenhar();
   }
   // índices e indicadores econômicos também têm página (não estão no catálogo de ativos negociáveis)
-  const porId = (id) => (S.porId && S.porId.get(id)) || (K ? [...K.INDICES.BR, ...K.INDICES.US, ...K.MACRO.BR, ...K.MACRO.US].find((a) => a.assetId === id) : null) || null;
+  const porId = (id) => (S.porId && S.porId.get(id)) || (K ? [...K.INDICES.BR, ...K.INDICES.US, ...K.MACRO.BR, ...K.MACRO.US].find((a) => a.assetId === id) : null) || fundoPorId(id) || null;
+  // ---------- v160: fundos (CVM) — índice e históricos vêm do eagles-dados, sob demanda ----------
+  const FD = () => window.INVEST.fundos;
+  S.fundos = { estado: 'parado', indice: null, hist: new Map(), porId: new Map(), erro: '' };
+  function fundoPorId(id) {
+    if (!/^BR:FUNDO:/.test(String(id)) || !S.fundos.indice || !FD()) return null;
+    if (!S.fundos.porId.size) for (const l of S.fundos.indice.itens) S.fundos.porId.set(l[0], l);
+    const l = S.fundos.porId.get(id); if (!l) return null;
+    const a = FD().ativoDe(FD().deLinha(l)); if (S.porId && !S.porId.has(id)) { S.porId.set(id, a); S.cat = (S.cat || []).concat([a]); }
+    return a;
+  }
+  async function carregarIndiceFundos() {
+    const c = carregadorDados(); if (!c || !c.fundos || !FD()) { S.fundos.estado = 'indisponivel'; S.fundos.erro = 'Módulo de fundos não carregado.'; return null; }
+    if (S.fundos.indice) return S.fundos.indice;
+    if (!c.fundos.disponivel()) { S.fundos.estado = 'indisponivel'; S.fundos.erro = c.fundos.motivo(); return null; }
+    if (S.fundos._p) return S.fundos._p;
+    S.fundos.estado = 'carregando';
+    S.fundos._p = c.fundos.indice().then((ix) => { S.fundos._p = null; if (!ix) { S.fundos.estado = 'erro'; S.fundos.erro = 'Índice de fundos indisponível (falha de rede ou de integridade).'; return null; } S.fundos.indice = ix; S.fundos.estado = 'ok'; montarMotor(); return ix; });
+    return S.fundos._p;
+  }
+  // carrega os históricos (arquivos fundos-h-NNN) dos fundos pedidos; um arquivo por grupo, reaproveitado
+  async function garantirFundos(ids) {
+    const lista = [...new Set((ids || []).filter((id) => /^BR:FUNDO:/.test(id) && !S.fundos.hist.has(id)))];
+    if (!lista.length) return true;
+    if (!(await carregarIndiceFundos())) return false;
+    const c = carregadorDados(); const arqs = [...new Set(lista.map((id) => FD().arqShard(id)))];
+    const lidos = await Promise.all(arqs.map((a) => c.fundos.shard(a)));
+    lidos.forEach((sh) => { if (sh && sh.fundos) for (const id of lista) if (sh.fundos[id]) S.fundos.hist.set(id, sh.fundos[id]); });
+    lista.forEach((id) => fundoPorId(id)); montarMotor();
+    return lista.every((id) => S.fundos.hist.has(id));
+  }
 
   // ---------- Market Engine (Etapa 06): simulador + preço manual da empresa; os provedores reais ficam desligados ----------
   const K = window.INVEST.mercado;
@@ -117,6 +147,7 @@
       if (tem(['fred'])) { reais.fred = DR.criarAdaptadorRetrato(ret, ['fred']); ligados.fred = true; }
       if (ret.tesouro && ret.tesouro.titulos) { reais.tesouro = DR.criarAdaptadorTesouro(ret.tesouro, hoje); ligados.tesouro = true; }
     }
+    if (S.fundos && S.fundos.indice && FD()) { reais.fundos = FD().criarAdaptadorSync(S.fundos.indice, S.fundos.hist, hoje); ligados.fundos = true; } // v160
     S.motor = K.criarMotor({ adaptadores: Object.assign({ simulador: K.criarSimulador({ dataRef: hoje }), manual: K.criarManual(S.precosManuais) }, reais), ligados, simulador: S.simulador });
     // motor de AVALIAÇÃO (carteiras reais, alertas, insights, projeções): NUNCA usa o simulador; usa os dados reais quando existem
     S.motorReal = K.criarMotor({ adaptadores: Object.assign({ manual: K.criarManual(S.precosManuais) }, reais), ligados, simulador: false });
@@ -255,6 +286,7 @@
         : S.cat.length === 0 ? estado('info', 'Nenhum ativo liberado ainda', 'A Biblioteca mostra só ativos de fontes com uso autorizado comprovado. As fontes oficiais (CVM, Tesouro) aguardam a confirmação dos termos de uso; até lá, a lista fica vazia. Carteiras, preços manuais, projeções e favoritos continuam funcionando.')
         : estado('info', 'Nenhum ativo encontrado', 'Confira o código ou o nome, ou limpe os filtros. Se o ativo existir e não estiver aqui, ele ainda não está no catálogo das fontes autorizadas.')}
       </div>
+      <div class="panel" id="inv-busca-fundos"></div>
       <p class="inv-muda inv-atribuicao">${Object.values(S.meta.fontes || {}).filter((f) => f.usada && f.atribuicao).map((f) => E(f.atribuicao)).join(' · ')}${S.meta.naoConfirmados ? ` · ${S.meta.naoConfirmados} código(s) de FII montados a partir do ISIN, não confirmados` : ''}. Licenças e termos de uso de cada fonte: página de cada ativo.</p>`;
     const b = document.getElementById('inv-busca');
     b.addEventListener('input', () => { clearTimeout(S._t); S._t = setTimeout(() => { S.busca = b.value; S.mostrar = 50; desenhar(); const n = document.getElementById('inv-busca'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 200); });
@@ -263,6 +295,7 @@
     document.getElementById('inv-limpar').addEventListener('click', () => { S.filtros = {}; S.busca = ''; S.mostrar = 50; desenhar(); });
     const mais = document.getElementById('inv-mais'); if (mais) mais.addEventListener('click', () => { S.mostrar += 50; desenhar(); });
     ligarLinhas(host);
+    if (TELAS._buscaFundos) TELAS._buscaFundos(document.getElementById('inv-busca-fundos'), S.busca); // v160
   }
   function linhaAtivo(a) {
     const fav = S.fav && M.ehFavorito(S.fav, a.assetId);
@@ -352,7 +385,7 @@
     .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-tema-custom', 'style'] });
   // ---------- Etapa 11.18: fundamentos (CVM: DFP/ITR consolidadas · SEC: 10-K) ----------
   const fundTemFonte = (a) => !!((a.pais === 'BR' && a.classe === 'acao' && a.ids && a.ids.cnpj) || (a.pais === 'US' && a.ids && a.ids.cik));
-  const fundSemFonteTxt = (a) => a.classe === 'fii' ? 'Os fundos imobiliários não publicam DFP/ITR; os informes mensais de FII entram numa próxima etapa.' : a.classe === 'cripto' ? 'Criptomoedas não têm demonstrações financeiras.' : a.classe === 'tesouro' ? 'Títulos públicos não têm demonstrações financeiras.' : 'Sem demonstrações de fonte autorizada para este ativo. Nada é estimado.';
+  const fundSemFonteTxt = (a) => a.classe === 'fii' ? 'Os fundos imobiliários não publicam DFP/ITR; os dados do informe mensal da CVM estão no painel acima.' : a.classe === 'cripto' ? 'Criptomoedas não têm demonstrações financeiras.' : a.classe === 'tesouro' ? 'Títulos públicos não têm demonstrações financeiras.' : 'Sem demonstrações de fonte autorizada para este ativo. Nada é estimado.';
   const fmtMoeda = (v, moeda) => { if (v == null || !Number.isFinite(v)) return '—'; const s = moeda === 'USD' ? 'US$ ' : 'R$ '; const a = Math.abs(v); const n = (x, c) => x.toLocaleString('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c }); return (v < 0 ? '−' : '') + s + (a >= 1e9 ? n(a / 1e9, 2) + ' bi' : a >= 1e6 ? n(a / 1e6, 1) + ' mi' : n(a, 0)); };
   const fmtPct = (v) => (v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%');
   async function desenharFundamentos(el, a) {
@@ -382,6 +415,7 @@
   }
   function telaAtivo(host, id) {
     if (S.estadoCat !== 'ok') return telaBiblioteca(host);
+    if (/^BR:FUNDO:/.test(id) && TELAS._fundo) return TELAS._fundo(host, id); // v160: página do fundo (CVM)
     const a = porId(id);
     if (a && (a.classe === 'indice' || a.classe === 'macro') && TELAS._ativoMercado) { host.innerHTML = `<a href="#/${a.pais === 'US' ? 'us' : 'br'}" class="inv-voltar">‹ Mercado ${a.pais === 'US' ? 'US' : 'BR'}</a>` + cabecalho(a.ticker + ' · ' + a.nome, `${a.classe === 'indice' ? 'Índice' : 'Indicador econômico'} · ${M.PAISES[a.pais]}`) + '<div class="panel" id="inv-ativo-mercado"></div>' + graficoTV(a, { titulo: 'Gráfico' }) + gfLink(a); TELAS._ativoMercado(document.getElementById('inv-ativo-mercado'), a); ligarGraficosTV(host); return; }
     if (!a) { host.innerHTML = cabecalho('Ativo não encontrado', '') + `<div class="panel">${estado('info', 'Este ativo não está no catálogo', 'O código pode estar errado ou o ativo ainda não vem de nenhuma fonte autorizada.', '<a class="btn" href="#/biblioteca">Voltar à Biblioteca</a>')}</div>`; return; }
@@ -418,6 +452,7 @@
     ligarGraficosTV(host);
     if (fundTemFonte(a)) desenharFundamentos(document.getElementById('inv-ativo-fund'), a);
     if (TELAS._ativoNoticias) TELAS._ativoNoticias(document.getElementById('inv-ativo-noticias'), a);
+    if (a.classe === 'fii' && TELAS._fiiMensal) { const el = document.createElement('div'); el.className = 'panel inv-largo'; el.id = 'inv-ativo-fii'; const g = host.querySelector('.inv-grade'); if (g) { g.insertBefore(el, document.getElementById('inv-ativo-fund')); TELAS._fiiMensal(el, a); } } // v160: informe mensal da CVM
     const b = document.getElementById('inv-fav-ativo');
     if (b) b.addEventListener('click', () => { const s = document.getElementById('inv-lista-fav'); alternarFav(a.assetId, s ? s.value : null); });
   }
@@ -542,7 +577,7 @@
     desenhar();
   }
   // contexto compartilhado com as abas das Etapas 06–08 (mesmas funções, mesmo medidor, mesmo visual)
-  window.INVEST.ctx = { S, M, E, invDb, ehNuvem, estado, cabecalho, tagEstado, tagSituacao: (a) => tagSituacao(a), porId, ir, rota, toastInv, avisarSimples, estrela, dataBr, desenhar, ligarLinhas, alternarFav, salvarFavoritos, carregarFavoritos, carregarPrecosManuais, montarMotor, pref, salvarPref, RG, carregarDadosReais, carregadorDados };
+  window.INVEST.ctx = { S, M, E, invDb, ehNuvem, estado, cabecalho, tagEstado, tagSituacao: (a) => tagSituacao(a), porId, ir, rota, toastInv, avisarSimples, estrela, dataBr, desenhar, ligarLinhas, alternarFav, salvarFavoritos, carregarFavoritos, carregarPrecosManuais, montarMotor, pref, salvarPref, RG, carregarDadosReais, carregadorDados, carregarIndiceFundos, garantirFundos };
   window.INVEST.iniciar = iniciar;
   window.INVEST.enviarConsumo = enviarConsumo;
 })();

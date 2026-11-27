@@ -95,6 +95,9 @@
   function resumo(c, ops, demo) {
     const m = motorDe(demo);
     const base = CT.calcular(ops, { saldoCarteira: c.demo ? null : c.saldo });
+    // v160: fundos da carteira — busca os históricos (eagles-dados) e redesenha quando chegarem
+    const fundos = Object.keys(base.posicoes || {}).filter((id) => /^BR:FUNDO:/.test(id) && !(C().S.fundos && C().S.fundos.hist.has(id)));
+    if (fundos.length && C().garantirFundos && !W._fundosPedidos) { W._fundosPedidos = true; C().garantirFundos(fundos).then((ok) => { if (ok) { W._fundosPedidos = false; render(); } }); }
     const av = CT.avaliar(base, (id) => m.cotacao(C().porId(id) || { assetId: id, ticker: id.split(':')[2], pais: id.split(':')[0] }), m.cotacao(USDBRL()), (id) => C().porId(id), { aceitarSimulado: !!demo });
     return { base, av };
   }

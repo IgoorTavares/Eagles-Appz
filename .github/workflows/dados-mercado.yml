@@ -13,7 +13,7 @@ on:
     - cron: '37 22 * * 1-5'   # dias úteis, 19h37 em Brasília (depois do fechamento)
   workflow_dispatch:
   pull_request:
-    paths: ['investimentos-portao/**', 'inv/inv-dados.js', 'testes-investimentos/dados-reais.test.mjs', '.github/workflows/dados-mercado.yml']
+    paths: ['investimentos-portao/**', 'inv/inv-dados.js', 'inv/inv-snapshot.js', 'inv/inv-fundos.js', 'inv/inv-rendafixa.js', 'testes-investimentos/**', '.github/workflows/dados-mercado.yml']
 permissions:
   contents: read
 concurrency: { group: dados-mercado, cancel-in-progress: false }
@@ -41,7 +41,7 @@ jobs:
           BRAPI_TOKEN: ${{ secrets.BRAPI_TOKEN }}
         run: node investimentos-portao/conferir-segredos.mjs inv/dados
       - name: Testes da camada de dados e do artefato
-        run: node --test testes-investimentos/dados-reais.test.mjs testes-investimentos/fontes-1118.test.mjs .github/pages/montar-site.test.mjs
+        run: node --test testes-investimentos/dados-reais.test.mjs testes-investimentos/fontes-1118.test.mjs testes-investimentos/eagles-dados.test.mjs testes-investimentos/fundos.test.mjs testes-investimentos/rendafixa.test.mjs .github/pages/montar-site.test.mjs
       - name: Guardar os arquivos gerados (conferência; não é publicação)
         uses: actions/upload-artifact@v4
         with: { name: dados-mercado, path: inv/dados, retention-days: 7 }
@@ -60,7 +60,7 @@ jobs:
       - name: Só arquivos de dados conhecidos (nada de HTML, JS, CSS ou service worker)
         run: |
           cd dados
-          for f in *; do case "$f" in tesouro.json|noticias.json|macro-us.json|fundamentos-br.json|fundamentos-us.json|catalogo-us.json|status.json|manifesto.json) ;; *) echo "arquivo inesperado: $f"; exit 1;; esac; done
+          for f in *; do case "$f" in tesouro.json|noticias.json|macro-us.json|fundamentos-br.json|fundamentos-us.json|catalogo-us.json|energia.json|cambio-int.json|macro-int.json|status.json|manifesto.json) ;; *) echo "arquivo inesperado: $f"; exit 1;; esac; done
       - name: Enviar ao repositório de dados (chave de implantação só daquele repositório)
         env:
           DADOS_REPO: ${{ vars.DADOS_REPO }}

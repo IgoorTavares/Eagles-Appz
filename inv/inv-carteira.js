@@ -21,6 +21,8 @@
   const E8 = 100000000n;
   function divArred(a, b) { const neg = (a < 0n) !== (b < 0n); const A = a < 0n ? -a : a, B = b < 0n ? -b : b; let q = A / B; const r = A % B; const d = r * 2n; if (d > B || (d === B && q % 2n === 1n)) q += 1n; return neg ? -q : q; }
   const valorCentavos = (qtdE8, precoE8) => Number(divArred(BigInt(qtdE8) * BigInt(precoE8) * 100n, E8 * E8));
+  // preço em texto decimal (até 12 casas) × quantidade E8 → centavos, meio-par, sem ponto flutuante (v160, cotas de fundos)
+  function valorCentavosTxt(qtdE8, txt) { const [i, d = ''] = String(txt).split('.'); const p12 = BigInt(i) * 10n ** 12n + BigInt(d.padEnd(12, '0')); return Number(divArred(BigInt(qtdE8) * p12 * 100n, E8 * 10n ** 12n)); }
   // conversão EXATA de número decimal para inteiro (sem o erro de 0,1 × 1e8): passa pelo texto com as casas fixas.
   // Limites (validação + regras): quantidade e preço até 10 milhões, valor até 10 bilhões → tudo cabe em 2^53.
   // Lê o número como o DECIMAL que a pessoa digitou (15 algarismos significativos) e arredonda meio-par na casa pedida:
@@ -257,7 +259,8 @@
       let valor = null, valorBRL = null, motivo = '';
       if (!aceita(q)) motivo = q && q.preco > 0 ? 'preço não autorizado (' + q.estado + ')' : 'sem preço autorizado ou manual';
       else {
-        valor = valorCentavos(x.qtdE8, paraE8(q.preco));
+        // v160: cota de fundo com mais de 8 casas (texto decimal da CVM) é avaliada sem arredondar o preço antes
+        valor = q.precoDec && /^\d{1,15}(\.\d{1,12})?$/.test(q.precoDec) ? valorCentavosTxt(x.qtdE8, q.precoDec) : valorCentavos(x.qtdE8, paraE8(q.preco));
         if (x.moeda === 'USD') {
           if (cambioAtual) { valorBRL = Math.round(valor * cambioAtual); const cambioMedio = x.custo ? x.custoBRL / x.custo : cambioAtual; efeitoCambial += Math.round(valor * (cambioAtual - cambioMedio)); estados.add(usdbrl.estado); }
           else { motivo = 'sem câmbio autorizado ou manual'; valor = null; }
@@ -373,5 +376,5 @@
     return x;
   }
 
-  return { TIPOS, LIM, REVERSIVEIS, ESTADOS_VALIDOS, precoValido, dataValida, validarOperacao, efeito, aplicar, prepararOperacao, xirrCarteira, calcular, avaliar, distribuir, twr, xirr, evolucao, paraGravar, valorCentavos, paraE8, paraCent, divArred };
+  return { TIPOS, LIM, REVERSIVEIS, ESTADOS_VALIDOS, precoValido, dataValida, validarOperacao, efeito, aplicar, prepararOperacao, xirrCarteira, calcular, avaliar, distribuir, twr, xirr, evolucao, paraGravar, valorCentavos, valorCentavosTxt, paraE8, paraCent, divArred };
 });

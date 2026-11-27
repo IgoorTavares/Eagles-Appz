@@ -14,8 +14,12 @@ import { coletarFred } from './fred.mjs';
 import { fundamentosCVM } from './fundamentos-cvm.mjs';
 import { coletarSec, mascarar } from './sec.mjs';
 import { coletarBrapi, brapiLiberada } from './brapi.mjs';
+import { coletarEnergia, coletarCambio, coletarMacroInt } from './fontes-internacionais.mjs';
+import { gerarFundos, gerarFII } from './fundos-cvm.mjs';
+import { publicar as publicarSnapshot, reter } from './eagles-dados.mjs';
 
 const D = createRequire(import.meta.url)('../inv/inv-dados.js');
+const SN = createRequire(import.meta.url)('../inv/inv-snapshot.js'); // v160: a MESMA validação do navegador (inv/inv-snapshot.js)
 const UA = 'EaglesLabz-DataEngine/11 (robo de dados; eagleslabz.com.br)';
 const TESOURO_CSV = 'https://www.tesourotransparente.gov.br/ckan/dataset/df56aa42-484a-4a59-8184-7676580c81e3/resource/796d2059-14e9-44e3-80c9-2d9e30b405c1/download/PrecoTaxaTesouroDireto.csv';
 // só fontes de notícia APROVADAS e com as condições cumpridas (SEC aguarda o e-mail de contato do robô; BC aguarda os termos)
@@ -61,21 +65,15 @@ export const ARQUIVOS = {
   'fundamentos-br.json': { formato: 'eagles-inv-fundamentos-br-v1', max: 3e6, min: (o) => Object.keys(o.empresas || {}).length >= 100 },
   'fundamentos-us.json': { formato: 'eagles-inv-fundamentos-us-v1', max: 2e6, min: (o) => o.indisponivel || Object.keys(o.empresas || {}).length >= 10 },
   'catalogo-us.json': { formato: 'eagles-inv-catalogo-us-v1', max: 2e6, min: (o) => o.indisponivel || (Array.isArray(o.itens) && o.itens.length >= 1000) },
+  // v160: pequenos, servidos junto com o site (como os da v159)
+  'energia.json': { formato: 'eagles-inv-energia-v1' }, 'cambio-int.json': { formato: 'eagles-inv-cambio-int-v1' }, 'macro-int.json': { formato: 'eagles-inv-macro-int-v1' },
 };
-const RX_PERIGO = /<\s*script|<\s*iframe|javascript\s*:|data\s*:\s*text\/html|on(error|load|click)\s*=|\bvbscript:/i;
+// v160: fundos (índice + 128 arquivos de histórico) e FII mensal são grandes demais para o site: vão SÓ para o eagles-dados (--snapshots)
+// v160: a validação é a do módulo compartilhado (formato, tamanho, anti-vazio, competência, datas, script, credencial,
+// e-mail, campo privado e links só de domínios autorizados); só arquivos da lista entram.
 export function validarArquivo(nome, obj, op = {}) {
-  const R = ARQUIVOS[nome]; const erros = [];
-  if (!R) return { ok: false, erros: ['arquivo fora da lista'] };
-  if (!obj || typeof obj !== 'object' || obj.formato !== R.formato) erros.push('formato inesperado');
-  const txt = JSON.stringify(obj || {});
-  if (txt.length > R.max) erros.push(`grande demais (${txt.length} bytes)`);
-  if (RX_PERIGO.test(txt)) erros.push('conteúdo suspeito (script/javascript:)');
-  if (/[A-Za-z0-9_-]{20,}@|api_key=|token=|Bearer /i.test(txt)) erros.push('possível credencial no conteúdo');
-  const hoje = op.hoje || '9999-12-31';
-  const datas = txt.match(/"(dataBase|dataRef|data|fim)":"(\d{4}-\d{2}-\d{2})/g) || [];
-  if (datas.some((d) => d.slice(-10) > hoje)) erros.push('data no futuro');
-  if (!erros.length && !R.min(obj)) erros.push('vazio ou incompleto (anti-vazio)');
-  return { ok: !erros.length, erros };
+  if (!ARQUIVOS[nome] && !/^fundos-|^fii-mensal/.test(nome)) return { ok: false, erros: ['arquivo fora da lista'] };
+  const v = SN.validarConteudo(nome, obj, op); return { ok: v.ok, erros: v.erros, competencia: v.competencia };
 }
 // grava de forma atômica (arquivo temporário + troca), só se válido; senão mantém o anterior
 export function gravarValidado(saida, nome, obj, op = {}) {
@@ -108,7 +106,7 @@ async function principal() {
   const saida = pega('--saida') || 'inv/dados'; mkdirSync(saida, { recursive: true });
   const hoje = pega('--hoje') || new Date().toISOString().slice(0, 10);
   const coleta = new Date().toISOString();
-  const so = (pega('--so') || 'tesouro,noticias,fred,cvm,sec,brapi').split(',');
+  const so = (pega('--so') || 'tesouro,noticias,fred,cvm,sec,brapi,eia,cambio,worldbank,fundos,fii').split(',');
   const env = process.env; const emailSec = env.SEC_CONTACT_EMAIL || '';
   const limpa = (e) => mascarar(String((e && e.message) || e), emailSec).replace(/api_key=[^&\s]+/g, 'api_key=***').slice(0, 200);
   const relatorio = { coleta, hoje, fontes: {} };
@@ -167,6 +165,37 @@ async function principal() {
   }
   // brapi — preparada e DESLIGADA (licença comercial pendente); nunca publica nada sem autorização
   if (so.includes('brapi')) { const lib = brapiLiberada(env); reg('brapi', lib.ok ? Object.assign({ ok: true }, await coletarBrapi({ fetch, env, tickers: ['PETR4'] }).then((x) => ({ registros: Object.keys(x.cotacoes).length, publicado: false }))) : { ok: false, desligada: true, erro: lib.motivo }); }
+  // v160 — energia (EIA via FRED), câmbio internacional (BCE, Fed H.10, Banco do Canadá) e macro internacional (Banco Mundial)
+  const net = (u, o) => fetch(u, Object.assign({ headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(90000) }, o));
+  for (const [id, nome, fn] of [['eia_fred', 'energia.json', coletarEnergia], ['cambio_int', 'cambio-int.json', coletarCambio], ['worldbank', 'macro-int.json', coletarMacroInt]]) {
+    if (!so.includes(id.split('_')[0]) && !so.includes(id)) continue;
+    try { const o = Object.assign(await fn({ fetch: net, hoje }), { coleta }); const g = gravarValidado(saida, nome, o, { hoje });
+      reg(id, g.ok ? { ok: true, registros: Object.keys(o.series || o.pares || o.paises || {}).length, falhas: Object.keys(o.erros || {}).length } : { ok: false, erro: g.erro, mantido: g.mantido });
+    } catch (e) { reg(id, { ok: false, erro: limpa(e), mantido: existsSync(join(saida, nome)) }); }
+  }
+  // v160 — fundos (CVM Cadastro + Informe Diário) e FII (Informe Mensal): SÓ para o repositório de dados (eagles-dados)
+  const repoDados = pega('--snapshots');
+  if (repoDados && (so.includes('fundos') || so.includes('fii'))) {
+    const entradas = {}; const dirF = pega('--cvm-fundos-dir');
+    const baixarZip = async (rel) => { const nome = rel.split('/').pop(); if (dirF && existsSync(join(dirF, nome))) return readFileSync(join(dirF, nome)); const r = await fetch('https://dados.cvm.gov.br/dados/' + rel, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(300000) }); if (!r.ok) throw new Error(`HTTP ${r.status} em ${nome}`); return Buffer.from(await r.arrayBuffer()); };
+    let cat = null; try { cat = JSON.parse(readFileSync(new URL('../inv/catalogo/ativos.json', import.meta.url), 'utf8')); } catch (e) { cat = { itens: [] }; }
+    if (so.includes('fundos')) try {
+      const meses = []; const d0 = new Date(hoje + 'T12:00:00Z'); for (let i = 12; i >= 0; i--) { const d = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() - i, 1)); meses.push(`${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`); }
+      const zips = []; for (const m of meses) { try { zips.push(await baixarZip(`FI/DOC/INF_DIARIO/DADOS/inf_diario_fi_${m}.zip`)); } catch (e) { if (m === meses[meses.length - 1] || m === meses[meses.length - 2]) throw e; } }
+      const r = gerarFundos({ cadastroZip: await baixarZip('FI/CAD/DADOS/registro_fundo_classe.zip'), informesZip: zips, hoje, coleta, catalogo: cat });
+      entradas['fundos-indice.json'] = { obj: r.indice }; for (const [n, o] of Object.entries(r.shards)) entradas[n] = { obj: o };
+    } catch (e) { entradas['fundos-indice.json'] = { erro: limpa(e) }; }
+    if (so.includes('fii')) try {
+      const a = +hoje.slice(0, 4); const zips = []; for (const ano of [a - 1, a]) { try { zips.push(await baixarZip(`FII/DOC/INF_MENSAL/DADOS/inf_mensal_fii_${ano}.zip`)); } catch (e) { if (ano === a) throw e; } }
+      entradas['fii-mensal.json'] = { obj: gerarFII({ zips, hoje, coleta, catalogo: cat }) };
+    } catch (e) { entradas['fii-mensal.json'] = { erro: limpa(e) }; }
+    // os arquivos pequenos também entram no snapshot (o eagles-dados tem o conjunto completo)
+    for (const n of Object.keys(ARQUIVOS)) if (existsSync(join(saida, n))) { try { entradas[n] = { obj: JSON.parse(readFileSync(join(saida, n), 'utf8')) }; } catch (e) { entradas[n] = { erro: 'ilegível' }; } }
+    try { const p = publicarSnapshot(repoDados, entradas, { agora: coleta, hoje }); const ret = reter(repoDados, Number(pega('--reter')) || 7);
+      const falhas = Object.entries(p.relatorio).filter(([, x]) => !x.ok); reg('eagles_dados', { ok: true, sequencia: p.sequencia, arquivos: Object.keys(p.relatorio).length, falhas: falhas.length, retencao: ret.snapshotsApagados.length });
+      for (const [n, x] of falhas) reg('eagles_dados:' + n, { ok: false, erro: x.erro, mantido: x.mantido });
+    } catch (e) { reg('eagles_dados', { ok: false, erro: limpa(e) }); }
+  }
   // status (sem valores de segredo: só "configurada"/"ausente") + histórico de falhas + manifesto (sha256 de cada arquivo)
   let anterior = null; try { anterior = JSON.parse(readFileSync(join(saida, 'status.json'), 'utf8')); } catch (e) { anterior = null; }
   const falhasAgora = Object.entries(relatorio.fontes).filter(([, x]) => !x.ok && !x.desligada).map(([id, x]) => ({ fonte: id, quando: coleta, erro: x.erro, mantido: !!x.mantido }));

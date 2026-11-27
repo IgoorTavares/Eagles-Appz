@@ -21,38 +21,53 @@ export function cabecalhoSec(email) {
 export const mascarar = (txt, email) => String(txt || '').split(email || '\u0000').join('[contato]').replace(/[^@\s]+@[^@\s]+\.[a-z]{2,}/gi, '[contato]');
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// companyfacts → anos fiscais (10-K, FY, ~12 meses) com indicadores só quando os dois lados existem
-export function fundamentosDeFacts(facts) {
+// companyfacts → períodos ANUAIS (10-K, FY, ~12 meses) e TRIMESTRAIS (10-Q, Q1–Q3, ~3 meses), sem misturar formulários.
+// - moeda: USD quando a empresa reporta em USD; senão a moeda reportada (estrangeiras), registrada em "moeda" (nunca convertida aqui);
+// - revisões: para o mesmo período vale o número do arquivamento MAIS NOVO ("filed"); quantas versões diferentes existiram fica em "revisoes";
+// - indicadores só com os dois lados presentes; fundamentos NÃO são cotação (nada de preço aqui).
+function moedaDe(g) { for (const tags of Object.values(TAGS)) for (const t of tags) { const u = g[t] && g[t].units; if (u) { if (u.USD) return 'USD'; const k = Object.keys(u).find((x) => /^[A-Z]{3}$/.test(x)); if (k) return k; } } return 'USD'; }
+export function periodosDeFacts(facts, op = {}) {
   const g = (facts && facts.facts && facts.facts['us-gaap']) || {};
-  const porAno = new Map();
+  const moeda = moedaDe(g); const trimestral = !!op.trimestral;
+  const porPer = new Map();
   for (const [campo, tags] of Object.entries(TAGS)) {
     for (const tag of tags) {
-      const u = g[tag] && g[tag].units && g[tag].units.USD; if (!u) continue;
+      const u = g[tag] && g[tag].units && g[tag].units[moeda]; if (!u) continue;
       for (const f of u) {
-        if (f.form !== '10-K' || f.fp !== 'FY' || !f.end || !Number.isFinite(f.val)) continue;
-        if (FLUXO.has(campo)) { if (!f.start) continue; const d = (Date.parse(f.end) - Date.parse(f.start)) / 86400000; if (d < 350 || d > 380) continue; }
+        const okForm = trimestral ? (f.form === '10-Q' || f.form === '10-Q/A') && /^Q[1-3]$/.test(f.fp || '') : (f.form === '10-K' || f.form === '10-K/A') && f.fp === 'FY';
+        if (!okForm || !f.end || !Number.isFinite(f.val)) continue;
+        if (FLUXO.has(campo)) { if (!f.start) continue; const d = (Date.parse(f.end) - Date.parse(f.start)) / 86400000; if (trimestral ? (d < 80 || d > 100) : (d < 350 || d > 380)) continue; }
         else if (f.start) continue;
-        const ano = f.end.slice(0, 4); // ano do fim do exercício fiscal
-        if (!porAno.has(ano)) porAno.set(ano, { ano, fim: f.end });
-        const x = porAno.get(ano);
-        if (x[campo] == null || (x['_' + campo] && x['_' + campo].filed < f.filed && x['_' + campo].tag === tag)) { if (x[campo] == null || x['_' + campo].tag === tag) { x[campo] = f.val; x['_' + campo] = { filed: f.filed, tag }; } }
+        const chave = trimestral ? f.end : f.end.slice(0, 4);
+        if (!porPer.has(chave)) porPer.set(chave, { ano: f.end.slice(0, 4), fim: f.end, periodo: trimestral ? (f.fp || '') : 'FY', vals: {} });
+        const x = porPer.get(chave); const atual = x.vals[campo];
+        if (atual && atual.tag !== tag) continue; // não mistura tags no mesmo campo
+        if (!atual) x.vals[campo] = { val: f.val, filed: f.filed || '', tag, versoes: new Set([f.val]) };
+        else { atual.versoes.add(f.val); if ((f.filed || '') > atual.filed) { atual.val = f.val; atual.filed = f.filed || ''; } }
       }
-      if ([...porAno.values()].some((x) => x[campo] != null)) break; // usa a primeira tag que a empresa reporta (não mistura tags)
+      if ([...porPer.values()].some((x) => x.vals[campo])) break; // usa a primeira tag que a empresa reporta
     }
   }
-  const lista = [...porAno.values()].sort((a, b) => (a.ano < b.ano ? -1 : 1)).map((x) => ({ ano: x.ano, fim: x.fim, receita: x.receita ?? null, lucro: x.lucro ?? null, ativo: x.ativo ?? null, passivo: x.passivo ?? null, pl: x.pl ?? null, divida: x.divida ?? null, fco: x.fco ?? null }));
+  const lista = [...porPer.values()].sort((a, b) => (a.fim < b.fim ? -1 : 1)).map((x) => {
+    const o = { ano: x.ano, fim: x.fim, periodo: x.periodo, moeda };
+    let rev = 0; for (const c of Object.keys(TAGS)) { const v = x.vals[c]; o[c] = v ? v.val : null; if (v && v.versoes.size > 1) rev++; }
+    o.revisoes = rev; return o;
+  });
   const div = (a, b) => (a != null && b != null && b !== 0 ? Math.round((a / b) * 10000) / 100 : null);
   lista.forEach((o, i) => {
-    const ant = lista[i - 1] && Number(lista[i - 1].ano) === Number(o.ano) - 1 ? lista[i - 1] : null;
+    const ant = trimestral ? null : (lista[i - 1] && Number(lista[i - 1].ano) === Number(o.ano) - 1 ? lista[i - 1] : null);
     o.margemLiquida = o.receita > 0 ? div(o.lucro, o.receita) : null;
     o.roe = ant && o.pl != null && ant.pl != null && o.pl + ant.pl > 0 ? div(o.lucro, (o.pl + ant.pl) / 2) : null;
     o.crescReceita = ant && ant.receita > 0 && o.receita != null ? div(o.receita - ant.receita, ant.receita) : null;
     o.crescLucro = ant && ant.lucro > 0 && o.lucro != null ? div(o.lucro - ant.lucro, ant.lucro) : null;
   });
-  return lista.slice(-4);
+  return lista.slice(trimestral ? -6 : -4);
 }
+// compatível com a v159 (só anual, sem os campos novos)
+export function fundamentosDeFacts(facts) { return periodosDeFacts(facts).map((o) => { const x = Object.assign({}, o); delete x.periodo; delete x.moeda; delete x.revisoes; return x; }); }
 
-export async function coletarSec({ fetch, email, tickers = LISTA_FUNDAMENTOS, coleta = new Date().toISOString() }) {
+// controle de consultas: no máximo "limite" empresas por execução (as demais ficam com o dado anterior, que o robô mantém)
+export async function coletarSec({ fetch, email, tickers = LISTA_FUNDAMENTOS, coleta = new Date().toISOString(), limite = 60, anterior = null }) {
   const H = cabecalhoSec(email);
   const r = await fetch('https://www.sec.gov/files/company_tickers_exchange.json', { headers: H });
   if (!r.ok) throw new Error('SEC tickers: HTTP ' + r.status);
@@ -61,14 +76,17 @@ export async function coletarSec({ fetch, email, tickers = LISTA_FUNDAMENTOS, co
   const ix = Object.fromEntries(j.fields.map((f, i) => [f, i]));
   const porTicker = new Map(j.data.map((l) => [String(l[ix.ticker]).toUpperCase(), { cik: l[ix.cik], nome: l[ix.name], bolsa: l[ix.exchange] }]));
   const empresas = {}; const erros = {};
+  let feitas = 0;
   for (const t of tickers) {
     const e = porTicker.get(t.toUpperCase()); if (!e) { erros[t] = 'ticker não encontrado no arquivo da SEC'; continue; }
+    if (feitas >= limite) { const ant = anterior && anterior.empresas && anterior.empresas[String(e.cik)]; if (ant) empresas[String(e.cik)] = ant; continue; }
+    feitas++;
     await espera(260);
     try {
       const rf = await fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${String(e.cik).padStart(10, '0')}.json`, { headers: H });
       if (!rf.ok) throw new Error('HTTP ' + rf.status);
-      const anual = fundamentosDeFacts(await rf.json());
-      if (anual.length) empresas[String(e.cik)] = { ticker: t.replace('-', '.'), nome: e.nome, cik: e.cik, anual };
+      const fj = await rf.json(); const anual = fundamentosDeFacts(fj); const per = periodosDeFacts(fj); const tri = periodosDeFacts(fj, { trimestral: true });
+      if (anual.length) empresas[String(e.cik)] = { ticker: t.replace('-', '.'), nome: e.nome, cik: e.cik, bolsa: e.bolsa, moeda: per.length ? per[per.length - 1].moeda : 'USD', anual, trimestral: tri, revisoes: per.reduce((a, x) => a + x.revisoes, 0) };
     } catch (err) { erros[t] = mascarar(err.message, email).slice(0, 120); }
   }
   return { textoTickers, fundamentos: { formato: 'eagles-inv-fundamentos-us-v1', fonte: 'sec_edgar', atribuicao: 'Source: U.S. Securities and Exchange Commission — EDGAR (XBRL company facts)', licenca: 'Obra do governo federal dos EUA (domínio público)', transformacoes: 'Valores anuais dos formulários 10-K (exercício de ~12 meses); margem, ROE (PL médio) e crescimento calculados pelo Eagles Labz', coleta, empresas }, erros };
